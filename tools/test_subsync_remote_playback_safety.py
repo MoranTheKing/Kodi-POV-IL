@@ -5,6 +5,7 @@ must stay local-only; remote playback may call only embedded_extract's bounded,
 keep-alive cue-index API after playback is stable.
 """
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -36,6 +37,29 @@ class RemotePlaybackSafety(unittest.TestCase):
         ku.log = Mock()
         ku.get_setting = lambda key, default='': 'test-only' if key == 'api_key' else default
         ku.cache_dir = lambda: str(self.root)
+        self.successful_status = []
+
+        def _status_update(state, source='', selection_token='',
+                           link_hash='', stream_hash='', **_kwargs):
+            accepted = self._selection_matches(
+                selection_token, link_hash, stream_hash)
+            if accepted:
+                self.successful_status.append((state, source))
+            return accepted
+
+        self.status_update = Mock(side_effect=_status_update)
+        ku.set_subtitle_sync_status = self.status_update
+        ku.stage_subtitle_sync_fix = Mock(return_value=True)
+        ku.stage_subtitle_delivery = Mock(return_value=True)
+        ku.subtitle_delivery_is_applied = Mock(return_value=True)
+        ku.clear_subtitle_delivery = Mock(return_value=True)
+        self.selection = {
+            'token': 'selection-token-A',
+            'link_hash': 'selection-link-A',
+        }
+        ku.current_subtitle_selection = self._selection_snapshot
+        ku.subtitle_selection_matches = self._selection_matches
+        ku.get_subtitle_selection_token = lambda: self.selection['token']
         xbmc = types.ModuleType('xbmc')
         xbmc.Player = lambda: types.SimpleNamespace(
             getPlayingFile=lambda: self.url,
@@ -79,6 +103,49 @@ class RemotePlaybackSafety(unittest.TestCase):
         gemini.generate_media = Mock(side_effect=AssertionError('unexpected Gemini request'))
         sys.modules['resources.lib.gemini'] = gemini
 
+    def _stream_hash(self, url=None):
+        value = (self.url if url is None else url).split('|')[0].strip()
+        return hashlib.sha256(value.encode('utf-8')).hexdigest()[:24]
+
+    def _selection_snapshot(self):
+        return {
+            'token': self.selection['token'],
+            'link_hash': self.selection['link_hash'],
+            'stream_hash': self._stream_hash(),
+        }
+
+    def _selection_matches(self, token='', link_hash='', stream_hash=''):
+        current = self._selection_snapshot()
+        return bool(token and link_hash and stream_hash
+                    and token == current['token']
+                    and link_hash == current['link_hash']
+                    and stream_hash == current['stream_hash'])
+
+    def _bound_job(self, **values):
+        selection = self._selection_snapshot()
+        job = {
+            'selection_token': selection['token'],
+            'selection_hash': selection['link_hash'],
+            'stream_hash': selection['stream_hash'],
+            'stream_url': self.url,
+        }
+        job.update(values)
+        return job
+
+    def _set_pending_for(self, job, key=None):
+        selection = {
+            'token': job.get('selection_token') or '',
+            'link_hash': job.get('selection_hash') or '',
+            'stream_hash': job.get('stream_hash') or '',
+        }
+        self.window_props[self.sub._pending_prop(selection)] = json.dumps({
+            'key': key if key is not None else job.get('key', ''),
+            'ts': 1,
+            'selection_token': job.get('selection_token') or '',
+            'selection_hash': job.get('selection_hash') or '',
+            'stream_hash': job.get('stream_hash') or '',
+        })
+
     def test_remote_missing_oracle_uses_only_bounded_cue_reader(self):
         out, verdict = self.sub._deep_verify({}, str(self.subtitle), self.subtitle.read_text(),
                                             'sub-release', 'movie-release', 'key')
@@ -88,14 +155,102 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.network.assert_not_called()
 
     def test_queued_service_job_without_oracle_keeps_original_on_cue_miss(self):
-        self.sub.run_deep_job({'key': 'key', 'path': str(self.subtitle),
-                               'playing': 'movie-release', 'info': {},
-                               'stream_url': self.url})
+        job = self._bound_job(
+            key='key', path=str(self.subtitle),
+            playing='movie-release', info={})
+        self._set_pending_for(job)
+        self.sub.run_deep_job(job)
         self.sub._oracle_candidates.assert_called_once()
         self.cue_reader.assert_called_once()
         self.network.assert_not_called()
         self.sub._swap_if_current.assert_not_called()
         self.sub._announce.assert_not_called()
+
+    def test_deep_worker_waits_for_foreground_delivery_ack(self):
+        job = self._bound_job(
+            key='ack-key', path=str(self.subtitle),
+            playing='movie-release', info={})
+        self._set_pending_for(job)
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.subtitle_delivery_is_applied.return_value = False
+        with patch.object(self.sub, '_deep_verify') as verify:
+            self.sub.run_deep_job(job)
+        verify.assert_not_called()
+        self.sub._swap_if_current.assert_not_called()
+        self.assertIn(('unverified', 'delivery'), self.successful_status)
+
+    def test_deep_worker_proceeds_only_after_exact_delivery_ack(self):
+        job = self._bound_job(
+            key='ack-key', path=str(self.subtitle),
+            playing='movie-release', info={})
+        self._set_pending_for(job)
+        verdict = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                   'cache_key': 'ack-key', 'diag': 'confirmed'}
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.subtitle_delivery_is_applied.return_value = True
+        with patch.object(self.sub, '_deep_verify',
+                          return_value=(str(self.subtitle), verdict)) as verify, \
+             patch.object(self.sub, '_record_delivery'):
+            self.sub.run_deep_job(job)
+        verify.assert_called_once()
+
+    def test_worker_starting_first_cannot_leave_original_over_false_fixed(self):
+        """Sabotage the old order: service starts before foreground delivery."""
+        job = self._bound_job(
+            key='race-key', path=str(self.subtitle),
+            playing='movie-release', info={})
+        self._set_pending_for(job)
+        fixed = self.root / 'fixed.srt'
+        fixed.write_text(
+            '1\n00:00:02,000 --> 00:00:03,000\nHello\n',
+            encoding='utf-8')
+        verdict = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'applied': True, 'cache_key': 'race-key',
+            'mode': 'global', 'scale': 1.0, 'offset_ms': 1000.0,
+            'diag': 'synthetic race fix'}
+        ack = {'ready': False}
+        streams = ['embedded']
+        active = {'path': ''}
+        order = []
+
+        def add(path):
+            streams.append(path)
+            active['path'] = path
+            order.append(path)
+
+        def pin(index):
+            active['path'] = streams[index]
+
+        player = types.SimpleNamespace(
+            isPlaying=lambda: True, isPlayingVideo=lambda: True,
+            getPlayingFile=lambda: self.url,
+            getAvailableSubtitleStreams=lambda: list(streams),
+            setSubtitles=add, showSubtitles=lambda _on: None,
+            setSubtitleStream=pin)
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.subtitle_delivery_is_applied.side_effect = (
+            lambda *_a, **_k: ack['ready'])
+
+        def foreground_finishes(_ms):
+            if not ack['ready']:
+                add(str(self.subtitle))
+                pin(len(streams) - 1)
+                ack['ready'] = True
+
+        xbmc = sys.modules['xbmc']
+        with patch.object(xbmc, 'Player', return_value=player), \
+             patch.object(xbmc, 'sleep', side_effect=foreground_finishes), \
+             patch.object(self.sub, '_deep_verify',
+                          return_value=(str(fixed), verdict)), \
+             patch.object(self.sub, '_swap_if_current',
+                          new=self.real_swap_if_current), \
+             patch.object(self.sub, '_record_delivery'):
+            self.sub.run_deep_job(job)
+
+        self.assertEqual(order, [str(self.subtitle), str(fixed)])
+        self.assertEqual(active['path'], str(fixed))
+        self.assertIn(('fixed', 'local'), self.successful_status)
 
     def test_inconclusive_oracle_falls_through_to_actual_playing_file(self):
         candidate = {'release': 'movie-release', 'payload': 'opaque'}
@@ -235,9 +390,9 @@ class RemotePlaybackSafety(unittest.TestCase):
                    'cut_signature': 'cut1:' + 'a' * 32,
                    'segments': [{'cand_from_ms': None,
                                  'offset_ms': 1000.0}]}
-        job = {'key': 'legacy-key', 'path': str(self.subtitle),
-               'playing': 'movie-release', 'info': {},
-               'stream_url': self.url}
+        job = self._bound_job(
+            key='legacy-key', path=str(self.subtitle),
+            playing='movie-release', info={})
         self.window_props[self.sub._DELIVERED_PROP] = json.dumps(
             {'key': 'legacy-key', 'mode': 'global', 'offset': 0})
         with patch.object(self.sub, '_job_stream_is_current',
@@ -331,11 +486,10 @@ class RemotePlaybackSafety(unittest.TestCase):
         key = 'legacy-sub-hash|movie-release'
         record = Mock()
         deep = Mock(side_effect=AssertionError('timing verification ran'))
-        job = {'key': key, 'path': str(self.subtitle),
-               'playing': 'movie-release', 'info': {},
-               'identity_only': True, 'stream_url': self.url}
-        self.window_props[self.sub._PENDING_PROP] = json.dumps(
-            {'key': key, 'ts': 1})
+        job = self._bound_job(
+            key=key, path=str(self.subtitle), playing='movie-release',
+            info={}, identity_only=True)
+        self._set_pending_for(job)
         xbmc = sys.modules['xbmc']
         player = types.SimpleNamespace(isPlaying=lambda: True,
                                        getPlayingFile=lambda: self.url)
@@ -348,7 +502,7 @@ class RemotePlaybackSafety(unittest.TestCase):
             self.subtitle.read_text(encoding='utf-8'), 'movie-release', sig)
         self.assertEqual(record.call_args.args[2], exact_key)
         self.assertEqual(record.call_args.kwargs['cut_signature'], sig)
-        self.assertEqual(self.sub._pending_key(), '')
+        self.assertEqual(self.sub._pending_key(), key)
         self.sub._oracle_candidates.assert_not_called()
         self.network.assert_not_called()
 
@@ -438,7 +592,9 @@ class RemotePlaybackSafety(unittest.TestCase):
             out, verdict = self.sub.process({}, str(self.subtitle), '')
         self.assertEqual(out, str(self.subtitle))
         self.assertEqual(verdict['status'], 'DEFERRED')
-        self.assertEqual(self.sub._pending_key(), '')
+        self.assertFalse(self.sub._pending_key())
+        sys.modules['resources.lib.kodi_utils'].clear_subtitle_delivery \
+            .assert_called_once()
         deep.assert_not_called()
 
     def test_fixed_delivery_names_cannot_collide_on_reused_temp_basename(self):
@@ -794,8 +950,10 @@ class RemotePlaybackSafety(unittest.TestCase):
 
     def test_new_trusted_delivery_invalidates_old_background_swap(self):
         old_key = 'old-subtitle-key'
-        self.window_props[self.sub._PENDING_PROP] = json.dumps(
-            {'key': old_key, 'ts': 1})
+        old_job = self._bound_job(
+            key=old_key, path=str(self.subtitle), playing='old-release',
+            info={})
+        self._set_pending_for(old_job)
         playing = 'Movie.2026.1080p.WEB-DL'
         tier = next(iter(self.sub.release_match.AUTO_OK_TIERS))
         with patch.object(self.sub, 'enabled', return_value=True), \
@@ -807,7 +965,13 @@ class RemotePlaybackSafety(unittest.TestCase):
                 {}, str(self.subtitle), playing)
         self.assertEqual(out, str(self.subtitle))
         self.assertEqual(verdict['status'], self.sub._STATUS_TRUSTED)
-        self.assertEqual(self.sub._pending_key(), '')
+        self.assertNotEqual(self.sub._pending_key(), old_key)
+        expected = self._selection_snapshot()
+        self.status_update.assert_not_called()
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.stage_subtitle_delivery.assert_called_with(
+            str(self.subtitle), selection=expected,
+            status='confirmed', source='release')
 
         xbmc = sys.modules['xbmc']
         setter = Mock()
@@ -817,24 +981,165 @@ class RemotePlaybackSafety(unittest.TestCase):
             setSubtitles=setter)
         with patch.object(xbmc, 'Player', return_value=player):
             self.assertFalse(self.real_swap_if_current(
-                {'key': old_key, 'stream_url': self.url},
+                old_job,
                 'old-fixed.srt', {}))
         setter.assert_not_called()
+
+    def test_queued_verification_publishes_checking_before_job_is_visible(self):
+        with patch.object(self.sub, 'enabled', return_value=True), \
+             patch.object(self.sub, 'playing_release', return_value='movie'), \
+             patch.object(self.sub, '_known_cut_signature', return_value=''), \
+             patch.object(self.sub, '_community_verdict', return_value=None), \
+             patch.object(self.sub, '_record_delivery'), \
+             patch.object(self.sub, '_enqueue_deep', return_value=True) as enqueue:
+            out, verdict = self.sub.process(
+                {}, str(self.subtitle), 'different-sub-release')
+        self.assertEqual(out, str(self.subtitle))
+        self.assertEqual(verdict['status'], 'PENDING')
+        expected = self._selection_snapshot()
+        self.status_update.assert_any_call(
+            'checking', source='local',
+            selection_token=expected['token'],
+            link_hash=expected['link_hash'],
+            stream_hash=expected['stream_hash'])
+        enqueue.assert_called_once()
+
+    def test_missing_deep_job_file_finishes_checking_as_unverified(self):
+        missing = self.root / 'removed-before-service.srt'
+        job = self._bound_job(
+            key='missing-key', path=str(missing),
+            playing='movie-release', info={})
+        self._set_pending_for(job)
+        self.sub.run_deep_job(job)
+        self.assertIn(('unverified', 'missing'), self.successful_status)
+
+        self.successful_status[:] = []
+        identity = dict(job, identity_only=True)
+        self._set_pending_for(identity)
+        self.sub.run_deep_job(identity)
+        self.assertEqual(self.successful_status, [])
+
+    def test_deep_result_updates_only_the_still_current_selection(self):
+        job = self._bound_job(
+            key='same-key', path=str(self.subtitle),
+            playing='movie-release', info={})
+        verdict = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                   'cache_key': 'same-key', 'diag': 'confirmed'}
+        self._set_pending_for(job)
+        with patch.object(self.sub, '_deep_verify',
+                          return_value=(str(self.subtitle), verdict)), \
+             patch.object(self.sub, '_record_delivery'):
+            self.sub.run_deep_job(job)
+        expected = self._selection_snapshot()
+        self.status_update.assert_called_with(
+            'confirmed', source='local',
+            selection_token=expected['token'],
+            link_hash=expected['link_hash'],
+            stream_hash=expected['stream_hash'])
+
+        self.status_update.reset_mock()
+        self._set_pending_for(job, key='newer-selection')
+        with patch.object(self.sub, '_deep_verify',
+                          return_value=(str(self.subtitle), verdict)), \
+             patch.object(self.sub, '_record_delivery'):
+            self.sub.run_deep_job(job)
+        self.status_update.assert_not_called()
+
+    def test_pool_correction_never_reuploads_a_second_subtitle_copy(self):
+        fake_pool = types.ModuleType('resources.lib.pool')
+        fake_pool.contribute = Mock()
+        fake_pool.contribute_ktuvit = Mock()
+        fake_pool.report_sync = Mock()
+        fixable = {'status': self.sub.sync_align.STATUS_FIXABLE,
+                   'scale': 1.0, 'offset_ms': 750.0,
+                   'mode': 'global', 'diag': 'community exact-cut record'}
+        with patch.dict(sys.modules, {'resources.lib.pool': fake_pool}), \
+             patch.object(self.sub, 'enabled', return_value=True), \
+             patch.object(self.sub, 'playing_release', return_value='movie'), \
+             patch.object(self.sub, '_known_cut_signature',
+                          return_value='cut1:' + 'a' * 32), \
+             patch.object(self.sub, '_community_verdict',
+                          return_value=fixable), \
+             patch.object(self.sub, '_record_delivery'), \
+             patch.object(self.sub, '_write_fixed',
+                          return_value=str(self.root / 'fixed.srt')):
+            _out, verdict = self.sub.process(
+                {}, str(self.subtitle), 'different-sub-release')
+        self.assertTrue(verdict['applied'])
+        fake_pool.contribute.assert_not_called()
+        fake_pool.contribute_ktuvit.assert_not_called()
+        fake_pool.report_sync.assert_not_called()
+
+    def test_process_never_rebinds_an_old_resolve_to_the_new_selection(self):
+        selection_a = self._selection_snapshot()
+        self.selection.update(token='selection-token-B',
+                              link_hash='selection-link-B')
+        pending_b = self._bound_job(key='new-selection-key', info={})
+        self._set_pending_for(pending_b)
+        with patch.object(self.sub, 'enabled') as enabled, \
+             patch.object(self.sub, '_record_delivery') as record, \
+             patch.object(self.sub, '_enqueue_deep') as enqueue:
+            out, verdict = self.sub.process(
+                {}, str(self.subtitle), 'old-release',
+                selection=selection_a)
+        self.assertEqual(out, str(self.subtitle))
+        self.assertIsNone(verdict)
+        enabled.assert_not_called()
+        record.assert_not_called()
+        enqueue.assert_not_called()
+        self.assertEqual(self.sub._pending_key(), 'new-selection-key')
+        self.assertEqual(self.successful_status, [])
+
+    def test_deep_job_cannot_clear_or_label_a_selection_changed_mid_commit(self):
+        job = self._bound_job(
+            key='old-key', path=str(self.subtitle),
+            playing='movie-release', info={})
+        self._set_pending_for(job)
+        verdict = {
+            'status': self.sub.sync_align.STATUS_CONFIRMED,
+            'cache_key': 'old-key', 'diag': 'confirmed'}
+
+        def change_selection(*_args, **_kwargs):
+            self.selection.update(token='selection-token-B',
+                                  link_hash='selection-link-B')
+            pending_b = self._bound_job(key='new-key', info={})
+            self._set_pending_for(pending_b)
+            return False
+
+        with patch.object(self.sub, '_deep_verify',
+                          return_value=(str(self.subtitle), verdict)), \
+             patch.object(self.sub, '_record_delivery',
+                          side_effect=change_selection):
+            self.sub.run_deep_job(job)
+        self.assertEqual(self.sub._pending_key(), 'new-key')
+        self.assertNotIn(('confirmed', 'local'), self.successful_status)
+        self.sub._announce.assert_not_called()
 
     def test_background_swap_requires_same_proven_stream(self):
         xbmc = sys.modules['xbmc']
         setter = Mock()
         current = {'url': 'https://media.invalid/stream?file=B&token=new'}
+        streams = ['embedded']
+
+        def registered_set(path):
+            setter(path)
+            streams.append(path)
+
+        self.url = current['url']
         player = types.SimpleNamespace(
             isPlaying=lambda: True,
             getPlayingFile=lambda: current['url'],
-            setSubtitles=setter)
-        base = {'key': 'subtitle-key', 'info': {}}
-        with patch.object(self.sub, '_pending_key',
-                          return_value='subtitle-key'), \
-             patch.object(xbmc, 'Player', return_value=player):
+            getAvailableSubtitleStreams=lambda: list(streams),
+            setSubtitles=registered_set,
+            showSubtitles=lambda _on: None,
+            setSubtitleStream=lambda _index: None)
+        base = self._bound_job(key='subtitle-key', info={})
+        self._set_pending_for(base)
+        missing_url = dict(base)
+        missing_url.pop('stream_url', None)
+        with patch.object(xbmc, 'Player', return_value=player):
             self.assertFalse(self.real_swap_if_current(
-                dict(base), 'fixed.srt', {}))
+                missing_url, 'fixed.srt', {}))
             self.assertFalse(self.real_swap_if_current(
                 dict(base, stream_url='https://media.invalid/old.mkv'),
                 'fixed.srt', {}))
@@ -850,6 +1155,39 @@ class RemotePlaybackSafety(unittest.TestCase):
                 dict(base, stream_url=current['url']),
                 'fixed.srt', {}))
         setter.assert_called_once_with('fixed.srt')
+
+    def test_background_swap_does_not_claim_fixed_without_registration(self):
+        xbmc = sys.modules['xbmc']
+        job = self._bound_job(key='subtitle-key', info={})
+        self._set_pending_for(job)
+        player = types.SimpleNamespace(
+            isPlaying=lambda: True,
+            getPlayingFile=lambda: self.url,
+            getAvailableSubtitleStreams=lambda: ['embedded'],
+            setSubtitles=lambda _path: None,
+            showSubtitles=lambda _on: None,
+            setSubtitleStream=lambda _index: None)
+        with patch.object(xbmc, 'Player', return_value=player):
+            self.assertFalse(self.real_swap_if_current(job, 'fixed.srt', {}))
+
+    def test_background_swap_requires_new_stream_to_be_selected(self):
+        xbmc = sys.modules['xbmc']
+        job = self._bound_job(key='subtitle-key', info={})
+        self._set_pending_for(job)
+        streams = ['embedded']
+
+        def add_stream(_path):
+            streams.append('external')
+
+        player = types.SimpleNamespace(
+            isPlaying=lambda: True,
+            getPlayingFile=lambda: self.url,
+            getAvailableSubtitleStreams=lambda: list(streams),
+            setSubtitles=add_stream, showSubtitles=lambda _on: None,
+            setSubtitleStream=Mock(
+                side_effect=RuntimeError('synthetic pin failure')))
+        with patch.object(xbmc, 'Player', return_value=player):
+            self.assertFalse(self.real_swap_if_current(job, 'fixed.srt', {}))
 
 
 if __name__ == '__main__':

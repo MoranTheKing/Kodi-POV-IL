@@ -131,6 +131,9 @@ def _row_item(c, info, translate, xbmcgui):
     disp = name
     if current and '· ' in disp:
         disp = disp.split('· ', 1)[1]
+    sync_label = (c.get('_subsync_label') or '').strip()
+    if current and sync_label:
+        disp = '{0} · {1}'.format(sync_label, disp)
 
     code = _norm_lang(lang)
     is_he = (code == 'he') or (lang.lower() in ('he', 'iw', 'heb'))
@@ -181,6 +184,23 @@ def _start_ai_apply(link, info):
         import base64
         from resources.lib import (kodi_utils, translate,
                                     subs_engine_bridge)
+        try:
+            timing_selection = kodi_utils.current_subtitle_selection(
+                expected_link=link)
+        except Exception:
+            timing_selection = {}
+
+        def _selection_current():
+            try:
+                return bool(kodi_utils.subtitle_selection_matches(
+                    timing_selection.get('token') or '',
+                    timing_selection.get('link_hash') or '',
+                    timing_selection.get('stream_hash') or ''))
+            except Exception:
+                return False
+
+        if not _selection_current():
+            return
         payload = translate._decode_link(link) or {}
         ai_link = link
         ai_payload = payload
@@ -198,6 +218,8 @@ def _start_ai_apply(link, info):
                                       time_ms=4000)
                 except Exception:
                     pass
+                return
+            if not _selection_current():
                 return
             ai_payload = {
                 'type': 'ai',
@@ -219,6 +241,8 @@ def _start_ai_apply(link, info):
             # to the video) so the user sees it while the Hebrew cooks, instead of
             # the stale sub they picked embedded to replace. Best-effort.
             try:
+                if not _selection_current():
+                    return
                 _si = payload.get('stream_index')
                 if _si is not None:
                     subs_engine_bridge.select_embedded(
@@ -231,9 +255,11 @@ def _start_ai_apply(link, info):
         local_src = ai_payload.get('local_path')
         if src_lang == 'en' and local_src and os.path.isfile(local_src):
             try:
-                if xbmc.Player().isPlayingVideo():
-                    xbmc.Player().setSubtitles(local_src)
-                    xbmc.Player().showSubtitles(True)
+                if not _selection_current():
+                    return
+                kodi_utils.apply_subtitle_file(
+                    local_src, selection=timing_selection,
+                    abandon_on_failure=False)
             except Exception:
                 pass
         # Hand the Hebrew translation to a background process that swaps it in
@@ -244,12 +270,21 @@ def _start_ai_apply(link, info):
         except Exception:
             sid = ''
         try:
+            if not _selection_current():
+                return
+            import json
             lk = base64.b64encode(ai_link.encode('utf-8')).decode('ascii')
             sd = base64.b64encode(sid.encode('utf-8')).decode('ascii')
+            safe_selection = {
+                k: (timing_selection or {}).get(k, '')
+                for k in ('token', 'link_hash', 'stream_hash')}
+            ss = base64.b64encode(json.dumps(
+                safe_selection, separators=(',', ':')).encode(
+                    'utf-8')).decode('ascii')
             xbmc.executebuiltin(
                 'RunScript(service.subtitles.kodipovilai,'
-                'action=bg_translate_picker,link_b64={0},source_id_b64={1})'
-                .format(lk, sd))
+                'action=bg_translate_picker,link_b64={0},source_id_b64={1},'
+                'selection_b64={2})'.format(lk, sd, ss))
             # (the chooser already recorded the original picked link as the
             # current sub, so it's marked "» נוכחית" on the next open.)
             kodi_utils.notify('AI: מתרגם לעברית ברקע', time_ms=3000)
@@ -415,18 +450,54 @@ def _show_pyxbmct():
                     kodi_utils.set_current_subtitle(link)
                 except Exception:
                     pass
+                try:
+                    timing_selection = kodi_utils.current_subtitle_selection(
+                        expected_link=link)
+                except Exception:
+                    timing_selection = {}
+
+                def _still_current():
+                    try:
+                        return bool(kodi_utils.subtitle_selection_matches(
+                            timing_selection.get('token') or '',
+                            timing_selection.get('link_hash') or '',
+                            timing_selection.get('stream_hash') or ''))
+                    except Exception:
+                        return False
                 payload = _t._decode_link(link) or {}
                 kind = payload.get('type')
                 # Embedded pick: switch Kodi's stream, no file to deliver.
                 if kind == 'engine' and payload.get('embedded'):
                     try:
                         from resources.lib import subs_engine_bridge
-                        subs_engine_bridge.select_embedded(
-                            payload.get('stream_index'),
-                            payload.get('lang') or 'he')
+                        if (not _still_current()
+                                or not subs_engine_bridge.select_embedded(
+                                    payload.get('stream_index'),
+                                    payload.get('lang') or 'he')
+                                or not _still_current()):
+                            self._set_head(
+                                '[B][COLOR red]הפעלת התרגום המובנה נכשלה'
+                                '[/COLOR][/B]')
+                            kodi_utils.abandon_subtitle_selection(
+                                timing_selection)
+                            return
+                        kodi_utils.set_subtitle_sync_status(
+                            'confirmed', source='embedded',
+                            selection_token=(
+                                timing_selection.get('token') or ''),
+                            link_hash=(
+                                timing_selection.get('link_hash') or ''),
+                            stream_hash=(
+                                timing_selection.get('stream_hash') or ''))
                     except Exception as _e:
                         _log('embedded select failed: {0}'.format(_e),
                              level='WARNING')
+                        self._set_head(
+                            '[B][COLOR red]הפעלת התרגום המובנה נכשלה'
+                            '[/COLOR][/B]')
+                        kodi_utils.abandon_subtitle_selection(
+                            timing_selection)
+                        return
                     self._set_head('[B][COLOR lightgreen]הופעל תרגום '
                                    'מובנה[/COLOR][/B]')
                     return
@@ -441,16 +512,19 @@ def _show_pyxbmct():
                 # Ready Hebrew subs (passthrough / pool / human engine): quick
                 # download -> apply and CLOSE the window. On failure, keep it
                 # open so the user can pick another.
-                path = _t.resolve(link, self.info)
-                if path and os.path.isfile(path):
-                    p = xbmc.Player()
-                    if p.isPlayingVideo():
-                        p.setSubtitles(path)
-                        p.showSubtitles(True)
-                    try:
-                        kodi_utils.set_current_subtitle(link)
-                    except Exception:
-                        pass
+                path = _t.resolve(
+                    link, self.info, selection=timing_selection)
+                if (path and os.path.isfile(path) and _still_current()):
+                    if kodi_utils.apply_subtitle_file(
+                            path, selection=timing_selection):
+                        self.close()
+                    elif not _still_current():
+                        self.close()
+                    else:
+                        self._set_head(
+                            '[B][COLOR red]הפעלת הכתובית נכשלה, נסה אחרת'
+                            '[/COLOR][/B]')
+                elif path and not _still_current():
                     self.close()
                 else:
                     self._set_head('[B][COLOR red]ההורדה נכשלה, נסה '
@@ -508,6 +582,9 @@ def _classify(c, info, translate):
             head, rel = disp.split(sep, 1)
             break
     head, rel = head.strip(), rel.strip()
+    sync_label = (c.get('_subsync_label') or '').strip()
+    if current and sync_label:
+        rel = sync_label + ((' · ' + rel) if rel else '')
     code = _norm_lang(lang)
     is_he = (code == 'he') or (lang.lower() in ('he', 'iw', 'heb'))
     he_name = _LANG_HE.get(code or lang[:2].lower())
@@ -542,28 +619,62 @@ def _deliver_pick(c, info, close_cb):
             kodi_utils.set_current_subtitle(link)
         except Exception:
             pass
+        try:
+            timing_selection = kodi_utils.current_subtitle_selection(
+                expected_link=link)
+        except Exception:
+            timing_selection = {}
+
+        def _still_current():
+            try:
+                return bool(kodi_utils.subtitle_selection_matches(
+                    timing_selection.get('token') or '',
+                    timing_selection.get('link_hash') or '',
+                    timing_selection.get('stream_hash') or ''))
+            except Exception:
+                return False
         payload = _t._decode_link(link) or {}
         kind = payload.get('type')
         if kind == 'engine' and payload.get('embedded'):
             try:
                 from resources.lib import subs_engine_bridge
-                subs_engine_bridge.select_embedded(
-                    payload.get('stream_index'), payload.get('lang') or 'he')
-                kodi_utils.notify('הופעל תרגום מובנה', time_ms=2500)
+                selected = bool(
+                    _still_current()
+                    and subs_engine_bridge.select_embedded(
+                        payload.get('stream_index'),
+                        payload.get('lang') or 'he')
+                    and _still_current())
+                if selected:
+                    kodi_utils.set_subtitle_sync_status(
+                        'confirmed', source='embedded',
+                        selection_token=(timing_selection.get('token') or ''),
+                        link_hash=(timing_selection.get('link_hash') or ''),
+                        stream_hash=(timing_selection.get('stream_hash') or ''))
+                    kodi_utils.notify('הופעל תרגום מובנה', time_ms=2500)
+                else:
+                    kodi_utils.abandon_subtitle_selection(timing_selection)
+                    kodi_utils.notify(
+                        'הפעלת התרגום המובנה נכשלה', time_ms=3000)
             except Exception as _e:
                 _log('embedded select failed: {0}'.format(_e), level='WARNING')
+                kodi_utils.abandon_subtitle_selection(timing_selection)
             close_cb()
             return
         if kind in ('engine_ai', 'ai', 'embedded_ai'):
             close_cb()
             _start_ai_apply(link, info)
             return
-        path = _t.resolve(link, info)
-        if path and os.path.isfile(path):
-            p = xbmc.Player()
-            if p.isPlayingVideo():
-                p.setSubtitles(path)
-                p.showSubtitles(True)
+        path = _t.resolve(link, info, selection=timing_selection)
+        if path and os.path.isfile(path) and _still_current():
+            if kodi_utils.apply_subtitle_file(
+                    path, selection=timing_selection):
+                close_cb()
+            elif not _still_current():
+                close_cb()
+            else:
+                kodi_utils.notify(
+                    'הפעלת הכתובית נכשלה, נסה אחרת', time_ms=3500)
+        elif path and not _still_current():
             close_cb()
         else:
             kodi_utils.notify('ההורדה נכשלה, נסה אחרת', time_ms=3500)

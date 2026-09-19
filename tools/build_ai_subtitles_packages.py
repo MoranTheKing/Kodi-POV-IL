@@ -387,19 +387,14 @@ def _start_subsync_delay_watch(monitor):
                     except Exception:
                         playing = False
                     if playing:
-                        raw = xbmcgui.Window(10000).getProperty(
-                            _ss._DELIVERED_PROP) or ''
-                        rec = None
-                        if raw:
-                            try:
-                                rec = json.loads(raw)
-                            except Exception:
-                                rec = None
+                        rec = _ss.current_delivery_record()
                         if rec and (active is None
                                     or rec.get('key') != active.get('key')
                                     or float(rec.get('ts') or 0)
                                     != float(active.get('ts') or 0)):
                             active, watched, last_delay = rec, 0, 0.0
+                        elif not rec:
+                            active, watched, last_delay = None, 0, 0.0
                         if active is not None:
                             watched += 10
                             last_delay = _delay_now()
@@ -423,11 +418,7 @@ def _start_subsync_delay_watch(monitor):
                                     '({0}, {1:+.0f}ms, watched {2}s)'.format(
                                         rep['status'], rep['offset_ms'],
                                         watched), level='INFO')
-                        try:
-                            xbmcgui.Window(10000).clearProperty(
-                                _ss._DELIVERED_PROP)
-                        except Exception:
-                            pass
+                        _ss.clear_delivery_record(active)
                         active, watched, last_delay = None, 0, 0.0
                 except Exception:
                     pass
