@@ -94,7 +94,9 @@ SLIM_SERVICE = r'''# Clean standalone service for Kodi POV IL AI Subtitles.
 # and does not touch unrelated update state. It only keeps the AI
 # subtitle flow and required DarkSubs/OpenSubtitles integration alive.
 
+import json
 import os
+import threading
 
 try:
     import xbmc
@@ -320,6 +322,116 @@ def _start_pool_queue_drainer(monitor):
                 except Exception:
                     backlog = bool(left)
                 if monitor.waitForAbort(20 if backlog else 60):
+                    break
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_loop, daemon=True).start()
+    except Exception:
+        pass
+
+
+def _start_subsync_drainer(monitor):
+    """Run slow SubSync verification outside the subtitle picker thread."""
+    def _loop():
+        try:
+            if monitor.waitForAbort(1.0):
+                return
+            from resources.lib import subsync as _ss
+            while not monitor.abortRequested():
+                try:
+                    _ss.drain_queue_once()
+                except Exception:
+                    pass
+                if monitor.waitForAbort(1.0):
+                    break
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_loop, daemon=True).start()
+    except Exception:
+        pass
+
+
+def _start_subsync_delay_watch(monitor):
+    """Learn a settled manual subtitle delay for the exact playing cut."""
+    def _delay_now():
+        try:
+            raw = xbmc.executeJSONRPC(json.dumps({
+                'jsonrpc': '2.0', 'id': 1,
+                'method': 'Player.GetProperties',
+                'params': {'playerid': 1,
+                           'properties': ['subtitledelay']}}))
+            return float((json.loads(raw).get('result') or {})
+                         .get('subtitledelay') or 0.0)
+        except Exception:
+            return 0.0
+
+    def _loop():
+        try:
+            if monitor.waitForAbort(2.0):
+                return
+            from resources.lib import subsync as _ss
+            from resources.lib import pool as _pool
+            from resources.lib import kodi_utils
+            import xbmcgui
+            active, watched, last_delay = None, 0, 0.0
+            reported = set()
+            while not monitor.abortRequested():
+                try:
+                    playing = False
+                    try:
+                        playing = xbmc.Player().isPlayingVideo()
+                    except Exception:
+                        playing = False
+                    if playing:
+                        raw = xbmcgui.Window(10000).getProperty(
+                            _ss._DELIVERED_PROP) or ''
+                        rec = None
+                        if raw:
+                            try:
+                                rec = json.loads(raw)
+                            except Exception:
+                                rec = None
+                        if rec and (active is None
+                                    or rec.get('key') != active.get('key')
+                                    or float(rec.get('ts') or 0)
+                                    != float(active.get('ts') or 0)):
+                            active, watched, last_delay = rec, 0, 0.0
+                        if active is not None:
+                            watched += 10
+                            last_delay = _delay_now()
+                    elif active is not None:
+                        akey = active.get('key') or ''
+                        if akey and akey not in reported:
+                            rep = _ss.finalize_delay_session(
+                                active, last_delay, watched)
+                            if rep:
+                                _ss.store_human_verdict(rep)
+                                _pool.report_sync(
+                                    rep.get('info') or {}, rep['sub_hash'],
+                                    _ss._sync_registry_release(
+                                        rep['release'],
+                                        rep.get('cut_signature') or ''),
+                                    rep['scale'], rep['offset_ms'],
+                                    rep['status'], origin='human')
+                                reported.add(akey)
+                                kodi_utils.log(
+                                    'subsync delay-watch: human report '
+                                    '({0}, {1:+.0f}ms, watched {2}s)'.format(
+                                        rep['status'], rep['offset_ms'],
+                                        watched), level='INFO')
+                        try:
+                            xbmcgui.Window(10000).clearProperty(
+                                _ss._DELIVERED_PROP)
+                        except Exception:
+                            pass
+                        active, watched, last_delay = None, 0, 0.0
+                except Exception:
+                    pass
+                if monitor.waitForAbort(10.0):
                     break
         except Exception:
             pass
@@ -685,6 +797,13 @@ def main():
         return
     if _check_first_run_marker():
         return
+
+    # The standalone carries the complete SubSync stack too. Slow file
+    # verification and viewer-confirmed delay learning therefore need the same
+    # long-lived workers as the build edition; otherwise jobs stay on disk and
+    # a manual correction is never scoped to its exact media cut.
+    _start_subsync_drainer(xbmc.Monitor())
+    _start_subsync_delay_watch(xbmc.Monitor())
 
     _prune_once()
     _maybe_purge_temp_once()

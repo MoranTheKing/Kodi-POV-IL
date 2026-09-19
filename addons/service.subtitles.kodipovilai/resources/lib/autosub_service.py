@@ -293,6 +293,11 @@ def autosub_on_play():
         # (list_candidates already queued every human Ktuvit release for the
         # background harvest; the service drainer downloads + uploads them
         # gently over time. Nothing to do here.)
+        try:
+            from resources.lib import subsync
+            cands = subsync.rank_ready_candidates(info, cands)
+        except Exception:
+            pass
         # Try the ready Hebrew candidates in priority order until one actually
         # downloads. If a source fails (e.g. Ktuvit rate-limited / "refused"),
         # skip the rest from that SAME source (they fail identically) and move
