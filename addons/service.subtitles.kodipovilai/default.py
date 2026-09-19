@@ -80,6 +80,31 @@ def _safe_log(msg, level='INFO'):
             pass
 
 
+def _encode_selection_b64(selection):
+    """Serialize only opaque selection hashes/tokens for a RunScript baton."""
+    try:
+        import base64
+        import json
+        safe = {k: (selection or {}).get(k, '')
+                for k in ('token', 'link_hash', 'stream_hash')}
+        raw = json.dumps(safe, separators=(',', ':')).encode('utf-8')
+        return base64.b64encode(raw).decode('ascii')
+    except Exception:
+        return ''
+
+
+def _decode_selection_b64(value):
+    try:
+        import base64
+        import json
+        raw = base64.b64decode((value or '').encode('ascii')).decode('utf-8')
+        data = json.loads(raw)
+        return {k: (data.get(k) or '')
+                for k in ('token', 'link_hash', 'stream_hash')}
+    except Exception:
+        return {}
+
+
 def _handle_search(handle, params):
     """List available subtitles. Kodi calls this when the user opens
     the subtitle search dialog."""
@@ -155,6 +180,9 @@ def _handle_search(handle, params):
                 _rating = str(_stars)
             else:
                 _rating = str(c.get('rating', '4'))
+            sync_label = (c.get('_subsync_label') or '').strip()
+            if sync_label:
+                label = '{0} · {1}'.format(label, sync_label)
             listitem = xbmcgui.ListItem(label=c.get('language', 'he'),
                                         label2=label)
             listitem.setArt({'icon': _rating,
@@ -197,6 +225,20 @@ def _handle_download(handle, params):
         kodi_utils.set_current_subtitle(link)
     except Exception:
         pass
+    try:
+        _timing_selection = kodi_utils.current_subtitle_selection(
+            expected_link=link)
+    except Exception:
+        _timing_selection = {}
+
+    def _timing_selection_current():
+        try:
+            return bool(kodi_utils.subtitle_selection_matches(
+                _timing_selection.get('token') or '',
+                _timing_selection.get('link_hash') or '',
+                _timing_selection.get('stream_hash') or ''))
+        except Exception:
+            return False
 
     # If the user picked an engine "translate from <lang>" entry, download the
     # source sub NOW, then continue as a local 'ai' link. This lets the fast
@@ -215,17 +257,28 @@ def _handle_download(handle, params):
     # cacheToDisc=True). The sleep(100) is essential: it lets the dialog finish
     # closing BEFORE endOfDirectory, otherwise Kodi shows "download failed".
     if _p and _p.get('type') == 'engine' and _p.get('embedded'):
+        _embedded_selected = False
         try:
             from resources.lib import subs_engine_bridge
             # Pass the picked language through. It was being dropped here and
             # only here, which left the out-of-range fallback inside
             # select_embedded re-finding a HEBREW stream for a '[מובנה] EN'
             # pick.
-            if subs_engine_bridge.select_embedded(_p.get('stream_index'),
-                                                  lang=_p.get('lang')):
+            if (_timing_selection_current()
+                    and subs_engine_bridge.select_embedded(
+                        _p.get('stream_index'), lang=_p.get('lang'))
+                    and _timing_selection_current()):
+                _embedded_selected = True
+                kodi_utils.set_subtitle_sync_status(
+                    'confirmed', source='embedded',
+                    selection_token=_timing_selection.get('token') or '',
+                    link_hash=_timing_selection.get('link_hash') or '',
+                    stream_hash=_timing_selection.get('stream_hash') or '')
                 kodi_utils.notify('כתובית עברית מובנה הופעלה', time_ms=3000)
         except Exception as _e:
             _safe_log('embedded select failed: {0}'.format(_e), level='WARNING')
+        if not _embedded_selected:
+            kodi_utils.abandon_subtitle_selection(_timing_selection)
         try:
             xbmc.executebuiltin('Dialog.Close(all,true)')
             xbmcplugin.addDirectoryItems(handle, [], 0)
@@ -276,19 +329,25 @@ def _handle_download(handle, params):
         try:
             from resources.lib import subs_engine_bridge as _seb
             _si = _p.get('stream_index')
-            if _si is not None:
+            if _si is not None and _timing_selection_current():
                 _seb.select_embedded(_si, lang=_p.get('src_lang') or 'en')
         except Exception:
             pass
         try:
-            import base64 as _b64m
-            _lk = _b64m.b64encode(link.encode('utf-8')).decode('ascii')
-            _sd = _b64m.b64encode(b'').decode('ascii')
-            xbmc.executebuiltin(
-                'RunScript(service.subtitles.kodipovilai,'
-                'action=bg_translate_picker,link_b64={0},source_id_b64={1})'
-                .format(_lk, _sd))
-            kodi_utils.notify('AI: מחלץ ומתרגם תרגום מובנה ברקע', time_ms=3500)
+            # A source-track switch can yield to Kodi. If another subtitle was
+            # selected meanwhile, close this old picker cleanly but do not fire
+            # a stale extraction/translation job.
+            if _timing_selection_current():
+                import base64 as _b64m
+                _lk = _b64m.b64encode(link.encode('utf-8')).decode('ascii')
+                _sd = _b64m.b64encode(b'').decode('ascii')
+                _ss = _encode_selection_b64(_timing_selection)
+                xbmc.executebuiltin(
+                    'RunScript(service.subtitles.kodipovilai,'
+                    'action=bg_translate_picker,link_b64={0},source_id_b64={1},'
+                    'selection_b64={2})'.format(_lk, _sd, _ss))
+                kodi_utils.notify(
+                    'AI: מחלץ ומתרגם תרגום מובנה ברקע', time_ms=3500)
         except Exception as _e:
             _safe_log('embedded_ai bg fire failed: {0}'.format(_e),
                       level='WARNING')
@@ -322,7 +381,8 @@ def _handle_download(handle, params):
         fast_mode = False
     if fast_mode:
         try:
-            if _try_fast_download(handle, link, info):
+            if _try_fast_download(
+                    handle, link, info, selection=_timing_selection):
                 return  # endOfDirectory was called inside the helper
         except Exception as _e:
             _safe_log('fast_download outer guard caught: {0}'
@@ -345,10 +405,11 @@ def _handle_download(handle, params):
             _sid = translate._source_id_for_ai(_ai_payload) or ''
             _lk = _b64m.b64encode(link.encode('utf-8')).decode('ascii')
             _sd = _b64m.b64encode(_sid.encode('utf-8')).decode('ascii')
+            _ss = _encode_selection_b64(_timing_selection)
             xbmc.executebuiltin(
                 'RunScript(service.subtitles.kodipovilai,'
-                'action=bg_translate_picker,link_b64={0},source_id_b64={1})'
-                .format(_lk, _sd))
+                'action=bg_translate_picker,link_b64={0},source_id_b64={1},'
+                'selection_b64={2})'.format(_lk, _sd, _ss))
             try:
                 kodi_utils.notify('AI: מתרגם לעברית ברקע', time_ms=3500)
             except Exception:
@@ -415,7 +476,8 @@ def _handle_download(handle, params):
             pass
 
     try:
-        path = translate.resolve(link, info, progress_cb=report)
+        path = translate.resolve(
+            link, info, progress_cb=report, selection=_timing_selection)
     except Exception as e:
         _safe_log('resolve crashed: {0}'.format(e), level='ERROR')
         path = None
@@ -429,31 +491,53 @@ def _handle_download(handle, params):
     # If the picked subtitle failed to download (e.g. Ktuvit rate-limited),
     # don't leave the user stuck on it -- automatically try the NEXT available
     # ready Hebrew subtitles and deliver the first that works.
-    if not (path and os.path.isfile(path)):
+    fallback_selection = None
+    if (not (path and os.path.isfile(path))
+            and _timing_selection_current()):
         try:
-            path = _try_next_hebrew(link, info)
+            fallback = _try_next_hebrew(
+                link, info, owner_selection=_timing_selection)
+            if fallback:
+                path, link, fallback_selection = fallback
+                _timing_selection = fallback_selection
         except Exception as e:
             _safe_log('next-hebrew fallback failed: {0}'.format(e),
                       level='WARNING')
 
-    if path and os.path.isfile(path):
+    if (path and os.path.isfile(path)
+            and _timing_selection_current()):
         # Internet-stream workaround: hand the SRT to the player ourselves
         # under a meaningful, unique name so it doesn't collapse into the
         # generic shared "TempSubtitle" file Kodi would create. Falls back
         # to the normal addDirectoryItem flow on local playback or failure.
         delivered = False
         try:
-            delivered = _deliver_named_subtitle(handle, path, link, info)
+            delivered = _deliver_named_subtitle(
+                handle, path, link, info, selection=_timing_selection)
         except Exception as _e:
             _safe_log('named subtitle delivery failed: {0}'.format(_e),
                       level='WARNING')
             delivered = False
         if delivered:
             return  # endOfDirectory already called inside the helper
+        if not _timing_selection_current():
+            xbmcplugin.endOfDirectory(handle)
+            return
         listitem = xbmcgui.ListItem(label=path)
-        xbmcplugin.addDirectoryItem(handle=handle, url=path,
-                                    listitem=listitem,
-                                    isFolder=False)
+        registration_before = kodi_utils.subtitle_sync_registration_baseline(
+            path, selection=_timing_selection)
+        added = xbmcplugin.addDirectoryItem(
+            handle=handle, url=path, listitem=listitem, isFolder=False)
+        xbmcplugin.endOfDirectory(handle)
+        registration_confirmed = True
+        if added is not False and registration_before is not None:
+            registration_confirmed = kodi_utils.confirm_subtitle_sync_registration(
+                path, selection=_timing_selection,
+                before=registration_before)
+        if added is False or not registration_confirmed:
+            kodi_utils.abandon_subtitle_selection(_timing_selection)
+        return
+    kodi_utils.abandon_subtitle_selection(_timing_selection)
     xbmcplugin.endOfDirectory(handle)
 
 
@@ -602,7 +686,7 @@ def _subtitle_display_name(link, info, path):
     return ''
 
 
-def _deliver_named_subtitle(handle, path, link, info):
+def _deliver_named_subtitle(handle, path, link, info, selection=None):
     """Internet-stream workaround for two Kodi-core subtitle behaviours.
 
     When the playing file is an HTTP(S) stream (debrid/CDN), Kodi's
@@ -632,6 +716,19 @@ def _deliver_named_subtitle(handle, path, link, info):
     from resources.lib import kodi_utils
     if xbmc is None:
         return False
+    expected = selection or {}
+
+    def _still_current():
+        try:
+            return bool(kodi_utils.subtitle_selection_matches(
+                expected.get('token') or '',
+                expected.get('link_hash') or '',
+                expected.get('stream_hash') or ''))
+        except Exception:
+            return False
+
+    if not _still_current():
+        return False
     # Only internet streams hit the TempSubtitle path. Local playback gets
     # a sane video-derived name from Kodi (and may be stored alongside the
     # video), so leave that flow completely untouched.
@@ -658,12 +755,12 @@ def _deliver_named_subtitle(handle, path, link, info):
         _safe_log('named subtitle copy failed: {0}'.format(_e),
                   level='WARNING')
         return False
-    try:
-        p = xbmc.Player()
-        p.setSubtitles(dest)
-        p.showSubtitles(True)
-    except Exception as _e:
-        _safe_log('named subtitle setSubtitles failed: {0}'.format(_e),
+    if not _still_current():
+        return False
+    if not kodi_utils.apply_subtitle_file(
+            dest, selection=expected, fix_path=path,
+            abandon_on_failure=False):
+        _safe_log('named subtitle setSubtitles failed or became stale',
                   level='WARNING')
         return False
     # Close the dialog cleanly with no item -- same sequence the embedded
@@ -684,7 +781,7 @@ def _deliver_named_subtitle(handle, path, link, info):
     return True
 
 
-def _try_next_hebrew(failed_link, info):
+def _try_next_hebrew(failed_link, info, owner_selection=None):
     """The user's picked subtitle failed -- fall back to the next ready Hebrew
     options so they aren't stuck on the failed one. Re-lists candidates and
     resolves the next non-AI, non-embedded Hebrew entries (engine human / pool /
@@ -705,6 +802,16 @@ def _try_next_hebrew(failed_link, info):
     except Exception:
         return None
     tried = 0
+    owned = dict(owner_selection or {})
+
+    def _owns_current():
+        try:
+            return bool(kodi_utils.subtitle_selection_matches(
+                owned.get('token') or '', owned.get('link_hash') or '',
+                owned.get('stream_hash') or ''))
+        except Exception:
+            return False
+
     for c in candidates:
         if tried >= 8:
             break
@@ -726,23 +833,42 @@ def _try_next_hebrew(failed_link, info):
         if kind == 'engine' and p2.get('embedded'):
             continue  # embedded delivers no file
         tried += 1
+        # A fallback may take seconds. A manual pick made while it runs owns
+        # the player, so stop instead of replacing it with the next fallback.
+        if not _owns_current():
+            return None
         try:
-            path = translate.resolve(link2, info)
+            # The fallback becomes the real selected candidate. Set it before
+            # resolve() so a queued SubSync result is attached to this row.
+            kodi_utils.set_current_subtitle(link2)
+            selection = kodi_utils.current_subtitle_selection(
+                expected_link=link2)
+            owned = dict(selection or {})
+            if not _owns_current():
+                return None
+            path = translate.resolve(
+                link2, info, selection=selection)
         except Exception:
             path = None
-        if path and os.path.isfile(path):
+        if not _owns_current():
+            return None
+        if (path and os.path.isfile(path)
+                and kodi_utils.subtitle_selection_matches(
+                    selection.get('token') or '',
+                    selection.get('link_hash') or '',
+                    selection.get('stream_hash') or '')):
             try:
                 kodi_utils.notify('הכתובית הקודמת נכשלה — נטענה הבאה בתור',
                                   time_ms=4000)
             except Exception:
                 pass
-            return path
+            return path, link2, selection
         if src:
             failed_sources.add(src)  # this source failed too -- skip its siblings
     return None
 
 
-def _try_fast_download(handle, link, info):
+def _try_fast_download(handle, link, info, selection=None):
     """Native-picker fast path. Returns True on success
     (endOfDirectory was called). Returns False to mean 'fall
     through to the legacy slow flow' for any case the fast path
@@ -815,18 +941,40 @@ def _try_fast_download(handle, link, info):
                 cached_delivery = translate._sync_hebrew_delivery(
                     info, cached,
                     source_release=(payload.get('release') or ''),
-                    embedded_timing=bool(payload.get('embedded')))
+                    embedded_timing=bool(payload.get('embedded')),
+                    selection=selection)
                 listitem = xbmcgui.ListItem(label=cached_delivery)
-                xbmcplugin.addDirectoryItem(
+                registration_before = (
+                    kodi_utils.subtitle_sync_registration_baseline(
+                        cached_delivery, selection=selection))
+                added = xbmcplugin.addDirectoryItem(
                     handle=handle, url=cached_delivery,
                     listitem=listitem, isFolder=False)
                 xbmcplugin.endOfDirectory(handle)
-                try:
-                    kodi_utils.notify(
-                        'AI: כתוביות מ-cache (תרגום קודם)',
-                        time_ms=3000)
-                except Exception:
-                    pass
+                registration_confirmed = True
+                if added is not False and registration_before is not None:
+                    try:
+                        registration_confirmed = (
+                            kodi_utils.confirm_subtitle_sync_registration(
+                            cached_delivery, selection=selection,
+                            before=registration_before))
+                    except Exception:
+                        registration_confirmed = False
+                if added is False or not registration_confirmed:
+                    kodi_utils.abandon_subtitle_selection(selection)
+                    try:
+                        kodi_utils.notify(
+                            'הפעלת הכתובית מהמטמון נכשלה',
+                            time_ms=3500)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        kodi_utils.notify(
+                            'AI: כתוביות מ-cache (תרגום קודם)',
+                            time_ms=3000)
+                    except Exception:
+                        pass
                 return True
         except Exception as _e:
             _safe_log('fast_download cache check failed: {0}'
@@ -880,10 +1028,13 @@ def _try_fast_download(handle, link, info):
     # in seconds. endOfDirectory() ends this subprocess; the BG
     # RunScript below picks up the Hebrew translation.
     listitem = xbmcgui.ListItem(label=fallback_path)
-    xbmcplugin.addDirectoryItem(
+    added = xbmcplugin.addDirectoryItem(
         handle=handle, url=fallback_path,
         listitem=listitem, isFolder=False)
     xbmcplugin.endOfDirectory(handle)
+    if added is False:
+        kodi_utils.abandon_subtitle_selection(selection)
+        return True
 
     try:
         kodi_utils.notify(
@@ -901,11 +1052,12 @@ def _try_fast_download(handle, link, info):
             link.encode('utf-8')).decode('ascii')
         source_id_b64 = base64.b64encode(
             (source_id or '').encode('utf-8')).decode('ascii')
+        selection_b64 = _encode_selection_b64(selection)
         xbmc.executebuiltin(
             'RunScript(service.subtitles.kodipovilai,'
             'action=bg_translate_picker,'
-            'link_b64={0},source_id_b64={1})'.format(
-                link_b64, source_id_b64))
+            'link_b64={0},source_id_b64={1},selection_b64={2})'.format(
+                link_b64, source_id_b64, selection_b64))
     except Exception as _e:
         _safe_log('fast_download BG fire failed: {0}'.format(_e),
                   level='ERROR')
@@ -962,9 +1114,31 @@ def _handle_bg_translate_picker(params):
 
     link = _b64(params.get('link_b64', ''))
     expected_source_id = _b64(params.get('source_id_b64', ''))
+    _timing_selection = _decode_selection_b64(
+        params.get('selection_b64', ''))
     if not link:
         _safe_log('bg_translate_picker: missing link',
                   level='WARNING')
+        return
+
+    # A delayed RunScript for selection A may start after the viewer has
+    # already chosen B.  Do not let A claim the live-translation job, clear or
+    # replace B's subtitle.  The next explicit pick can translate A again.
+    def _selection_is_current():
+        try:
+            return bool(kodi_utils.subtitle_selection_matches(
+                _timing_selection.get('token') or '',
+                _timing_selection.get('link_hash') or '',
+                _timing_selection.get('stream_hash') or ''))
+        except Exception:
+            return False
+
+    try:
+        if not _selection_is_current():
+            _safe_log('bg_translate_picker: stale selection discarded',
+                      level='INFO')
+            return
+    except Exception:
         return
 
     info = kodi_utils.current_video_info()
@@ -1018,11 +1192,12 @@ def _handle_bg_translate_picker(params):
             pass
 
     def on_phase(phase, payload):
-        if phase == 'done':
-            _completion['seen'] = True
         try:
-            if not _owns_translation_job(_job_token):
+            if (not _owns_translation_job(_job_token)
+                    or not _selection_is_current()):
                 return
+            if phase == 'done':
+                _completion['seen'] = True
             if phase in ('chunk_ready', 'done'):
                 win = xbmcgui.Window(10000)
                 if (win.getProperty('ai_subs.live_translate_active') != '1'
@@ -1081,12 +1256,17 @@ def _handle_bg_translate_picker(params):
                 with open(_tmp, 'w', encoding='utf-8') as _f:
                     _f.write(payload['merged_text'])
                 os.replace(_tmp, ver_path)
+                if (not _owns_translation_job(_job_token)
+                        or not _selection_is_current()):
+                    return
                 try:
                     if xbmc.Player().isPlayingVideo():
-                        if not _owns_translation_job(_job_token):
+                        if (not _owns_translation_job(_job_token)
+                                or not _selection_is_current()):
                             return
-                        xbmc.Player().setSubtitles(ver_path)
-                        xbmc.Player().showSubtitles(True)
+                        kodi_utils.apply_subtitle_file(
+                            ver_path, selection=_timing_selection,
+                            abandon_on_failure=False)
                 except Exception as _e:
                     _safe_log(
                         'bg_translate_picker setSubtitles raised: '
@@ -1147,7 +1327,8 @@ def _handle_bg_translate_picker(params):
                                     'failed: {0}'.format(_we),
                                     level='WARNING')
                                 _final_path = None
-                            if _final_path:
+                            if (_final_path and _owns_translation_job(_job_token)
+                                    and _selection_is_current()):
                                 try:
                                     p = xbmc.Player()
                                     # setSubtitles() POSTS to the
@@ -1168,7 +1349,8 @@ def _handle_bg_translate_picker(params):
                                             p.getAvailableSubtitleStreams() or [])
                                     except Exception:
                                         _before = -1
-                                    if not _owns_translation_job(_job_token):
+                                    if (not _owns_translation_job(_job_token)
+                                            or not _selection_is_current()):
                                         return
                                     if payload.get('_cached_media'):
                                         # Copying the final file can race a
@@ -1178,10 +1360,16 @@ def _handle_bg_translate_picker(params):
                                             return
                                     p.setSubtitles(_final_path)
                                     p.showSubtitles(True)
+                                    if not _selection_is_current():
+                                        return
                                     _grew = False
                                     if _before >= 0:
                                         for _ in range(20):      # <= 1s
                                             xbmc.sleep(50)
+                                            if (not _owns_translation_job(
+                                                    _job_token)
+                                                    or not _selection_is_current()):
+                                                return
                                             try:
                                                 _streams = (
                                                     p.getAvailableSubtitleStreams()
@@ -1189,22 +1377,25 @@ def _handle_bg_translate_picker(params):
                                             except Exception:
                                                 break
                                             if len(_streams) > _before:
-                                                _grew = True
                                                 # Pin our stream so Kodi
                                                 # does not auto-revert to
                                                 # a pre-existing Hebrew
                                                 # SRT.
                                                 try:
-                                                    if not _owns_translation_job(_job_token):
+                                                    if (not _owns_translation_job(
+                                                            _job_token)
+                                                            or not _selection_is_current()):
                                                         return
                                                     if (payload.get('_cached_media')
                                                             and (p.getPlayingFile() or '') != payload['_cached_media']):
                                                         return
                                                     p.setSubtitleStream(
                                                         len(_streams) - 1)
+                                                    _grew = True
                                                 except Exception:
-                                                    pass
+                                                    _grew = False
                                                 break
+                                    _registered_and_pinned = _grew
                                     if not _grew and not _playing_now():
                                         # Nobody to strand: with no player
                                         # there is no stream pointing at a
@@ -1222,6 +1413,14 @@ def _handle_bg_translate_picker(params):
                                             'the player may still be on',
                                             level='WARNING')
                                     _canonical_swap_succeeded = _grew
+                                    if (_registered_and_pinned
+                                            and _selection_is_current()):
+                                        kodi_utils.mark_subtitle_delivery_applied(
+                                            canonical,
+                                            selection=_timing_selection)
+                                        kodi_utils.confirm_subtitle_sync_fix(
+                                            canonical,
+                                            selection=_timing_selection)
                                 except Exception as _se:
                                     _safe_log(
                                         'bg_translate_picker done '
@@ -1233,7 +1432,9 @@ def _handle_bg_translate_picker(params):
                             'swap failed: {0}'.format(_e),
                             level='DEBUG')
                 # Cleanup ONLY when the canonical swap succeeded.
-                if _canonical_swap_succeeded and _owns_translation_job(_job_token):
+                if (_canonical_swap_succeeded
+                        and _owns_translation_job(_job_token)
+                        and _selection_is_current()):
                     try:
                         import glob as _glob
                         # Patterns cover legacy (_v*), the hash-named
@@ -1263,15 +1464,18 @@ def _handle_bg_translate_picker(params):
 
     _resolved = None
     try:
-        _resolved = translate.resolve(link, info, progressive_cb=on_phase,
-                                      extract_progress_cb=_extract_progress)
+        _resolved = translate.resolve(
+            link, info, progressive_cb=on_phase,
+            extract_progress_cb=_extract_progress,
+            selection=_timing_selection)
         # Cache and community early returns do not emit progressive phases.
         # Deliver their validated result through the same final-swap path,
         # before clearing this job's ownership. Never replace a newer pick or
         # attach a completed result to a different movie.
         if (_resolved and not _completion['seen']
                 and os.path.isfile(_resolved)
-                and _owns_translation_job(_job_token)):
+                and _owns_translation_job(_job_token)
+                and _selection_is_current()):
             try:
                 _current_media = xbmc.Player().getPlayingFile() or ''
             except Exception:
@@ -2673,6 +2877,24 @@ def _handle_translate_file(params):
     }
     link = urllib.parse.quote(
         json.dumps(payload, ensure_ascii=False))
+    # DarkSubs invoked this delivery outside MoranSubs's own picker, so bind
+    # the timing job here. Without this, a status from an earlier subtitle
+    # could be mistaken for the translation being produced now.
+    kodi_utils.set_current_subtitle(link)
+    _timing_selection = kodi_utils.current_subtitle_selection(
+        expected_link=link)
+
+    def _timing_selection_current():
+        try:
+            return bool(kodi_utils.subtitle_selection_matches(
+                _timing_selection.get('token') or '',
+                _timing_selection.get('link_hash') or '',
+                _timing_selection.get('stream_hash') or ''))
+        except Exception:
+            return False
+
+    if not _timing_selection_current():
+        return
 
     translated_path = None
     # Same toast-milestone-driven pattern as _handle_download.
@@ -2756,7 +2978,8 @@ def _handle_translate_file(params):
     if not fast_mode:
         try:
             translated_path = translate.resolve(
-                link, info, progress_cb=report)
+                link, info, progress_cb=report,
+                selection=_timing_selection)
         except Exception as e:
             _safe_log('translate_file: resolve crashed: {0}'.format(e),
                       level='ERROR')
@@ -2771,6 +2994,16 @@ def _handle_translate_file(params):
             _safe_log('translate_file: resolve returned nothing',
                       level='WARNING')
             return
+
+        if not _timing_selection_current():
+            return
+
+        # translate.resolve() may have queued a deep timing job for this exact
+        # file. Capture Kodi's current stream count before DarkSubs sees the
+        # sentinel; the service worker is not allowed to verify/swap until the
+        # hook has visibly registered and selected this foreground delivery.
+        _delivery_before = kodi_utils.subtitle_sync_registration_baseline(
+            translated_path, selection=_timing_selection)
 
         # Copy translated content to the output path DarkSubs expects.
         try:
@@ -2810,13 +3043,23 @@ def _handle_translate_file(params):
                       level='ERROR')
             return
 
+        if not _timing_selection_current():
+            return
+
         # Touch the sentinel last -- the hook polls for it. Only after
         # the output is complete on disk.
+        _sentinel_ready = False
         try:
             open(out_path + '.ai_done', 'w').close()
+            _sentinel_ready = True
         except OSError as e:
             _safe_log('translate_file: sentinel write failed: {0}'
                       .format(e), level='WARNING')
+        if (_sentinel_ready and _delivery_before is not None
+                and not kodi_utils.confirm_subtitle_sync_registration(
+                translated_path, selection=_timing_selection,
+                before=_delivery_before, timeout_ms=2000)):
+            kodi_utils.abandon_subtitle_selection(_timing_selection)
         return
 
     # ---- fast_first_chunk path ------------------------------------
@@ -2843,7 +3086,8 @@ def _handle_translate_file(params):
 
     def on_phase(phase, payload):
         try:
-            if not _owns_translation_job(_job_token):
+            if (not _owns_translation_job(_job_token)
+                    or not _timing_selection_current()):
                 return
             if phase in ('chunk_ready', 'done'):
                 win = xbmcgui.Window(10000)
@@ -2857,7 +3101,8 @@ def _handle_translate_file(params):
                 with open(_tmp, 'w', encoding='utf-8') as _f:
                     _f.write(payload['fallback_text'])
                 os.replace(_tmp, out_path)
-                if not _owns_translation_job(_job_token):
+                if (not _owns_translation_job(_job_token)
+                        or not _timing_selection_current()):
                     return
                 xbmcgui.Window(10000).setProperty(
                     'ai_subs.live_translate_active', '1')
@@ -2889,11 +3134,13 @@ def _handle_translate_file(params):
                 try:
                     _attempts = 0
                     while _attempts < 12:
-                        if not _owns_translation_job(_job_token):
+                        if (not _owns_translation_job(_job_token)
+                                or not _timing_selection_current()):
                             return
                         if xbmc.Player().isPlayingVideo():
-                            xbmc.Player().setSubtitles(out_path)
-                            xbmc.Player().showSubtitles(True)
+                            kodi_utils.apply_subtitle_file(
+                                out_path, selection=_timing_selection,
+                                abandon_on_failure=False)
                             break
                         xbmc.sleep(250)
                         _attempts += 1
@@ -2936,12 +3183,17 @@ def _handle_translate_file(params):
                     _f.write(payload['merged_text'])
                 os.replace(_tmp, ver_path)
                 _ver['last_path'] = ver_path
+                if (not _owns_translation_job(_job_token)
+                        or not _timing_selection_current()):
+                    return
                 try:
                     if xbmc.Player().isPlayingVideo():
-                        if not _owns_translation_job(_job_token):
+                        if (not _owns_translation_job(_job_token)
+                                or not _timing_selection_current()):
                             return
-                        xbmc.Player().setSubtitles(ver_path)
-                        xbmc.Player().showSubtitles(True)
+                        kodi_utils.apply_subtitle_file(
+                            ver_path, selection=_timing_selection,
+                            abandon_on_failure=False)
                 except Exception as e:
                     _safe_log(
                         'translate_file fast: setSubtitles raised: '
@@ -3004,7 +3256,8 @@ def _handle_translate_file(params):
                                     'failed: {0}'.format(_we),
                                     level='WARNING')
                                 _final_path = None
-                            if _final_path:
+                            if (_final_path and _owns_translation_job(_job_token)
+                                    and _timing_selection_current()):
                                 # NOT gated on isPlayingVideo -- if
                                 # the user paused mid-translation,
                                 # setSubtitles is still useful for
@@ -3030,10 +3283,13 @@ def _handle_translate_file(params):
                                             p.getAvailableSubtitleStreams() or [])
                                     except Exception:
                                         _before = -1
-                                    if not _owns_translation_job(_job_token):
+                                    if (not _owns_translation_job(_job_token)
+                                            or not _timing_selection_current()):
                                         return
                                     p.setSubtitles(_final_path)
                                     p.showSubtitles(True)
+                                    if not _timing_selection_current():
+                                        return
                                     # Explicit stream selection: when
                                     # the user already had a Hebrew
                                     # SRT loaded BEFORE picking
@@ -3050,6 +3306,10 @@ def _handle_translate_file(params):
                                     if _before >= 0:
                                         for _ in range(20):      # <= 1s
                                             xbmc.sleep(50)
+                                            if (not _owns_translation_job(
+                                                    _job_token)
+                                                    or not _timing_selection_current()):
+                                                return
                                             try:
                                                 _streams = (
                                                     p.getAvailableSubtitleStreams()
@@ -3057,14 +3317,16 @@ def _handle_translate_file(params):
                                             except Exception:
                                                 break
                                             if len(_streams) > _before:
-                                                _grew = True
                                                 try:
-                                                    if not _owns_translation_job(_job_token):
+                                                    if (not _owns_translation_job(
+                                                            _job_token)
+                                                            or not _timing_selection_current()):
                                                         return
                                                     p.setSubtitleStream(
                                                         len(_streams) - 1)
+                                                    _grew = True
                                                 except Exception:
-                                                    pass
+                                                    _grew = False
                                                 break
                                     if not _grew and not _playing_now():
                                         # Nobody to strand: with no player
@@ -3082,7 +3344,16 @@ def _handle_translate_file(params):
                                             'slots rather than deleting a file '
                                             'the player may still be on',
                                             level='WARNING')
+                                    _registered_and_pinned = _grew
                                     _canonical_swap_succeeded = _grew
+                                    if (_registered_and_pinned
+                                            and _timing_selection_current()):
+                                        kodi_utils.mark_subtitle_delivery_applied(
+                                            canonical,
+                                            selection=_timing_selection)
+                                        kodi_utils.confirm_subtitle_sync_fix(
+                                            canonical,
+                                            selection=_timing_selection)
                                 except Exception as _se:
                                     _safe_log(
                                         'translate_file fast done '
@@ -3099,7 +3370,9 @@ def _handle_translate_file(params):
                 # at a removed file = no subtitles for the rest of
                 # playback. The 180-day TTL prune sweeps them up
                 # eventually if we don't.
-                if _canonical_swap_succeeded and _owns_translation_job(_job_token):
+                if (_canonical_swap_succeeded
+                        and _owns_translation_job(_job_token)
+                        and _timing_selection_current()):
                     try:
                         import glob as _glob
                         # Patterns cover legacy (_v*), the hash-named
@@ -3131,7 +3404,8 @@ def _handle_translate_file(params):
         try:
             translated_path = translate.resolve(
                 link, info, progress_cb=report,
-                progressive_cb=on_phase)
+                progressive_cb=on_phase,
+                selection=_timing_selection)
         except Exception as e:
             _safe_log(
                 'translate_file fast: resolve crashed: {0}'.format(e),
@@ -3150,10 +3424,14 @@ def _handle_translate_file(params):
         # whatever Hebrew we have to out_path and touching the
         # sentinel now.
         sentinel_path = out_path + '.ai_done'
+        _delivery_before = None
         if not os.path.isfile(sentinel_path):
             try:
                 if (translated_path
                         and os.path.isfile(translated_path)):
+                    _delivery_before = (
+                        kodi_utils.subtitle_sync_registration_baseline(
+                            translated_path, selection=_timing_selection))
                     with open(translated_path, 'r',
                               encoding='utf-8',
                               errors='replace') as _f:
@@ -3180,6 +3458,14 @@ def _handle_translate_file(params):
                 # output -- letting DarkSubs's hook return quickly
                 # is strictly better than the 300s hang.
                 open(sentinel_path, 'w').close()
+                if (_delivery_before is not None
+                        and translated_path
+                        and _timing_selection_current()):
+                    if not kodi_utils.confirm_subtitle_sync_registration(
+                        translated_path, selection=_timing_selection,
+                            before=_delivery_before, timeout_ms=2000):
+                        kodi_utils.abandon_subtitle_selection(
+                            _timing_selection)
             except OSError as _e:
                 _safe_log(
                     'translate_file fast: post-resolve sentinel '

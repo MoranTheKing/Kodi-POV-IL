@@ -127,6 +127,31 @@ _ORACLE_SOURCE_SCALES = (1.0,)
 _ORACLE_SOURCE_MIN_VOTE = 0.50
 
 
+def _selection_snapshot():
+    try:
+        return kodi_utils.current_subtitle_selection() or {}
+    except Exception:
+        return {}
+
+
+def _publish_selection_status(state, source='local', selection=None):
+    """Update the current pick's tiny UI record; never performs network I/O."""
+    try:
+        if kodi_utils is not None:
+            expected = selection or {}
+            if not all(expected.get(k) for k in (
+                    'token', 'link_hash', 'stream_hash')):
+                return False
+            return bool(kodi_utils.set_subtitle_sync_status(
+                state, source=source,
+                selection_token=expected.get('token') or '',
+                link_hash=expected.get('link_hash') or '',
+                stream_hash=expected.get('stream_hash') or ''))
+    except Exception:
+        return False
+    return False
+
+
 def _log(msg, level='INFO'):
     try:
         kodi_utils.log('subsync: ' + msg, level=level)
@@ -981,22 +1006,30 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
 
 # ---- main entry -------------------------------------------------------------
 
-def process(info, path, delivered_release):
+def process(info, path, delivered_release, selection=None):
     """Verify (and when confidently possible, FIX) the timing of the Hebrew
     sub at `path` against the playing release. Returns (final_path, verdict)
     where verdict is a dict with at least {'status'} plus 'applied': True when
     a retimed copy was written and returned, or (path, None) when SubSync did
     not run (disabled / no anchor / unreadable file). Fail-open, never raises."""
     try:
-        # Every new file delivery supersedes an older background candidate.
-        # Re-mark below only if THIS selection actually queues deep work.
-        cancel_pending()
+        # The caller snapshots the selected candidate when resolve() starts.
+        # A download/AI translation may finish much later; by then another
+        # subtitle may be current. Never cancel, label, learn from or queue the
+        # old result against that newer selection.
+        selection = (_selection_snapshot()
+                     if selection is None else selection)
+        if not _selection_matches(selection):
+            return path, None
         if sync_align is None or release_match is None or not enabled():
             return path, None
         if not path or not os.path.isfile(path):
             return path, None
         playing = playing_release(info)
         if not playing:
+            kodi_utils.stage_subtitle_delivery(
+                path, selection=selection,
+                status='unverified', source='no-release')
             return path, None
 
         try:
@@ -1016,15 +1049,20 @@ def process(info, path, delivered_release):
             _pct, tier, _ = release_match.score(playing, rel)
             if tier in release_match.AUTO_OK_TIERS:
                 _record_delivery(info, playing, key, 1.0, 0.0,
-                                 cut_signature=cut_signature)
+                                 cut_signature=cut_signature,
+                                 selection=selection)
                 # Trusted timing needs no verification, but a remote first play
                 # still needs its tiny content id so a later manual delay is
                 # learned for this cut only.  Do that in the service worker.
                 if not cut_signature and _remote_playing_url(info):
-                    _mark_pending(key)
-                    if not _enqueue_deep(info, path, rel, playing, key,
-                                         identity_only=True):
-                        cancel_pending()
+                    marked = _mark_pending(key, selection=selection)
+                    if (marked and not _enqueue_deep(
+                            info, path, rel, playing, key,
+                            identity_only=True, selection=selection)):
+                        _log('identity job queue unavailable', level='DEBUG')
+                kodi_utils.stage_subtitle_delivery(
+                    path, selection=selection,
+                    status='confirmed', source='release')
                 return path, {'status': _STATUS_TRUSTED, 'tier': tier}
 
         cached = _load_verdicts().get(key)
@@ -1048,13 +1086,16 @@ def process(info, path, delivered_release):
                         _record_delivery(info, playing, key,
                                          cached.get('scale', 1.0),
                                          cached.get('offset_ms', 0.0),
-                                         cut_signature=cut_signature)
+                                         cut_signature=cut_signature,
+                                         selection=selection)
                     else:
                         # A scalar manual-delay record cannot describe a
                         # subtitle corrected by several timeline regions.
                         # Remove the original zero/global record immediately,
                         # before the delay watcher can learn or share it.
-                        _clear_delivery()
+                        _clear_delivery(selection=selection)
+                    kodi_utils.stage_subtitle_sync_fix(
+                        out, selection=selection, source='cache')
                     return out, {'status': status, 'applied': True,
                                  'offset_ms': cached.get('offset_ms', 0.0),
                                  'scale': cached.get('scale', 1.0),
@@ -1064,7 +1105,14 @@ def process(info, path, delivered_release):
             if status in (sync_align.STATUS_CONFIRMED,
                           sync_align.STATUS_UNKNOWN):
                 _record_delivery(info, playing, key, 1.0, 0.0,
-                                 cut_signature=cut_signature)
+                                 cut_signature=cut_signature,
+                                 selection=selection)
+                kodi_utils.stage_subtitle_delivery(
+                    path, selection=selection,
+                    status=('confirmed'
+                            if status == sync_align.STATUS_CONFIRMED
+                            else 'unverified'),
+                    source='cache')
                 return path, {'status': status, 'cached': True,
                               'diag': cached.get('diag', '')}
 
@@ -1095,16 +1143,23 @@ def process(info, path, delivered_release):
                         _record_delivery(info, playing, key,
                                          cv.get('scale', 1.0),
                                          cv.get('offset_ms', 0.0),
-                                         cut_signature=cut_signature)
+                                         cut_signature=cut_signature,
+                                         selection=selection)
                     else:
-                        _clear_delivery()
-                    _announce(verdict, fresh=True)
+                        _clear_delivery(selection=selection)
+                    kodi_utils.stage_subtitle_sync_fix(
+                        out, selection=selection, source='community',
+                        notice=_fix_notice(verdict))
                     return out, verdict
             elif status == sync_align.STATUS_CONFIRMED:
                 _store_verdict(key, cv)
                 _log('community CONFIRMED: ' + cv.get('diag', ''))
                 _record_delivery(info, playing, key, 1.0, 0.0,
-                                 cut_signature=cut_signature)
+                                 cut_signature=cut_signature,
+                                 selection=selection)
+                kodi_utils.stage_subtitle_delivery(
+                    path, selection=selection,
+                    status='confirmed', source='community')
                 return path, dict(cv, community=True)
 
         # DEEP verification needed (oracle download / file probe / audio) --
@@ -1114,16 +1169,40 @@ def process(info, path, delivered_release):
         # pattern as the he_warm drainer), deliver the ORIGINAL file now, and
         # let the worker swap in a fixed copy when (and only when) it proves
         # one -- self-healing delivery, per the plan's latency budget.
-        _mark_pending(key)
+        marked = _mark_pending(key, selection=selection)
+        delivery_staged = bool(
+            marked and kodi_utils.stage_subtitle_delivery(
+                path, selection=selection))
+        # Publish before the job file becomes visible to the service. A fast
+        # worker can only replace "checking" with its result, never have this
+        # foreground path overwrite a verdict that has already completed.
+        if delivery_staged:
+            _publish_selection_status(
+                'checking', 'local', selection=selection)
         _record_delivery(info, playing, key, 1.0, 0.0,
-                         cut_signature=cut_signature)
-        if _enqueue_deep(info, path, rel, playing, key):
+                         cut_signature=cut_signature, selection=selection)
+        if (delivery_staged and _enqueue_deep(
+                info, path, rel, playing, key, selection=selection)):
             return path, {'status': 'PENDING'}
+        # Remove only this selection's half-created coordination records. A
+        # newer pick has another token and cannot be disturbed here.
+        try:
+            kodi_utils.clear_subtitle_delivery(path, selection=selection)
+        except Exception:
+            pass
+        _clear_job_pending({
+            'key': key,
+            'selection_token': selection.get('token') or '',
+            'selection_hash': selection.get('link_hash') or '',
+            'stream_hash': selection.get('stream_hash') or '',
+        })
         # Queue unwritable (rare): keep playback responsive and the chosen
         # subtitle untouched.  Deep verification can include provider and media
         # reads; doing it synchronously here would bring the old 10-30s picker
         # freeze back precisely when the background service is unavailable.
-        cancel_pending()
+        kodi_utils.stage_subtitle_delivery(
+            path, selection=selection,
+            status='unverified', source='queue')
         _log('deep verify deferred: service queue unavailable', level='WARNING')
         return path, {'status': 'DEFERRED'}
     except Exception as e:
@@ -1186,35 +1265,125 @@ def _community_verdict(info, key, playing, cut_signature=''):
 _DELIVERED_PROP = 'subsync.delivered'
 
 
-def _clear_delivery():
+def _delivery_prop(selection=None):
+    expected = selection or {}
+    token = expected.get('token') or expected.get('selection_token') or ''
+    if not token:
+        try:
+            token = kodi_utils.get_subtitle_selection_token() or ''
+        except Exception:
+            token = ''
+    return _DELIVERED_PROP + ('.' + token if token else '')
+
+
+def _clear_delivery(selection=None):
     """Discard scalar delay-learning state after a non-global delivery."""
     try:
+        if selection and not _selection_matches(selection):
+            return False
         import xbmcgui
-        xbmcgui.Window(10000).clearProperty(_DELIVERED_PROP)
+        win = xbmcgui.Window(10000)
+        win.clearProperty(_delivery_prop(selection))
+        # A pre-token record cannot belong to a newer token-scoped selection.
+        win.clearProperty(_DELIVERED_PROP)
+        return True
     except Exception:
-        pass
+        return False
 
 
 def _record_delivery(info, playing, key, scale, offset_ms,
-                     cut_signature='', mode='global'):
+                     cut_signature='', mode='global', selection=None):
     """Remember what we just delivered (and any applied fix), so the service's
     delay watcher can turn the viewer's manual subtitle-delay into a HUMAN
     community sync report -- the anchor of last resort."""
     try:
         import xbmcgui
+        expected = selection or {}
+        if expected and not kodi_utils.subtitle_selection_matches(
+                expected.get('token') or '',
+                expected.get('link_hash') or '',
+                expected.get('stream_hash') or ''):
+            return False
         payload = {
             'key': key, 'playing': playing, 'ts': time.time(),
             'scale': float(scale or 1.0),
             'offset': float(offset_ms or 0.0),
             'mode': (mode or '').strip().lower(),
             'cut_signature': (cut_signature or '').strip().lower(),
+            'selection_token': expected.get('token') or '',
+            'selection_hash': expected.get('link_hash') or '',
+            'stream_hash': expected.get('stream_hash') or '',
             'info': {k: info.get(k) for k in _INFO_KEYS
                      if isinstance(info.get(k), (str, int, float, bool))},
         }
-        xbmcgui.Window(10000).setProperty(
-            _DELIVERED_PROP, json.dumps(payload, ensure_ascii=False))
+        win = xbmcgui.Window(10000)
+        raw = json.dumps(payload, ensure_ascii=False)
+        prop = _delivery_prop(expected)
+        win.setProperty(prop, raw)
+        if expected and not kodi_utils.subtitle_selection_matches(
+                expected.get('token') or '',
+                expected.get('link_hash') or '',
+                expected.get('stream_hash') or ''):
+            if win.getProperty(prop) == raw:
+                win.clearProperty(prop)
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def current_delivery_record():
+    """Return delay-learning state only for the exact live selection/cut."""
+    try:
+        import xbmcgui
+        selection = _selection_snapshot()
+        if not _selection_matches(selection):
+            return None
+        win = xbmcgui.Window(10000)
+        raw = win.getProperty(_delivery_prop(selection)) or ''
+        if not raw:
+            # One-session migration from the previous global property.
+            raw = win.getProperty(_DELIVERED_PROP) or ''
+        record = json.loads(raw) if raw else None
+        if not isinstance(record, dict):
+            return None
+        token = record.get('selection_token') or ''
+        link_hash = record.get('selection_hash') or ''
+        stream_hash = record.get('stream_hash') or ''
+        if token or link_hash or stream_hash:
+            if (token != selection.get('token')
+                    or link_hash != selection.get('link_hash')
+                    or stream_hash != selection.get('stream_hash')):
+                return None
+        return record
+    except Exception:
+        return None
+
+
+def clear_delivery_record(record):
+    """Remove only the token-scoped record the delay watcher just consumed."""
+    try:
+        import xbmcgui
+        win = xbmcgui.Window(10000)
+        prop = _delivery_prop(record or {})
+        raw = win.getProperty(prop) or ''
+        current = json.loads(raw) if raw else {}
+        if (current.get('key') == (record or {}).get('key')
+                and float(current.get('ts') or 0)
+                == float((record or {}).get('ts') or 0)):
+            win.clearProperty(prop)
+            return True
+        # Clear only the legacy singleton when it is the exact same record.
+        legacy = win.getProperty(_DELIVERED_PROP) or ''
+        old = json.loads(legacy) if legacy else {}
+        if (old.get('key') == (record or {}).get('key')
+                and float(old.get('ts') or 0)
+                == float((record or {}).get('ts') or 0)):
+            win.clearProperty(_DELIVERED_PROP)
+            return True
     except Exception:
         pass
+    return False
 
 
 def finalize_delay_session(record, delay_s, watched_s):
@@ -1889,15 +2058,56 @@ def _queue_dir():
         return ''
 
 
-def _mark_pending(key):
+def _selection_matches(selection):
+    expected = selection or {}
+    try:
+        return bool(expected.get('token') and expected.get('link_hash')
+                    and expected.get('stream_hash')
+                    and kodi_utils.subtitle_selection_matches(
+                        expected.get('token'), expected.get('link_hash'),
+                        expected.get('stream_hash')))
+    except Exception:
+        return False
+
+
+def _pending_prop(selection=None):
+    """Per-selection marker name, so concurrent picks cannot overwrite it."""
+    expected = selection or {}
+    token = expected.get('token') or ''
+    if not token:
+        try:
+            token = kodi_utils.get_subtitle_selection_token() or ''
+        except Exception:
+            token = ''
+    return _PENDING_PROP + ('.' + token if token else '')
+
+
+def _mark_pending(key, selection=None):
     """Remember which (sub, release) pair we delivered un-verified, so the
     worker only swaps if the user hasn't picked something else meanwhile."""
     try:
         import xbmcgui
-        xbmcgui.Window(10000).setProperty(
-            _PENDING_PROP, json.dumps({'key': key, 'ts': time.time()}))
+        expected = (_selection_snapshot()
+                    if selection is None else selection)
+        if not _selection_matches(expected):
+            return False
+        payload = {
+            'key': key, 'ts': time.time(),
+            'selection_token': expected.get('token') or '',
+            'selection_hash': expected.get('link_hash') or '',
+            'stream_hash': expected.get('stream_hash') or '',
+        }
+        win = xbmcgui.Window(10000)
+        raw = json.dumps(payload, separators=(',', ':'))
+        prop = _pending_prop(expected)
+        win.setProperty(prop, raw)
+        if not _selection_matches(expected):
+            if win.getProperty(prop) == raw:
+                win.clearProperty(prop)
+            return False
+        return True
     except Exception:
-        pass
+        return False
 
 
 def cancel_pending():
@@ -1908,32 +2118,69 @@ def cancel_pending():
     """
     try:
         import xbmcgui
-        xbmcgui.Window(10000).clearProperty(_PENDING_PROP)
+        win = xbmcgui.Window(10000)
+        win.clearProperty(_pending_prop())
+        win.clearProperty(_PENDING_PROP)  # pre-token release residue
     except Exception:
         pass
 
 
-def _pending_key():
+def _pending_record(selection=None):
     try:
         import xbmcgui
-        raw = xbmcgui.Window(10000).getProperty(_PENDING_PROP) or ''
-        return (json.loads(raw) or {}).get('key', '') if raw else ''
+        raw = xbmcgui.Window(10000).getProperty(
+            _pending_prop(selection)) or ''
+        return (json.loads(raw) or {}) if raw else {}
     except Exception:
-        return ''
+        return {}
 
 
-def _enqueue_deep(info, path, rel, playing, key, identity_only=False):
+def _pending_key():
+    return _pending_record().get('key', '')
+
+
+def _clear_job_pending(job):
+    """Clear only this job's token-scoped marker; never another selection's."""
+    try:
+        import xbmcgui
+        expected = {
+            'token': job.get('selection_token') or '',
+            'link_hash': job.get('selection_hash') or '',
+            'stream_hash': job.get('stream_hash') or '',
+        }
+        prop = _pending_prop(expected)
+        win = xbmcgui.Window(10000)
+        raw = win.getProperty(prop) or ''
+        record = json.loads(raw) if raw else {}
+        if (record.get('key') == job.get('key')
+                and record.get('selection_token') == expected['token']
+                and record.get('selection_hash') == expected['link_hash']
+                and record.get('stream_hash') == expected['stream_hash']):
+            win.clearProperty(prop)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
+                  selection=None):
     """Drop a deep-verify job for the service drainer. True on success."""
     d = _queue_dir()
     if not d:
         return False
     try:
+        expected = (_selection_snapshot()
+                    if selection is None else selection)
+        if not _selection_matches(expected):
+            return False
         os.makedirs(d, exist_ok=True)
         # The readable prefix alone used to collide when two long release keys
         # differed after character 80.  A full-key digest makes the queue name
         # unambiguous; identity-only and full verification are separate jobs so
         # a cheap trusted-subtitle task can never swallow a later timing task.
-        job_identity = key + ('|identity' if identity_only else '|verify')
+        job_identity = (key + ('|identity' if identity_only else '|verify')
+                        + '|' + (expected.get('token') or ''))
         prefix = re.sub(r'[^0-9A-Za-z]+', '_', key)[:48] or 'job'
         safe = prefix + '_' + hashlib.sha1(
             job_identity.encode('utf-8', 'replace')).hexdigest()[:16]
@@ -1948,6 +2195,9 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False):
             'key': key, 'path': path, 'release': rel, 'playing': playing,
             'identity_only': bool(identity_only),
             'ts': time.time(),
+            'selection_token': expected.get('token') or '',
+            'selection_hash': expected.get('link_hash') or '',
+            'stream_hash': expected.get('stream_hash') or '',
             # Capture the actual stream identity at delivery time.  Metadata's
             # filepath is optional and may be absent; without this value a
             # later background result must never hot-swap into another video.
@@ -1958,6 +2208,14 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False):
         tmp = jpath + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(job, f, ensure_ascii=False)
+        # Last gate before the job becomes visible to the service. A newer
+        # selection may have landed while this small file was being written.
+        if not _selection_matches(expected):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            return False
         os.replace(tmp, jpath)
         _log('deep job enqueued for %r' % key)
         return True
@@ -1966,7 +2224,7 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False):
         return False
 
 
-def _announce(verdict, fresh, offset_hint=None):
+def _announce(verdict, fresh, offset_hint=None, selection=None):
     """The ONE gentle toast policy: speak ONLY when a timing fix was actually
     APPLIED to the subtitle -- that's the single event the user can feel and
     wants to know about ("synced automatically"). Everything else is SILENT:
@@ -1978,6 +2236,8 @@ def _announce(verdict, fresh, offset_hint=None):
     ever -- fresh applied fixes only."""
     try:
         if not fresh or not verdict:
+            return
+        if selection is not None and not _selection_matches(selection):
             return
         if (verdict.get('status') == sync_align.STATUS_FIXABLE
                 and verdict.get('applied')):
@@ -1994,12 +2254,39 @@ def _announce(verdict, fresh, offset_hint=None):
         pass
 
 
+def _fix_notice(verdict, offset_hint=None):
+    try:
+        off = float(offset_hint if offset_hint is not None
+                    else verdict.get('offset_ms') or 0.0)
+        scale = float(verdict.get('scale') or 1.0)
+        if verdict.get('mode', 'global') == 'global' and scale == 1.0 and off:
+            return 'הכתובית סונכרנה אוטומטית ({0:+.1f} שנ׳)'.format(
+                -off / 1000.0)
+    except Exception:
+        pass
+    return 'הכתובית סונכרנה אוטומטית'
+
+
 def _job_matches_current(job):
     """Prove a background result still belongs to the visible stream/pick."""
     try:
-        if _pending_key() != job.get('key'):
+        expected = {
+            'token': job.get('selection_token') or '',
+            'link_hash': job.get('selection_hash') or '',
+            'stream_hash': job.get('stream_hash') or '',
+        }
+        pending = _pending_record(expected)
+        # Old pre-token jobs may still be on disk after an update. They can be
+        # computed/cached, but can never hot-swap or label a live selection.
+        if not all(expected.values()):
             return False
-        return _job_stream_is_current(job)
+        if (pending.get('key') != job.get('key')
+                or pending.get('selection_token') != expected['token']
+                or pending.get('selection_hash') != expected['link_hash']
+                or pending.get('stream_hash') != expected['stream_hash']):
+            return False
+        return (_selection_matches(expected) and
+                _job_stream_is_current(job))
     except Exception:
         return False
 
@@ -2021,6 +2308,42 @@ def _job_stream_is_current(job):
         return False
 
 
+def _job_selection(job):
+    return {
+        'token': job.get('selection_token') or '',
+        'link_hash': job.get('selection_hash') or '',
+        'stream_hash': job.get('stream_hash') or '',
+    }
+
+
+def _wait_for_delivery_ack(job, timeout_ms=3000):
+    """Wait until Kodi has registered/pinned the foreground subtitle.
+
+    The service can claim a queue file before the picker callback delivers its
+    original SRT. Swapping a correction first lets that later callback overwrite
+    it while the UI falsely says FIXED. This bounded gate establishes the only
+    safe order: original visibly selected, then verify/replace in background.
+    """
+    selection = _job_selection(job)
+    path = job.get('path') or ''
+    if not path or not all(selection.values()):
+        return False
+    try:
+        import xbmc
+        steps = max(1, min(120, int(max(0, timeout_ms) / 50) + 1))
+        for attempt in range(steps):
+            if not _job_matches_current(job):
+                return False
+            if kodi_utils.subtitle_delivery_is_applied(
+                    path, selection=selection):
+                return True
+            if attempt + 1 < steps:
+                xbmc.sleep(50)
+    except Exception:
+        return False
+    return False
+
+
 def _swap_if_current(job, fixed_path, verdict):
     """Swap the playing subtitle to the fixed copy -- ONLY if the user is
     still watching the same stream and hasn't picked a different subtitle
@@ -2031,14 +2354,45 @@ def _swap_if_current(job, fixed_path, verdict):
             _log('swap skipped: selection or stream changed meanwhile')
             return False
         player = xbmc.Player()
+        if not player.isPlaying():
+            return False
+        try:
+            before = len(player.getAvailableSubtitleStreams() or [])
+        except Exception:
+            # Kodi gave us no positive observation channel. Applying remains
+            # fail-open, but do not claim FIXED without proof of registration.
+            before = -1
         player.setSubtitles(fixed_path)
         try:
-            import xbmcgui
-            xbmcgui.Window(10000).clearProperty(_PENDING_PROP)
+            player.showSubtitles(True)
         except Exception:
             pass
-        _log('fixed subtitle swapped in-place: ' + fixed_path)
-        return True
+        if before < 0:
+            _log('fixed subtitle handed to Kodi; registration unobservable',
+                 level='WARNING')
+            return False
+        for _ in range(20):  # setSubtitles posts asynchronously; wait <= 1s.
+            xbmc.sleep(50)
+            if not _job_matches_current(job):
+                _log('swap confirmation abandoned: selection changed')
+                return False
+            try:
+                streams = player.getAvailableSubtitleStreams() or []
+            except Exception:
+                return False
+            if len(streams) > before:
+                try:
+                    player.setSubtitleStream(len(streams) - 1)
+                except Exception:
+                    _log('fixed subtitle registered but could not be selected',
+                         level='WARNING')
+                    return False
+                if not _job_matches_current(job):
+                    return False
+                _log('fixed subtitle swapped in-place: ' + fixed_path)
+                return True
+        _log('fixed subtitle registration was not observed', level='WARNING')
+        return False
     except Exception as e:
         _log('swap failed: %r' % e, level='WARNING')
         return False
@@ -2051,7 +2405,16 @@ def run_deep_job(job):
     try:
         key = job.get('key') or ''
         path = job.get('path') or ''
+        job_selection = _job_selection(job)
+
+        def _finish_unverified(source):
+            if (not job.get('identity_only')
+                    and _job_matches_current(job)):
+                _publish_selection_status(
+                    'unverified', source, selection=job_selection)
+
         if not key or not path or not os.path.isfile(path):
+            _finish_unverified('missing')
             return
         if not _job_stream_is_current(job):
             _log('deep job discarded: captured stream is no longer playing')
@@ -2060,7 +2423,6 @@ def run_deep_job(job):
         info['_subsync_stream_url'] = (
             (job.get('stream_url') or '').split('|')[0].strip())
         playing = job.get('playing') or ''
-
         # A release-exact subtitle needs no timing work.  Its tiny background
         # job exists solely to learn the content-derived cut id, so a later
         # manual delay is never shared with another cut carrying the same name.
@@ -2076,23 +2438,43 @@ def run_deep_job(job):
                 if text.strip():
                     exact_key = _cache_key(text, playing, cut_signature)
                     _record_delivery(info, playing, exact_key, 1.0, 0.0,
-                                     cut_signature=cut_signature)
-                cancel_pending()
+                                     cut_signature=cut_signature,
+                                     selection=job_selection)
+            return
+        # The foreground picker/chooser still owns the first application. Never
+        # let this faster service thread apply a corrected copy before Kodi has
+        # visibly registered and selected that original delivery.
+        if not _wait_for_delivery_ack(job):
+            _finish_unverified('delivery')
+            _log('deep job deferred: foreground subtitle delivery unconfirmed',
+                 level='WARNING')
             return
         # Someone may have computed it while the job sat in the queue.
         cached = _load_verdicts().get(key)
-        if cached and cached.get('v') == _VERDICT_VERSION:
+        if (cached and cached.get('v') == _VERDICT_VERSION
+                and cached.get('status') in (
+                    sync_align.STATUS_CONFIRMED, sync_align.STATUS_UNKNOWN)):
+            if _job_matches_current(job):
+                if cached.get('status') == sync_align.STATUS_CONFIRMED:
+                    _publish_selection_status(
+                        'confirmed', 'cache', selection=job_selection)
+                else:
+                    _publish_selection_status(
+                        'unverified', 'cache', selection=job_selection)
             return
         try:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 text = f.read()
         except Exception:
+            _finish_unverified('read-error')
             return
         if not text.strip():
+            _finish_unverified('empty')
             return
         rel = job.get('release') or ''
         out, verdict = _deep_verify(info, path, text, rel, playing, key)
         if not verdict:
+            _finish_unverified('no-result')
             return
         swapped = False
         current = _job_matches_current(job)
@@ -2108,12 +2490,13 @@ def run_deep_job(job):
                                      verdict.get('scale', 1.0),
                                      verdict.get('offset_ms', 0.0),
                                      cut_signature=(
-                                         verdict.get('cut_signature') or ''))
+                                         verdict.get('cut_signature') or ''),
+                                     selection=job_selection)
                 else:
                     # The foreground path recorded the untouched subtitle as a
                     # global zero while verification ran.  Once a piecewise
                     # copy is swapped in, that stale scalar must disappear.
-                    _clear_delivery()
+                    _clear_delivery(selection=job_selection)
         if current and not swapped:
             # The original subtitle is still on screen.  Refresh only its exact
             # cut identity (not an unapplied proposed shift), so any later manual
@@ -2122,17 +2505,31 @@ def run_deep_job(job):
                              verdict.get('cache_key') or key,
                              1.0, 0.0,
                              cut_signature=(
-                                 verdict.get('cut_signature') or ''))
-            try:
-                import xbmcgui
-                xbmcgui.Window(10000).clearProperty(_PENDING_PROP)
-            except Exception:
-                pass
+                                 verdict.get('cut_signature') or ''),
+                             selection=job_selection)
+            _publish_selection_status(
+                'confirmed' if verdict.get('status')
+                == sync_align.STATUS_CONFIRMED else 'unverified',
+                'local', selection=job_selection)
         # Announce ONLY an actual in-place swap the user can see. A verdict
         # that couldn't be verified changes nothing on screen -> stay silent.
         if swapped:
-            _announce(dict(verdict, applied=True), fresh=True)
+            if _publish_selection_status(
+                    'fixed', 'local', selection=job_selection):
+                if _selection_matches(job_selection):
+                    _announce(dict(verdict, applied=True), fresh=True,
+                              selection=job_selection)
     except Exception as e:
+        try:
+            if _job_matches_current(job):
+                _publish_selection_status(
+                    'unverified', 'error', selection={
+                        'token': job.get('selection_token') or '',
+                        'link_hash': job.get('selection_hash') or '',
+                        'stream_hash': job.get('stream_hash') or '',
+                    })
+        except Exception:
+            pass
         _log('deep job failed: %r' % e, level='WARNING')
 
 
@@ -2158,7 +2555,17 @@ def drain_queue_once():
             except OSError:
                 pass
             if job:
-                run_deep_job(job)
+                try:
+                    run_deep_job(job)
+                finally:
+                    if not job.get('identity_only'):
+                        try:
+                            kodi_utils.clear_subtitle_delivery(
+                                job.get('path') or '',
+                                selection=_job_selection(job))
+                        except Exception:
+                            pass
+                    _clear_job_pending(job)
                 ran += 1
     except Exception:
         pass
