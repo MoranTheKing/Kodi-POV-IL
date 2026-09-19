@@ -1,3 +1,8 @@
+0.2.550
+- Correct repeated short edit pads even when a remote video has no embedded subtitle timeline, but only after two independent provider timing families and separate held-out checks agree on the same map.
+- Keep the exact automatically applied provider row marked as current when its temporary transport metadata refreshes, without transferring that row's timing status to a similarly named result.
+- Freeze the real embedded-subtitle baseline before an external file is loaded and scope it to the exact title and playback transport, so neither that file nor a previous title can reappear as a false built-in track.
+
 0.2.549
 - Show whether the currently selected subtitle is already synchronized, was corrected automatically, is still being checked or could not yet be verified.
 - Commit timing status only after Kodi visibly registers and selects the exact subtitle file, including cached and embedded-timeline AI deliveries.

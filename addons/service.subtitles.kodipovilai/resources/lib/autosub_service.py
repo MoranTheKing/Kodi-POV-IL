@@ -301,7 +301,11 @@ def autosub_on_play():
             # below) is present, so the picker can later tell embedded from
             # external and never mistake an AI translation for "embedded Hebrew".
             try:
-                subs_engine_bridge.note_playback_streams(info, _streams)
+                # This poll has run to completion. Seal even an empty result
+                # before we append an external subtitle, otherwise the parallel
+                # snapshot poller can mistake our own file for an embedded one.
+                subs_engine_bridge.note_playback_streams(
+                    info, _streams, final=True)
             except Exception:
                 pass
             if _heb_idx is not None:
@@ -615,7 +619,7 @@ def snapshot_on_play():
             info = kodi_utils.current_video_info() or {}
         except Exception:
             info = {}
-        subs_engine_bridge.note_playback_streams(info, streams)
+        subs_engine_bridge.note_playback_streams(info, streams, final=True)
     except Exception as e:
         try:
             from resources.lib import kodi_utils

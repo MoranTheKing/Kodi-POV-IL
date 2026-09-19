@@ -100,7 +100,11 @@ _MAX_VERDICTS = 400
 # v19: repeated short edit pads can be corrected only after five disjoint
 # holdouts reproduce the map and a distinct full-span text/PGS timing family
 # validates it. Old UNKNOWNs must recompute; exact-cut keys prevent reuse.
-_VERDICT_VERSION = 19
+# v20: a remote file with no embedded subtitle timeline may prove that same map
+# with two distinct provider-oracle timing families. Both must independently
+# rebuild an agreeing map and pass >=4/5 held-out folds; translated timing
+# clones never count as a second family.
+_VERDICT_VERSION = 20
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -125,6 +129,10 @@ _ORACLE_SOURCE_SCALES = (1.0,)
 # offset ran as low as 54% vote in the field (S01E04 -677ms) -- the real
 # correctness guard is the graduated tight/overlap gate, not the coarse vote.
 _ORACLE_SOURCE_MIN_VOTE = 0.50
+# This rare rescue runs only after an ordinary oracle abstains and only in the
+# background worker. Bound its extra downloads so one difficult cross-cut
+# subtitle cannot turn into an open-ended provider crawl.
+_ORACLE_PIECEWISE_MAX_DOWNLOADS = 6
 
 
 def _selection_snapshot():
@@ -348,14 +356,15 @@ def _playing_url(info):
     Subtitle-provider oracle downloads do not use this media path.
     """
     url = _media_url(info)
-    low = (url or '').lower().split('|')[0]
+    clean = (url or '').split('|')[0].strip()
+    low = clean.lower()
     if not low:
         return ''
     if low.startswith(('http://', 'https://')):
         _log('remote media probing skipped to protect playback')
         return ''
-    if os.path.isfile(url):
-        return url
+    if os.path.isfile(clean):
+        return clean
     return ''
 
 
@@ -377,9 +386,14 @@ def _remote_playing_url(info):
 
 def _current_stream_url():
     """The stream Kodi is playing now, without Kodi's header suffix."""
+    return _current_stream_transport().split('|')[0].strip()
+
+
+def _current_stream_transport():
+    """Exact Kodi transport, including its content-selecting header suffix."""
     try:
         import xbmc
-        return ((xbmc.Player().getPlayingFile() or '').split('|')[0].strip())
+        return (xbmc.Player().getPlayingFile() or '').strip()
     except Exception:
         return ''
 
@@ -394,12 +408,12 @@ def _media_url(info):
     live player and then the metadata fallback.
     """
     try:
-        pinned = (info.get('_subsync_stream_url') or '').split('|')[0].strip()
+        pinned = (info.get('_subsync_stream_url') or '').strip()
     except Exception:
         pinned = ''
     if pinned:
         return pinned
-    current = _current_stream_url()
+    current = _current_stream_transport()
     if current:
         return current
     try:
@@ -414,15 +428,19 @@ def _transport_cache_key(info):
         value = _media_url(info)
         if not value:
             return ''
-        clean = value.split('|')[0].strip()
+        raw = value.strip()
+        clean = raw.split('|')[0].strip()
         # Local paths can be reused after replacement.  Size+mtime keep their
         # transport entry separate until the content signature is recomputed.
-        if os.path.isfile(clean):
+        is_local = os.path.isfile(clean)
+        if is_local:
             st = os.stat(clean)
             clean = '%s|%d|%d' % (
                 os.path.abspath(clean), int(st.st_size),
                 int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9))))
-        digest = hashlib.sha256(clean.encode('utf-8', 'replace')).hexdigest()
+        identity = clean if is_local else raw
+        digest = hashlib.sha256(
+            identity.encode('utf-8', 'replace')).hexdigest()
         return 'media:' + digest[:32]
     except Exception:
         return ''
@@ -1598,18 +1616,131 @@ def _onset_coverage(source, target, tolerance_ms=250.0):
     return matched / float(len(left))
 
 
+def _shift_invariant_onset_coverage(source, target, tolerance_ms=250.0):
+    """Best onset containment after a plausible constant timeline shift.
+
+    Provider mirrors sometimes add SDH cues, split a few captions, or rebase
+    every timestamp by the same amount.  They are still one timing lane, even
+    though a raw bidirectional comparison can make the larger derivative look
+    independent.  Endpoint candidates catch that relationship without an
+    unbounded all-pairs search.
+    """
+    left = sorted(float(cue['start']) for cue in source or [])
+    right = sorted(float(cue['start']) for cue in target or [])
+    if not left or not right:
+        return 0.0
+
+    # A derivative may have a handful of leading/trailing SDH captions.  Pair
+    # the first/last four onsets, plus the median rank when counts are close.
+    # Ignore absurd offsets: those cannot be a harmless timestamp rebase.
+    edge = 4
+    offsets = {0.0}
+    for source_value in left[:edge]:
+        for target_value in right[:edge]:
+            offsets.add(target_value - source_value)
+    for source_value in left[-edge:]:
+        for target_value in right[-edge:]:
+            offsets.add(target_value - source_value)
+    offsets.add(right[len(right) // 2] - left[len(left) // 2])
+    offsets = [value for value in offsets if abs(value) <= 30000.0]
+
+    best = 0.0
+    for offset in offsets:
+        shifted = [{'start': value + offset} for value in left]
+        best = max(best, _onset_coverage(
+            shifted, [{'start': value} for value in right], tolerance_ms))
+        if best >= 0.995:
+            break
+    return best
+
+
+def _shift_invariant_shape_coverage(source, target, tolerance_ms=350.0,
+                                    duration_tolerance_ms=250.0):
+    """Containment of both cue onset and duration after a constant rebase.
+
+    A mechanically edited timing lane can replace enough onsets to fall below
+    the plain containment ceiling while retaining nearly every other cue's
+    exact duration. Independently authored subtitle families do not preserve
+    that cue-shape fingerprint at scale.
+    """
+    left = sorted(source or [], key=lambda cue: float(cue['start']))
+    right = sorted(target or [], key=lambda cue: float(cue['start']))
+    if not left or not right:
+        return 0.0
+    edge = 4
+    offsets = {0.0}
+    for source_cue in left[:edge]:
+        for target_cue in right[:edge]:
+            offsets.add(float(target_cue['start'])
+                        - float(source_cue['start']))
+    for source_cue in left[-edge:]:
+        for target_cue in right[-edge:]:
+            offsets.add(float(target_cue['start'])
+                        - float(source_cue['start']))
+    offsets.add(float(right[len(right) // 2]['start'])
+                - float(left[len(left) // 2]['start']))
+    offsets = [value for value in offsets if abs(value) <= 30000.0]
+
+    best = 0.0
+    for offset in offsets:
+        matched = 0
+        cursor = 0
+        for cue in left:
+            value = float(cue['start']) + offset
+            while (cursor + 1 < len(right)
+                   and abs(float(right[cursor + 1]['start']) - value)
+                   <= abs(float(right[cursor]['start']) - value)):
+                cursor += 1
+            other = right[cursor]
+            duration = float(cue['end']) - float(cue['start'])
+            other_duration = (float(other['end'])
+                              - float(other['start']))
+            if (abs(float(other['start']) - value) <= tolerance_ms
+                    and abs(other_duration - duration)
+                    <= duration_tolerance_ms):
+                matched += 1
+        best = max(best, matched / float(len(left)))
+        if best >= 0.995:
+            break
+    return best
+
+
 def _timing_profiles_distinct(left, right):
-    """Reject a codec conversion that merely copies the same cue onsets.
+    """Reject conversions, supersets and splits of the same timing lane.
 
     Codec labels alone are not independent evidence: a text stream can be
-    rendered to PGS without changing its timing.  Real Flash text/PGS families
-    differ editorially; a converted duplicate has >=90% onset coverage in both
-    directions and must not unlock a rewrite.
+    rendered to PGS without changing its timing, and an SDH/translated mirror
+    can add cues to only one side.  Bidirectional similarity rejects ordinary
+    copies; one-way containment rejects supersets/splits.  The shifted check
+    also catches an otherwise identical lane rebased by a constant offset.
     """
     left_cues = (left or {}).get('cues') or []
     right_cues = (right or {}).get('cues') or []
-    return not (_onset_coverage(left_cues, right_cues) >= 0.90
-                and _onset_coverage(right_cues, left_cues) >= 0.90)
+    left_raw = _onset_coverage(left_cues, right_cues)
+    right_raw = _onset_coverage(right_cues, left_cues)
+    if left_raw >= 0.90 and right_raw >= 0.90:
+        return False
+    # Map agreement tolerates up to 300 ms of segment jitter. Independence
+    # therefore uses a slightly wider 350 ms window; otherwise one mechanical
+    # clone alternating +/-251 ms by segment could agree with the map while
+    # evading the family gate.
+    left_aligned = _shift_invariant_onset_coverage(
+        left_cues, right_cues, tolerance_ms=350.0)
+    right_aligned = _shift_invariant_onset_coverage(
+        right_cues, left_cues, tolerance_ms=350.0)
+    left_shape = _shift_invariant_shape_coverage(left_cues, right_cues)
+    right_shape = _shift_invariant_shape_coverage(right_cues, left_cues)
+    # A second family must be editorially independent, not merely a translated
+    # derivative that replaces one SDH/split cue every few lines.  At least 15%
+    # of both timelines must therefore differ.  The real DEMAND/ROVERS proof
+    # stays comfortably below this ceiling even at a wider 500 ms comparison.
+    if max(left_aligned, right_aligned) >= 0.85:
+        return False
+    # Cue-duration shape is an additional clone fingerprint. This catches a
+    # lane that mechanically retimes as many as one cue in three while leaving
+    # the surrounding cue shapes intact; the second family must differ in more
+    # than a third of those shapes before it may count as independent evidence.
+    return max(left_shape, right_shape) < 0.65
 
 
 def _validated_micro_piecewise(profiles, text):
@@ -1720,6 +1851,187 @@ def _validated_micro_piecewise(profiles, text):
     })
     return {'track': primary_track, 'cues': primary.get('cues') or [],
             'verdict': verdict}
+
+
+def _oracle_match(candidates, playing):
+    """Rank provider oracles that may represent the playing edit.
+
+    Exact/group matches are usable for every source. A looser same-source
+    match is accepted only for physical-disc masters, matching ``pick_oracle``:
+    WEB services and broadcasts can carry different edits despite sharing the
+    same broad source label.
+    """
+    try:
+        playing_source = release_match.parse(playing).get('source', '')
+    except Exception:
+        playing_source = ''
+    allowed = {release_match.TIER_EXACT, release_match.TIER_GROUP}
+    if playing_source in ('bluray', 'dvd'):
+        allowed.add(release_match.TIER_SOURCE)
+    tier_rank = {
+        release_match.TIER_EXACT: 3,
+        release_match.TIER_GROUP: 2,
+        release_match.TIER_SOURCE: 1,
+    }
+    ranked = []
+    for candidate in candidates or []:
+        rel = (candidate.get('release') or '').strip()
+        if not rel:
+            continue
+        try:
+            pct, tier, _diag = release_match.score(playing, rel)
+        except Exception:
+            continue
+        if tier not in allowed:
+            continue
+        try:
+            group = release_match.parse(rel).get('group', '')
+        except Exception:
+            group = ''
+        ranked.append((candidate, tier, int(pct or 0), group,
+                       tier_rank.get(tier, 0)))
+    return ranked
+
+
+def _validated_oracle_piecewise(candidates, playing, text,
+                                primary, primary_text):
+    """Prove a repeated-short-edit map with two provider timing families.
+
+    This is the remote/no-embedded-track counterpart of
+    ``_validated_micro_piecewise``. One provider subtitle proposes the map;
+    five disjoint holdouts test it. A second release/language subtitle must
+    have genuinely different cue segmentation, independently rebuild an
+    agreeing map, pass its own holdouts, and improve under the frozen primary
+    map. Merely translated copies with the same onsets are rejected.
+    """
+    planner = getattr(sync_align, 'micro_piecewise_proposal', None)
+    validator = getattr(sync_align, 'validate_micro_piecewise', None)
+    family_judge = getattr(sync_align, 'evaluate_piecewise_family', None)
+    maps_agree = getattr(sync_align, 'piecewise_maps_agree', None)
+    if not all((planner, validator, family_judge, maps_agree)):
+        return None
+    if not primary or not primary_text or not text:
+        return None
+
+    try:
+        primary_cues = sync_align.dialogue_cues(
+            sync_align.parse_srt(primary_text))
+        proposal = planner(primary_cues, text)
+        validated = validator(primary_cues, text, proposal)
+    except Exception:
+        return None
+    if (not validated
+            or int(validated.get('validation_folds') or 0) < 4):
+        return None
+
+    ranked = _oracle_match(candidates, playing)
+    if not ranked:
+        return None
+    try:
+        primary_group = release_match.parse(
+            primary.get('release') or '').get('group', '')
+    except Exception:
+        primary_group = ''
+
+    # Prefer a different release group, then the strongest release match. A
+    # physical-disc source match is still the same master, and group diversity
+    # is more likely to carry independently authored timing than six translated
+    # copies of one exact release. The onset comparison below remains the actual
+    # independence gate.
+    ranked.sort(key=lambda item: (
+        1 if item[3] and item[3] != primary_group else 0,
+        item[4],
+        item[2],
+        0 if (item[0].get('language') or '').lower()
+        in ('en', 'eng', 'english') else 1,
+    ), reverse=True)
+
+    primary_profile = {'cues': primary_cues}
+    primary_key = (
+        (primary.get('release') or '').strip().lower(),
+        (primary.get('language') or '').strip().lower(),
+        json.dumps(primary.get('payload') or {}, sort_keys=True,
+                   ensure_ascii=False, default=str),
+    )
+    seen = {primary_key}
+    downloads = 0
+    for secondary, tier, _pct, _group, _rank in ranked:
+        key = (
+            (secondary.get('release') or '').strip().lower(),
+            (secondary.get('language') or '').strip().lower(),
+            json.dumps(secondary.get('payload') or {}, sort_keys=True,
+                       ensure_ascii=False, default=str),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        if downloads >= _ORACLE_PIECEWISE_MAX_DOWNLOADS:
+            break
+        downloads += 1
+        secondary_text = _download_oracle(secondary.get('payload') or {})
+        if not secondary_text.strip() or secondary_text == primary_text:
+            continue
+        try:
+            secondary_cues = sync_align.dialogue_cues(
+                sync_align.parse_srt(secondary_text))
+        except Exception:
+            continue
+        secondary_profile = {'cues': secondary_cues}
+        if not _timing_profiles_distinct(
+                primary_profile, secondary_profile):
+            continue
+        try:
+            secondary_proposal = planner(secondary_cues, text)
+            secondary_validated = validator(
+                secondary_cues, text, secondary_proposal)
+            if (not secondary_validated
+                    or int(secondary_validated.get(
+                        'validation_folds') or 0) < 4):
+                continue
+        except Exception:
+            continue
+        # Never shop around for agreement. A genuinely distinct provider
+        # family that rebuilds a different map and proves it out-of-sample is
+        # strong evidence. Once that proof exists, even an evaluator exception
+        # must abstain instead of silently skipping onward to a friendlier row.
+        try:
+            if not maps_agree(validated, secondary_validated):
+                return None
+            family = family_judge(secondary_cues, text, validated)
+        except Exception:
+            return None
+        # Mirror the embedded-family veto: if this independent subtitle was
+        # already a strong match and the frozen primary map damages it, later
+        # agreeable providers cannot erase that conflict.
+        if (family and family.get('before_score', 0.0) >= 0.78
+                and family.get('after_score', 0.0)
+                < family.get('before_score', 0.0) - 0.03):
+            return None
+        if not family or not family.get('accepted'):
+            continue
+
+        verdict = dict(validated)
+        verdict.update({
+            'timing_family_count': 2,
+            'timing_families': ['provider-primary', 'provider-secondary'],
+            'validation_primary_oracle': primary.get('release') or '',
+            'validation_secondary_oracle': secondary.get('release') or '',
+            'validation_secondary_tier': tier,
+            'validation_secondary_folds': int(
+                secondary_validated.get('validation_folds') or 0),
+            'diag': ('%s; independent provider timing family %r agreed '
+                     '(%d/5 holdouts, score %.3f->%.3f, unique %.0f%%)'
+                     % (validated.get('diag', ''),
+                        secondary.get('release') or '?',
+                        int(secondary_validated.get(
+                            'validation_folds') or 0),
+                        family.get('before_score', 0.0),
+                        family.get('after_score', 0.0),
+                        family.get('after_unique', 0.0) * 100)),
+        })
+        return {'verdict': verdict, 'secondary': secondary,
+                'downloads': downloads}
+    return None
 
 
 def _verify_file_bundle(bundle, text):
@@ -1851,13 +2163,13 @@ def _deep_verify(info, path, text, rel, playing, key):
     """
     try:
         pinned = (info.get('_subsync_stream_url') or '').strip()
-        if pinned and _current_stream_url() != pinned:
+        if pinned and _current_stream_transport() != pinned:
             return path, None
 
         # Profile the actual media first. Besides being the strongest timing
         # anchor, this produces the content id used by all learning below.
         bundle = _probe_reference_bundle(info, playing)
-        if pinned and _current_stream_url() != pinned:
+        if pinned and _current_stream_transport() != pinned:
             _log('deep verify discarded: playback changed during media probe')
             return path, None
         cut_signature = (bundle.get('cut_signature') or '').strip().lower()
@@ -1940,6 +2252,28 @@ def _deep_verify(info, path, text, rel, playing, key):
                     _log('verdict for %r vs oracle %r [%s]: %s'
                          % (rel or '?', oracle['release'], tier,
                             oracle_verdict['diag']))
+                    if (oracle_verdict.get('status')
+                            == sync_align.STATUS_UNKNOWN):
+                        rescue = _validated_oracle_piecewise(
+                            cands, playing, text, oracle, oracle_text)
+                        if rescue:
+                            oracle_verdict = rescue['verdict']
+                            try:
+                                oracle_fixed = sync_align.apply_verdict(
+                                    text, oracle_verdict)
+                            except Exception:
+                                oracle_fixed = None
+                            if oracle_fixed and oracle_fixed.strip():
+                                _log('provider-consensus piecewise rescue for '
+                                     '%r: %s' % (
+                                         rel or '?',
+                                         oracle_verdict.get('diag', '?')))
+                            else:
+                                oracle_verdict = dict(
+                                    oracle_verdict,
+                                    status=sync_align.STATUS_UNKNOWN,
+                                    diag=(oracle_verdict.get('diag', '')
+                                          + ' | structural apply failed'))
             else:
                 try:
                     scored = sorted(
@@ -1996,7 +2330,7 @@ def _deep_verify(info, path, text, rel, playing, key):
             if not (fixed_text and fixed_text.strip()):
                 verdict = dict(verdict, status=sync_align.STATUS_UNKNOWN)
 
-        if pinned and _current_stream_url() != pinned:
+        if pinned and _current_stream_transport() != pinned:
             _log('deep verify discarded: playback changed before commit')
             return path, None
         verdict = dict(verdict, cut_signature=cut_signature,
@@ -2201,7 +2535,7 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
             # Capture the actual stream identity at delivery time.  Metadata's
             # filepath is optional and may be absent; without this value a
             # later background result must never hot-swap into another video.
-            'stream_url': _current_stream_url(),
+            'stream_url': _current_stream_transport(),
             'info': {k: info.get(k) for k in _INFO_KEYS
                      if isinstance(info.get(k), (str, int, float, bool))},
         }
@@ -2298,8 +2632,8 @@ def _job_stream_is_current(job):
         player = xbmc.Player()
         if not player.isPlaying():
             return False
-        cur_url = _current_stream_url()
-        job_url = (job.get('stream_url') or '').split('|')[0].strip()
+        cur_url = _current_stream_transport()
+        job_url = (job.get('stream_url') or '').strip()
         # Require the exact captured stream URL.  Some providers use one path
         # for every title and put the content identity in `?file=`/`?id=`;
         # dropping the query could therefore cross films.
@@ -2410,8 +2744,10 @@ def run_deep_job(job):
         def _finish_unverified(source):
             if (not job.get('identity_only')
                     and _job_matches_current(job)):
-                _publish_selection_status(
-                    'unverified', source, selection=job_selection)
+                if _publish_selection_status(
+                        'unverified', source, selection=job_selection):
+                    _log('status for current subtitle: unverified ({0})'
+                         .format(source))
 
         if not key or not path or not os.path.isfile(path):
             _finish_unverified('missing')
@@ -2420,8 +2756,7 @@ def run_deep_job(job):
             _log('deep job discarded: captured stream is no longer playing')
             return
         info = dict(job.get('info') or {})
-        info['_subsync_stream_url'] = (
-            (job.get('stream_url') or '').split('|')[0].strip())
+        info['_subsync_stream_url'] = (job.get('stream_url') or '').strip()
         playing = job.get('playing') or ''
         # A release-exact subtitle needs no timing work.  Its tiny background
         # job exists solely to learn the content-derived cut id, so a later
@@ -2507,10 +2842,12 @@ def run_deep_job(job):
                              cut_signature=(
                                  verdict.get('cut_signature') or ''),
                              selection=job_selection)
-            _publish_selection_status(
-                'confirmed' if verdict.get('status')
-                == sync_align.STATUS_CONFIRMED else 'unverified',
-                'local', selection=job_selection)
+            final_state = ('confirmed' if verdict.get('status')
+                           == sync_align.STATUS_CONFIRMED else 'unverified')
+            if _publish_selection_status(
+                    final_state, 'local', selection=job_selection):
+                _log('status for current subtitle: {0} (local)'.format(
+                    final_state))
         # Announce ONLY an actual in-place swap the user can see. A verdict
         # that couldn't be verified changes nothing on screen -> stay silent.
         if swapped:

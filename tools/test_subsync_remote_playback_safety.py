@@ -104,7 +104,7 @@ class RemotePlaybackSafety(unittest.TestCase):
         sys.modules['resources.lib.gemini'] = gemini
 
     def _stream_hash(self, url=None):
-        value = (self.url if url is None else url).split('|')[0].strip()
+        value = (self.url if url is None else url).strip()
         return hashlib.sha256(value.encode('utf-8')).hexdigest()[:24]
 
     def _selection_snapshot(self):
@@ -690,9 +690,9 @@ class RemotePlaybackSafety(unittest.TestCase):
         judge.assert_not_called()
 
     def test_micro_piecewise_requires_a_complete_distinct_codec_family(self):
-        def cues(offset=0, count=60):
-            return [{'start': 10000 + offset + i * 10000,
-                     'end': 11000 + offset + i * 10000}
+        def cues(offset=0, count=60, stride=10000):
+            return [{'start': 10000 + offset + i * stride,
+                     'end': 11000 + offset + i * stride}
                     for i in range(count)]
 
         proposal = {'status': self.sub.sync_align.STATUS_FIXABLE,
@@ -718,7 +718,7 @@ class RemotePlaybackSafety(unittest.TestCase):
         distinct_pgs = {'track': {'num': 6, 'lang': 'eng',
                                   'codec': 'S_HDMV/PGS',
                                   'name': 'English'},
-                        'cues': cues(offset=1000)}
+                        'cues': cues(offset=1000, stride=10200)}
         short_text = {'track': {'num': 2, 'lang': 'eng',
                                 'codec': 'S_TEXT/UTF8',
                                 'name': 'English'},
@@ -741,6 +741,371 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.assertEqual(result['verdict']['validation_folds'], 5)
         self.assertEqual(result['verdict']['timing_family_count'], 2)
         self.assertEqual(result['track']['num'], 3)
+
+    def test_provider_piecewise_requires_two_independent_rebuilt_maps(self):
+        def cues(delta=0, stride=10000):
+            return [{'start': 10000 + delta + i * stride + (i % 3) * 170,
+                     'end': 11000 + delta + i * stride + (i % 3) * 170}
+                    for i in range(60)]
+
+        primary = {
+            'release': 'Show.S01E01.720p.BluRay.x264-DEMAND',
+            'language': 'en', 'payload': {'id': 'primary'}}
+        clone = {
+            'release': 'Show.S01E01.720p.BluRay.x264-DEMAND',
+            'language': 'it', 'payload': {'id': 'clone'}}
+        independent = {
+            'release': 'Show.S01E01.1080p.BluRay.x264-ROVERS',
+            'language': 'ro', 'payload': {'id': 'independent'}}
+        playing = 'Show.S01E01.1080p.BluRay.x265-NOGRP.mkv'
+        proposal = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0},
+                         {'cand_from_ms': 300000.0,
+                          'offset_ms': 1000.0}],
+            'validation_required': True, 'validation_folds': 0,
+            'timing_family_count': 0, 'diag': 'proposal'}
+        validated = dict(proposal, validation_folds=5)
+        accepted = {'accepted': True, 'before_score': .50,
+                    'after_score': .92, 'after_overlap': .95,
+                    'after_unique': .86}
+        parsed = {
+            'primary-text': cues(),
+            'clone-text': cues(),
+            'independent-text': cues(delta=700, stride=11300),
+        }
+
+        with patch.object(self.sub, '_download_oracle', side_effect=lambda p: {
+                    'clone': 'clone-text',
+                    'independent': 'independent-text'}.get(p.get('id'), '')), \
+             patch.object(self.sub.sync_align, 'parse_srt',
+                          side_effect=lambda value: parsed[value]), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=validated) as validate, \
+             patch.object(self.sub.sync_align, 'piecewise_maps_agree',
+                          return_value=True), \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family',
+                          return_value=accepted) as family:
+            result = self.sub._validated_oracle_piecewise(
+                [primary, clone, independent], playing, 'candidate-text',
+                primary, 'primary-text')
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['verdict']['timing_family_count'], 2)
+        self.assertEqual(result['verdict']['validation_folds'], 5)
+        self.assertEqual(result['verdict']['validation_secondary_folds'], 5)
+        self.assertEqual(result['secondary'], independent)
+        # Only the genuinely different family reached its own holdout proof;
+        # exact timing clones can never manufacture a second vote.
+        self.assertEqual(validate.call_count, 2)
+        family.assert_called_once()
+
+    def test_provider_piecewise_abstains_when_every_secondary_is_a_clone(self):
+        cues = [{'start': 10000 + i * 10000,
+                 'end': 11000 + i * 10000} for i in range(60)]
+        primary = {
+            'release': 'Show.S01E01.720p.BluRay.x264-DEMAND',
+            'language': 'en', 'payload': {'id': 'primary'}}
+        clone = {
+            'release': 'Show.S01E01.1080p.BluRay.x264-ROVERS',
+            'language': 'it', 'payload': {'id': 'clone'}}
+        proposal = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0}],
+            'validation_required': True, 'validation_folds': 0,
+            'timing_family_count': 0, 'diag': 'proposal'}
+        validated = dict(proposal, validation_folds=5)
+        with patch.object(self.sub, '_download_oracle',
+                          return_value='clone-text'), \
+             patch.object(self.sub.sync_align, 'parse_srt',
+                          return_value=cues), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=validated) as validate, \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family') \
+                     as family:
+            result = self.sub._validated_oracle_piecewise(
+                [primary, clone],
+                'Show.S01E01.1080p.BluRay.x265-NOGRP.mkv',
+                'candidate-text', primary, 'primary-text')
+        self.assertIsNone(result)
+        self.assertEqual(validate.call_count, 1)
+        family.assert_not_called()
+
+    def test_provider_piecewise_rejects_shifted_superset_timing_clone(self):
+        primary_cues = []
+        derivative_cues = []
+        for i in range(420):
+            start = 10000 + i * 5000
+            primary_cues.append({'start': start, 'end': start + 1200})
+            derivative_cues.append({'start': start + 700,
+                                    'end': start + 1900})
+            if (i + 1) % 6 == 0:
+                derivative_cues.append({'start': start + 2700,
+                                        'end': start + 3600})
+        self.assertEqual(len(derivative_cues), 490)
+        self.assertFalse(self.sub._timing_profiles_distinct(
+            {'cues': primary_cues}, {'cues': derivative_cues}))
+
+        primary = {
+            'release': 'Show.S01E01.720p.BluRay.x264-DEMAND',
+            'language': 'en', 'payload': {'id': 'primary'}}
+        derivative = {
+            'release': 'Show.S01E01.1080p.BluRay.x264-ROVERS',
+            'language': 'ro', 'payload': {'id': 'derivative'}}
+        proposal = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0}],
+            'validation_required': True, 'validation_folds': 0,
+            'timing_family_count': 0, 'diag': 'proposal'}
+        validated = dict(proposal, validation_folds=5)
+        parsed = {'primary-text': primary_cues,
+                  'derivative-text': derivative_cues}
+        with patch.object(self.sub, '_download_oracle',
+                          return_value='derivative-text'), \
+             patch.object(self.sub.sync_align, 'parse_srt',
+                          side_effect=lambda value: parsed[value]), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=validated) as validate, \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family') \
+                     as family:
+            result = self.sub._validated_oracle_piecewise(
+                [primary, derivative],
+                'Show.S01E01.1080p.BluRay.x265-NOGRP.mkv',
+                'candidate-text', primary, 'primary-text')
+        self.assertIsNone(result)
+        self.assertEqual(validate.call_count, 1)
+        family.assert_not_called()
+
+    def test_provider_piecewise_rejects_segment_jitter_timing_clone(self):
+        primary_cues = []
+        derivative_cues = []
+        offsets = (251, -249, 251, -249, 251, -249)
+        for i in range(420):
+            start = 10000 + i * 5000
+            offset = offsets[min(5, i // 70)]
+            primary_cues.append({'start': start, 'end': start + 1200})
+            derivative_cues.append({'start': start + offset,
+                                    'end': start + offset + 1200})
+        self.assertFalse(self.sub._timing_profiles_distinct(
+            {'cues': primary_cues}, {'cues': derivative_cues}))
+
+        primary = {
+            'release': 'Show.S01E01.720p.BluRay.x264-DEMAND',
+            'language': 'en', 'payload': {'id': 'primary'}}
+        derivative = {
+            'release': 'Show.S01E01.1080p.BluRay.x264-ROVERS',
+            'language': 'ro', 'payload': {'id': 'derivative'}}
+        proposal = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0}],
+            'validation_required': True, 'validation_folds': 0,
+            'timing_family_count': 0, 'diag': 'proposal'}
+        validated = dict(proposal, validation_folds=5)
+        parsed = {'primary-text': primary_cues,
+                  'derivative-text': derivative_cues}
+        with patch.object(self.sub, '_download_oracle',
+                          return_value='derivative-text'), \
+             patch.object(self.sub.sync_align, 'parse_srt',
+                          side_effect=lambda value: parsed[value]), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=validated) as validate, \
+             patch.object(self.sub.sync_align, 'piecewise_maps_agree',
+                          return_value=True), \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family') \
+                     as family:
+            result = self.sub._validated_oracle_piecewise(
+                [primary, derivative],
+                'Show.S01E01.1080p.BluRay.x265-NOGRP.mkv',
+                'candidate-text', primary, 'primary-text')
+        self.assertIsNone(result)
+        self.assertEqual(validate.call_count, 1)
+        family.assert_not_called()
+
+    def test_provider_piecewise_rejects_one_in_eight_retimed_derivative(self):
+        primary_cues = []
+        derivative_cues = []
+        for i in range(420):
+            start = 10000 + i * 5000
+            primary_cues.append({'start': start, 'end': start + 1200})
+            # Replace, rather than add, one cue out of every eight. This keeps
+            # equal cue counts and defeats a pure superset/containment check.
+            moved = start + (1700 if (i + 1) % 8 == 0 else 0)
+            derivative_cues.append({'start': moved, 'end': moved + 1200})
+        left = {'cues': primary_cues}
+        right = {'cues': derivative_cues}
+        self.assertGreater(
+            self.sub._shift_invariant_onset_coverage(
+                primary_cues, derivative_cues, tolerance_ms=350.0), .87)
+        self.assertFalse(self.sub._timing_profiles_distinct(left, right))
+
+        primary = {
+            'release': 'Show.S01E01.720p.BluRay.x264-DEMAND',
+            'language': 'en', 'payload': {'id': 'primary'}}
+        derivative = {
+            'release': 'Show.S01E01.1080p.BluRay.x264-ROVERS',
+            'language': 'ro', 'payload': {'id': 'derivative'}}
+        proposal = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0}],
+            'validation_required': True, 'validation_folds': 0,
+            'timing_family_count': 0, 'diag': 'proposal'}
+        validated = dict(proposal, validation_folds=5)
+        parsed = {'primary-text': primary_cues,
+                  'derivative-text': derivative_cues}
+        with patch.object(self.sub, '_download_oracle',
+                          return_value='derivative-text'), \
+             patch.object(self.sub.sync_align, 'parse_srt',
+                          side_effect=lambda value: parsed[value]), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=validated) as validate, \
+             patch.object(self.sub.sync_align, 'piecewise_maps_agree',
+                          return_value=True), \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family') \
+                     as family:
+            result = self.sub._validated_oracle_piecewise(
+                [primary, derivative],
+                'Show.S01E01.1080p.BluRay.x265-NOGRP.mkv',
+                'candidate-text', primary, 'primary-text')
+        self.assertIsNone(result)
+        self.assertEqual(validate.call_count, 1)
+        family.assert_not_called()
+
+    def test_timing_family_rejects_one_in_three_same_shape_derivative(self):
+        primary_cues = []
+        derivative_cues = []
+        for i in range(420):
+            start = 10000 + i * 5000
+            primary_cues.append({'start': start, 'end': start + 1200})
+            moved = start + (1700 if (i + 1) % 3 == 0 else 0)
+            derivative_cues.append({'start': moved, 'end': moved + 1200})
+        # Plain onset containment is intentionally below the 85% ceiling; the
+        # duration/onset fingerprint is what proves this remains one lane.
+        self.assertLess(
+            self.sub._shift_invariant_onset_coverage(
+                primary_cues, derivative_cues, tolerance_ms=350.0), .85)
+        self.assertGreater(
+            self.sub._shift_invariant_shape_coverage(
+                primary_cues, derivative_cues), .65)
+        self.assertFalse(self.sub._timing_profiles_distinct(
+            {'cues': primary_cues}, {'cues': derivative_cues}))
+
+    def test_provider_piecewise_conflicting_proven_map_is_a_veto(self):
+        def cues(stride):
+            return [{'start': 10000 + i * stride,
+                     'end': 11200 + i * stride} for i in range(60)]
+
+        primary = {'release': 'Primary-DEMAND', 'language': 'en',
+                   'payload': {'id': 'primary'}}
+        conflict = {'release': 'Conflict-ROVERS', 'language': 'ro',
+                    'payload': {'id': 'conflict'}}
+        agreeable = {'release': 'Agree-SPARKS', 'language': 'fr',
+                     'payload': {'id': 'agree'}}
+        map_a = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0}],
+            'validation_required': True, 'validation_folds': 5,
+            'timing_family_count': 0, 'diag': 'map A'}
+        map_b = dict(map_a, offset_ms=1700.0,
+                     segments=[{'cand_from_ms': None,
+                                'offset_ms': 1700.0}], diag='map B')
+        parsed = {'primary-text': cues(10000),
+                  'conflict-text': cues(11300),
+                  'agree-text': cues(12700)}
+        ranked = [
+            (conflict, self.sub.release_match.TIER_GROUP, 99, 'rovers', 2),
+            (agreeable, self.sub.release_match.TIER_GROUP, 98, 'sparks', 2),
+        ]
+        with patch.object(self.sub, '_oracle_match', return_value=ranked), \
+             patch.object(self.sub, '_download_oracle', side_effect=lambda p: {
+                 'conflict': 'conflict-text', 'agree': 'agree-text'
+             }.get(p.get('id'), '')), \
+             patch.object(self.sub.sync_align, 'parse_srt',
+                          side_effect=lambda value: parsed[value]), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          side_effect=[map_a, map_b, map_a]), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          side_effect=[map_a, map_b, map_a]) as validate, \
+             patch.object(self.sub.sync_align, 'piecewise_maps_agree',
+                          side_effect=[False, True]) as agree, \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family') \
+                     as family:
+            result = self.sub._validated_oracle_piecewise(
+                [conflict, agreeable], 'Playing.BluRay.mkv',
+                'candidate-text', primary, 'primary-text')
+        self.assertIsNone(result)
+        self.assertEqual(validate.call_count, 2)
+        agree.assert_called_once()
+        family.assert_not_called()
+
+    def test_provider_piecewise_strong_regression_is_a_veto(self):
+        primary_cues = [{'start': 10000 + i * 10000,
+                         'end': 11200 + i * 10000} for i in range(60)]
+        secondary_cues = [{'start': 10000 + i * 11300,
+                           'end': 12600 + i * 11300} for i in range(55)]
+        primary = {'release': 'Primary-DEMAND', 'language': 'en',
+                   'payload': {'id': 'primary'}}
+        secondary = {'release': 'Secondary-ROVERS', 'language': 'ro',
+                     'payload': {'id': 'secondary'}}
+        proven = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0}],
+            'validation_required': True, 'validation_folds': 5,
+            'timing_family_count': 0, 'diag': 'proven'}
+        family_result = {'accepted': False, 'before_score': .90,
+                         'after_score': .60, 'after_overlap': .65,
+                         'after_unique': .61}
+        parsed = {'primary-text': primary_cues,
+                  'secondary-text': secondary_cues}
+        ranked = [(secondary, self.sub.release_match.TIER_GROUP,
+                   99, 'rovers', 2)]
+        with patch.object(self.sub, '_oracle_match', return_value=ranked), \
+             patch.object(self.sub, '_download_oracle',
+                          return_value='secondary-text'), \
+             patch.object(self.sub.sync_align, 'parse_srt',
+                          side_effect=lambda value: parsed[value]), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proven), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=proven), \
+             patch.object(self.sub.sync_align, 'piecewise_maps_agree',
+                          return_value=True), \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family',
+                          return_value=family_result):
+            result = self.sub._validated_oracle_piecewise(
+                [secondary], 'Playing.BluRay.mkv', 'candidate-text',
+                primary, 'primary-text')
+        self.assertIsNone(result)
 
     def test_file_bundle_uses_validated_micro_path_and_exact_track_veto(self):
         cues = [{'start': 10000 + i * 10000,
@@ -1118,7 +1483,8 @@ class RemotePlaybackSafety(unittest.TestCase):
     def test_background_swap_requires_same_proven_stream(self):
         xbmc = sys.modules['xbmc']
         setter = Mock()
-        current = {'url': 'https://media.invalid/stream?file=B&token=new'}
+        current = {'url': ('https://media.invalid/stream?file=B&token=new'
+                           '|Authorization=object-B')}
         streams = ['embedded']
 
         def registered_set(path):
@@ -1150,6 +1516,11 @@ class RemotePlaybackSafety(unittest.TestCase):
             self.assertFalse(self.real_swap_if_current(
                 dict(base, stream_url=
                      'https://media.invalid/stream?file=B&token=old'),
+                'fixed.srt', {}))
+            self.assertFalse(self.real_swap_if_current(
+                dict(base, stream_url=
+                     ('https://media.invalid/stream?file=B&token=new'
+                      '|Authorization=object-A')),
                 'fixed.srt', {}))
             self.assertTrue(self.real_swap_if_current(
                 dict(base, stream_url=current['url']),
