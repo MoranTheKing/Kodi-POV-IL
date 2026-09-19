@@ -201,7 +201,7 @@ def run(stream_labels, sabotage=False, manual_switch=False):
 
     seb = types.ModuleType('resources.lib.subs_engine_bridge')
     seb.ensure_engine_settings = lambda: None
-    seb.note_playback_streams = lambda info, streams: None
+    seb.note_playback_streams = lambda info, streams, final=False: None
     seb._release_ready = lambda info: True
     seb.select_embedded = lambda idx, lang=None: True
     seb.LAST_DOWNLOAD_FROM_CACHE = False
