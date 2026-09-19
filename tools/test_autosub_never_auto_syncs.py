@@ -50,7 +50,7 @@ HUMAN_LINK = link({'type': 'engine', 'source': 'ktuvit',
                    'filename': 'Movie.2024.1080p'})
 
 
-def run(stream_labels, sabotage=False):
+def run(stream_labels, sabotage=False, manual_switch=False):
     """Run the real autosub_on_play(); return what it resolved and applied."""
     resolved, streams_set = [], []
     for name in list(sys.modules):
@@ -132,8 +132,34 @@ def run(stream_labels, sabotage=False):
                                      'year': '2024', 'season': '', 'episode': '',
                                      'filepath': 'http://cdn/movie.mkv',
                                      'picked_release': 'Movie.2024.1080p'}
-    ku.set_current_subtitle = lambda link: None
-    ku.get_current_subtitle = lambda: ''
+    current = {'link': '', 'status': {}, 'token': '', 'seq': 0}
+
+    def _set_current_subtitle(value):
+        if value != current['link']:
+            current['seq'] += 1
+            current['token'] = ('tok-%d' % current['seq']) if value else ''
+        current['link'] = value
+        current['status'] = {}
+
+    def _selection(expected_link=None):
+        if expected_link is not None and expected_link != current['link']:
+            return {'token': '', 'link_hash': '', 'stream_hash': ''}
+        return {'token': current['token'], 'link_hash': current['link'],
+                'stream_hash': 'stream'}
+
+    ku.set_current_subtitle = _set_current_subtitle
+    ku.get_current_subtitle = lambda: current['link']
+    ku.current_subtitle_selection = _selection
+    ku.get_subtitle_selection_token = lambda: current['token']
+    ku.subtitle_selection_matches = lambda token, link_hash, stream_hash: bool(
+        current['link'] and token == current['token']
+        and link_hash == current['link']
+        and stream_hash == 'stream')
+    ku.get_subtitle_sync_status = lambda link=None: dict(current['status'])
+    ku.set_subtitle_sync_status = lambda state, **kwargs: (
+        current.__setitem__('status', {'state': state}) or True)
+    ku.confirm_subtitle_sync_fix = lambda *a, **k: True
+    ku.apply_subtitle_file = lambda *a, **k: True
     ku.cache_dir = lambda: '/tmp'
     sys.modules['resources.lib.kodi_utils'] = ku
     lib.kodi_utils = ku
@@ -150,16 +176,24 @@ def run(stream_labels, sabotage=False):
 
     # The order list_candidates really produces: the embedded rows go to the
     # FRONT, the new sync row first.
-    ROWS = [{'language': 'he', 'link': SYNC_LINK,
+    rows = [{'language': 'he', 'link': SYNC_LINK,
              'filename': 'עברית מסונכרנת למובנה · 101%'},
             {'language': 'he', 'link': EMB_LINK,
              'filename': 'תרגום מובנה בעברית · 101%'},
             {'language': 'he', 'link': HUMAN_LINK,
              'filename': 'Movie.2024.1080p'}]
-    tr.list_candidates = lambda info, modal_progress=True: list(ROWS)
+    if manual_switch:
+        rows = [rows[0], rows[2], rows[1]]
+    tr.list_candidates = lambda info, modal_progress=True: list(rows)
 
-    def _resolve(l, info):
-        resolved.append((_decode(l) or {}).get('type'))
+    def _resolve(l, info, **kwargs):
+        decoded = _decode(l) or {}
+        resolved.append(decoded.get('type'))
+        if manual_switch and decoded.get('filename'):
+            _set_current_subtitle('manual-user-choice-B')
+            return None
+        if decoded.get('embedded'):
+            current['status'] = {'state': 'confirmed'}
         return None            # embedded picks return None; that IS success
     tr.resolve = _resolve
     sys.modules['resources.lib.translate'] = tr
@@ -202,6 +236,8 @@ def run(stream_labels, sabotage=False):
         mod.autosub_on_play()
     except Exception as e:
         print('   (autosub_on_play raised: %r)' % (e,))
+    if manual_switch:
+        return resolved, streams_set, current['link']
     return resolved, streams_set
 
 
@@ -230,6 +266,13 @@ check('SABOTAGE: without the guard autosub DOES auto-resolve the sync row',
       sab_resolved and sab_resolved[0] == 'embedded_sync',
       'resolved=%r -- the checks above are not testing the guard'
       % (sab_resolved,))
+
+# --- a manual pick during a failed candidate owns the player ---------------
+race_resolved, _race_streams, race_current = run(
+    ['Hebrew', 'English'], manual_switch=True)
+check('autosub never overwrites a manual pick with its next fallback',
+      race_current == 'manual-user-choice-B' and len(race_resolved) == 1,
+      'current=%r resolved=%r' % (race_current, race_resolved))
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')

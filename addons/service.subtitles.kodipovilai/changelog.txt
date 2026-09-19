@@ -1,3 +1,9 @@
+0.2.549
+- Show whether the currently selected subtitle is already synchronized, was corrected automatically, is still being checked or could not yet be verified.
+- Commit timing status only after Kodi visibly registers and selects the exact subtitle file, including cached and embedded-timeline AI deliveries.
+- Bind background verification and replacement to the exact subtitle selection and full playing-stream identity, preventing stale work and fast workers from replacing a newer choice.
+- Keep every synchronized SRT as a local content-addressed delivery copy; the community subtitle stays canonical and only the existing exact-cut timing metadata may be shared.
+
 0.2.548
 - Correct repeated short edit pads such as the reported Flash BluRay/Web timing pattern only after five disjoint holdouts and a distinct full-length text/PGS timing family agree; scalar delay learning is disabled for these multi-region fixes.
 - Compare each usable embedded subtitle track independently and abstain when sparse or conflicting tracks cannot prove one timing correction.
