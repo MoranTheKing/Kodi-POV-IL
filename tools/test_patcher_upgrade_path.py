@@ -155,7 +155,7 @@ separate assumptions each hid live, shipping patchers:
     biggest cluster in service.py rather than in any patcher.
 
   * not even "name and version in one string" -- the shape already PROVEN in
-    production splits them: CACHE_RTL_FIX_VERSION = '7' beside
+    production splits them: CACHE_RTL_FIX_VERSION = '8' beside
     set_setting('_rtl_fix_done', CACHE_RTL_FIX_VERSION). Neither literal
     carries both halves and the joined text exists nowhere, so no
     single-string search could see it. That gate has been bumped 4->5 and
@@ -614,7 +614,7 @@ pin('resources/lib/subs_engine/sources/opensubtitles', 'UNPROVEN',
 pin('resources/patches/darksubs/opensubtitles', 'UNPROVEN',
     'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4')
 pin('service', 'UNPROVEN',
-    'CACHE_RTL_FIX_VERSION=7', 'TEMP_PURGE_VERSION=2',
+    'CACHE_RTL_FIX_VERSION=8', 'TEMP_PURGE_VERSION=2',
     '_builtin_engine_rollout_v2', '_chunk_lines_50_v1',
     '_fast_first_chunk_default_v2', '_fen_osd_autoclose_v1',
     '_gemini3_tune_v1', '_gemini_model_bump_v2', '_gemini_model_bump_v3',
@@ -623,7 +623,7 @@ pin('service', 'UNPROVEN',
     '_pool_default_on_v1', '_pool_share_force_v1',
     '_pov_autoplay_default_v1', '_pov_autoplay_revert_v2',
     '_pov_resume_revert_v1', '_remember_source_default_v1',
-    '_remember_source_force_v2', '_rtl_fix_done=7', '_temp_purge_done=2')
+    '_remember_source_force_v2', '_rtl_fix_done=8', '_temp_purge_done=2')
 pin('skin_dialog_subtitles_patcher', 'UNPROVEN',
     'AI_SUBS_DIALOG_HEADER_v1', 'AI_SUBS_DIALOG_HEADER_v2')
 pin('skin_dialog_subtitles_row_patcher', 'UNPROVEN',
@@ -723,7 +723,7 @@ def pair_markers(src):
     is a fixed key with no digits plus a bare version value with no name,
     joined only at runtime:
 
-        CACHE_RTL_FIX_VERSION = '7'
+        CACHE_RTL_FIX_VERSION = '8'
         ...
         kodi_utils.set_setting('_rtl_fix_done', CACHE_RTL_FIX_VERSION)
 
@@ -1878,7 +1878,7 @@ def main():
     # shipped releases for exactly the reason this file exists, and no
     # single-string search could ever have seen it.
     check('SABOTAGE: a split name/version pair is discovered',
-          '_rtl_fix_done=7' in PINS.get('service', ('', ()))[1]
+          '_rtl_fix_done=8' in PINS.get('service', ('', ()))[1]
           and '_tiles_refresh_gen=2'
           in PINS.get('build_icons_patcher', ('', ()))[1],
           'the pair shape is invisible again, and the RTL backfill gate with '
@@ -1910,7 +1910,7 @@ def main():
           'can see it')
 
     check('SABOTAGE: a split pair can be bumped',
-          bump_marker('_rtl_fix_done=7') == '_rtl_fix_done=8'
+          bump_marker('_rtl_fix_done=8') == '_rtl_fix_done=9'
           and bump_marker('_fen_widgets_seeded=v1') == '_fen_widgets_seeded=v2',
           'bump_marker cannot move the pair shape')
 

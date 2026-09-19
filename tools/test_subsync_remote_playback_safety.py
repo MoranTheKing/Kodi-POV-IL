@@ -805,6 +805,226 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.assertEqual(validate.call_count, 2)
         family.assert_called_once()
 
+    def test_provider_candidates_are_interleaved_by_release_family(self):
+        def item(name, group, pct):
+            return ({'release': name, 'payload': {'id': name}},
+                    self.sub.release_match.TIER_SOURCE, pct, group, 1)
+
+        ranked = [
+            item('ROVERS-nl', 'rovers', 90),
+            item('ROVERS-sv', 'rovers', 89),
+            item('ROVERS-ro', 'rovers', 88),
+            item('RSG-de', 'rsg', 80),
+            item('TRIM-id', 'trim', 70),
+        ]
+        diversified = self.sub._diversify_oracle_matches(ranked)
+        self.assertEqual(
+            [row[0]['release'] for row in diversified],
+            ['ROVERS-nl', 'RSG-de', 'TRIM-id',
+             'ROVERS-sv', 'ROVERS-ro'])
+
+    def test_provider_piecewise_failed_downloads_do_not_consume_evidence_slots(self):
+        """A dead provider row is no evidence and may not hide a later family.
+
+        The field report had six high-ranked BluRay rows, but only three could
+        actually be read on the device; the independent Romanian row sat after
+        failed/duplicate results.  The old loop spent its six-download budget
+        before it reached usable independent evidence.
+        """
+        def cues(delta=0, stride=10000):
+            return [{'start': 10000 + delta + i * stride,
+                     'end': 11000 + delta + i * stride}
+                    for i in range(60)]
+
+        primary = {
+            'release': 'Show.S01E01.720p.BluRay.x264-DEMAND',
+            'language': 'en', 'payload': {'id': 'primary'}}
+        dead = [
+            {'release': 'Show.S01E01.1080p.BluRay.x264-G%02d' % i,
+             'language': 'x%02d' % i, 'payload': {'id': 'dead-%02d' % i}}
+            for i in range(6)
+        ]
+        independent = {
+            'release': 'Show.S01E01.1080p.BluRay.x264-ROVERS',
+            'language': 'ro', 'payload': {'id': 'independent'}}
+        proposal = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0}],
+            'validation_required': True, 'validation_folds': 5,
+            'timing_family_count': 0, 'diag': 'proven'}
+        accepted = {'accepted': True, 'before_score': .50,
+                    'after_score': .93, 'after_overlap': .96,
+                    'after_unique': .88}
+        ranked = [
+            (row, self.sub.release_match.TIER_SOURCE, 60 - i,
+             'g%02d' % i, 1) for i, row in enumerate(dead)
+        ] + [(independent, self.sub.release_match.TIER_SOURCE,
+              50, 'rovers', 1)]
+
+        with patch.object(self.sub, '_oracle_match', return_value=ranked), \
+             patch.object(self.sub, '_download_oracle',
+                          side_effect=lambda p: (
+                              'independent-text'
+                              if p.get('id') == 'independent' else '')), \
+             patch.object(self.sub.sync_align, 'parse_srt',
+                          side_effect=lambda value: (
+                              cues(stride=11300) if value == 'independent-text'
+                              else cues())), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'piecewise_maps_agree',
+                          return_value=True), \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family',
+                          return_value=accepted):
+            result = self.sub._validated_oracle_piecewise(
+                dead + [independent],
+                'Show.S01E01.1080p.BluRay.x265-NOGRP.mkv',
+                'candidate-text', primary, 'primary-text')
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['secondary'], independent)
+        self.assertEqual(result['downloads'], 1)
+
+    def test_provider_piecewise_non_srt_responses_do_not_consume_evidence_slots(self):
+        """A 200/HTML provider error is a fetch, but never timing evidence."""
+        def cues(delta=0, stride=10000):
+            return [{'start': 10000 + delta + i * stride,
+                     'end': 11000 + delta + i * stride}
+                    for i in range(60)]
+
+        primary = {
+            'release': 'Show.S01E01.720p.BluRay.x264-DEMAND',
+            'language': 'en', 'payload': {'id': 'primary'}}
+        invalid = [
+            {'release': 'Show.S01E01.1080p.BluRay.x264-BAD%02d' % i,
+             'language': 'x%02d' % i,
+             'payload': {'id': 'invalid-%02d' % i}}
+            for i in range(6)
+        ]
+        independent = {
+            'release': 'Show.S01E01.1080p.BluRay.x264-ROVERS',
+            'language': 'ro', 'payload': {'id': 'good'}}
+        proposal = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0}],
+            'validation_required': True, 'validation_folds': 5,
+            'timing_family_count': 0, 'diag': 'proven'}
+        accepted = {'accepted': True, 'before_score': .50,
+                    'after_score': .93, 'after_overlap': .96,
+                    'after_unique': .88}
+        ranked = [
+            (row, self.sub.release_match.TIER_SOURCE, 60 - i,
+             'bad%02d' % i, 1) for i, row in enumerate(invalid)
+        ] + [(independent, self.sub.release_match.TIER_SOURCE,
+              50, 'rovers', 1)]
+        calls = []
+
+        def download(payload):
+            calls.append(payload.get('id'))
+            return ('good-srt' if payload.get('id') == 'good'
+                    else '<html>rate limited</html>')
+
+        def parse(value):
+            if value == '<html>rate limited</html>':
+                return []
+            return cues(stride=11300) if value == 'good-srt' else cues()
+
+        with patch.object(self.sub, '_oracle_match', return_value=ranked), \
+             patch.object(self.sub, '_download_oracle', side_effect=download), \
+             patch.object(self.sub.sync_align, 'parse_srt', side_effect=parse), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'piecewise_maps_agree',
+                          return_value=True), \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family',
+                          return_value=accepted):
+            result = self.sub._validated_oracle_piecewise(
+                invalid + [independent],
+                'Show.S01E01.1080p.BluRay.x265-NOGRP.mkv',
+                'candidate-text', primary, 'primary-text')
+
+        self.assertIsNotNone(result)
+        self.assertIn('good', calls)
+        self.assertEqual(result['secondary'], independent)
+        self.assertEqual(result['downloads'], 1)
+
+    def test_provider_piecewise_timing_clones_do_not_hide_later_family(self):
+        """Translated copies of one timeline are attempts, not six votes."""
+        def cues(delta=0, stride=10000):
+            return [{'start': 10000 + delta + i * stride,
+                     'end': 11000 + delta + i * stride}
+                    for i in range(60)]
+
+        primary = {
+            'release': 'Show.S01E01.720p.BluRay.x264-DEMAND',
+            'language': 'en', 'payload': {'id': 'primary'}}
+        clones = [
+            {'release': 'Show.S01E01.1080p.BluRay.x264-C%02d' % i,
+             'language': 'x%02d' % i,
+             'payload': {'id': 'clone-%02d' % i}}
+            for i in range(6)
+        ]
+        independent = {
+            'release': 'Show.S01E01.1080p.BluRay.x264-ROVERS',
+            'language': 'ro', 'payload': {'id': 'good'}}
+        proposal = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0}],
+            'validation_required': True, 'validation_folds': 5,
+            'timing_family_count': 0, 'diag': 'proven'}
+        accepted = {'accepted': True, 'before_score': .50,
+                    'after_score': .93, 'after_overlap': .96,
+                    'after_unique': .88}
+        ranked = [
+            (row, self.sub.release_match.TIER_SOURCE, 60 - i,
+             'clone%02d' % i, 1) for i, row in enumerate(clones)
+        ] + [(independent, self.sub.release_match.TIER_SOURCE,
+              50, 'rovers', 1)]
+        calls = []
+
+        def download(payload):
+            calls.append(payload.get('id'))
+            return ('independent-text' if payload.get('id') == 'good'
+                    else 'clone-text')
+
+        def parse(value):
+            return (cues(delta=700, stride=11300)
+                    if value == 'independent-text' else cues())
+
+        with patch.object(self.sub, '_oracle_match', return_value=ranked), \
+             patch.object(self.sub, '_download_oracle', side_effect=download), \
+             patch.object(self.sub.sync_align, 'parse_srt', side_effect=parse), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'piecewise_maps_agree',
+                          return_value=True), \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family',
+                          return_value=accepted):
+            result = self.sub._validated_oracle_piecewise(
+                clones + [independent],
+                'Show.S01E01.1080p.BluRay.x265-NOGRP.mkv',
+                'candidate-text', primary, 'primary-text')
+
+        self.assertIsNotNone(result)
+        self.assertIn('good', calls)
+        self.assertEqual(result['secondary'], independent)
+        self.assertEqual(result['downloads'], 1)
+
     def test_provider_piecewise_abstains_when_every_secondary_is_a_clone(self):
         cues = [{'start': 10000 + i * 10000,
                  'end': 11000 + i * 10000} for i in range(60)]
@@ -1540,6 +1760,29 @@ class RemotePlaybackSafety(unittest.TestCase):
             setSubtitleStream=lambda _index: None)
         with patch.object(xbmc, 'Player', return_value=player):
             self.assertFalse(self.real_swap_if_current(job, 'fixed.srt', {}))
+
+    def test_background_swap_accepts_kodi_external_slot_replacement(self):
+        xbmc = sys.modules['xbmc']
+        job = self._bound_job(key='subtitle-key', info={})
+        self._set_pending_for(job)
+        fixed = self.root / 'replacement-fixed.srt'
+        fixed.write_text(
+            '1\n00:00:01,000 --> 00:00:02,000\nשלום\n',
+            encoding='utf-8')
+        handed = []
+        # Same count and same generic language label before/after, matching
+        # Android's one-external-slot behavior in the field log.
+        player = types.SimpleNamespace(
+            isPlaying=lambda: True,
+            getPlayingFile=lambda: self.url,
+            getAvailableSubtitleStreams=lambda: ['embedded', 'he'],
+            setSubtitles=lambda path: handed.append(path),
+            showSubtitles=lambda _on: None,
+            setSubtitleStream=lambda _index: None)
+        with patch.object(xbmc, 'Player', return_value=player):
+            self.assertTrue(self.real_swap_if_current(
+                job, str(fixed), {}))
+        self.assertEqual(handed, [str(fixed)])
 
     def test_background_swap_requires_new_stream_to_be_selected(self):
         xbmc = sys.modules['xbmc']

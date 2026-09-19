@@ -92,6 +92,22 @@ _LEADING_PUNCT_RE = re.compile(
     r'(?P<rest>[' + _HEB_LETTER + r'][^\n]*?)'          # Hebrew body (non-greedy)
     r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'        # zero or more closing tags
 )
+# A second physical-RTL shape seen in human Hebrew subtitle archives puts a
+# sentence mark *and its closing quote/bracket* at the byte start.  For
+# example, the logical second line of a quotation ``...אלן",`` is stored as
+# ``,"...אלן``.  _LEADING_PUNCT_RE intentionally does not accept the quote
+# between the mark and the first Hebrew letter, so handle this stronger and
+# unambiguous signature separately.  The closer run is reversed when returned
+# to logical order: `,"` -> `",`, `.)` -> `).`.
+_LEADING_PUNCT_CLOSER_RE = re.compile(
+    r'^(?P<dash>-\s+)?'
+    r'(?P<open_tags_a>(?:<[a-zA-Z!][^>]*>)*)'
+    r'(?P<leading>[' + _TRAILING_PUNCT_CHARS + r']+)'
+    r'(?P<closers>["\'\u05f3\u05f4\u2019\u201d\)\]\}\u00bb]+)\s*'
+    r'(?P<open_tags_b>(?:<[a-zA-Z!][^>]*>)*)'
+    r'(?P<rest>[' + _HEB_LETTER + r'][^\n]*?)'
+    r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
+)
 # Detect a pure ellipsis (".." or "..." or more) -- legitimate
 # continuation marker, don't move it.
 _ELLIPSIS_RE = re.compile(r'^(?:\.{2,}|…+)$')
@@ -140,6 +156,34 @@ def _fix_one_text_line(line, move_ellipsis=False):
         stripped = stripped[:-1]
     if not stripped:
         return line
+    paired = _LEADING_PUNCT_CLOSER_RE.match(stripped)
+    if paired:
+        dash = paired.group('dash') or ''
+        open_tags = ((paired.group('open_tags_a') or '')
+                     + (paired.group('open_tags_b') or ''))
+        leading = paired.group('leading') or ''
+        closers = paired.group('closers') or ''
+        rest = paired.group('rest') or ''
+        close_tags = paired.group('close_tags') or ''
+        if not rest:
+            return stripped if stripped != line.strip() else line
+        # ``..."שלום`` can be a perfectly logical continuation that opens a
+        # quotation.  Like a bare leading ellipsis, the paired form is
+        # ambiguous and may move only after another signature has identified
+        # the whole file as physical-order legacy text.
+        if _ELLIPSIS_RE.match(leading) and not move_ellipsis:
+            return stripped if stripped != line.strip() else line
+        # The whole neutral suffix was written in visual order at the start;
+        # restore its logical character order at the end.  If the body already
+        # ends in the same closer, do not manufacture a duplicate quote or
+        # bracket; only the displaced sentence mark still needs to move.
+        logical_closers = closers[::-1]
+        suffix = (leading if rest.endswith(logical_closers)
+                  else logical_closers + leading)
+        if rest.endswith(suffix):
+            suffix = ''
+        return dash + open_tags + rest + suffix + close_tags
+
     m = _LEADING_PUNCT_RE.match(stripped)
     if not m:
         # No leading punct -- but if we stripped invisible chars,
@@ -462,6 +506,10 @@ def _looks_like_legacy_engine_text(text):
                 st = st[:-1]
             if not st or not _HEB_LETTER_RE.search(st):
                 continue
+            paired = _LEADING_PUNCT_CLOSER_RE.match(st)
+            if (paired and not _ELLIPSIS_RE.match(
+                    paired.group('leading') or '')):
+                return True
             bare_body = st[:-1].rstrip() if st.endswith('-') \
                 and not st.endswith(' -') else ''
             if bare_body and _LEADING_PUNCT_RE.match(bare_body):
