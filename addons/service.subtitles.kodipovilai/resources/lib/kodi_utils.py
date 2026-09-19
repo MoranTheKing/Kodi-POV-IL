@@ -1144,8 +1144,18 @@ def subtitle_sync_registration_baseline(path, selection=None, player=None):
 
 def confirm_subtitle_sync_registration(path, selection=None, before=None,
                                        player=None, timeout_ms=1000,
-                                       select_new=True):
-    """Confirm FIXED only after Kodi visibly registers a new subtitle stream."""
+                                       select_new=True,
+                                       accept_valid_replacement=False,
+                                       replacement_path=None):
+    """Confirm a subtitle handoff without confusing replacement with failure.
+
+    Kodi may append an external subtitle, or replace the one external slot it
+    already owns.  Stream-count growth proves the append form and still gets an
+    explicit pin.  For the replacement form, the Python API contract says a
+    successful ``setSubtitles`` adds *and activates* the supplied file; callers
+    may opt into accepting that handoff only when the exact staged file exists
+    and the same selection/stream token is still current.
+    """
     if before is None or before < 0:
         return False
     expected = _selection_values(selection)
@@ -1177,6 +1187,32 @@ def confirm_subtitle_sync_registration(path, selection=None, before=None,
                         expected['token'], expected['link_hash'],
                         expected['stream_hash']):
                     return False
+                acknowledged = mark_subtitle_delivery_applied(
+                    path, selection=expected)
+                confirmed = confirm_subtitle_sync_fix(
+                    path, selection=expected)
+                return bool(acknowledged or confirmed)
+        if accept_valid_replacement:
+            # Kodi 21/Android commonly closes the previous external subtitle
+            # and opens the new one in the same slot.  getAvailableSubtitleStreams
+            # then keeps the same length (and often the same generic "he"
+            # label), so growth can never occur although playback changed.
+            # Trust the completed API handoff only for a real local/VFS file
+            # and only while its exact private selection identity remains live.
+            exists = False
+            delivered = replacement_path or path
+            try:
+                exists = os.path.isfile(delivered)
+            except Exception:
+                exists = False
+            if not exists and xbmcvfs is not None:
+                try:
+                    exists = bool(xbmcvfs.exists(delivered))
+                except Exception:
+                    exists = False
+            if (exists and subtitle_selection_matches(
+                    expected['token'], expected['link_hash'],
+                    expected['stream_hash'])):
                 acknowledged = mark_subtitle_delivery_applied(
                     path, selection=expected)
                 confirmed = confirm_subtitle_sync_fix(
@@ -1232,7 +1268,8 @@ def apply_subtitle_file(path, selection=None, fix_path=None, timeout_ms=1000,
         if before is not None:
             confirmed = confirm_subtitle_sync_registration(
                 staged_path, selection=expected, before=before,
-                player=p, timeout_ms=timeout_ms)
+                player=p, timeout_ms=timeout_ms,
+                accept_valid_replacement=True, replacement_path=path)
             if not confirmed:
                 if abandon_on_failure:
                     abandon_subtitle_selection(expected)

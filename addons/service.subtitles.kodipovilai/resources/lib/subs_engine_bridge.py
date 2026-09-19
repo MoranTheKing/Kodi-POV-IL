@@ -1567,7 +1567,8 @@ def _download_inner(payload, for_delivery=True):
                     # engine's reversed dash/ellipsis shapes. Render a copy;
                     # never mutate/delete the cache source or its share marker.
                     return _render_hebrew_rtl_copy(
-                        hit, legacy_engine=not is_logical_source(hit))
+                        hit, legacy_engine=(
+                            'auto' if is_logical_source(hit) else True))
                 return hit
         except Exception as e:
             kodi_utils.log('subs_engine_bridge: cache lookup skipped: {0}'
@@ -1615,5 +1616,10 @@ def _download_inner(payload, for_delivery=True):
     if (for_delivery
             and kodi_utils.get_bool('auto_fix_sub_punctuation', True)
             and 'Hebrew' in language):
-        return _render_hebrew_rtl_copy(source_file, legacy_engine=False)
+        # "Logical source" means MoranSubs itself did not reverse these
+        # bytes.  Human subtitle archives can nevertheless already contain
+        # old physical-RTL punctuation.  Auto-detection repairs only files
+        # carrying an unambiguous signature and preserves genuinely logical
+        # leading ellipses in clean files.
+        return _render_hebrew_rtl_copy(source_file, legacy_engine='auto')
     return source_file
