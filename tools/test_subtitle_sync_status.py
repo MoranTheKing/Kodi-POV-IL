@@ -4,6 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import tempfile
 import types
 import unittest
 from unittest.mock import Mock, patch
@@ -16,6 +17,8 @@ LIB = ADDON / 'resources/lib'
 
 class SubtitleSyncStatus(unittest.TestCase):
     def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.props = {}
         self.stream = {'url': 'https://media.invalid/movie.mkv?id=A&token=one'}
 
@@ -306,17 +309,21 @@ class SubtitleSyncStatus(unittest.TestCase):
         notice.assert_not_called()
         self.assertEqual(self.ku.get_subtitle_sync_status('candidate-B'), {})
 
-    def test_player_registration_and_pin_are_both_required_for_fixed(self):
+    def test_player_append_is_pinned_and_valid_replacement_is_accepted(self):
         xbmc = sys.modules['xbmc']
 
         def run_case(candidate, grow, pin_ok):
             self.ku.set_current_subtitle(candidate)
             selection = self.ku.current_subtitle_selection(
                 expected_link=candidate)
-            path = candidate + '.fixed.srt'
+            path_obj = Path(self.tmp.name) / (candidate + '.fixed.srt')
+            path_obj.write_text(
+                '1\n00:00:01,000 --> 00:00:02,000\nשלום\n',
+                encoding='utf-8')
+            path = str(path_obj)
             self.assertTrue(self.ku.stage_subtitle_sync_fix(
                 path, selection=selection))
-            streams = ['embedded']
+            streams = ['embedded', 'he'] if not grow else ['embedded']
 
             def apply(_path):
                 if grow:
@@ -338,14 +345,65 @@ class SubtitleSyncStatus(unittest.TestCase):
             return applied, self.ku.get_subtitle_sync_status(candidate)
 
         applied, status = run_case('no-growth', False, True)
-        self.assertFalse(applied)
-        self.assertEqual(status, {})
+        self.assertTrue(applied)
+        self.assertEqual(status['state'], 'fixed')
         applied, status = run_case('pin-fails', True, False)
         self.assertFalse(applied)
         self.assertEqual(status, {})
         applied, status = run_case('registered', True, True)
         self.assertTrue(applied)
         self.assertEqual(status['state'], 'fixed')
+
+    def test_sequential_external_slot_replacements_follow_each_new_pick(self):
+        """Every manual pick may reuse Kodi's one external-subtitle slot.
+
+        The Android field log kept the same stream count/name while replacing
+        source 1028, then 1029 and 1030.  Prove each new exact selection can be
+        acknowledged independently and that an earlier selection cannot own
+        the later correction.
+        """
+        xbmc = sys.modules['xbmc']
+        streams = ['embedded', 'he']
+        handed = []
+        player = types.SimpleNamespace(
+            isPlayingVideo=lambda: True,
+            getPlayingFile=lambda: self.stream['url'],
+            getAvailableSubtitleStreams=lambda: list(streams),
+            setSubtitles=lambda path: handed.append(path),
+            showSubtitles=lambda _on: None,
+            setSubtitleStream=lambda _index: None)
+
+        selections = []
+        with patch.object(xbmc, 'Player', return_value=player):
+            for index, candidate in enumerate(
+                    ('candidate-A', 'candidate-B', 'candidate-C'), 1):
+                self.ku.set_current_subtitle(candidate)
+                selection = self.ku.current_subtitle_selection(
+                    expected_link=candidate)
+                selections.append(selection)
+                path = Path(self.tmp.name) / ('fixed-%d.srt' % index)
+                path.write_text(
+                    '1\n00:00:01,000 --> 00:00:02,000\nשלום %d\n'
+                    % index, encoding='utf-8')
+                self.assertTrue(self.ku.stage_subtitle_sync_fix(
+                    str(path), selection=selection))
+                self.assertTrue(self.ku.apply_subtitle_file(
+                    str(path), selection=selection))
+                self.assertEqual(
+                    self.ku.get_subtitle_sync_status(candidate)['state'],
+                    'fixed')
+
+        self.assertEqual(len(handed), 3)
+        self.assertEqual(len(set(handed)), 3)
+        self.assertFalse(self.ku.subtitle_selection_matches(
+            selections[0]['token'], selections[0]['link_hash'],
+            selections[0]['stream_hash']))
+        self.assertFalse(self.ku.subtitle_selection_matches(
+            selections[1]['token'], selections[1]['link_hash'],
+            selections[1]['stream_hash']))
+        self.assertTrue(self.ku.subtitle_selection_matches(
+            selections[2]['token'], selections[2]['link_hash'],
+            selections[2]['stream_hash']))
 
     def test_delivery_ack_is_exact_to_path_selection_and_stream(self):
         self.ku.set_current_subtitle('candidate-A')

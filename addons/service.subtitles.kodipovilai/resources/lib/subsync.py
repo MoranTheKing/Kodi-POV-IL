@@ -104,7 +104,11 @@ _MAX_VERDICTS = 400
 # with two distinct provider-oracle timing families. Both must independently
 # rebuild an agreeing map and pass >=4/5 held-out folds; translated timing
 # clones never count as a second family.
-_VERDICT_VERSION = 20
+# v21: provider rows that fail, return non-SRT data or repeat one timing family
+# no longer exhaust the usable-evidence budget before a later independent row.
+# Recompute v20 UNKNOWNs so subtitles already tried on the affected source get
+# the corrected bounded search instead of inheriting the old refusal forever.
+_VERDICT_VERSION = 21
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -133,6 +137,11 @@ _ORACLE_SOURCE_MIN_VOTE = 0.50
 # background worker. Bound its extra downloads so one difficult cross-cut
 # subtitle cannot turn into an open-ended provider crawl.
 _ORACLE_PIECEWISE_MAX_DOWNLOADS = 6
+# A provider row can disappear, be rate-limited, or yield an invalid archive.
+# Such a miss is not timing evidence and must not consume one of the six
+# evidence slots.  Keep a separate hard attempt ceiling so the background
+# rescue remains bounded while still reaching later, independent languages.
+_ORACLE_PIECEWISE_MAX_ATTEMPTS = 12
 
 
 def _selection_snapshot():
@@ -1893,6 +1902,43 @@ def _oracle_match(candidates, playing):
     return ranked
 
 
+def _diversify_oracle_matches(ranked):
+    """Round-robin release groups before spending provider downloads.
+
+    Subtitle APIs commonly return the same ROVERS/DEMAND timing translated
+    into many languages in one contiguous block.  Downloading that whole block
+    first wastes the bounded rescue budget on timing clones.  Preserve the
+    quality order *within* each group, but take one row from every group before
+    taking a second.  Rows with no parsed group are bucketed by normalized
+    release so unrelated anonymous masters are not collapsed together.
+    """
+    buckets = {}
+    order = []
+    for item in ranked or []:
+        try:
+            candidate, _tier, _pct, group, _rank = item
+            key = (group or '').strip().lower()
+            if not key:
+                key = 'nogroup:' + release_match.normalize(
+                    candidate.get('release') or '')
+        except Exception:
+            key = 'unknown'
+        if key not in buckets:
+            buckets[key] = []
+            order.append(key)
+        buckets[key].append(item)
+    out = []
+    while True:
+        added = False
+        for key in order:
+            if buckets[key]:
+                out.append(buckets[key].pop(0))
+                added = True
+        if not added:
+            break
+    return out
+
+
 def _validated_oracle_piecewise(candidates, playing, text,
                                 primary, primary_text):
     """Prove a repeated-short-edit map with two provider timing families.
@@ -1945,6 +1991,7 @@ def _validated_oracle_piecewise(candidates, playing, text,
         0 if (item[0].get('language') or '').lower()
         in ('en', 'eng', 'english') else 1,
     ), reverse=True)
+    ranked = _diversify_oracle_matches(ranked)
 
     primary_profile = {'cues': primary_cues}
     primary_key = (
@@ -1955,6 +2002,7 @@ def _validated_oracle_piecewise(candidates, playing, text,
     )
     seen = {primary_key}
     downloads = 0
+    attempts = 0
     for secondary, tier, _pct, _group, _rank in ranked:
         key = (
             (secondary.get('release') or '').strip().lower(),
@@ -1965,9 +2013,10 @@ def _validated_oracle_piecewise(candidates, playing, text,
         if key in seen:
             continue
         seen.add(key)
-        if downloads >= _ORACLE_PIECEWISE_MAX_DOWNLOADS:
+        if (downloads >= _ORACLE_PIECEWISE_MAX_DOWNLOADS
+                or attempts >= _ORACLE_PIECEWISE_MAX_ATTEMPTS):
             break
-        downloads += 1
+        attempts += 1
         secondary_text = _download_oracle(secondary.get('payload') or {})
         if not secondary_text.strip() or secondary_text == primary_text:
             continue
@@ -1976,10 +2025,17 @@ def _validated_oracle_piecewise(candidates, playing, text,
                 sync_align.parse_srt(secondary_text))
         except Exception:
             continue
+        # A non-empty provider response can still be an HTML error page,
+        # malformed archive member, or a tiny preview.  It is a network
+        # attempt, but not a usable subtitle and therefore must not consume
+        # one of the six evidence slots.
+        if len(secondary_cues) < MIN_REMOTE_CUES:
+            continue
         secondary_profile = {'cues': secondary_cues}
         if not _timing_profiles_distinct(
                 primary_profile, secondary_profile):
             continue
+        downloads += 1
         try:
             secondary_proposal = planner(secondary_cues, text)
             secondary_validated = validator(
@@ -2031,6 +2087,9 @@ def _validated_oracle_piecewise(candidates, playing, text,
         })
         return {'verdict': verdict, 'secondary': secondary,
                 'downloads': downloads}
+    _log('provider-consensus exhausted: %d attempt(s), %d usable '
+         'independent-candidate download(s)' % (attempts, downloads),
+         level='DEBUG')
     return None
 
 
@@ -2725,6 +2784,16 @@ def _swap_if_current(job, fixed_path, verdict):
                     return False
                 _log('fixed subtitle swapped in-place: ' + fixed_path)
                 return True
+        # Kodi 21/Android replaces its current external-subtitle slot instead
+        # of growing the stream list (the field log shows Closing stream 3 /
+        # Opening stream 3 with a new source id).  setSubtitles is specified to
+        # add and activate the supplied file.  A successfully returned call,
+        # a real content-addressed correction file, and the still-current exact
+        # selection together are positive evidence for this replacement form.
+        if os.path.isfile(fixed_path) and _job_matches_current(job):
+            _log('fixed subtitle replaced current external slot: '
+                 + fixed_path)
+            return True
         _log('fixed subtitle registration was not observed', level='WARNING')
         return False
     except Exception as e:

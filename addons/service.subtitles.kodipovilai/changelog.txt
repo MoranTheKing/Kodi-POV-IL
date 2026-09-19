@@ -1,3 +1,8 @@
+0.2.551
+- Retry safe cross-cut synchronization past failed, malformed and timing-clone provider rows, while still requiring two independently validated timing families before changing cues.
+- Keep sequential subtitle picks and verified background corrections active when Kodi for Android replaces its single external-subtitle slot instead of growing the stream list.
+- Repair archived physical-order Hebrew punctuation across human, community, local and cached delivery paths, including ellipses, dialogue dashes and quote/bracket endings, while preserving genuine logical continuations.
+
 0.2.550
 - Correct repeated short edit pads even when a remote video has no embedded subtitle timeline, but only after two independent provider timing families and separate held-out checks agree on the same map.
 - Keep the exact automatically applied provider row marked as current when its temporary transport metadata refreshes, without transferring that row's timing status to a similarly named result.
