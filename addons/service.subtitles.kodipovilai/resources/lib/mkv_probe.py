@@ -644,27 +644,43 @@ def subtitle_reference(url_or_path,
             _log('no subtitle blocks found')
             return None
 
-        merged = {}
-        for lst in collected.values():
-            for t, d in lst:
-                ti = int(t - origin_ms)   # rebase to the playback timeline
-                if ti < 0:
-                    continue
-                if d and (ti not in merged or not merged[ti]):
-                    merged[ti] = d
-                else:
-                    merged.setdefault(ti, None)
-        pts = sorted(merged)
-        cues = []
-        for i, t in enumerate(pts):
-            d = merged.get(t)
-            if not d:
-                gap = (pts[i + 1] - t) if i + 1 < len(pts) else 3000
-                d = max(600, min(3000, gap - 100))
-            cues.append({'start': t, 'end': t + int(d)})
+        def _as_cues(lists):
+            merged = {}
+            for lst in lists:
+                for t, d in lst:
+                    ti = int(t - origin_ms)   # playback timeline
+                    if ti < 0:
+                        continue
+                    if d and (ti not in merged or not merged[ti]):
+                        merged[ti] = d
+                    else:
+                        merged.setdefault(ti, None)
+            pts = sorted(merged)
+            out = []
+            for i, t in enumerate(pts):
+                d = merged.get(t)
+                if not d:
+                    gap = (pts[i + 1] - t) if i + 1 < len(pts) else 3000
+                    d = max(600, min(3000, gap - 100))
+                out.append({'start': t, 'end': t + int(d)})
+            return out
+
+        cues = _as_cues(collected.values())
 
         def _sanitize(t):
             return {k: v for k, v in t.items() if not isinstance(v, bytes)}
+
+        # Preserve every real track separately.  Their union remains for a
+        # sparse last-resort fallback, but the caller can now compare each
+        # timeline on its own so one exact track cannot be outvoted by several
+        # language tracks with harmless editorial lead/lag.
+        track_cues = []
+        for tnum, lst in collected.items():
+            tc = _as_cues([lst])
+            if not tc:
+                continue
+            meta = next((x for x in anchor if x['num'] == tnum), {})
+            track_cues.append({'track': _sanitize(meta), 'cues': tc})
 
         best = max(collected, key=lambda n: len(collected[n]))
         track = next((x for x in anchor if x['num'] == best), {})
@@ -673,7 +689,8 @@ def subtitle_reference(url_or_path,
                  len(cues), len(collected), best, track.get('codec'),
                  track.get('lang') or '?', src.fetched / 1e6,
                  time.time() - t0, win / 1e6))
-        return {'cues': cues, 'track': _sanitize(track),
+        return {'cues': cues, 'track_cues': track_cues,
+                'track': _sanitize(track),
                 'tracks': [_sanitize(t) for t in subs],
                 'bytes': src.fetched}
     except Exception as e:

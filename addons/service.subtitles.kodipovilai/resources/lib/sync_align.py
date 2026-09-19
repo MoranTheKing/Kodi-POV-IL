@@ -70,6 +70,23 @@ _LOCAL_SAME_PLATEAU_MS = 1500
 # refuse the approximation and preserve the delivered subtitle unchanged.
 _SCALED_LOCAL_RANGE_MS = 1000
 
+# Some broadcast/stream masters insert a short bumper or black-frame pad at
+# several act boundaries.  Against another master this is neither one global
+# delay nor a normal FPS clock: the offset grows in small, repeated steps.  A
+# single timing track is not enough evidence to rewrite a whole subtitle for
+# such a subtle edit, so the planner below only PRODUCES a proposal.  The media
+# layer must prove it on held-out timing cues (or genuinely independent timing
+# families) before ``apply_verdict`` will accept it.  These bounds describe that
+# deliberately narrow proposal space; ordinary >=5-second cuts continue through
+# the mature piecewise path above.
+_MICRO_MIN_STEP_MS = 1000
+_MICRO_MAX_STEP_MS = 4500
+_MICRO_SAME_PLATEAU_MS = 1200
+_MICRO_MAX_SEGMENTS = 8
+_MICRO_MIN_WINDOWS = 10
+_MICRO_MIN_CORE_RATIO = 0.75
+_MICRO_POST_RESIDUAL_MS = 850
+
 
 # ---- SRT parsing -----------------------------------------------------------
 
@@ -848,7 +865,18 @@ def _optimize_piecewise_boundaries(ref, cand, scale, groups, offsets):
         hi_i = min(n - 4, bisect.bisect_right(cand_starts, hi) + margin)
         if lo_i > hi_i:
             return None
-        allowed.append(range(lo_i, hi_i + 1))
+        # A later plateau with a larger offset moves its first cue further
+        # backwards.  A cut placed inside continuous dialogue would therefore
+        # reorder/overlap adjacent cues even if its aggregate timing score looks
+        # attractive.  Keep only boundaries whose two neighbouring cues remain
+        # ordered after applying each side's own map; ``apply_verdict`` repeats
+        # this invariant on the complete, unfiltered SRT.
+        safe_positions = [index for index in range(lo_i, hi_i + 1)
+                          if ((cand[index]['start'] - right_off) / scale
+                              >= (cand[index - 1]['end'] - left_off) / scale)]
+        if not safe_positions:
+            return None
+        allowed.append(safe_positions)
 
     states = {0: (0.0, [])}
     for boundary_index, positions in enumerate(allowed):
@@ -899,6 +927,441 @@ def _map_cues_global(cand, scale, offset):
 def _timing_score(ref, cand):
     return (0.60 * overlap_rate(ref, cand, 1.0, 0.0)
             + 0.40 * _tight_agreement(ref, cand, 1.0, 0.0))
+
+
+def _micro_core_windows(windows):
+    """Strong local windows after removing isolated dense-dialogue aliases.
+
+    A local histogram can occasionally lock onto dialogue tens of seconds away
+    even while its vote/overlap look plausible.  A real sequence of short edit
+    pads follows one slow monotonic trend.  Theil-Sen's median pairwise slope
+    models that trend without being pulled by one bad window; a generous robust
+    residual then removes only gross aliases.  This is still proposal evidence,
+    never an acceptance decision.
+    """
+    trusted = _trusted_local_windows(windows)
+    if (len(trusted) < _MICRO_MIN_WINDOWS
+            or len(trusted) < int(math.ceil(
+                _MICRO_MIN_CORE_RATIO * len(windows)))):
+        return []
+    xs = [float(w['center_ms']) for w in trusted]
+    ys = [float(w['offset_ms']) for w in trusted]
+    slopes = [(ys[j] - ys[i]) / (xs[j] - xs[i])
+              for i in range(len(xs)) for j in range(i + 1, len(xs))
+              if xs[j] != xs[i]]
+    if not slopes:
+        return []
+    slope = _median(slopes)
+    intercept = _median([y - slope * x for x, y in zip(xs, ys)])
+    residuals = [y - (slope * x + intercept) for x, y in zip(xs, ys)]
+    middle = _median(residuals)
+    mad = _median([abs(value - middle) for value in residuals])
+    limit = max(2500.0, 5.0 * mad)
+    core = [w for w, residual in zip(trusted, residuals)
+            if abs(residual - middle) <= limit]
+    if (len(core) < _MICRO_MIN_WINDOWS
+            or len(core) < int(math.ceil(
+                _MICRO_MIN_CORE_RATIO * len(windows)))):
+        return []
+    return core
+
+
+def _micro_plateau_groups(windows):
+    core = _micro_core_windows(windows)
+    groups = []
+    for window in core:
+        if (not groups
+                or abs(window['offset_ms'] - _median(
+                    [item['offset_ms'] for item in groups[-1]]))
+                >= _MICRO_SAME_PLATEAU_MS):
+            groups.append([window])
+        else:
+            groups[-1].append(window)
+    return groups, core
+
+
+def _micro_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
+                          max_offset_ms=None):
+    """Proposal for repeated short edit pads, pending track consensus.
+
+    The base clock is intentionally pinned to identity.  Standard/global FPS
+    drift and large cuts already have independently proven paths; mixing those
+    freedoms here would make a subtle edit too easy to overfit.  The returned
+    verdict carries ``validation_required`` and therefore cannot be applied
+    until a separate holdout/independent-family validator approves it.
+    """
+    scale = 1.0
+    max_off = _MAXOFF if max_offset_ms is None else max_offset_ms
+    center_offset, _votes = _best_offset(
+        [c['start'] for c in ref], [c['start'] for c in cand], scale, max_off)
+    windows = _local_windows(
+        ref, cand, scale, max_offset_ms=max_offset_ms,
+        center_offset=center_offset)
+    groups, core = _micro_plateau_groups(windows)
+    info = {'windows': windows, 'core': core, 'groups': groups}
+    if not (3 <= len(groups) <= _MICRO_MAX_SEGMENTS):
+        return None, info
+    # Boundary regions must be sustained, and at most one short middle act may
+    # be represented by a single window.  Consensus will independently confirm
+    # that singleton at the same candidate boundary.
+    if len(groups[0]) < 2 or len(groups[-1]) < 2:
+        return None, info
+    if sum(1 for group in groups if len(group) == 1) > 1:
+        return None, info
+
+    offsets = [_median([w['offset_ms'] for w in group])
+               for group in groups]
+    if any(abs(offset) > MAX_PLAUSIBLE_OFFSET_MS for offset in offsets):
+        return None, info
+    steps = [offsets[i + 1] - offsets[i]
+             for i in range(len(offsets) - 1)]
+    if not steps:
+        return None, info
+    direction = 1.0 if _median(steps) > 0 else -1.0
+    if any(direction * step < _MICRO_MIN_STEP_MS
+           or abs(step) > _MICRO_MAX_STEP_MS for step in steps):
+        return None, info
+    if max(offsets) - min(offsets) < 3000.0:
+        return None, info
+    timeline_start = float(ref[0]['start'])
+    timeline_end = float(ref[-1]['end'])
+    timeline_span = max(1.0, timeline_end - timeline_start)
+    if (groups[0][0]['center_ms'] > timeline_start + 0.25 * timeline_span
+            or groups[-1][-1]['center_ms']
+            < timeline_start + 0.75 * timeline_span):
+        return None, info
+
+    cuts = _optimize_piecewise_boundaries(
+        ref, cand, scale, groups, offsets)
+    if cuts is None:
+        return None, info
+    candidate_boundaries = []
+    reference_boundaries = []
+    for cut, left_offset, right_offset in zip(
+            cuts, offsets, offsets[1:]):
+        candidate_boundary = (
+            cand[cut - 1]['end'] + cand[cut]['start']) / 2.0
+        reference_boundary = (
+            (cand[cut - 1]['end'] - left_offset)
+            + (cand[cut]['start'] - right_offset)) / 2.0
+        candidate_boundaries.append(candidate_boundary)
+        reference_boundaries.append(reference_boundary)
+    segments = []
+    for index, offset in enumerate(offsets):
+        segments.append({
+            'cand_from_ms': (None if index == 0
+                             else candidate_boundaries[index - 1]),
+            'cand_to_ms': (None if index == len(offsets) - 1
+                           else candidate_boundaries[index]),
+            'ref_from_ms': (None if index == 0
+                            else reference_boundaries[index - 1]),
+            'ref_to_ms': (None if index == len(offsets) - 1
+                          else reference_boundaries[index]),
+            'offset_ms': offset,
+        })
+
+    cue_edges = [0] + list(cuts) + [len(cand)]
+    min_segment_cues = max(12, int(math.ceil(0.02 * len(cand))))
+    for begin, end in zip(cue_edges, cue_edges[1:]):
+        if end - begin < min_segment_cues:
+            return None, info
+        region_start = float(cand[begin]['start'])
+        region_end = float(cand[end - 1]['end'])
+        if region_end - region_start < 60000.0:
+            return None, info
+
+    fixed = _map_cues_piecewise(cand, scale, segments)
+    if (len(fixed) != len(cand)
+            or any(c['end'] <= c['start'] for c in fixed)
+            or any(fixed[i]['start'] < fixed[i - 1]['start']
+                   for i in range(1, len(fixed)))):
+        return None, info
+    post_windows = _local_windows(
+        ref, fixed, 1.0, max_offset_ms=max_offset_ms, center_offset=0.0)
+    post_core = _micro_core_windows(post_windows)
+    if len(post_core) < _MICRO_MIN_WINDOWS:
+        return None, info
+    post_offsets = [w['offset_ms'] for w in post_core]
+    post_residual = max(post_offsets) - min(post_offsets)
+    before_score = _timing_score(ref, cand)
+    after_score = _timing_score(ref, fixed)
+    after_overlap = overlap_rate(ref, fixed, 1.0, 0.0)
+    after_unique, unique_median, unique_p95 = _unique_match_metrics(
+        ref, fixed, 1.0, 0.0)
+    if (post_residual > _MICRO_POST_RESIDUAL_MS
+            or after_overlap < max(0.85, min_overlap)
+            or after_unique < 0.72
+            or after_score < 0.78
+            or after_score < before_score + 0.15):
+        info.update({'post_residual_ms': post_residual,
+                     'before_score': before_score,
+                     'after_score': after_score,
+                     'after_overlap': after_overlap,
+                     'after_unique': after_unique})
+        return None, info
+    diag = ('embedded-track consensus proposal: %d regions offsets=%s '
+            'score=%.3f->%.3f overlap=%.0f%% unique=%.0f%% residual=%dms'
+            % (len(segments),
+               ','.join('%+d' % int(value) for value in offsets),
+               before_score, after_score, after_overlap * 100,
+               after_unique * 100, int(post_residual)))
+    verdict = {
+        'status': STATUS_FIXABLE,
+        'mode': 'piecewise',
+        'scale': 1.0,
+        'offset_ms': offsets[0],
+        'segments': segments,
+        'vote': min(w['vote'] for w in core),
+        'overlap': after_overlap,
+        'unique': after_unique,
+        'unique_median_ms': unique_median,
+        'unique_p95_ms': unique_p95,
+        'before_score': before_score,
+        'after_score': after_score,
+        'post_residual_ms': post_residual,
+        'cand_span_ms': float(cand[-1]['end']),
+        'validation_required': True,
+        'validation_folds': 0,
+        'timing_family_count': 0,
+        'diag': diag,
+    }
+    return verdict, info
+
+
+def micro_piecewise_proposal(ref_cues, cand_srt_text,
+                             max_offset_ms=None):
+    """Return a non-applicable short-edit proposal for external consensus.
+
+    This API deliberately does not accept a single timing track as proof.  A
+    media-aware caller must validate unseen timing cues (or compare genuinely
+    independent timing families) before ``apply_verdict`` can rewrite anything.
+    """
+    ref, ref_error = _preflight_cues(ref_cues)
+    if ref_error:
+        return None
+    cand_all, cand_error = _preflight_srt(cand_srt_text)
+    if cand_error:
+        return None
+    cand = dialogue_cues(cand_all)
+    if len(ref) < _LOCAL_MIN_REF_CUES or len(cand) < _LOCAL_MIN_REF_CUES:
+        return None
+    verdict, _info = _micro_piecewise_plan(
+        ref, cand, max_offset_ms=max_offset_ms)
+    return verdict
+
+
+def _piecewise_reference_time(verdict, candidate_ms):
+    try:
+        scale = float(verdict.get('scale') or 1.0)
+        segments = list(verdict.get('segments') or [])
+        if not segments:
+            return ((float(candidate_ms)
+                     - float(verdict.get('offset_ms') or 0.0)) / scale)
+        boundaries = [float(item.get('cand_from_ms'))
+                      for item in segments[1:]
+                      if item.get('cand_from_ms') is not None]
+        index = min(bisect.bisect_right(boundaries, float(candidate_ms)),
+                    len(segments) - 1)
+        offset = float(segments[index].get('offset_ms') or 0.0)
+        return (float(candidate_ms) - offset) / scale
+    except Exception:
+        return None
+
+
+def piecewise_maps_agree(left, right, tolerance_ms=700.0):
+    """Compare plateau maps without sampling directly on a discontinuity.
+
+    A fold can place the same act boundary at a neighbouring quiet cue.  Testing
+    the exact boundary timestamp would select the old side in one map and the
+    new side in the other, reporting a false full-step disagreement.  Instead,
+    corresponding offsets must agree tightly, boundaries must stay within one
+    conservative 45-second local-window margin, and each overlapping region is
+    compared at its midpoint away from either jump.
+    """
+    try:
+        if left.get('mode') != 'piecewise' or right.get('mode') != 'piecewise':
+            return False
+        lsegments = list(left.get('segments') or [])
+        rsegments = list(right.get('segments') or [])
+        if len(lsegments) < 2 or len(lsegments) != len(rsegments):
+            return False
+        if abs(float(left.get('scale') or 1.0)
+               - float(right.get('scale') or 1.0)) > 0.0002:
+            return False
+        loffsets = [float(item.get('offset_ms') or 0.0)
+                    for item in lsegments]
+        roffsets = [float(item.get('offset_ms') or 0.0)
+                    for item in rsegments]
+        if any(abs(a - b) > min(300.0, float(tolerance_ms))
+               for a, b in zip(loffsets, roffsets)):
+            return False
+        lboundaries = [float(item['cand_from_ms']) for item in lsegments[1:]]
+        rboundaries = [float(item['cand_from_ms']) for item in rsegments[1:]]
+        if any(abs(a - b) > 45000.0
+               for a, b in zip(lboundaries, rboundaries)):
+            return False
+        span = min(float(left.get('cand_span_ms') or 0.0),
+                   float(right.get('cand_span_ms') or 0.0))
+        if span <= 5 * 60 * 1000:
+            return False
+        ledges = [0.0] + lboundaries + [span]
+        redges = [0.0] + rboundaries + [span]
+        points = []
+        for index in range(len(lsegments)):
+            low = max(ledges[index], redges[index])
+            high = min(ledges[index + 1], redges[index + 1])
+            if high - low < 1000.0:
+                return False
+            points.append((low + high) / 2.0)
+        for point in points:
+            ltime = _piecewise_reference_time(left, point)
+            rtime = _piecewise_reference_time(right, point)
+            if (ltime is None or rtime is None
+                    or abs(ltime - rtime) > float(tolerance_ms)):
+                return False
+        return True
+    except Exception:
+        return False
+
+
+def validate_micro_piecewise(ref_cues, cand_srt_text, proposal=None,
+                             max_offset_ms=None):
+    """Five-fold out-of-sample proof for a subtle piecewise proposal.
+
+    Each trial removes one fifth of reference cues, rebuilds the complete map
+    without them, and then scores that map only on the unseen fifth. Four of
+    five separately held-out sets must materially improve and reproduce the
+    full map across the whole timeline. Duplicate Matroska tracks therefore
+    cannot masquerade as independent evidence.
+    """
+    ref, ref_error = _preflight_cues(ref_cues)
+    if ref_error:
+        return None
+    cand_all, cand_error = _preflight_srt(cand_srt_text)
+    if cand_error:
+        return None
+    cand = dialogue_cues(cand_all)
+    if len(ref) < 3 * _LOCAL_MIN_REF_CUES or len(cand) < _LOCAL_MIN_REF_CUES:
+        return None
+    full = proposal
+    if full is None:
+        full, _info = _micro_piecewise_plan(
+            ref, cand, max_offset_ms=max_offset_ms)
+    if not full or not full.get('validation_required'):
+        return None
+
+    reference_edges = [
+        float(item.get('ref_from_ms'))
+        for item in (full.get('segments') or [])[1:]
+        if item.get('ref_from_ms') is not None]
+    passed = []
+    for fold in range(5):
+        train = [cue for index, cue in enumerate(ref) if index % 5 != fold]
+        holdout = [cue for index, cue in enumerate(ref) if index % 5 == fold]
+        # Every holdout must exercise every plateau, rather than validating only
+        # the dense beginning/end and leaving a middle correction untested.
+        holdout_regions = [0] * len(full.get('segments') or [])
+        for cue in holdout:
+            region = bisect.bisect_right(reference_edges, cue['start'])
+            holdout_regions[min(region, len(holdout_regions) - 1)] += 1
+        if not holdout_regions or min(holdout_regions) < 5:
+            continue
+        fold_plan, _info = _micro_piecewise_plan(
+            train, cand, max_offset_ms=max_offset_ms)
+        if not fold_plan or not piecewise_maps_agree(full, fold_plan):
+            continue
+        # Score the FULL map that would actually be applied.  The fold-derived
+        # map is used as an independent stability requirement above; this keeps
+        # the production transform itself under the held-out measurement.
+        fixed = _map_cues_piecewise(
+            cand, full.get('scale', 1.0), full.get('segments') or [])
+        if (len(fixed) != len(cand)
+                or any(c['end'] <= c['start'] for c in fixed)
+                or any(fixed[index]['start'] < fixed[index - 1]['start']
+                       for index in range(1, len(fixed)))):
+            continue
+        before_score = _timing_score(holdout, cand)
+        after_score = _timing_score(holdout, fixed)
+        after_overlap = overlap_rate(holdout, fixed, 1.0, 0.0)
+        after_unique, _median_ms, p95_ms = _unique_match_metrics(
+            holdout, fixed, 1.0, 0.0)
+        if (after_overlap < 0.85 or after_unique < 0.72
+                or p95_ms is None or p95_ms > 800.0
+                or after_score < 0.78
+                or after_score < before_score + 0.15):
+            continue
+        passed.append({'fold': fold, 'before_score': before_score,
+                       'after_score': after_score,
+                       'overlap': after_overlap,
+                       'unique': after_unique})
+    if len(passed) < 4:
+        return None
+    validated = dict(full)
+    validated.update({
+        'validation_folds': len(passed),
+        'holdout_score_min': min(item['after_score'] for item in passed),
+        'holdout_gain_min': min(item['after_score'] - item['before_score']
+                                for item in passed),
+        'diag': ('%s; %d/5 disjoint holdouts passed '
+                 '(score>=%.3f gain>=%.3f)'
+                 % (full.get('diag', ''), len(passed),
+                    min(item['after_score'] for item in passed),
+                    min(item['after_score'] - item['before_score']
+                        for item in passed))),
+    })
+    return validated
+
+
+def evaluate_piecewise_family(ref_cues, cand_srt_text, verdict,
+                              max_offset_ms=None):
+    """Out-of-family validation/veto metrics for an already frozen map.
+
+    This does not refit a single parameter.  It asks whether a map learned from
+    a preferred English text timeline also improves a different embedded codec
+    family (normally PGS).  One representative validates the family; duplicate
+    language tracks never increase its evidence count.
+    """
+    ref, ref_error = _preflight_cues(ref_cues)
+    cand_all, cand_error = _preflight_srt(cand_srt_text)
+    if ref_error or cand_error or not verdict:
+        return None
+    cand = dialogue_cues(cand_all)
+    segments = list(verdict.get('segments') or [])
+    if len(ref) < _LOCAL_MIN_REF_CUES or not cand or not segments:
+        return None
+    fixed = _map_cues_piecewise(
+        cand, float(verdict.get('scale') or 1.0), segments)
+    if (len(fixed) != len(cand)
+            or any(c['end'] <= c['start'] for c in fixed)
+            or any(fixed[index]['start'] < fixed[index - 1]['start']
+                   for index in range(1, len(fixed)))):
+        return None
+    before_score = _timing_score(ref, cand)
+    after_score = _timing_score(ref, fixed)
+    after_overlap = overlap_rate(ref, fixed, 1.0, 0.0)
+    after_unique, median_ms, p95_ms = _unique_match_metrics(
+        ref, fixed, 1.0, 0.0)
+    post_windows = _local_windows(
+        ref, fixed, 1.0, max_offset_ms=max_offset_ms, center_offset=0.0)
+    post_core = _micro_core_windows(post_windows)
+    post_residual = None
+    if post_core:
+        values = [item['offset_ms'] for item in post_core]
+        post_residual = max(values) - min(values)
+    accepted = bool(
+        len(post_core) >= _MICRO_MIN_WINDOWS
+        and post_residual is not None
+        and post_residual <= _MICRO_POST_RESIDUAL_MS
+        and after_overlap >= 0.82
+        and after_unique >= 0.70
+        and p95_ms is not None and p95_ms <= 800.0
+        and after_score >= 0.74
+        and after_score >= before_score + 0.15)
+    return {'accepted': accepted, 'before_score': before_score,
+            'after_score': after_score, 'after_overlap': after_overlap,
+            'after_unique': after_unique, 'unique_median_ms': median_ms,
+            'unique_p95_ms': p95_ms, 'post_residual_ms': post_residual,
+            'post_core': len(post_core), 'post_windows': len(post_windows)}
 
 
 def _piecewise_plan(ref, cand, scale, min_overlap, max_offset_ms=None,
@@ -1223,6 +1686,13 @@ def _adjacent_overlap_pairs(signature):
             if signature[i][0] < signature[i - 1][1]}
 
 
+def _adjacent_overlap_durations(signature):
+    """Overlap milliseconds by right-hand cue index."""
+    return {i: signature[i - 1][1] - signature[i][0]
+            for i in range(1, len(signature))
+            if signature[i][0] < signature[i - 1][1]}
+
+
 def apply_verdict(cand_srt_text, verdict):
     """Apply a FIXABLE verdict only if all structural invariants survive.
 
@@ -1232,6 +1702,14 @@ def apply_verdict(cand_srt_text, verdict):
     """
     if not verdict or verdict.get('status') != STATUS_FIXABLE:
         return cand_srt_text
+    if verdict.get('validation_required'):
+        try:
+            validation_folds = int(verdict.get('validation_folds') or 0)
+            timing_families = int(verdict.get('timing_family_count') or 0)
+        except (TypeError, ValueError):
+            validation_folds = timing_families = 0
+        if validation_folds < 4 or timing_families < 2:
+            raise ValueError('piecewise proposal lacks holdout/family validation')
     _all_cues, preflight_error = _preflight_srt(cand_srt_text)
     if preflight_error:
         raise ValueError('source subtitle failed structural preflight: '
@@ -1258,6 +1736,15 @@ def apply_verdict(cand_srt_text, verdict):
     after_overlaps = _adjacent_overlap_pairs(after)
     if not after_overlaps.issubset(before_overlaps):
         raise ValueError('retime introduced new cue overlap')
+    # Keeping the same pair identity is not enough: a boundary map can turn a
+    # harmless 50-ms editorial overlap into seconds of stacked dialogue.  A
+    # 100-ms serialization margin tolerates SRT rounding while refusing any
+    # material worsening of an overlap that already existed.
+    before_overlap_ms = _adjacent_overlap_durations(before)
+    after_overlap_ms = _adjacent_overlap_durations(after)
+    if any(duration > before_overlap_ms.get(index, 0.0) + 100.0
+           for index, duration in after_overlap_ms.items()):
+        raise ValueError('retime materially worsened cue overlap')
     # Serialized timestamps must parse back to the same rounded preview.
     reparsed = _timed_signature(fixed)
     if reparsed != after:

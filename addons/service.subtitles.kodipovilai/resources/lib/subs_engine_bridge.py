@@ -1297,6 +1297,25 @@ def select_embedded(stream_index, lang=None):
         return False
 
 
+def cached_source(payload):
+    """Return an already-downloaded canonical subtitle without networking."""
+    try:
+        cache_dir = _cached_subs_dir()
+        if not cache_dir:
+            return None
+        keybase = _cached_subs_keybase(
+            cache_dir, payload.get('source') or '',
+            payload.get('language') or 'Hebrew',
+            payload.get('filename') or 'subtitle')
+        hit = _cached_subs_lookup(keybase)
+        if not hit:
+            return None
+        _ensure_utf8(hit)
+        return hit if os.path.isfile(hit) else None
+    except Exception:
+        return None
+
+
 def download(payload, for_delivery=True):
     """Resolve an 'engine' link to a Hebrew SRT path on disk. Returns
     the path or None. Called from translate.resolve().
