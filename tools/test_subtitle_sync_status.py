@@ -100,6 +100,162 @@ class SubtitleSyncStatus(unittest.TestCase):
         _head, rel, *_rest = chooser._classify(other, {}, None)
         self.assertNotIn('כבר מסונכרנת', rel)
 
+    def test_refreshed_pool_link_keeps_initial_auto_selection_current(self):
+        import urllib.parse
+
+        def link(payload):
+            return urllib.parse.quote(json.dumps(payload, ensure_ascii=False))
+
+        first = link({
+            'type': 'pool', 'hash': 'stable-content-hash',
+            'release': 'The.Flash.WEB-DL', 'pool_kind': 'ktuvit',
+            'source_lang': 'he-v1',
+        })
+        refreshed = link({
+            'type': 'pool', 'hash': 'stable-content-hash',
+            'release': 'The.Flash.WEB-DL', 'pool_kind': 'ktuvit',
+            'source_lang': 'he-v2',
+        })
+        self.ku.set_current_subtitle(first)
+        self.assertTrue(self.ku.set_subtitle_sync_status(
+            'unverified', source='local'))
+        opaque_id = self.props[self.ku._CURRENT_SUB_ID_PROP]
+        self.assertEqual(len(opaque_id), 24)
+        self.assertNotIn('stable-content-hash', opaque_id)
+
+        spec = importlib.util.spec_from_file_location(
+            'resources.lib.translate_current_identity_test',
+            LIB / 'translate.py')
+        translate = importlib.util.module_from_spec(spec)
+        resources = types.ModuleType('resources')
+        resources.__path__ = [str(ADDON / 'resources')]
+        resources_lib = types.ModuleType('resources.lib')
+        resources_lib.__path__ = [str(LIB)]
+        with patch.dict(sys.modules, {
+                'resources': resources,
+                'resources.lib': resources_lib,
+                'resources.lib.kodi_utils': self.ku}):
+            resources.lib = resources_lib
+            resources_lib.kodi_utils = self.ku
+            spec.loader.exec_module(translate)
+        rows = translate._mark_current([{
+            'filename': 'כתובית · מאגר — The.Flash.WEB-DL',
+            'language': 'he', 'link': refreshed,
+        }])
+        self.assertTrue(rows[0]['filename'].startswith('» נוכחית ·'))
+        self.assertEqual(rows[0]['_subsync_label'], 'התזמון טרם אומת')
+
+    def test_malformed_pool_rows_without_hash_do_not_share_an_identity(self):
+        import urllib.parse
+
+        left = urllib.parse.quote(json.dumps({
+            'type': 'pool', 'release': 'left'}))
+        right = urllib.parse.quote(json.dumps({
+            'type': 'pool', 'release': 'right'}))
+        self.assertNotEqual(
+            self.ku.subtitle_candidate_identity(left),
+            self.ku.subtitle_candidate_identity(right))
+
+    def test_engine_identity_uses_provider_id_and_never_marks_a_sibling_row(self):
+        import urllib.parse
+
+        def link(file_id, token):
+            return urllib.parse.quote(json.dumps({
+                'type': 'engine', 'source': 'opensubtitles',
+                'language': 'he', 'filename': 'Same.Release.srt',
+                'download_data': {
+                    'id': file_id, 'filename': 'Same.Release.srt',
+                    'temporary_url': 'https://provider.invalid/' + token,
+                },
+            }, ensure_ascii=False))
+
+        selected = link(101, 'old-token')
+        same_row_refreshed = link(101, 'new-token')
+        sibling = link(202, 'other-token')
+        self.assertEqual(
+            self.ku.subtitle_candidate_identity(selected),
+            self.ku.subtitle_candidate_identity(same_row_refreshed))
+        self.assertNotEqual(
+            self.ku.subtitle_candidate_identity(selected),
+            self.ku.subtitle_candidate_identity(sibling))
+        self.ku.set_current_subtitle(selected)
+        self.assertTrue(self.ku.set_subtitle_sync_status(
+            'confirmed', source='release'))
+
+        spec = importlib.util.spec_from_file_location(
+            'resources.lib.translate_engine_identity_test',
+            LIB / 'translate.py')
+        translate = importlib.util.module_from_spec(spec)
+        resources = types.ModuleType('resources')
+        resources.__path__ = [str(ADDON / 'resources')]
+        resources_lib = types.ModuleType('resources.lib')
+        resources_lib.__path__ = [str(LIB)]
+        with patch.dict(sys.modules, {
+                'resources': resources,
+                'resources.lib': resources_lib,
+                'resources.lib.kodi_utils': self.ku}):
+            resources.lib = resources_lib
+            resources_lib.kodi_utils = self.ku
+            spec.loader.exec_module(translate)
+
+        rows = translate._mark_current([
+            {'filename': 'Same.Release.srt', 'language': 'he',
+             'link': sibling},
+            {'filename': 'Same.Release.srt', 'language': 'he',
+             'link': same_row_refreshed},
+        ])
+        self.assertTrue(rows[0]['filename'].startswith('» נוכחית ·'))
+        self.assertEqual(rows[0]['link'], same_row_refreshed)
+        self.assertEqual(rows[0]['_subsync_label'], 'כבר מסונכרנת')
+        self.assertFalse(rows[1]['filename'].startswith('» נוכחית ·'))
+        self.assertNotIn('_subsync_label', rows[1])
+
+    def test_engine_without_provider_id_keeps_strict_link_identity(self):
+        import urllib.parse
+
+        left = urllib.parse.quote(json.dumps({
+            'type': 'engine', 'source': 'unknown', 'language': 'he',
+            'filename': 'Same.srt',
+            'download_data': {'url': 'https://one.invalid/token'},
+        }))
+        right = urllib.parse.quote(json.dumps({
+            'type': 'engine', 'source': 'unknown', 'language': 'he',
+            'filename': 'Same.srt',
+            'download_data': {'url': 'https://two.invalid/token'},
+        }))
+        self.assertNotEqual(
+            self.ku.subtitle_candidate_identity(left),
+            self.ku.subtitle_candidate_identity(right))
+
+    def test_malformed_ktuvit_request_never_uses_film_id_as_row_id(self):
+        import urllib.parse
+
+        def link(raw_request):
+            return urllib.parse.quote(json.dumps({
+                'type': 'engine', 'source': 'ktuvit', 'language': 'he',
+                'filename': 'Same.Release.srt',
+                'download_data': {
+                    'Ktuvit_Page_ID': '777',
+                    'subtitle_download_data': raw_request,
+                },
+            }))
+
+        left = link('{bad-A')
+        right = link('{bad-B')
+        self.assertNotEqual(left, right)
+        self.assertNotEqual(
+            self.ku.subtitle_candidate_identity(left),
+            self.ku.subtitle_candidate_identity(right))
+
+    def test_stream_identity_includes_kodi_header_suffix_privately(self):
+        first = 'https://media.invalid/shared|Authorization=secret-A'
+        second = 'https://media.invalid/shared|Authorization=secret-B'
+        first_hash = self.ku._current_stream_hash(first)
+        second_hash = self.ku._current_stream_hash(second)
+        self.assertNotEqual(first_hash, second_hash)
+        self.assertNotIn('secret-A', first_hash)
+        self.assertEqual(len(first_hash), 24)
+
     def test_fixed_status_is_published_only_after_delivery_confirmation(self):
         self.ku.set_current_subtitle('candidate-A')
         selection = self.ku.current_subtitle_selection(

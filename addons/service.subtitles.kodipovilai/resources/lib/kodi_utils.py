@@ -8,6 +8,7 @@ import threading
 import hashlib
 import json
 import time
+import urllib.parse
 
 try:
     import xbmc
@@ -469,6 +470,7 @@ def current_video_info():
 
 
 _CURRENT_SUB_PROP = 'moransubs.current_sub'
+_CURRENT_SUB_ID_PROP = 'moransubs.current_sub_id'
 _CURRENT_SUB_STATUS_PROP = 'moransubs.current_subsync_status'
 _CURRENT_SUB_TOKEN_PROP = 'moransubs.current_sub_token'
 _CURRENT_SUB_FIX_READY_PROP = 'moransubs.current_subsync_fix_ready'
@@ -498,7 +500,10 @@ def _current_stream_hash(stream_url=None):
         value = stream_url
         if value is None:
             value = xbmc.Player().getPlayingFile()
-        value = (value or '').split('|')[0].strip()
+        # Kodi's ``|Header=...`` suffix can select a different debrid object
+        # even when the visible URL is identical.  It is safe to include here:
+        # only the digest leaves this function, never the URL or its headers.
+        value = (value or '').strip()
         if not value:
             return ''
         return hashlib.sha256(
@@ -513,6 +518,127 @@ def _subtitle_link_hash(link):
             (link or '').encode('utf-8', 'replace')).hexdigest()[:24]
     except Exception:
         return ''
+
+
+def subtitle_candidate_identity(link):
+    """Return a short, private identity that survives refreshed picker links.
+
+    Provider rows are URL-encoded JSON. Some providers refresh transport
+    details between the automatic search and a later manual picker open, even
+    though the row still names the exact same subtitle. The old UI compared the
+    entire encoded payload, so a subtitle that was already on screen could lose
+    its ``current`` marker. Keep only the fields that identify the logical
+    subtitle, then hash them; no provider URL, token or local path is exposed
+    through the Kodi window property.
+    """
+    try:
+        value = str(link or '')
+        payload = None
+        for _ in range(3):
+            try:
+                decoded = json.loads(value)
+                if isinstance(decoded, dict):
+                    payload = decoded
+                    break
+            except Exception:
+                pass
+            unquoted = urllib.parse.unquote(value)
+            if unquoted == value:
+                break
+            value = unquoted
+        if not payload:
+            return _subtitle_link_hash(link)
+
+        kind = str(payload.get('type') or '')
+        stable = {'type': kind}
+        if kind == 'pool':
+            # The content hash is the community row's immutable identity. Its
+            # release/source labels may be enriched by a later lookup.
+            content_hash = str(payload.get('hash') or '')
+            if not content_hash:
+                return _subtitle_link_hash(link)
+            stable['hash'] = content_hash
+        elif kind in ('engine', 'engine_ai'):
+            download_data = payload.get('download_data') or {}
+            if not isinstance(download_data, dict):
+                download_data = {}
+            source = str(payload.get('source') or '').strip().lower()
+
+            # A filename is not a provider row id: OpenSubtitles and other
+            # engines can return two different files with the same display
+            # name.  Use only explicit, stable provider identifiers.  When a
+            # provider exposes none, retain strict full-link semantics rather
+            # than risking a false ``current`` marker on another row.
+            provider_id = None
+            id_fields = (
+                'id', 'file_id', 'fileId', 'subtitle_id', 'subtitleId',
+                'sub_id', 'subId', 'SubtitleID',
+            )
+            if source != 'ktuvit':
+                for field in id_fields:
+                    value = download_data.get(field)
+                    if value not in ('', None):
+                        provider_id = {field: str(value)}
+                        break
+            if source == 'ktuvit':
+                # Ktuvit_Page_ID identifies the film page, not one subtitle;
+                # every sibling row shares it. Only FilmID+SubtitleID from the
+                # signed request (or an explicit SubtitleID) is row-unique.
+                direct_subtitle_id = download_data.get('SubtitleID')
+                if direct_subtitle_id not in ('', None):
+                    provider_id = {'SubtitleID': str(direct_subtitle_id)}
+                raw_request = download_data.get('subtitle_download_data')
+                try:
+                    request = (json.loads(raw_request)
+                               if isinstance(raw_request, str)
+                               else raw_request) or {}
+                    request = request.get('request') or request
+                    film_id = request.get('FilmID')
+                    subtitle_id = request.get('SubtitleID')
+                    if film_id not in ('', None) and subtitle_id not in ('', None):
+                        provider_id = {
+                            'FilmID': str(film_id),
+                            'SubtitleID': str(subtitle_id),
+                        }
+                except Exception:
+                    pass
+            if provider_id is None:
+                return _subtitle_link_hash(link)
+            stable.update({
+                'embedded': bool(payload.get('embedded')),
+                'stream_index': payload.get('stream_index', ''),
+                'source': source,
+                'language': str(payload.get('language') or
+                                payload.get('lang') or '').strip().lower(),
+                'provider_id': provider_id,
+            })
+        elif kind == 'embedded_sync':
+            stable.update({
+                'stream_index': payload.get('stream_index', ''),
+                'language': str(payload.get('language') or
+                                payload.get('lang') or 'he').strip().lower(),
+            })
+        elif kind in ('ai', 'embedded_ai'):
+            stable.update({
+                'source_lang': str(payload.get('source_lang') or '')
+                               .strip().lower(),
+                # Paths stay private because the canonical structure is hashed.
+                'local_path': str(payload.get('local_path') or ''),
+                'stream_index': payload.get('stream_index', ''),
+            })
+        elif kind == 'passthrough':
+            stable['path'] = str(payload.get('path') or '')
+        else:
+            # Unknown future kinds retain strict semantics. Sorting keys makes
+            # harmless JSON field-order changes stable without guessing which
+            # new fields may be safe to ignore.
+            stable = payload
+        canonical = json.dumps(stable, ensure_ascii=False, sort_keys=True,
+                               separators=(',', ':'))
+        return hashlib.sha256(
+            canonical.encode('utf-8', 'replace')).hexdigest()[:24]
+    except Exception:
+        return _subtitle_link_hash(link)
 
 
 def _new_subtitle_selection_token(link):
@@ -582,6 +708,8 @@ def set_current_subtitle(link):
             win.setProperty(_CURRENT_SUB_TOKEN_PROP,
                             _new_subtitle_selection_token(new_link))
         win.setProperty(_CURRENT_SUB_PROP, new_link)
+        win.setProperty(_CURRENT_SUB_ID_PROP,
+                        subtitle_candidate_identity(new_link) if new_link else '')
     except Exception:
         pass
 
@@ -598,6 +726,23 @@ def get_current_subtitle():
                 return value
         return xbmc.getInfoLabel(
             'Window(10000).Property({0})'.format(_CURRENT_SUB_PROP)) or ''
+    except Exception:
+        return ''
+
+
+def get_current_subtitle_identity():
+    """Opaque logical identity of the applied picker row, or ``''``."""
+    if not KODI_AVAILABLE:
+        return ''
+    try:
+        win = _home_window()
+        value = (win.getProperty(_CURRENT_SUB_ID_PROP) or '') if win else ''
+        if value:
+            return value
+        # Upgrade a selection made by an older in-memory module after an add-on
+        # hot update. A normal new selection always takes the bounded property
+        # path above.
+        return subtitle_candidate_identity(get_current_subtitle())
     except Exception:
         return ''
 
@@ -1071,6 +1216,13 @@ def apply_subtitle_file(path, selection=None, fix_path=None, timeout_ms=1000,
                 expected['token'], expected['link_hash'],
                 expected['stream_hash']):
             return False
+        # Freeze the real embedded-stream baseline before Kodi appends this
+        # external file. This is intentionally lazy to avoid a module cycle.
+        try:
+            from resources.lib import subs_engine_bridge
+            subs_engine_bridge.seal_playback_streams(current_video_info())
+        except Exception:
+            pass
         p.setSubtitles(path)
         p.showSubtitles(True)
         if not subtitle_selection_matches(
