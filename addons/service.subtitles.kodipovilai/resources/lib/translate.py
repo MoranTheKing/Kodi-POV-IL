@@ -479,7 +479,7 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
         except OSError: pass
 
 
-def _rtl_delivery_copy(path, legacy_engine=False):
+def _rtl_delivery_copy(path, legacy_engine='auto'):
     """Render a Hebrew local-file candidate without touching its source bytes.
 
     A file sitting next to the video is not necessarily healthy: it may be an
@@ -2688,7 +2688,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 _pkind == 'ktuvit'
                 and _psrc != pool.KTUVIT_LOGICAL_SOURCE_TAG)
             _reapply_rtl_fix_in_place(
-                out, legacy_engine=_legacy_ktuvit,
+                out, legacy_engine=(True if _legacy_ktuvit else 'auto'),
                 ai_output=srt.may_carry_arabic_leak(pool_kind=_pkind))
             # SubSync S2: pool variants carry the release of their SOURCE sub;
             # if that doesn't match the playing release, verify/fix timing
