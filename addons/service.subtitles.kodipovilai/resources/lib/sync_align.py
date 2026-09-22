@@ -1706,9 +1706,24 @@ def apply_verdict(cand_srt_text, verdict):
         try:
             validation_folds = int(verdict.get('validation_folds') or 0)
             timing_families = int(verdict.get('timing_family_count') or 0)
+            same_master_count = int(
+                verdict.get('same_master_group_count') or 0)
         except (TypeError, ValueError):
-            validation_folds = timing_families = 0
-        if validation_folds < 4 or timing_families < 2:
+            validation_folds = timing_families = same_master_count = 0
+        groups = verdict.get('same_master_groups') or []
+        if not isinstance(groups, (list, tuple)):
+            groups = []
+        distinct_groups = {
+            str(group).strip().lower() for group in groups
+            if str(group).strip()}
+        same_disc_quorum = (
+            verdict.get('validation_proof')
+            == 'same-disc-release-group-quorum'
+            and same_master_count >= 3
+            and len(distinct_groups) >= 3
+            and same_master_count == len(distinct_groups))
+        if (validation_folds < 4
+                or (timing_families < 2 and not same_disc_quorum)):
             raise ValueError('piecewise proposal lacks holdout/family validation')
     _all_cues, preflight_error = _preflight_srt(cand_srt_text)
     if preflight_error:

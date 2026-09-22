@@ -644,7 +644,8 @@ def subtitle_candidate_identity(link):
 def _new_subtitle_selection_token(link):
     try:
         seed = '{0}\0{1}\0{2}'.format(
-            time.time_ns(), threading.get_ident(), link or '')
+            time.time_ns(), threading.get_ident(),
+            (link or '') + '\0' + os.urandom(16).hex())
         return hashlib.sha256(seed.encode('utf-8', 'replace')).hexdigest()[:24]
     except Exception:
         return hashlib.sha256(
@@ -669,7 +670,7 @@ def clear_subtitle_sync_status():
         pass
 
 
-def set_current_subtitle(link):
+def set_current_subtitle(link, renew=False):
     """Remember which subtitle (by its candidate link) is currently applied,
     so the picker can mark it as '» נוכחית' next time it opens. Stored on the
     home window so it's visible across the service / picker processes."""
@@ -688,9 +689,11 @@ def set_current_subtitle(link):
             old_token = win.getProperty(_CURRENT_SUB_TOKEN_PROP) or ''
         except Exception:
             old_token = ''
-        # A verdict belongs to one selected candidate. Re-selecting the same
-        # one preserves its result; selecting anything else invalidates it.
-        if old_link != new_link:
+        # A verdict belongs to one selection event. Internal delivery retries
+        # may preserve the token, but an explicit picker click passes
+        # ``renew=True`` so even re-selecting the same row invalidates an older
+        # background worker and can never be mistaken for its automatic claim.
+        if old_link != new_link or (renew and new_link):
             clear_subtitle_sync_status()
             # Background and manual-delay records are token-scoped. Retire only
             # the selection being replaced, so a late process cannot erase the
