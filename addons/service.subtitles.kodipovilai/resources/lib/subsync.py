@@ -111,7 +111,10 @@ _MAX_VERDICTS = 400
 # v22: when the user's ordinary language set contains no independent provider
 # family, perform one separately cached all-language timing search in the deep
 # worker. v21 UNKNOWNs may therefore have new evidence and must be recomputed.
-_VERDICT_VERSION = 22
+# v23: a physical-disc timing lane can be proven by the primary plus two other
+# release groups with strong bidirectional/frozen-map checks. v22 UNKNOWNs may
+# therefore have new evidence and must be recomputed.
+_VERDICT_VERSION = 23
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -1068,9 +1071,44 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
         return candidates
 
 
+def proven_pool_ai_fallback(info, candidates):
+    """Find a release-proven community AI row without fetching anything.
+
+    Human Hebrew remains autosub's first choice.  This only remembers a pool
+    alternative that may be used later if deep verification definitively fails
+    to align that human subtitle.  It does not reorder the manual picker or make
+    a provider/pool request.
+    """
+    try:
+        if release_match is None:
+            return ''
+        playing = playing_release(info)
+        if not playing:
+            return ''
+        for candidate in candidates or []:
+            if (candidate.get('language') or '').strip().lower() not in (
+                    'he', 'heb', 'hebrew'):
+                continue
+            link = candidate.get('link') or ''
+            payload = _decode_link(link) or {}
+            if payload.get('type') != 'pool':
+                continue
+            if (payload.get('pool_kind') or 'ai') == 'ktuvit':
+                continue
+            rel = (payload.get('release') or '').strip()
+            if not rel:
+                continue
+            _pct, tier, _diag = release_match.score(playing, rel)
+            if tier in release_match.AUTO_OK_TIERS:
+                return link
+    except Exception as e:
+        _log('autosub AI fallback discovery skipped: %r' % e, level='DEBUG')
+    return ''
+
+
 # ---- main entry -------------------------------------------------------------
 
-def process(info, path, delivered_release, selection=None):
+def process(info, path, delivered_release, selection=None, fallback_link=''):
     """Verify (and when confidently possible, FIX) the timing of the Hebrew
     sub at `path` against the playing release. Returns (final_path, verdict)
     where verdict is a dict with at least {'status'} plus 'applied': True when
@@ -1177,6 +1215,11 @@ def process(info, path, delivered_release, selection=None):
                             if status == sync_align.STATUS_CONFIRMED
                             else 'unverified'),
                     source='cache')
+                if (status == sync_align.STATUS_UNKNOWN and fallback_link
+                        and _mark_pending(key, selection=selection)):
+                    _enqueue_deep(
+                        info, path, rel, playing, key, selection=selection,
+                        fallback_link=fallback_link)
                 return path, {'status': status, 'cached': True,
                               'diag': cached.get('diag', '')}
 
@@ -1246,7 +1289,8 @@ def process(info, path, delivered_release, selection=None):
         _record_delivery(info, playing, key, 1.0, 0.0,
                          cut_signature=cut_signature, selection=selection)
         if (delivery_staged and _enqueue_deep(
-                info, path, rel, playing, key, selection=selection)):
+                info, path, rel, playing, key, selection=selection,
+                fallback_link=fallback_link)):
             return path, {'status': 'PENDING'}
         # Remove only this selection's half-created coordination records. A
         # newer pick has another token and cannot be disturbed here.
@@ -1982,10 +2026,13 @@ def _validated_oracle_piecewise(candidates, playing, text,
 
     This is the remote/no-embedded-track counterpart of
     ``_validated_micro_piecewise``. One provider subtitle proposes the map;
-    five disjoint holdouts test it. A second release/language subtitle must
-    have genuinely different cue segmentation, independently rebuild an
+    five disjoint holdouts test it. A second release/language subtitle normally
+    must have genuinely different cue segmentation, independently rebuild an
     agreeing map, pass its own holdouts, and improve under the frozen primary
-    map. Merely translated copies with the same onsets are rejected.
+    map. A narrower disc-source proof accepts two different release groups that
+    corroborate the same master through >=94% bidirectional onset containment
+    plus a strong frozen-map evaluation; one
+    translated timing copy is never evidence.
     """
     planner = getattr(sync_align, 'micro_piecewise_proposal', None)
     validator = getattr(sync_align, 'validate_micro_piecewise', None)
@@ -2013,10 +2060,17 @@ def _validated_oracle_piecewise(candidates, playing, text,
     if not ranked:
         return None
     try:
-        primary_group = release_match.parse(
-            primary.get('release') or '').get('group', '')
+        primary_parts = release_match.parse(primary.get('release') or '')
+        playing_parts = release_match.parse(playing)
+        primary_group = primary_parts.get('group', '')
+        same_disc_source = (
+            bool(primary_group)
+            and
+            primary_parts.get('source') in ('bluray', 'dvd')
+            and primary_parts.get('source') == playing_parts.get('source'))
     except Exception:
         primary_group = ''
+        same_disc_source = False
 
     # Prefer a different release group, then the strongest release match. A
     # physical-disc source match is still the same master, and group diversity
@@ -2042,6 +2096,7 @@ def _validated_oracle_piecewise(candidates, playing, text,
     seen = {primary_key}
     downloads = 0
     attempts = 0
+    same_master_groups = {}
     for secondary, tier, _pct, _group, _rank in ranked:
         key = (
             (secondary.get('release') or '').strip().lower(),
@@ -2073,6 +2128,27 @@ def _validated_oracle_piecewise(candidates, playing, text,
         secondary_profile = {'cues': secondary_cues}
         if not _timing_profiles_distinct(
                 primary_profile, secondary_profile):
+            # Timing clones are not independent subtitle families.  Two other
+            # release groups can, however, corroborate the physical-disc lane
+            # used by the playing encode. Defer that quorum so a genuinely
+            # independent family found later always wins.
+            try:
+                group = (_group or '').strip().lower()
+                strong_tier = tier in (
+                    release_match.TIER_EXACT, release_match.TIER_GROUP,
+                    release_match.TIER_SOURCE)
+                forward = _shift_invariant_onset_coverage(
+                    primary_cues, secondary_cues)
+                reverse = _shift_invariant_onset_coverage(
+                    secondary_cues, primary_cues)
+                if (same_disc_source and strong_tier and group
+                        and group != primary_group
+                        and min(forward, reverse) >= 0.94):
+                    same_master_groups.setdefault(
+                        group, {'candidate': secondary,
+                                'cues': secondary_cues})
+            except Exception:
+                pass
             continue
         downloads += 1
         try:
@@ -2130,6 +2206,39 @@ def _validated_oracle_piecewise(candidates, playing, text,
                         family.get('after_score', 0.0),
                         family.get('after_unique', 0.0) * 100)),
         })
+        return {'verdict': verdict, 'secondary': secondary,
+                'downloads': downloads}
+    if len(same_master_groups) >= 2:
+        proven_groups = []
+        for group in sorted(same_master_groups):
+            try:
+                family = family_judge(
+                    same_master_groups[group]['cues'], text, validated)
+            except Exception:
+                family = None
+            if (family and family.get('accepted')
+                    and family.get('after_score', 0.0) >= 0.90
+                    and family.get('after_unique', 0.0) >= 0.85
+                    and family.get('post_residual_ms', 999999) <= 500):
+                proven_groups.append(group)
+            if len(proven_groups) >= 2:
+                break
+        groups = proven_groups[:2]
+    else:
+        groups = []
+    if len(groups) >= 2:
+        verdict = dict(validated)
+        verdict.update({
+            'timing_family_count': 1,
+            'validation_proof': 'same-disc-release-group-quorum',
+            'same_master_group_count': 1 + len(groups),
+            'same_master_groups': [primary_group] + groups,
+            'validation_primary_oracle': primary.get('release') or '',
+            'diag': ('%s; same-disc timing lane corroborated by release '
+                     'groups %s' % (validated.get('diag', ''),
+                                     ', '.join(groups))),
+        })
+        secondary = same_master_groups[groups[0]]['candidate']
         return {'verdict': verdict, 'secondary': secondary,
                 'downloads': downloads}
     _log('provider-consensus exhausted: %d attempt(s), %d usable '
@@ -2644,7 +2753,7 @@ def _clear_job_pending(job):
 
 
 def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
-                  selection=None):
+                  selection=None, fallback_link=''):
     """Drop a deep-verify job for the service drainer. True on success."""
     d = _queue_dir()
     if not d:
@@ -2682,6 +2791,8 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
             # filepath is optional and may be absent; without this value a
             # later background result must never hot-swap into another video.
             'stream_url': _current_stream_transport(),
+            # Autosub-only escape hatch, revalidated by the worker before use.
+            'fallback_link': fallback_link or '',
             'info': {k: info.get(k) for k in _INFO_KEYS
                      if isinstance(info.get(k), (str, int, float, bool))},
         }
@@ -2701,6 +2812,79 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
         return True
     except Exception as e:
         _log('enqueue failed: %r' % e, level='WARNING')
+        return False
+
+
+def _apply_proven_pool_fallback(job):
+    """Replace an unalignable autosub human row with release-proven pool AI.
+
+    A manual subtitle pick or source change invalidates the job. If retrieval or
+    Kodi registration fails, restore the human row's identity bookkeeping; the
+    human file already on screen is never removed by a failed fallback.
+    """
+    link = job.get('fallback_link') or ''
+    if (not link or not _job_matches_current(job)
+            or not _job_stream_is_current(job)):
+        return False
+    payload = _decode_link(link) or {}
+    if (payload.get('type') != 'pool'
+            or (payload.get('pool_kind') or 'ai') == 'ktuvit'):
+        return False
+    playing = job.get('playing') or ''
+    rel = (payload.get('release') or '').strip()
+    if not (playing and rel and release_match is not None):
+        return False
+    _pct, tier, _diag = release_match.score(playing, rel)
+    if tier not in release_match.AUTO_OK_TIERS:
+        return False
+
+    old_link = kodi_utils.get_current_subtitle() or ''
+    fallback_selection = {}
+    try:
+        kodi_utils.set_current_subtitle(link)
+        selection = kodi_utils.current_subtitle_selection(
+            expected_link=link) or {}
+        fallback_selection = dict(selection)
+        if (selection.get('stream_hash') != (job.get('stream_hash') or '')
+                or not _selection_matches(selection)):
+            raise RuntimeError('fallback selection/stream changed')
+        # Lazy import avoids the translate -> subsync module cycle.
+        from resources.lib import translate
+        path = translate.resolve(
+            link, dict(job.get('info') or {}), selection=selection)
+        if (not path or not _selection_matches(selection)
+                or not kodi_utils.apply_subtitle_file(
+                    path, selection=selection)):
+            raise RuntimeError('fallback delivery was not acknowledged')
+        _log('autosub fallback: release-proven pool AI replaced '
+             'unalignable human')
+        try:
+            kodi_utils.notify(
+                'הכתובית האנושית לא התאימה · הוחלה כתובית מסונכרנת',
+                time_ms=4500)
+        except Exception:
+            pass
+        return True
+    except Exception as e:
+        _log('autosub AI fallback skipped: %r' % e, level='WARNING')
+        try:
+            # A user can manually choose the same AI row while resolve is in
+            # flight. Its link is identical but its new selection token is
+            # authoritative; never overwrite that manual choice on failure.
+            if (old_link and fallback_selection
+                    and kodi_utils.get_current_subtitle() == link
+                    and _selection_matches(fallback_selection)):
+                kodi_utils.set_current_subtitle(old_link)
+                restored = kodi_utils.current_subtitle_selection(
+                    expected_link=old_link) or {}
+                if _selection_matches(restored):
+                    kodi_utils.set_subtitle_sync_status(
+                        'unverified', source='fallback-failed',
+                        selection_token=restored.get('token') or '',
+                        link_hash=restored.get('link_hash') or '',
+                        stream_hash=restored.get('stream_hash') or '')
+        except Exception:
+            pass
         return False
 
 
@@ -2950,6 +3134,8 @@ def run_deep_job(job):
                     _publish_selection_status(
                         'confirmed', 'cache', selection=job_selection)
                 else:
+                    if _apply_proven_pool_fallback(job):
+                        return
                     _publish_selection_status(
                         'unverified', 'cache', selection=job_selection)
             return
@@ -2989,6 +3175,10 @@ def run_deep_job(job):
                     # copy is swapped in, that stale scalar must disappear.
                     _clear_delivery(selection=job_selection)
         if current and not swapped:
+            if (verdict.get('status') in (
+                    sync_align.STATUS_UNKNOWN, _STATUS_NO_ORACLE)
+                    and _apply_proven_pool_fallback(job)):
+                return
             # The original subtitle is still on screen.  Refresh only its exact
             # cut identity (not an unapplied proposed shift), so any later manual
             # delay learns safely even after an UNKNOWN/CONFIRMED result.

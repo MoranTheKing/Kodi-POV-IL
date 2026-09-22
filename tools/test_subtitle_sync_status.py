@@ -83,6 +83,19 @@ class SubtitleSyncStatus(unittest.TestCase):
         self.assertFalse(self.ku.set_subtitle_sync_status(
             'fixed', link='candidate-A'))
 
+    def test_explicit_same_candidate_reselection_renews_generation(self):
+        self.ku.set_current_subtitle('candidate-A')
+        self.ku.set_subtitle_sync_status('confirmed', source='release')
+        old_token = self.ku.get_subtitle_selection_token()
+        old_prop = self.ku._CURRENT_SUB_STATUS_PROP + '.' + old_token
+
+        self.ku.set_current_subtitle('candidate-A', renew=True)
+
+        new_token = self.ku.get_subtitle_selection_token()
+        self.assertNotEqual(new_token, old_token)
+        self.assertNotIn(old_prop, self.props)
+        self.assertEqual(self.ku.get_current_subtitle(), 'candidate-A')
+
     def test_custom_chooser_renders_result_only_on_current_row(self):
         spec = importlib.util.spec_from_file_location(
             'subs_chooser_status_test', LIB / 'subs_chooser.py')

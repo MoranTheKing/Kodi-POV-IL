@@ -222,7 +222,7 @@ def _handle_download(handle, params):
     # Remember this as the currently-applied subtitle so the picker marks it
     # '» נוכחית' next time it opens.
     try:
-        kodi_utils.set_current_subtitle(link)
+        kodi_utils.set_current_subtitle(link, renew=True)
     except Exception:
         pass
     try:
@@ -2880,7 +2880,7 @@ def _handle_translate_file(params):
     # DarkSubs invoked this delivery outside MoranSubs's own picker, so bind
     # the timing job here. Without this, a status from an earlier subtitle
     # could be mistaken for the translation being produced now.
-    kodi_utils.set_current_subtitle(link)
+    kodi_utils.set_current_subtitle(link, renew=True)
     _timing_selection = kodi_utils.current_subtitle_selection(
         expected_link=link)
 
