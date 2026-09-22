@@ -85,6 +85,8 @@ _SOURCE_SETS = tuple((cls, frozenset(toks)) for cls, toks in _SOURCE_CLASSES)
 _PROPER_SET = frozenset(_PROPER_TOKENS)
 _DOTS_RE = re.compile(r'\.+')
 _GROUP_RE = re.compile(r'[a-z0-9]+')
+_EPISODE_RE = re.compile(r'^s\d{1,2}e\d{1,3}$')
+_YEAR_RE = re.compile(r'^(?:19|20)\d{2}$')
 
 # MEMOISED BECAUSE THE CALLER'S SHAPE IS QUADRATIC AND CANNOT EASILY STOP
 # BEING SO. POV's source window scores every row against every available
@@ -148,6 +150,54 @@ def _toks(name):
 
 def tokens(name):
     return list(_toks(name))
+
+
+def content_identity(name):
+    """Return a conservative title identity from a release name.
+
+    Timing proofs must never rely on source/group tags alone: two unrelated
+    titles released by the same group can otherwise look like a strong match.
+    Episodes bind the normalized title plus SxxExx; movies bind title plus
+    year.  A title without either marker is usable only when its pre-technical
+    token sequence is exact.
+    """
+    toks = list(_toks(name))
+    if not toks:
+        return None
+    for index, token in enumerate(toks):
+        if _EPISODE_RE.fullmatch(token):
+            years = tuple(t for t in toks[:index] if _YEAR_RE.fullmatch(t))
+            title = tuple(t for t in toks[:index]
+                          if not _YEAR_RE.fullmatch(t))
+            return ('episode', title, token,
+                    years[-1] if years else '') if title else None
+    for index, token in enumerate(toks):
+        if _YEAR_RE.fullmatch(token) and index:
+            return ('movie', tuple(toks[:index]), token)
+    technical = (set(_RES_MAP) | set(_CODEC_MAP) | _PROPER_SET |
+                 {t for _kind, values in _SOURCE_CLASSES for t in values} |
+                 {'2160p', '1080p', '720p', '576p', '480p', 'hdr', 'hdr10',
+                  'dv', 'dovi', 'sdr', 'atmos', 'ddp', 'dd', 'dts', 'ac3',
+                  'eac3', 'aac', 'truehd', 'multi', 'dual', 'audio'})
+    end = next((i for i, token in enumerate(toks)
+                if token in technical or token.isdigit()), len(toks))
+    title = tuple(toks[:end])
+    return ('title', title, '') if title else None
+
+
+def same_content(video_name, subtitle_name):
+    """True only when both release names identify the same title/episode."""
+    left = content_identity(video_name)
+    right = content_identity(subtitle_name)
+    if left is None or right is None:
+        return False
+    if left[0] != 'episode' or right[0] != 'episode':
+        return left == right
+    # Some subtitle releases omit the show's debut year, so absence on one
+    # side is allowed.  When both name one, it distinguishes revivals sharing
+    # the same title and episode number (for example Doctor Who 1963/2005).
+    return bool(left[1:3] == right[1:3]
+                and (not left[3] or not right[3] or left[3] == right[3]))
 
 
 def _parse(name):

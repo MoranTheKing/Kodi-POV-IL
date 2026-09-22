@@ -1759,9 +1759,83 @@ def apply_verdict(cand_srt_text, verdict):
                         certified_segments[1:], certified_bounds))
             except (TypeError, ValueError):
                 field_certificate = False
+        matched_oracle = False
+        if (verdict.get('validation_proof')
+                == 'matched-oracle-holdouts-v1'):
+            try:
+                try:
+                    from resources.lib import release_match as _release_match
+                except ImportError:
+                    import release_match as _release_match
+                target = verdict.get('validation_target') or ''
+                primary = verdict.get('validation_primary_oracle') or ''
+                _pct, primary_tier, _diag = _release_match.score(
+                    target, primary)
+                matched_segments = list(verdict.get('segments') or [])
+                matched_oracle = bool(
+                    verdict.get('status') == STATUS_FIXABLE
+                    and verdict.get('mode') == 'piecewise'
+                    and abs(float(verdict.get('scale') or 0.0) - 1.0)
+                    <= 1e-9
+                    and validation_folds >= 5
+                    and primary_tier in _release_match.AUTO_OK_TIERS
+                    and verdict.get('validation_primary_tier') == primary_tier
+                    and _release_match.same_content(target, primary)
+                    and float(verdict.get('holdout_score_min') or 0.0) >= 0.82
+                    and float(verdict.get('holdout_gain_min') or 0.0) >= 0.15
+                    and float(verdict.get('after_score') or 0.0) >= 0.90
+                    and float(verdict.get('unique') or 0.0) >= 0.85
+                    and float(verdict.get('post_residual_ms') or 999999) <= 500
+                    and float(verdict.get('cand_span_ms') or 0.0) >= 300000
+                    and 3 <= len(matched_segments) <= 8
+                    and matched_segments[0].get('cand_from_ms') is None
+                    and matched_segments[-1].get('cand_to_ms') is None)
+                if matched_oracle:
+                    matched_boundaries = []
+                    for left, right in zip(
+                            matched_segments, matched_segments[1:]):
+                        if (left.get('cand_to_ms') is None
+                                or right.get('cand_from_ms') is None):
+                            matched_oracle = False
+                            break
+                        left_to = float(left['cand_to_ms'])
+                        right_from = float(right['cand_from_ms'])
+                        if (not math.isfinite(left_to)
+                                or not math.isfinite(right_from)
+                                or abs(left_to - right_from) > 1.0):
+                            matched_oracle = False
+                            break
+                        matched_boundaries.append(
+                            (left_to + right_from) / 2.0)
+                if matched_oracle:
+                    matched_span = float(
+                        verdict.get('cand_span_ms') or 0.0)
+                    matched_oracle = bool(
+                        math.isfinite(matched_span)
+                        and all(0.0 < boundary < matched_span
+                                for boundary in matched_boundaries)
+                        and all(left < right for left, right in zip(
+                            matched_boundaries, matched_boundaries[1:])))
+                if matched_oracle:
+                    matched_offsets = [
+                        float(item.get('offset_ms') or 0.0)
+                        for item in matched_segments]
+                    matched_steps = [
+                        matched_offsets[index + 1] - matched_offsets[index]
+                        for index in range(len(matched_offsets) - 1)]
+                    direction = (1.0 if sum(matched_steps) > 0 else -1.0)
+                    matched_oracle = bool(
+                        all(math.isfinite(offset)
+                            for offset in matched_offsets)
+                        and max(matched_offsets) - min(matched_offsets) >= 3000
+                        and all(direction * step >= 1000
+                                and abs(step) <= 4500
+                                for step in matched_steps))
+            except (ImportError, TypeError, ValueError):
+                matched_oracle = False
         if (validation_folds < 4
                 or (timing_families < 2 and not same_disc_quorum
-                    and not field_certificate)):
+                    and not field_certificate and not matched_oracle)):
             raise ValueError('piecewise proposal lacks holdout/family validation')
     _all_cues, preflight_error = _preflight_srt(cand_srt_text)
     if preflight_error:

@@ -16,6 +16,7 @@ import re
 import json
 import time
 import hashlib
+import math
 
 try:
     from resources.lib import kodi_utils
@@ -114,7 +115,7 @@ _MAX_VERDICTS = 400
 # v23: a physical-disc timing lane can be proven by the primary plus two other
 # release groups with strong bidirectional/frozen-map checks. v22 UNKNOWNs may
 # therefore have new evidence and must be recomputed.
-_VERDICT_VERSION = 23
+_VERDICT_VERSION = 24
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -2128,6 +2129,89 @@ def _field_certified_piecewise(playing, primary, validated):
         return None
 
 
+def _matched_oracle_piecewise(playing, primary, validated):
+    """Accept a generic map when its sole oracle matches the playing release.
+
+    Exact/same-group oracles are already trusted by the ordinary global-sync
+    path.  For a multi-region rewrite we additionally require every holdout,
+    strong post-transform metrics and conservative map structure.  Weaker
+    same-source matches still need an independent family or a previously
+    field-certified map.
+    """
+    try:
+        target = release_match.normalize(playing)
+        oracle = release_match.normalize(primary.get('release') or '')
+        _pct, tier, _diag = release_match.score(
+            playing, primary.get('release') or '')
+        if (tier not in release_match.AUTO_OK_TIERS
+                or not release_match.same_content(
+                    playing, primary.get('release') or '')):
+            return None
+        segments = list((validated or {}).get('segments') or [])
+        if (not validated
+                or validated.get('status') != sync_align.STATUS_FIXABLE
+                or validated.get('mode') != 'piecewise'
+                or abs(float(validated.get('scale') or 0.0) - 1.0) > 1e-9
+                or int(validated.get('validation_folds') or 0) < 5
+                or float(validated.get('holdout_score_min') or 0.0) < 0.82
+                or float(validated.get('holdout_gain_min') or 0.0) < 0.15
+                or float(validated.get('after_score') or 0.0) < 0.90
+                or float(validated.get('unique') or 0.0) < 0.85
+                or float(validated.get('post_residual_ms') or 999999) > 500
+                or not 3 <= len(segments) <= 8):
+            return None
+        if (segments[0].get('cand_from_ms') is not None
+                or segments[-1].get('cand_to_ms') is not None):
+            return None
+        cand_span = float(validated.get('cand_span_ms') or 0.0)
+        boundaries = []
+        for left, right in zip(segments, segments[1:]):
+            if (left.get('cand_to_ms') is None
+                    or right.get('cand_from_ms') is None):
+                return None
+            left_to = float(left['cand_to_ms'])
+            right_from = float(right['cand_from_ms'])
+            if (not math.isfinite(left_to)
+                    or not math.isfinite(right_from)
+                    or abs(left_to - right_from) > 1.0):
+                return None
+            boundaries.append((left_to + right_from) / 2.0)
+        if (any(boundary <= 0.0 or boundary >= cand_span
+                for boundary in boundaries)
+                or any(right <= left for left, right in
+                       zip(boundaries, boundaries[1:]))):
+            return None
+        starts = [0.0] + boundaries
+        ends = boundaries + [cand_span]
+        if any(start >= end for start, end in zip(starts, ends)):
+            return None
+        offsets = [float(item.get('offset_ms') or 0.0)
+                   for item in segments]
+        if not all(math.isfinite(offset) for offset in offsets):
+            return None
+        steps = [offsets[index + 1] - offsets[index]
+                 for index in range(len(offsets) - 1)]
+        direction = 1.0 if sum(steps) > 0 else -1.0
+        if (float(validated.get('cand_span_ms') or 0.0) < 300000
+                or max(offsets) - min(offsets) < 3000
+                or any(direction * step < 1000 or abs(step) > 4500
+                       for step in steps)):
+            return None
+        verdict = dict(validated)
+        verdict.update({
+            'timing_family_count': 1,
+            'validation_proof': 'matched-oracle-holdouts-v1',
+            'validation_target': target,
+            'validation_primary_oracle': oracle,
+            'validation_primary_tier': tier,
+            'diag': ('%s; exact-release oracle passed strict 5/5 holdouts'
+                     % validated.get('diag', '')),
+        })
+        return verdict
+    except Exception:
+        return None
+
+
 def _validated_oracle_piecewise(candidates, playing, text,
                                 primary, primary_text, audit=None):
     """Prove a repeated-short-edit map with two provider timing families.
@@ -2183,6 +2267,10 @@ def _validated_oracle_piecewise(candidates, playing, text,
     certified = _field_certified_piecewise(playing, primary, validated)
     if certified is not None:
         return {'verdict': certified, 'secondary': primary, 'downloads': 0}
+
+    matched = _matched_oracle_piecewise(playing, primary, validated)
+    if matched is not None:
+        return {'verdict': matched, 'secondary': primary, 'downloads': 0}
 
     # Prefer a different release group, then the strongest release match. A
     # physical-disc source match is still the same master, and group diversity
