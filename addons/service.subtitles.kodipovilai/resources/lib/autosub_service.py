@@ -543,10 +543,22 @@ def autosub_on_play():
         # manual pick that happened during delivery.
         if not _autosub_owns_player():
             return
-        # DarkSubs-style final status in the top overlay (full subtitle name,
-        # + cache note when it came straight from the Cached_subs folder),
-        # instead of a success toast.
-        _status_msg = '[COLOR lightblue]כתובית מוכנה'
+        # This first delivery can be provisional while exact-cut timing is
+        # checked in the background. Never call it "ready" or "synced" before
+        # the current selection actually has that verdict; the later worker
+        # may still replace it with a proven alternative.
+        try:
+            _sync_state = (kodi_utils.get_subtitle_sync_status(
+                chosen_link) or {}).get('state')
+        except Exception:
+            _sync_state = ''
+        _heading = {
+            'checking': 'כתובית נטענה · התזמון נבדק ברקע',
+            'confirmed': 'כתובית מסונכרנת',
+            'fixed': 'כתובית סונכרנה אוטומטית',
+            'unverified': 'כתובית נטענה · התזמון טרם אומת',
+        }.get(_sync_state, 'כתובית נטענה')
+        _status_msg = '[COLOR lightblue]' + _heading
         if chosen_name:
             _status_msg += '\n' + chosen_name
         if chosen_from_cache:
