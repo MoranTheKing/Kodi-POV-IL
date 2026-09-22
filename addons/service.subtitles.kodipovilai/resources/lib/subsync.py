@@ -115,7 +115,12 @@ _MAX_VERDICTS = 400
 # v23: a physical-disc timing lane can be proven by the primary plus two other
 # release groups with strong bidirectional/frozen-map checks. v22 UNKNOWNs may
 # therefore have new evidence and must be recomputed.
-_VERDICT_VERSION = 24
+# v24: exact/same-group oracles can prove a strictly gated generic piecewise
+# map, and every v23 refusal is retried under that new evidence rule.
+# v25: enrich POV season-pack names with the active episode metadata before
+# ranking and proof. v24 decisions made against incomplete Sxx identities must
+# be retried against the real SxxEyy cut.
+_VERDICT_VERSION = 25
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -204,6 +209,33 @@ def playing_release(info):
             return ''
         if release_match.is_synthetic(ref):
             return ''
+        # POV can expose a season-pack release for the playing episode, e.g.
+        # ``Show.S01.1080p...``.  Ranking/caching that incomplete identity made
+        # every real S01E06 subtitle look unrelated and also prevented a
+        # field-proven timing map from matching.  Kodi's player metadata is
+        # already bound to the active item, so fill only the missing episode
+        # part of an explicit, matching season token.  Never rewrite an
+        # existing SxxEyy or a token naming a different season.
+        try:
+            episodic = (info.get('is_episode') is True
+                        or str(info.get('is_episode') or '').strip().lower()
+                        == 'true')
+            media_type = str(info.get('media_type') or '').strip().lower()
+            season = int(str(info.get('season') or '').strip())
+            episode = int(str(info.get('episode') or '').strip())
+            if (episodic and media_type != 'movie'
+                    and season > 0 and episode > 0
+                    and not re.search(r'(?i)(?<![a-z0-9])s\d{1,2}e\d{1,3}'
+                                      r'(?![a-z0-9])', ref)):
+                season_token = re.compile(
+                    r'(?i)(?<![a-z0-9])s0*(\d{1,2})(?![a-z0-9])')
+                match = season_token.search(ref)
+                if match and int(match.group(1)) == season:
+                    ref = (ref[:match.start()]
+                           + 'S%02dE%02d' % (season, episode)
+                           + ref[match.end():])
+        except (TypeError, ValueError):
+            pass
         return ref
     except Exception:
         return ''
