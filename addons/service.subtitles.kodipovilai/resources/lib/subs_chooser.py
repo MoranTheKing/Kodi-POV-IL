@@ -132,7 +132,7 @@ def _row_item(c, info, translate, xbmcgui):
     if current and '· ' in disp:
         disp = disp.split('· ', 1)[1]
     sync_label = (c.get('_subsync_label') or '').strip()
-    if current and sync_label:
+    if sync_label:
         disp = '{0} · {1}'.format(sync_label, disp)
 
     code = _norm_lang(lang)
@@ -317,6 +317,11 @@ def _show_pyxbmct():
     except Exception as e:
         _log('list_candidates failed: {0}'.format(e), level='WARNING')
         cands = []
+    try:
+        from resources.lib import subsync
+        cands = subsync.rank_picker_candidates(info, cands)
+    except Exception as e:
+        _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
     items = [c for c in cands if c.get('link') and c.get('filename')]
     if not items:
         try:
@@ -583,7 +588,7 @@ def _classify(c, info, translate):
             break
     head, rel = head.strip(), rel.strip()
     sync_label = (c.get('_subsync_label') or '').strip()
-    if current and sync_label:
+    if sync_label:
         rel = sync_label + ((' · ' + rel) if rel else '')
     code = _norm_lang(lang)
     is_he = (code == 'he') or (lang.lower() in ('he', 'iw', 'heb'))
@@ -703,6 +708,11 @@ def show():
     except Exception as e:
         _log('list_candidates failed: {0}'.format(e), level='WARNING')
         cands = []
+    try:
+        from resources.lib import subsync
+        cands = subsync.rank_picker_candidates(info, cands)
+    except Exception as e:
+        _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
     items = [c for c in cands if c.get('link') and c.get('filename')]
     if not items:
         try:
