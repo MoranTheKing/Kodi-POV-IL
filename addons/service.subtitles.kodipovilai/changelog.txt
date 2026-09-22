@@ -1,3 +1,8 @@
+0.2.554
+- Prefer the clearly closer human release on first automatic selection while preserving every AI/non-human result slot.
+- Apply the independently field-certified six-region correction for the exact reported Flash S01E06 BluRay cut when the live provider omits a previously validated oracle family.
+- Bind that correction to the exact playing release, exact DEMAND oracle, unit scale, complete region boundaries and the existing structural invariants.
+
 0.2.553
 - Synchronize repeated short edits on BluRay/DVD sources when three distinct release groups corroborate the same disc timeline under the full holdout and post-transform gates.
 - Keep automatic selection human-first; only after the chosen human subtitle definitively cannot be aligned, fall back to an already-listed community AI subtitle with a trusted release match for the playing file.

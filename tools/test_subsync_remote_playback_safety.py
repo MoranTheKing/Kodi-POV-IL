@@ -1995,6 +1995,131 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.assertEqual(picked, good_ai['link'])
         cache_read.assert_not_called()
 
+    def test_first_play_release_rank_promotes_clear_human_winner_without_io(self):
+        def human(release):
+            payload = {'type': 'engine', 'language': 'Hebrew',
+                       'filename': release, 'source': 'opensubtitles'}
+            return {'language': 'he', 'filename': release,
+                    'link': urllib.parse.quote(json.dumps(payload))}
+
+        weak = human('the.flash.2014.106.hdtv-lol')
+        better = human('The.Flash.2014.S01E06.HDTV.SubsIL')
+        close = human('The.Flash.2014.S01E06.HDTV.XviD-FUM')
+        rows = [weak, better, close]
+        with patch.object(
+                self.sub, 'playing_release', return_value=(
+                    'The.Flash.2014.S01E06.1080p.BluRay.x265-RARBG.mp4')), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}):
+            ranked = self.sub.rank_ready_candidates({}, rows)
+        self.assertIs(ranked[0], better)
+        self.assertEqual(set(map(id, ranked)), set(map(id, rows)))
+
+        ai = {'language': 'he', 'filename': 'AI pool',
+              'link': urllib.parse.quote(json.dumps(
+                  {'type': 'pool', 'pool_kind': 'ai', 'language': 'Hebrew'}))}
+        interleaved = [weak, ai, better]
+        with patch.object(
+                self.sub, 'playing_release', return_value=(
+                    'The.Flash.2014.S01E06.1080p.BluRay.x265-RARBG.mp4')), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}):
+            ranked = self.sub.rank_ready_candidates({}, interleaved)
+        self.assertIs(ranked[0], better)
+        self.assertIs(ranked[1], ai)
+        self.assertIs(ranked[2], weak)
+
+        # A marginal metadata difference is not enough to disturb provider
+        # order before timing evidence exists.
+        with patch.object(self.sub, 'playing_release', return_value='playing'), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}), \
+             patch.object(self.sub.release_match, 'score',
+                          side_effect=[(20, 'cross', {}),
+                                       (23, 'cross', {}),
+                                       (18, 'cross', {})]):
+            unchanged = self.sub.rank_ready_candidates({}, rows)
+        self.assertEqual(unchanged, rows)
+
+    def test_exact_field_certificate_applies_and_near_maps_abstain(self):
+        segments = [
+            {'cand_from_ms': None, 'cand_to_ms': 619207.5,
+             'offset_ms': -776.0},
+            {'cand_from_ms': 619207.5, 'cand_to_ms': 1061546.0,
+             'offset_ms': 945.5},
+            {'cand_from_ms': 1061546.0, 'cand_to_ms': 1328859.5,
+             'offset_ms': 2651.5},
+            {'cand_from_ms': 1328859.5, 'cand_to_ms': 1764132.0,
+             'offset_ms': 4379.0},
+            {'cand_from_ms': 1764132.0, 'cand_to_ms': 2103903.5,
+             'offset_ms': 6016.5},
+            {'cand_from_ms': 2103903.5, 'cand_to_ms': None,
+             'offset_ms': 7827.5},
+        ]
+        validated = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -776.0,
+            'segments': segments, 'validation_required': True,
+            'validation_folds': 4, 'timing_family_count': 0,
+            'after_score': .928, 'unique': .88,
+            'post_residual_ms': 107.0, 'diag': 'field proposal'}
+        primary = {
+            'release': 'The.Flash.2014.S01E06.720p.BluRay.x264-DEMAND'}
+        playing = 'The.Flash.2014.S01E06.1080p.BluRay.x265-RARBG.mp4'
+        verdict = self.sub._field_certified_piecewise(
+            playing, primary, validated)
+        self.assertIsNotNone(verdict)
+        self.assertEqual(verdict['validation_certificate'],
+                         'flash-s01e06-rarbg-v1')
+
+        candidate = ''.join(
+            '%d\n00:%02d:%02d,000 --> 00:%02d:%02d,800\nline %d\n\n'
+            % (i + 1, (i * 30) // 60, (i * 30) % 60,
+               (i * 30) // 60, (i * 30) % 60, i + 1)
+            for i in range(80))
+        fixed = self.sub.sync_align.apply_verdict(candidate, verdict)
+        self.assertNotEqual(fixed, candidate)
+        self.assertEqual(
+            [c['text'] for c in self.sub.sync_align.parse_srt(fixed)],
+            [c['text'] for c in self.sub.sync_align.parse_srt(candidate)])
+
+        wrong_target = self.sub._field_certified_piecewise(
+            'Other.Show.S01E06.1080p.BluRay.x265-RARBG',
+            primary, validated)
+        self.assertIsNone(wrong_target)
+        wrong_primary = self.sub._field_certified_piecewise(
+            playing,
+            {'release': 'Completely.Other.Movie.1999.720p.BluRay.x264-DEMAND'},
+            validated)
+        self.assertIsNone(wrong_primary)
+        near = dict(validated)
+        near['segments'] = [dict(x) for x in segments]
+        near['segments'][3]['offset_ms'] += 351
+        self.assertIsNone(self.sub._field_certified_piecewise(
+            playing, primary, near))
+
+        forged = dict(verdict)
+        forged['segments'] = [dict(x) for x in segments]
+        forged['segments'][1]['cand_to_ms'] += 5001
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, forged)
+
+        forged_from = dict(verdict)
+        forged_from['segments'] = [dict(x) for x in segments]
+        forged_from['segments'][1]['cand_from_ms'] = 100000
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, forged_from)
+
+        forged_scale = dict(verdict)
+        forged_scale['scale'] = 1.01
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, forged_scale)
+
+        forged_target = dict(verdict)
+        forged_target['validation_target'] = 'other.show.s01e06'
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, forged_target)
+
     def test_disc_piecewise_accepts_three_release_group_same_master_quorum(self):
         cues = [{'start': 10000 + i * 5000,
                  'end': 11200 + i * 5000} for i in range(420)]
