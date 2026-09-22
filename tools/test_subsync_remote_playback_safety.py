@@ -670,8 +670,52 @@ class RemotePlaybackSafety(unittest.TestCase):
             verdict, label, count = self.sub._verify_file_bundle(bundle, 'srt')
         self.assertEqual(verdict['status'], self.sub.sync_align.STATUS_UNKNOWN)
         self.assertEqual(verdict['reason'], 'embedded_track_conflict')
-        self.assertEqual(call.call_count, 2)  # union was never allowed to decide
+        self.assertEqual(call.call_count, 4)  # identity preflight + full on each track
+        self.assertEqual([args[0][0][0]['start'] for args in call.call_args_list],
+                         [1000, 3000, 1000, 3000])
         self.assertEqual(count, 0)
+
+    def test_exact_track_preflight_skips_expensive_scale_and_edit_search(self):
+        cues = [{'start': 10000 + i * 10000, 'end': 11000 + i * 10000}
+                for i in range(12)]
+        bundle = {'track_cues': [
+            {'track': {'num': 2, 'lang': 'eng'}, 'cues': cues}]}
+        exact = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                 'scale': 1.0, 'offset_ms': 0.0,
+                 'vote': .95, 'overlap': .98, 'diag': 'already aligned'}
+        with patch.object(self.sub.sync_align, 'verify_cues',
+                          return_value=exact) as judge, \
+             patch.object(self.sub, '_validated_micro_piecewise') as edits:
+            verdict, label, count = self.sub._verify_file_bundle(bundle, 'srt')
+        self.assertIs(verdict, exact)
+        self.assertIn('#2', label)
+        self.assertEqual(count, len(cues))
+        self.assertEqual(judge.call_count, 1)
+        self.assertEqual(judge.call_args.kwargs['scales'], (1.0,))
+        self.assertFalse(judge.call_args.kwargs['allow_piecewise'])
+        edits.assert_not_called()
+
+    def test_drift_not_accepted_by_identity_preflight(self):
+        cues = [{'start': 10000 + i * 10000, 'end': 11000 + i * 10000}
+                for i in range(12)]
+        bundle = {'track_cues': [
+            {'track': {'num': 2, 'lang': 'eng'}, 'cues': cues}]}
+        unknown = {'status': self.sub.sync_align.STATUS_UNKNOWN,
+                   'diag': 'identity cannot explain drift'}
+        drift = {'status': self.sub.sync_align.STATUS_FIXABLE,
+                 'mode': 'global', 'scale': 1.001,
+                 'offset_ms': 0.0, 'diag': 'verified drift'}
+        with patch.object(self.sub.sync_align, 'verify_cues',
+                          side_effect=[unknown, drift]) as judge, \
+             patch.object(self.sub, '_validated_micro_piecewise',
+                          return_value=None):
+            verdict, _label, count = self.sub._verify_file_bundle(bundle, 'srt')
+        self.assertIs(verdict, drift)
+        self.assertEqual(count, len(cues))
+        self.assertEqual(judge.call_count, 2)
+        self.assertEqual(judge.call_args_list[0].kwargs['scales'], (1.0,))
+        self.assertEqual(judge.call_args_list[1].kwargs['scales'],
+                         self.sub._AUDIO_SCALES)
 
     def test_union_of_individually_sparse_tracks_cannot_fabricate_a_fix(self):
         profiles = []
@@ -2157,6 +2201,149 @@ class RemotePlaybackSafety(unittest.TestCase):
         ku.set_current_subtitle.assert_called_once_with(second, renew=True)
         fake_translate.resolve.assert_called_once()
         ku.apply_subtitle_file.assert_called_once()
+
+    def test_autosub_alternatives_sample_distinct_release_families(self):
+        def human(release, row_id):
+            payload = {'type': 'engine', 'source': 'opensubtitles',
+                       'language': 'Hebrew', 'filename': release,
+                       'download_data': {'id': row_id}}
+            return {'language': 'he', 'filename': release,
+                    'link': urllib.parse.quote(json.dumps(payload))}
+
+        same = [human('Show.S01E03.1080p.WEB-DL-GRP', i)
+                for i in range(1, 7)]
+        different = human('Show.S01E03.1080p.BluRay-ALT', 7)
+        english = dict(different, language='en')
+        artificial = {'language': 'he', 'filename': 'AI',
+                      'link': urllib.parse.quote(json.dumps({
+                          'type': 'pool', 'pool_kind': 'ai'}))}
+        rows = same + [different, english, artificial, same[0]]
+        links = self.sub.diverse_human_alternatives(rows, limit=6)
+        self.assertEqual(len(links), 6)
+        self.assertEqual(links[0], same[0]['link'])
+        self.assertEqual(links[1], different['link'])
+        self.assertEqual(links[2:], [row['link'] for row in same[1:5]])
+        self.assertEqual(self.sub.diverse_human_alternatives(rows, limit=0), [])
+
+        malformed = {'language': 'he', 'filename': 123,
+                     'link': urllib.parse.quote(json.dumps({
+                         'type': 'engine', 'source': 'opensubtitles',
+                         'language': 'Hebrew', 'filename': 123}))}
+        survivors = self.sub.diverse_human_alternatives(
+            [same[0], malformed, different], limit=3)
+        self.assertEqual(survivors, [same[0]['link'], different['link']])
+        self.assertEqual(self.sub.diverse_human_alternatives(
+            [same[0], None, {'language': 1, 'link': []}, different],
+            limit=3), survivors)
+
+    def test_autosub_tournament_can_choose_proven_community_human_row(self):
+        payload = {'type': 'pool', 'pool_kind': 'ktuvit',
+                   'hash': 'a' * 16,
+                   'release': 'The.Shards.S01E03.1080p.WEB.H264-CAKES'}
+        link = urllib.parse.quote(json.dumps(payload))
+        job = self._bound_job(
+            key='original', playing='The.Shards.S01E03.HULU.WEB-DL',
+            fallback_links=[link], info={})
+        bundle = {'cues': [1], 'cut_signature': 'cut1:' + 'd' * 32}
+        confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                     'scale': 1.0, 'offset_ms': 0.0,
+                     'diag': 'exact playing cut'}
+        fake_translate = types.ModuleType('resources.lib.translate')
+        fake_translate._pool_source_text = Mock(return_value=('pool source srt',
+                                                               payload['hash']))
+        fake_translate.resolve = Mock(return_value=str(self.subtitle))
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.get_current_subtitle = Mock(return_value='original-link')
+        ku.set_current_subtitle = Mock()
+        ku.current_subtitle_selection = Mock(
+            return_value=self._selection_snapshot())
+        ku.apply_subtitle_file = Mock(return_value=True)
+        ku.notify = Mock()
+        with patch.dict(sys.modules, {
+                'resources.lib.translate': fake_translate}), \
+             patch.object(self.sub, '_job_matches_current', return_value=True), \
+             patch.object(self.sub, '_job_stream_is_current',
+                          return_value=True), \
+             patch.object(self.sub, '_selection_matches', return_value=True), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(confirmed, 'FILE TRACK #2 eng', 200)):
+            applied = self.sub._apply_verified_human_fallback(job)
+        self.assertTrue(applied)
+        fake_translate._pool_source_text.assert_called_once()
+        fake_translate.resolve.assert_called_once()
+        ku.set_current_subtitle.assert_called_once_with(link, renew=True)
+        ku.apply_subtitle_file.assert_called_once()
+
+    def test_deep_worker_promotes_verified_community_human_after_unknown(self):
+        """Exercise the queued first-play path, not just the tournament helper."""
+        payload = {'type': 'pool', 'pool_kind': 'ktuvit',
+                   'hash': 'b' * 16,
+                   'release': 'The.Shards.S01E03.1080p.WEB.H264-CAKES'}
+        link = urllib.parse.quote(json.dumps(payload))
+        job = self._bound_job(
+            key='initial-dsnp', path=str(self.subtitle),
+            playing='The.Shards.S01E03.1080p.HULU.WEB-DL.H.264',
+            release='The.Shards.S01E03.Help.Me.Rhonda.1080p.DSNP.WEB-DL',
+            fallback_links=[link], info={})
+        self._set_pending_for(job)
+        cut = 'cut1:' + 'e' * 32
+        bundle = {'cues': [1], 'cut_signature': cut}
+        unknown = {'status': self.sub.sync_align.STATUS_UNKNOWN,
+                   'cut_signature': cut, 'cache_key': 'initial-dsnp',
+                   'diag': 'scaled-clock continuity FAILED'}
+        confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                     'scale': 1.0, 'offset_ms': -143.0,
+                     'diag': 'same media cut confirmed'}
+        fake_translate = types.ModuleType('resources.lib.translate')
+        fake_translate._pool_source_text = Mock(
+            return_value=('community human subtitle', payload['hash']))
+        fake_translate.resolve = Mock(return_value=str(self.subtitle))
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.get_current_subtitle = Mock(return_value='initial-dsnp-link')
+        ku.set_current_subtitle = Mock()
+        ku.current_subtitle_selection = Mock(
+            return_value=self._selection_snapshot())
+        ku.apply_subtitle_file = Mock(return_value=True)
+        ku.notify = Mock()
+        with patch.dict(sys.modules, {
+                'resources.lib.translate': fake_translate}), \
+             patch.object(self.sub, '_deep_verify',
+                          return_value=(str(self.subtitle), unknown)), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(confirmed, 'FILE TRACK #10 rus', 287)), \
+             patch.object(self.sub, '_record_delivery'):
+            self.sub.run_deep_job(job)
+        ku.set_current_subtitle.assert_called_once_with(link, renew=True)
+        fake_translate._pool_source_text.assert_called_once()
+        fake_translate.resolve.assert_called_once()
+        ku.apply_subtitle_file.assert_called_once()
+        self.assertNotIn(('unverified', 'local'), self.successful_status)
+
+    def test_shards_style_initial_order_keeps_cakes_in_first_tournament_slot(self):
+        def pool_row(release, row_hash):
+            payload = {'type': 'pool', 'pool_kind': 'ktuvit',
+                       'hash': row_hash, 'release': release}
+            return {'language': 'he', 'filename': release,
+                    'link': urllib.parse.quote(json.dumps(payload))}
+
+        d = pool_row('The.Shards.S01E03.Help.Me.Rhonda.1080p.'
+                     'DSNP.WEB-DL.DD+5.1.H.264-playWEB', 'a' * 16)
+        c = pool_row('The.Shards.S01E03.1080p.WEB.H264-CAKES', 'b' * 16)
+        other = pool_row('The.Shards.S01E04.1080p.WEB.H264-ETHEL', 'c' * 16)
+        playing = 'The.Shards.S01.1080p.HULU.WEB-DL.H.264'
+        rows = [d, c, other]
+        with patch.object(self.sub, 'playing_release', return_value=playing), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}):
+            ranked = self.sub.rank_ready_candidates({}, rows)
+        self.assertIs(ranked[0], d)
+        alternatives = self.sub.diverse_human_alternatives(ranked)
+        self.assertEqual([link for link in alternatives
+                          if link != d['link']][0], c['link'])
 
     def test_autosub_tournament_never_replaces_when_all_proofs_abstain(self):
         payload = {'type': 'engine', 'source': 'opensubtitles',
