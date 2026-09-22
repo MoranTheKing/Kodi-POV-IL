@@ -50,9 +50,10 @@ HUMAN_LINK = link({'type': 'engine', 'source': 'ktuvit',
                    'filename': 'Movie.2024.1080p'})
 
 
-def run(stream_labels, sabotage=False, manual_switch=False):
+def run(stream_labels, sabotage=False, manual_switch=False,
+        pending_overlay=False):
     """Run the real autosub_on_play(); return what it resolved and applied."""
-    resolved, streams_set = [], []
+    resolved, streams_set, overlay_messages = [], [], []
     for name in list(sys.modules):
         if name.split('.')[0] in ('resources', 'xbmc', 'xbmcgui', 'xbmcaddon',
                                   'xbmcvfs'):
@@ -120,6 +121,20 @@ def run(stream_labels, sabotage=False, manual_switch=False):
     sys.modules['resources'] = pkg
     sys.modules['resources.lib'] = lib
 
+    class _General(types.ModuleType):
+        def __setattr__(self, name, value):
+            if name == 'show_msg':
+                overlay_messages.append(value)
+            super().__setattr__(name, value)
+
+    engine = types.ModuleType('resources.lib.subs_engine')
+    general = _General('resources.lib.subs_engine.general')
+    general.show_results = lambda _modal: None
+    engine.general = general
+    sys.modules['resources.lib.subs_engine'] = engine
+    sys.modules['resources.lib.subs_engine.general'] = general
+    lib.subs_engine = engine
+
     ku = types.ModuleType('resources.lib.kodi_utils')
     ku.log = lambda *a, **k: None
     ku.notify = lambda *a, **k: None
@@ -184,6 +199,8 @@ def run(stream_labels, sabotage=False, manual_switch=False):
              'filename': 'Movie.2024.1080p'}]
     if manual_switch:
         rows = [rows[0], rows[2], rows[1]]
+    if pending_overlay:
+        rows = [rows[2]]
     tr.list_candidates = lambda info, modal_progress=True: list(rows)
 
     def _resolve(l, info, **kwargs):
@@ -194,6 +211,9 @@ def run(stream_labels, sabotage=False, manual_switch=False):
             return None
         if decoded.get('embedded'):
             current['status'] = {'state': 'confirmed'}
+        if pending_overlay and decoded.get('filename'):
+            current['status'] = {'state': 'checking'}
+            return '/tmp/human.srt'
         return None            # embedded picks return None; that IS success
     tr.resolve = _resolve
     sys.modules['resources.lib.translate'] = tr
@@ -238,6 +258,8 @@ def run(stream_labels, sabotage=False, manual_switch=False):
         print('   (autosub_on_play raised: %r)' % (e,))
     if manual_switch:
         return resolved, streams_set, current['link']
+    if pending_overlay:
+        return resolved, streams_set, overlay_messages
     return resolved, streams_set
 
 
@@ -273,6 +295,16 @@ race_resolved, _race_streams, race_current = run(
 check('autosub never overwrites a manual pick with its next fallback',
       race_current == 'manual-user-choice-B' and len(race_resolved) == 1,
       'current=%r resolved=%r' % (race_current, race_resolved))
+
+# A delivered subtitle may still be a provisional timing guess. The previous
+# unconditional "כתובית מוכנה" heading hid this from viewers for five seconds.
+pending_resolved, _pending_streams, messages = run(
+    ['eng'], pending_overlay=True)
+pending_final = next((m for m in messages if 'Movie.2024.1080p' in m), '')
+check('pending automatic subtitle is visibly described as still checking',
+      pending_resolved == ['engine'] and 'התזמון נבדק ברקע' in pending_final
+      and 'כתובית מוכנה' not in pending_final,
+      'resolved=%r final=%r' % (pending_resolved, pending_final))
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
