@@ -1,3 +1,8 @@
+0.2.553
+- Synchronize repeated short edits on BluRay/DVD sources when three distinct release groups corroborate the same disc timeline under the full holdout and post-transform gates.
+- Keep automatic selection human-first; only after the chosen human subtitle definitively cannot be aligned, fall back to an already-listed community AI subtitle with a trusted release match for the playing file.
+- Treat an explicit repeat click on the same subtitle row as a new selection generation, so an older background fallback can never overwrite it.
+
 0.2.552
 - Expand background timing evidence beyond the picker languages only after the normal proof abstains, so a verified cross-cut correction can use an independent provider family without changing visible results or bypassing conflicts.
 
