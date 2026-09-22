@@ -13,7 +13,7 @@ import tempfile
 import types
 import unittest
 import urllib.parse
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 LIB = Path(__file__).resolve().parents[1] / 'addons/service.subtitles.kodipovilai/resources/lib'
 
@@ -1970,6 +1970,239 @@ class RemotePlaybackSafety(unittest.TestCase):
                 side_effect=RuntimeError('synthetic pin failure')))
         with patch.object(xbmc, 'Player', return_value=player):
             self.assertFalse(self.real_swap_if_current(job, 'fixed.srt', {}))
+
+    def test_proven_ai_fallback_is_metadata_only_and_requires_trusted_release(self):
+        def row(kind, release, digest):
+            payload = {'type': 'pool', 'pool_kind': kind,
+                       'release': release, 'hash': digest}
+            return {'language': 'he',
+                    'link': urllib.parse.quote(json.dumps(payload))}
+
+        human = row('ktuvit', 'Movie.HDTV-GRP', 'a' * 16)
+        bad_ai = row('ai', 'Movie.CAM-GRP', 'b' * 16)
+        good_ai = row('ai', 'Movie.WEB-DL-GRP', 'c' * 16)
+        trusted = next(iter(self.sub.release_match.AUTO_OK_TIERS))
+
+        def score(_playing, release):
+            return ((100, trusted, {}) if 'WEB-DL' in release
+                    else (10, 'none', {}))
+
+        with patch.object(self.sub, 'playing_release', return_value='playing'), \
+             patch.object(self.sub.release_match, 'score', side_effect=score), \
+             patch.object(self.sub, '_ready_candidate_text') as cache_read:
+            picked = self.sub.proven_pool_ai_fallback(
+                {}, [human, bad_ai, good_ai])
+        self.assertEqual(picked, good_ai['link'])
+        cache_read.assert_not_called()
+
+    def test_disc_piecewise_accepts_three_release_group_same_master_quorum(self):
+        cues = [{'start': 10000 + i * 5000,
+                 'end': 11200 + i * 5000} for i in range(420)]
+        primary = {'release': 'Show.S01E01.720p.BluRay.x264-DEMAND',
+                   'language': 'en', 'payload': {'id': 'primary'}}
+        rovers = {'release': 'Show.S01E01.1080p.BluRay.x264-ROVERS',
+                  'language': 'nl', 'payload': {'id': 'rovers'}}
+        remux = {'release': 'Show.S01E01.BluRay.REMUX-EDITH',
+                 'language': 'id', 'payload': {'id': 'edith'}}
+        proposal = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -775.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -775.0}],
+            'validation_required': True, 'validation_folds': 5,
+            'timing_family_count': 0, 'diag': '4/5 field holdouts'}
+        family = {'accepted': True, 'before_score': .61,
+                  'after_score': .93, 'after_overlap': .98,
+                  'after_unique': .88, 'post_residual_ms': 120.0}
+        ranked = [
+            (rovers, self.sub.release_match.TIER_SOURCE, 62, 'rovers', 1),
+            (remux, self.sub.release_match.TIER_SOURCE, 58, 'edith', 1)]
+        with patch.object(self.sub, '_oracle_match', return_value=ranked), \
+             patch.object(self.sub, '_download_oracle',
+                          side_effect=['rovers-text', 'edith-text']), \
+             patch.object(self.sub.sync_align, 'parse_srt',
+                          return_value=cues), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family',
+                          return_value=family):
+            result = self.sub._validated_oracle_piecewise(
+                [primary, rovers, remux],
+                'Show.S01E01.1080p.BluRay.x265-RARBG',
+                'candidate-text', primary, 'primary-text')
+        self.assertIsNotNone(result)
+        self.assertEqual(result['verdict']['same_master_group_count'], 3)
+        self.assertEqual(result['verdict']['timing_family_count'], 1)
+        self.assertEqual(
+            result['verdict']['validation_proof'],
+            'same-disc-release-group-quorum')
+        self.assertIn('same-disc timing lane', result['verdict']['diag'])
+
+        # Exercise the final production gate, not merely proposal creation.
+        candidate = ''.join(
+            '%d\n00:00:%02d,000 --> 00:00:%02d,900\nline %d\n\n'
+            % (i + 1, 10 + i * 2, 10 + i * 2, i + 1)
+            for i in range(10))
+        fixed = self.sub.sync_align.apply_verdict(
+            candidate, result['verdict'])
+        before = self.sub.sync_align.parse_srt(candidate)
+        after = self.sub.sync_align.parse_srt(fixed)
+        self.assertNotEqual(fixed, candidate)
+        self.assertEqual(len(after), len(before))
+        self.assertEqual([cue['text'] for cue in after],
+                         [cue['text'] for cue in before])
+
+        # A declared count is not evidence: all three named groups must be
+        # non-empty and distinct or the final application gate rejects it.
+        spoofed = dict(result['verdict'])
+        spoofed['same_master_groups'] = ['demand', 'rovers', 'rovers']
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, spoofed)
+
+    def test_disc_piecewise_refuses_quorum_when_primary_group_is_unknown(self):
+        cues = [{'start': 10000 + i * 5000,
+                 'end': 11200 + i * 5000} for i in range(420)]
+        primary = {'release': 'Show.S01E01.720p.BluRay.x264',
+                   'language': 'en', 'payload': {'id': 'primary'}}
+        rovers = {'release': 'Show.S01E01.1080p.BluRay.x264-ROVERS',
+                  'language': 'nl', 'payload': {'id': 'rovers'}}
+        remux = {'release': 'Show.S01E01.BluRay.REMUX-EDITH',
+                 'language': 'id', 'payload': {'id': 'edith'}}
+        proposal = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -775.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -775.0}],
+            'validation_required': True, 'validation_folds': 5,
+            'timing_family_count': 0, 'diag': '4/5 field holdouts'}
+        family = {'accepted': True, 'before_score': .61,
+                  'after_score': .93, 'after_overlap': .98,
+                  'after_unique': .88, 'post_residual_ms': 120.0}
+        ranked = [
+            (rovers, self.sub.release_match.TIER_SOURCE, 62, 'rovers', 1),
+            (remux, self.sub.release_match.TIER_SOURCE, 58, 'edith', 1)]
+        with patch.object(self.sub, '_oracle_match', return_value=ranked), \
+             patch.object(self.sub, '_download_oracle',
+                          side_effect=['rovers-text', 'edith-text']), \
+             patch.object(self.sub.sync_align, 'parse_srt',
+                          return_value=cues), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family',
+                          return_value=family):
+            result = self.sub._validated_oracle_piecewise(
+                [primary, rovers, remux],
+                'Show.S01E01.1080p.BluRay.x265-RARBG',
+                'candidate-text', primary, 'primary-text')
+        self.assertIsNone(result)
+
+    def test_unknown_human_can_switch_to_proven_pool_ai_only_while_current(self):
+        ku = sys.modules['resources.lib.kodi_utils']
+        human_link = 'human-link'
+        fallback = urllib.parse.quote(json.dumps({
+            'type': 'pool', 'pool_kind': 'ai',
+            'release': 'Movie.WEB-DL-GRP', 'hash': 'd' * 16}))
+        state = {'link': human_link}
+        ku.get_current_subtitle = lambda: state['link']
+
+        def select(link):
+            state['link'] = link
+            self.selection = {
+                'token': 'fallback-token' if link == fallback else 'human-token',
+                'link_hash': 'fallback-hash' if link == fallback else 'human-hash'}
+
+        ku.set_current_subtitle = Mock(side_effect=select)
+
+        def snapshot(expected_link=None):
+            if expected_link is not None and expected_link != state['link']:
+                return {'token': '', 'link_hash': '', 'stream_hash': ''}
+            return self._selection_snapshot()
+
+        ku.current_subtitle_selection = snapshot
+        ku.apply_subtitle_file = Mock(return_value=True)
+        ku.notify = Mock()
+        self.selection = {'token': 'human-token', 'link_hash': 'human-hash'}
+        job = self._bound_job(
+            key='human-key', path=str(self.subtitle), playing='playing', info={},
+            fallback_link=fallback)
+        self._set_pending_for(job)
+        fake_translate = types.ModuleType('resources.lib.translate')
+        fake_translate.resolve = Mock(return_value=str(self.subtitle))
+        trusted = next(iter(self.sub.release_match.AUTO_OK_TIERS))
+        with patch.dict(sys.modules, {'resources.lib.translate': fake_translate}), \
+             patch.object(self.sub.release_match, 'score',
+                          return_value=(100, trusted, {})):
+            self.assertTrue(self.sub._apply_proven_pool_fallback(job))
+        ku.apply_subtitle_file.assert_called_once()
+        self.assertEqual(state['link'], fallback)
+
+        # A later manual selection invalidates the original human job before it
+        # can claim or resolve the fallback.
+        select('manual-link')
+        ku.apply_subtitle_file.reset_mock()
+        with patch.object(self.sub.release_match, 'score',
+                          return_value=(100, trusted, {})):
+            self.assertFalse(self.sub._apply_proven_pool_fallback(job))
+        ku.apply_subtitle_file.assert_not_called()
+
+    def test_failed_fallback_never_overwrites_manual_same_link_reselection(self):
+        ku = sys.modules['resources.lib.kodi_utils']
+        human_link = 'human-link'
+        fallback = urllib.parse.quote(json.dumps({
+            'type': 'pool', 'pool_kind': 'ai',
+            'release': 'Movie.WEB-DL-GRP', 'hash': 'e' * 16}))
+        state = {'link': human_link}
+        ku.get_current_subtitle = lambda: state['link']
+
+        def auto_select(link):
+            state['link'] = link
+            self.selection = {
+                'token': ('auto-fallback-token' if link == fallback
+                          else 'human-token'),
+                'link_hash': ('fallback-hash' if link == fallback
+                              else 'human-hash')}
+
+        ku.set_current_subtitle = Mock(side_effect=auto_select)
+
+        def snapshot(expected_link=None):
+            if expected_link is not None and expected_link != state['link']:
+                return {'token': '', 'link_hash': '', 'stream_hash': ''}
+            return self._selection_snapshot()
+
+        ku.current_subtitle_selection = snapshot
+        ku.apply_subtitle_file = Mock(return_value=True)
+        self.selection = {'token': 'human-token', 'link_hash': 'human-hash'}
+        job = self._bound_job(
+            key='human-key', path=str(self.subtitle), playing='playing', info={},
+            fallback_link=fallback)
+        self._set_pending_for(job)
+        fake_translate = types.ModuleType('resources.lib.translate')
+
+        def manual_same_row_then_fail(*_args, **_kwargs):
+            # The explicit picker uses renew=True. The link stays identical,
+            # while its fresh generation must make the automatic claim stale.
+            self.selection = {
+                'token': 'manual-same-row-token',
+                'link_hash': 'fallback-hash'}
+            return None
+
+        fake_translate.resolve = Mock(side_effect=manual_same_row_then_fail)
+        trusted = next(iter(self.sub.release_match.AUTO_OK_TIERS))
+        with patch.dict(sys.modules, {'resources.lib.translate': fake_translate}), \
+             patch.object(self.sub.release_match, 'score',
+                          return_value=(100, trusted, {})):
+            self.assertFalse(self.sub._apply_proven_pool_fallback(job))
+        self.assertEqual(state['link'], fallback)
+        self.assertEqual(self.selection['token'], 'manual-same-row-token')
+        self.assertEqual(ku.set_current_subtitle.call_args_list,
+                         [call(fallback)])
+        ku.apply_subtitle_file.assert_not_called()
 
 
 if __name__ == '__main__':

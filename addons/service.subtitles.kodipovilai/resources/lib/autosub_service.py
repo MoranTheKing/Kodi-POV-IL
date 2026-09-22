@@ -351,9 +351,13 @@ def autosub_on_play():
         # (list_candidates already queued every human Ktuvit release for the
         # background harvest; the service drainer downloads + uploads them
         # gently over time. Nothing to do here.)
+        _proven_ai_fallback = ''
         try:
             from resources.lib import subsync
             cands = subsync.rank_ready_candidates(info, cands)
+            # Metadata-only. Human stays first; this is used only if the deep
+            # worker definitively cannot align that human row.
+            _proven_ai_fallback = subsync.proven_pool_ai_fallback(info, cands)
         except Exception:
             pass
         # Try the ready Hebrew candidates in priority order until one actually
@@ -399,8 +403,16 @@ def autosub_on_play():
                 selection = _claim_candidate(link2)
                 if not selection:
                     return
-                path = translate.resolve(
-                    link2, info, selection=selection)
+                _fallback = (_proven_ai_fallback
+                             if (_proven_ai_fallback
+                                 and subsync._is_human_hebrew_candidate(pl))
+                             else '')
+                if _fallback:
+                    path = translate.resolve(
+                        link2, info, selection=selection,
+                        fallback_link=_fallback)
+                else:
+                    path = translate.resolve(link2, info, selection=selection)
             except Exception:
                 path = None
             if not _autosub_owns_player():
