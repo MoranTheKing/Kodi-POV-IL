@@ -1038,8 +1038,76 @@ def _is_human_hebrew_candidate(payload):
         return (payload.get('pool_kind') or 'ai') == 'ktuvit'
     if kind == 'engine' and not payload.get('embedded'):
         lang = payload.get('language') or ''
-        return ('Hebrew' in lang and 'MachineTranslated' not in lang)
+        return (isinstance(lang, str) and 'Hebrew' in lang
+                and 'MachineTranslated' not in lang)
     return False
+
+
+def diverse_human_alternatives(candidates, limit=6):
+    """Keep first-play alternates from distinct release timing families.
+
+    The provider search has already finished.  We only inspect row metadata;
+    no subtitle download or additional provider query occurs here.  Preserve
+    the top row, take the earliest representative of each other release family,
+    then fill spare slots in original order.  An unparseable name is not proof
+    that two rows share a timeline, so it gets its own family.
+    """
+    if limit <= 0:
+        return []
+    rows = []
+    seen_links = set()
+    for candidate in candidates or []:
+        if not isinstance(candidate, dict):
+            continue
+        language = candidate.get('language')
+        if not isinstance(language, str) or language.strip().lower() not in (
+                'he', 'heb', 'hebrew'):
+            continue
+        link = candidate.get('link') or ''
+        if not isinstance(link, str) or not link or link in seen_links:
+            continue
+        payload = _decode_link(link) or {}
+        if (not isinstance(payload, dict)
+                or not _is_human_hebrew_candidate(payload)
+                or payload.get('embedded')):
+            continue
+        release_fields = (payload.get('filename'), payload.get('release'),
+                          candidate.get('filename'))
+        if any(value is not None and not isinstance(value, str)
+               for value in release_fields):
+            continue
+        seen_links.add(link)
+        release = next((value.strip() for value in release_fields
+            if isinstance(value, str) and value.strip()), '')
+        try:
+            parsed = release_match.parse(release)
+        except Exception:
+            parsed = {}
+        family = ((parsed.get('source') or '').lower(),
+                  (parsed.get('group') or '').lower(),
+                  (parsed.get('edition') or '').lower(),
+                  bool(parsed.get('proper')))
+        if not any(family):
+            family = ('unknown', release.lower(), link, False)
+        rows.append((link, family))
+    if not rows:
+        return []
+    chosen = [rows[0][0]]
+    seen_families = {rows[0][1]}
+    for link, family in rows[1:]:
+        if family not in seen_families:
+            chosen.append(link)
+            seen_families.add(family)
+        if len(chosen) >= limit:
+            return chosen
+    chosen_set = set(chosen)
+    for link, _family in rows[1:]:
+        if link not in chosen_set:
+            chosen.append(link)
+            chosen_set.add(link)
+        if len(chosen) >= limit:
+            break
+    return chosen
 
 
 def rank_ready_candidates(info, candidates, max_candidates=4):
@@ -2600,6 +2668,35 @@ def _verify_file_bundle(bundle, text):
         raw_profiles.append({'track': profile.get('track') or {},
                              'cues': cues})
 
+    # A zero-shift answer can be settled cheaply before testing every FPS
+    # ratio and edit map.  Check each track independently with the same final
+    # verifier constrained to the identity clock.  Only CONFIRMED may return
+    # early: a shifted candidate still needs the full scale, local-continuity
+    # and cross-track conflict checks below.  A sparse set of tracks cannot
+    # become evidence by being combined here.
+    identity_checked = []
+    for profile in raw_profiles:
+        cues = profile['cues']
+        kwargs = dict(_probe_gate_kwargs(cues))
+        kwargs.update({'scales': (1.0,), 'allow_piecewise': False})
+        try:
+            verdict = sync_align.verify_cues(cues, text, **kwargs)
+        except Exception:
+            continue
+        identity_checked.append({'track': profile['track'],
+                                 'cues': cues, 'verdict': verdict})
+    identity_confirmed = [item for item in identity_checked
+                          if item['verdict'].get('status')
+                          == sync_align.STATUS_CONFIRMED]
+    if identity_confirmed:
+        chosen = max(identity_confirmed, key=_verdict_strength)
+        verdict = _guard_soft_probe_shift(chosen['verdict'], 'FILE PROBE')
+        if verdict.get('status') == sync_align.STATUS_CONFIRMED:
+            track = chosen['track']
+            return (verdict, 'FILE TRACK #%s %s' % (
+                track.get('num', '?'), track.get('lang') or '?'),
+                    len(chosen['cues']))
+
     # The short-edit planner is cheap (identity clock, local windows only),
     # whereas a full arbitrary-scale search on every language track is costly
     # on 32-bit Kodi.  Try the independently corroborated path first.  Before
@@ -2608,19 +2705,10 @@ def _verify_file_bundle(bundle, text):
     # sends us through the complete conflict-aware path below.
     validated_piecewise = _validated_micro_piecewise(raw_profiles, text)
     if validated_piecewise is not None:
-        quick = []
-        for profile in raw_profiles:
-            cues = profile.get('cues') or []
-            kwargs = dict(_probe_gate_kwargs(cues))
-            kwargs.update({'scales': (1.0,), 'allow_piecewise': False})
-            try:
-                verdict = sync_align.verify_cues(cues, text, **kwargs)
-            except Exception:
-                continue
-            if verdict.get('status') in (sync_align.STATUS_CONFIRMED,
-                                          sync_align.STATUS_FIXABLE):
-                quick.append({'track': profile.get('track') or {},
-                              'cues': cues, 'verdict': verdict})
+        quick = [item for item in identity_checked
+                 if item['verdict'].get('status') in (
+                     sync_align.STATUS_CONFIRMED,
+                     sync_align.STATUS_FIXABLE)]
         exact = [item for item in quick
                  if item['verdict'].get('status')
                  == sync_align.STATUS_CONFIRMED]
