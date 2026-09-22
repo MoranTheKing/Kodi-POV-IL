@@ -447,7 +447,7 @@ def _show_pyxbmct():
                 # it matches this same candidate next time) -- so reopening the
                 # chooser shows it at the top marked "» נוכחית".
                 try:
-                    kodi_utils.set_current_subtitle(link)
+                    kodi_utils.set_current_subtitle(link, renew=True)
                 except Exception:
                     pass
                 try:
@@ -616,7 +616,7 @@ def _deliver_pick(c, info, close_cb):
         from resources.lib import kodi_utils, translate as _t
         link = c.get('link') or ''
         try:
-            kodi_utils.set_current_subtitle(link)
+            kodi_utils.set_current_subtitle(link, renew=True)
         except Exception:
             pass
         try:
