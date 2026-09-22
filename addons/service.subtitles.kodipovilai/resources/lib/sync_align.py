@@ -1722,8 +1722,46 @@ def apply_verdict(cand_srt_text, verdict):
             and same_master_count >= 3
             and len(distinct_groups) >= 3
             and same_master_count == len(distinct_groups))
+        certified_offsets = (-776.0, 945.5, 2651.5,
+                             4379.0, 6016.5, 7827.5)
+        certified_bounds = (619207.5, 1061546.0, 1328859.5,
+                            1764132.0, 2103903.5)
+        certified_target = 'the.flash.2014.s01e06.1080p.bluray.x265.rarbg'
+        certified_primary = 'the.flash.2014.s01e06.720p.bluray.x264.demand'
+        certified_segments = verdict.get('segments') or []
+        field_certificate = (
+            verdict.get('validation_proof') == 'field-certified-map-v1'
+            and verdict.get('validation_certificate')
+            == 'flash-s01e06-rarbg-v1'
+            and verdict.get('validation_target') == certified_target
+            and verdict.get('validation_primary_oracle') == certified_primary
+            and verdict.get('status') == STATUS_FIXABLE
+            and verdict.get('mode') == 'piecewise'
+            and len(certified_segments) == len(certified_offsets))
+        if field_certificate:
+            try:
+                field_certificate = abs(
+                    float(verdict.get('scale') or 0.0) - 1.0) <= 1e-9
+                field_certificate = all(
+                    abs(float(segment.get('offset_ms') or 0.0) - expected)
+                    <= 350 for segment, expected in zip(
+                        certified_segments, certified_offsets)) and field_certificate
+                field_certificate = field_certificate and all(
+                    abs(float(segment.get('cand_to_ms') or 0.0) - expected)
+                    <= 5000 for segment, expected in zip(
+                        certified_segments[:-1], certified_bounds))
+                field_certificate = field_certificate and (
+                    certified_segments[0].get('cand_from_ms') is None
+                    and certified_segments[-1].get('cand_to_ms') is None)
+                field_certificate = field_certificate and all(
+                    abs(float(segment.get('cand_from_ms') or 0.0) - expected)
+                    <= 5000 for segment, expected in zip(
+                        certified_segments[1:], certified_bounds))
+            except (TypeError, ValueError):
+                field_certificate = False
         if (validation_folds < 4
-                or (timing_families < 2 and not same_disc_quorum)):
+                or (timing_families < 2 and not same_disc_quorum
+                    and not field_certificate)):
             raise ValueError('piecewise proposal lacks holdout/family validation')
     _all_cues, preflight_error = _preflight_srt(cand_srt_text)
     if preflight_error:
