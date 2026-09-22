@@ -370,16 +370,9 @@ def autosub_on_play():
         # verification, the service worker can test these against the one
         # media profile it just learned and self-heal to the first proven row.
         # No second provider search is needed.
-        _human_alternatives = []
         try:
-            for _candidate in he_list:
-                _link = _candidate.get('link') or ''
-                _payload = translate._decode_link(_link) or {}
-                if (_link and subsync._is_human_hebrew_candidate(_payload)
-                        and not _payload.get('embedded')):
-                    _human_alternatives.append(_link)
-                if len(_human_alternatives) >= 6:
-                    break
+            _human_alternatives = subsync.diverse_human_alternatives(
+                he_list, limit=6)
         except Exception:
             _human_alternatives = []
         applied = False
