@@ -123,6 +123,36 @@ check('synthetic Title.S01E02.1080p.mkv',
 check('real release NOT synthetic',
       rm.is_synthetic('Show.S01E05.1080p.WEB-DL.H.264-NTb.mkv') is False)
 
+print('== content identity for timing proof ==')
+check('same episode across resolution/codec is the same content',
+      rm.same_content(
+          'The.Flash.2014.S01E06.1080p.BluRay.x265-RARBG',
+          'The.Flash.S01E06.720p.BluRay.x264-DEMAND'))
+check('different episode is never the same content',
+      not rm.same_content(
+          'The.Flash.2014.S01E06.1080p.BluRay.x265-RARBG',
+          'The.Flash.S01E07.720p.BluRay.x264-DEMAND'))
+check('series revivals with different explicit years stay distinct',
+      not rm.same_content(
+          'Doctor.Who.1963.S01E01.1080p.BluRay.x265-GRP',
+          'Doctor.Who.2005.S01E01.720p.BluRay.x264-GRP'))
+check('a missing series year can still match an explicitly dated release',
+      rm.same_content(
+          'The.Flash.2014.S01E06.1080p.BluRay.x265-RARBG',
+          'The.Flash.S01E06.720p.BluRay.x264-DEMAND'))
+check('same release group cannot hide a different series',
+      not rm.same_content(
+          'Show.One.S01E01.1080p.WEB-DL.x264-NTb',
+          'Other.Show.S01E01.720p.WEB-DL.x264-NTb'))
+check('same movie title/year survives technical differences',
+      rm.same_content(
+          'Some.Movie.2024.2160p.WEB-DL.x265-FLUX',
+          'Some.Movie.2024.1080p.WEB-DL.x264-FLUX'))
+check('different movie title is never the same content',
+      not rm.same_content(
+          'Some.Movie.2024.2160p.WEB-DL.x265-FLUX',
+          'Other.Movie.2024.1080p.WEB-DL.x264-FLUX'))
+
 print('== empties / junk never crash ==')
 check('empty', rm.match_pct('', 'x') == 0)
 check('none-ish', rm.match_pct('   ', '') == 0)

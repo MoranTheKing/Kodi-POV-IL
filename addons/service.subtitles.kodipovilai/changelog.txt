@@ -1,3 +1,7 @@
+0.2.555
+- Re-run timing verification for every subtitle after the synchronization proof schema changes, instead of accepting stale UNKNOWN decisions from an older release.
+- Generalize strict multi-region correction to other movies and episodes when a matching exact/same-group oracle passes five independent holdouts and strong structural gates.
+- Bind generic timing proof to the same movie or exact episode and independently revalidate its release tier, boundaries, monotonic edits and quality metrics before applying it.
 0.2.554
 - Prefer the clearly closer human release on first automatic selection while preserving every AI/non-human result slot.
 - Apply the independently field-certified six-region correction for the exact reported Flash S01E06 BluRay cut when the live provider omits a previously validated oracle family.
