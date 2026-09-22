@@ -91,6 +91,7 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.sub._probe_cache_path = lambda: str(self.cache)
         self.sub._oracle_candidates = Mock(return_value=[])
         self.sub._load_verdicts = Mock(return_value={})
+        self.real_store_verdict = self.sub._store_verdict
         self.sub._store_verdict = Mock()
         self.real_swap_if_current = self.sub._swap_if_current
         self.sub._swap_if_current = Mock()
@@ -2062,6 +2063,180 @@ class RemotePlaybackSafety(unittest.TestCase):
             unchanged = self.sub.rank_ready_candidates({}, rows)
         self.assertEqual(unchanged, rows)
 
+    def test_picker_promotes_and_labels_candidate_proven_for_cached_cut(self):
+        def human(release, row_id):
+            payload = {'type': 'engine', 'language': 'Hebrew',
+                       'filename': release, 'source': 'opensubtitles',
+                       'download_data': {'id': row_id}}
+            return {'language': 'he', 'filename': release,
+                    'link': urllib.parse.quote(json.dumps(payload))}
+
+        weak = human('Show.S01E03.1080p.DSNP-playWEB', 1)
+        proven = human('Show.S01E03.1080p.WEB.H264-CAKES', 2)
+        bundle = {'cues': [1], 'cut_signature': 'cut1:' + 'a' * 32}
+        unknown = {'status': self.sub.sync_align.STATUS_UNKNOWN,
+                   'diag': 'different edit'}
+        confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                     'scale': 1.0, 'offset_ms': -143.0,
+                     'overlap': .97, 'vote': .91, 'diag': 'confirmed'}
+        with patch.object(self.sub, 'playing_release', return_value='playing'), \
+             patch.object(self.sub.release_match, 'score',
+                          return_value=(50, self.sub.release_match.TIER_SOURCE,
+                                        {})), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_ready_candidate_text',
+                          side_effect=[('weak srt', self.sub._decode_link(
+                              weak['link'])),
+                                       ('proven srt', self.sub._decode_link(
+                                           proven['link']))]), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          side_effect=[(unknown, 'track', 200),
+                                       (confirmed, 'track', 200)]), \
+             patch.object(self.sub, '_store_verdict') as store:
+            ranked = self.sub.rank_picker_candidates({}, [weak, proven])
+        self.assertIs(ranked[0], proven)
+        self.assertEqual(proven['_subsync_state'], 'confirmed')
+        self.assertEqual(proven['_subsync_label'], 'תזמון אומת לקובץ זה')
+        store.assert_called_once()
+
+    def test_picker_keeps_current_row_visible_then_ranks_alternatives(self):
+        current = {'filename': '» נוכחית · Current', 'language': 'he',
+                   'link': 'current'}
+        first = {'filename': 'First', 'language': 'he', 'link': 'first'}
+        second = {'filename': 'Second', 'language': 'he', 'link': 'second'}
+        with patch.object(self.sub, 'rank_ready_candidates',
+                          return_value=[second, first]) as rank:
+            rows = self.sub.rank_picker_candidates(
+                {}, [current, first, second])
+        self.assertEqual(rows, [current, second, first])
+        rank.assert_called_once_with({}, [first, second], max_candidates=4)
+
+    def test_autosub_tournament_skips_unknown_and_applies_next_proven_human(self):
+        def link(row_id):
+            return urllib.parse.quote(json.dumps({
+                'type': 'engine', 'source': 'opensubtitles',
+                'language': 'Hebrew', 'filename': 'Candidate-%d' % row_id,
+                'download_data': {'id': row_id}}))
+
+        first, second = link(1), link(2)
+        job = self._bound_job(
+            key='original', playing='Show.S01E03.HULU',
+            fallback_links=[first, second], info={})
+        bundle = {'cues': [1], 'cut_signature': 'cut1:' + 'b' * 32}
+        unknown = {'status': self.sub.sync_align.STATUS_UNKNOWN,
+                   'diag': 'different edit'}
+        confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                     'scale': 1.0, 'offset_ms': 0.0,
+                     'diag': 'confirmed'}
+        fake_translate = types.ModuleType('resources.lib.translate')
+        fake_translate.resolve = Mock(return_value=str(self.subtitle))
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.get_current_subtitle = Mock(return_value='original-link')
+        ku.set_current_subtitle = Mock()
+        ku.current_subtitle_selection = Mock(
+            return_value=self._selection_snapshot())
+        ku.apply_subtitle_file = Mock(return_value=True)
+        ku.notify = Mock()
+        with patch.dict(sys.modules, {
+                'resources.lib.translate': fake_translate}), \
+             patch.object(self.sub, '_job_matches_current', return_value=True), \
+             patch.object(self.sub, '_job_stream_is_current',
+                          return_value=True), \
+             patch.object(self.sub, '_selection_matches', return_value=True), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_tournament_candidate_text',
+                          side_effect=[('first text', self.sub._decode_link(first)),
+                                       ('second text', self.sub._decode_link(second))]), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          side_effect=[(unknown, 'track', 200),
+                                       (confirmed, 'track', 200)]):
+            applied = self.sub._apply_verified_human_fallback(job)
+        self.assertTrue(applied)
+        ku.set_current_subtitle.assert_called_once_with(second, renew=True)
+        fake_translate.resolve.assert_called_once()
+        ku.apply_subtitle_file.assert_called_once()
+
+    def test_autosub_tournament_never_replaces_when_all_proofs_abstain(self):
+        payload = {'type': 'engine', 'source': 'opensubtitles',
+                   'language': 'Hebrew', 'filename': 'Candidate',
+                   'download_data': {'id': 1}}
+        link = urllib.parse.quote(json.dumps(payload))
+        job = self._bound_job(
+            key='original', playing='Show.S01E03.HULU',
+            fallback_links=[link], info={})
+        bundle = {'cues': [1], 'cut_signature': 'cut1:' + 'c' * 32}
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.get_current_subtitle = Mock(return_value='original-link')
+        ku.set_current_subtitle = Mock()
+        with patch.object(self.sub, '_job_matches_current', return_value=True), \
+             patch.object(self.sub, '_job_stream_is_current',
+                          return_value=True), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_tournament_candidate_text',
+                          return_value=('text', payload)), \
+             patch.object(self.sub, '_verify_file_bundle', return_value=(
+                 {'status': self.sub.sync_align.STATUS_UNKNOWN,
+                  'diag': 'cannot prove'}, 'track', 200)):
+            applied = self.sub._apply_verified_human_fallback(job)
+        self.assertFalse(applied)
+        ku.set_current_subtitle.assert_not_called()
+
+    def test_autosub_tournament_cannot_overwrite_pick_changed_during_proof(self):
+        payload = {'type': 'engine', 'source': 'opensubtitles',
+                   'language': 'Hebrew', 'filename': 'Candidate',
+                   'download_data': {'id': 1}}
+        link = urllib.parse.quote(json.dumps(payload))
+        job = self._bound_job(
+            key='original', playing='Show.S01E03.HULU',
+            fallback_links=[link], info={})
+        bundle = {'cues': [1], 'cut_signature': 'cut1:' + 'd' * 32}
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.get_current_subtitle = Mock(return_value='original-link')
+        ku.set_current_subtitle = Mock()
+        # Entry + loop ownership checks pass. The check immediately after the
+        # expensive proof observes the user's newer choice and must stop.
+        ownership = [True, True, False]
+        with patch.object(self.sub, '_job_matches_current',
+                          side_effect=ownership), \
+             patch.object(self.sub, '_job_stream_is_current',
+                          return_value=True), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_tournament_candidate_text',
+                          return_value=('text', payload)), \
+             patch.object(self.sub, '_verify_file_bundle', return_value=(
+                 {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                  'diag': 'confirmed'}, 'track', 200)):
+            applied = self.sub._apply_verified_human_fallback(job)
+        self.assertFalse(applied)
+        ku.set_current_subtitle.assert_not_called()
+
+    def test_piecewise_cache_preserves_validation_certificate(self):
+        verdict_path = self.root / 'verdicts.json'
+        verdict = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0},
+                         {'cand_from_ms': 300000.0, 'offset_ms': 1000.0}],
+            'validation_required': True, 'validation_folds': 5,
+            'timing_family_count': 2,
+            'validation_proof': 'matched-oracle-holdouts-v1',
+            'validation_target': 'show.s01e03.hulu',
+            'diag': 'validated piecewise'}
+        with patch.object(self.sub, '_verdict_path',
+                          return_value=str(verdict_path)), \
+             patch.object(self.sub, '_load_verdicts', return_value={}):
+            self.real_store_verdict('sub|cut', verdict)
+        stored = json.loads(verdict_path.read_text(encoding='utf-8'))[
+            'sub|cut']
+        self.assertEqual(stored['validation_folds'], 5)
+        self.assertEqual(stored['timing_family_count'], 2)
+        self.assertEqual(stored['validation_proof'],
+                         'matched-oracle-holdouts-v1')
+
     def test_exact_field_certificate_applies_and_near_maps_abstain(self):
         segments = [
             {'cand_from_ms': None, 'cand_to_ms': 619207.5,
@@ -2261,8 +2436,8 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.assertIsNone(self.sub._matched_oracle_piecewise(
             playing, same_source_only, proposal))
 
-    def test_schema_25_retries_incomplete_release_decisions(self):
-        self.assertEqual(self.sub._VERDICT_VERSION, 25)
+    def test_schema_26_retries_incomplete_release_and_tournament_decisions(self):
+        self.assertEqual(self.sub._VERDICT_VERSION, 26)
         sig = 'cut1:' + '7' * 32
         text = self.subtitle.read_text(encoding='utf-8')
         final_key = self.sub._cache_key(text, 'movie-release', sig)
