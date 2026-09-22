@@ -1,3 +1,7 @@
+0.2.557
+- Continue through a bounded set of human Hebrew alternatives when the first automatic subtitle cannot be verified, and switch only to a candidate proven against the exact playing file.
+- Rank the manual chooser by release evidence and cached exact-cut timing proof, while keeping the currently applied row visible and labelling verified recommendations.
+- Preserve complete multi-region validation certificates in the local verdict cache so a previously proven correction remains safely reusable.
 0.2.556
 - Complete a season-pack playing release with the active Kodi episode before automatic ranking, cache binding and timing proof.
 - Retry every prior timing refusal made against an incomplete Sxx identity, while preserving existing episode identities and refusing season mismatches.

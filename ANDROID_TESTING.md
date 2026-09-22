@@ -2,7 +2,7 @@
 
 קובץ הבדיקה נמצא כאן:
 
-`dist/Kodi-POV-IL-FENtastic-test-0.1.169.zip`
+`dist/Kodi-POV-IL-FENtastic-test-0.1.170.zip`
 
 ## מה לבדוק אחרי התקנה
 
