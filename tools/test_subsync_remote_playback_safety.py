@@ -2120,6 +2120,145 @@ class RemotePlaybackSafety(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'family validation'):
             self.sub.sync_align.apply_verdict(candidate, forged_target)
 
+    def test_matching_oracle_generalizes_piecewise_proof_to_other_titles(self):
+        segments = [
+            {'cand_from_ms': None, 'cand_to_ms': 600000.0,
+             'offset_ms': -700.0},
+            {'cand_from_ms': 600000.0, 'cand_to_ms': 1200000.0,
+             'offset_ms': 900.0},
+            {'cand_from_ms': 1200000.0, 'cand_to_ms': None,
+             'offset_ms': 2600.0},
+        ]
+        proposal = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': segments, 'validation_required': True,
+            'validation_folds': 5, 'timing_family_count': 0,
+            'holdout_score_min': .86, 'holdout_gain_min': .18,
+            'after_score': .94, 'unique': .90,
+            'post_residual_ms': 180.0, 'cand_span_ms': 1800000.0,
+            'diag': 'generic strict proposal'}
+        primary = {
+            'release': 'Other.Show.S02E03.720p.WEB-DL.x264-NTb',
+            'language': 'en', 'payload': {'id': 'primary'}}
+        playing = 'Other.Show.S02E03.1080p.WEB-DL.x265-NTb.mkv'
+        cues = [{'start': 10000 + i * 10000,
+                 'end': 11200 + i * 10000} for i in range(180)]
+        with patch.object(self.sub.sync_align, 'parse_srt',
+                          return_value=cues), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=proposal), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=proposal), \
+             patch.object(self.sub, '_download_oracle') as download:
+            result = self.sub._validated_oracle_piecewise(
+                [primary], playing, 'candidate-text', primary, 'primary-text')
+        self.assertIsNotNone(result)
+        self.assertEqual(result['downloads'], 0)
+        self.assertEqual(result['verdict']['validation_proof'],
+                         'matched-oracle-holdouts-v1')
+        download.assert_not_called()
+
+        candidate = ''.join(
+            '%d\n00:%02d:%02d,000 --> 00:%02d:%02d,800\nline %d\n\n'
+            % (i + 1, (i * 30) // 60, (i * 30) % 60,
+               (i * 30) // 60, (i * 30) % 60, i + 1)
+            for i in range(80))
+        fixed = self.sub.sync_align.apply_verdict(
+            candidate, result['verdict'])
+        self.assertNotEqual(fixed, candidate)
+
+        wrong_title = dict(result['verdict'])
+        wrong_title['validation_primary_oracle'] = (
+            'Unrelated.Show.S02E03.720p.WEB-DL.x264-NTb')
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, wrong_title)
+
+        wrong_episode = dict(result['verdict'])
+        wrong_episode['validation_primary_oracle'] = (
+            'Other.Show.S02E04.720p.WEB-DL.x264-NTb')
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, wrong_episode)
+
+        forged_tier = dict(result['verdict'])
+        forged_tier['validation_primary_tier'] = 'exact'
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, forged_tier)
+
+        weak_folds = dict(result['verdict'])
+        weak_folds['validation_folds'] = 4
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, weak_folds)
+
+        weak_gain = dict(result['verdict'])
+        weak_gain['holdout_gain_min'] = .149
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, weak_gain)
+
+        broken_chain = dict(result['verdict'])
+        broken_chain['segments'] = [dict(item) for item in segments]
+        broken_chain['segments'][1]['cand_from_ms'] += 2.0
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, broken_chain)
+
+        nonmonotonic = dict(result['verdict'])
+        nonmonotonic['segments'] = [dict(item) for item in segments]
+        nonmonotonic['segments'][2]['offset_ms'] = 100.0
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, nonmonotonic)
+
+        descending = dict(result['verdict'])
+        descending['segments'] = [dict(item) for item in segments]
+        descending['segments'][0]['cand_to_ms'] = 1200000.0
+        descending['segments'][1]['cand_from_ms'] = 1200000.0
+        descending['segments'][1]['cand_to_ms'] = 600000.0
+        descending['segments'][2]['cand_from_ms'] = 600000.0
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, descending)
+        self.assertIsNone(self.sub._matched_oracle_piecewise(
+            playing, primary, descending))
+
+        outside_span = dict(result['verdict'])
+        outside_span['segments'] = [dict(item) for item in segments]
+        outside_span['segments'][1]['cand_to_ms'] = 1900000.0
+        outside_span['segments'][2]['cand_from_ms'] = 1900000.0
+        with self.assertRaisesRegex(ValueError, 'family validation'):
+            self.sub.sync_align.apply_verdict(candidate, outside_span)
+        self.assertIsNone(self.sub._matched_oracle_piecewise(
+            playing, primary, outside_span))
+
+        same_source_only = dict(primary)
+        same_source_only['release'] = (
+            'Other.Show.S02E03.1080p.WEB-DL.x265-FLUX')
+        self.assertIsNone(self.sub._matched_oracle_piecewise(
+            playing, same_source_only, proposal))
+
+    def test_schema_24_retries_every_stale_23_unknown(self):
+        self.assertEqual(self.sub._VERDICT_VERSION, 24)
+        sig = 'cut1:' + '7' * 32
+        text = self.subtitle.read_text(encoding='utf-8')
+        final_key = self.sub._cache_key(text, 'movie-release', sig)
+        stale = {'v': 23, 'status': self.sub.sync_align.STATUS_UNKNOWN,
+                 'diag': 'release 653 abstained'}
+        with patch.object(self.sub, '_probe_reference_bundle', return_value={
+                'cut_signature': sig, 'cues': [], 'track_cues': []}), \
+             patch.object(self.sub, '_load_verdicts',
+                          return_value={final_key: stale}), \
+             patch.object(self.sub, '_community_verdict', return_value=None), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(None, 'NONE', 0)), \
+             patch.object(self.sub, '_oracle_candidates',
+                          return_value=[]) as search, \
+             patch.object(self.sub, '_audio_probe_reference',
+                          return_value=None):
+            _out, verdict = self.sub._deep_verify(
+                {}, str(self.subtitle), text, 'manual-pick',
+                'movie-release', 'legacy-key')
+        self.assertEqual(verdict['status'], self.sub._STATUS_NO_ORACLE)
+        search.assert_called_once()
+
     def test_disc_piecewise_accepts_three_release_group_same_master_quorum(self):
         cues = [{'start': 10000 + i * 5000,
                  'end': 11200 + i * 5000} for i in range(420)]
