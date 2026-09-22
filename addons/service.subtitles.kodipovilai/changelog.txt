@@ -1,3 +1,5 @@
+0.2.559
+- Show the first automatic subtitle's actual timing state in the playback overlay, so an unverified candidate is not called ready while background verification may still replace it.
 0.2.558
 - Check an already aligned subtitle against the playing file with a cheaper identity-clock path, while retaining full drift/edit verification whenever it cannot be confirmed.
 - Sample alternate human subtitles from different release timing families before reusing similar rows, and ignore malformed provider metadata without losing all alternatives.
