@@ -120,7 +120,11 @@ _MAX_VERDICTS = 400
 # v25: enrich POV season-pack names with the active episode metadata before
 # ranking and proof. v24 decisions made against incomplete Sxx identities must
 # be retried against the real SxxEyy cut.
-_VERDICT_VERSION = 25
+# v26: the automatic first-play path can continue through a bounded set of
+# already-discovered Hebrew alternatives after the first candidate cannot be
+# verified.  Recompute old UNKNOWNs so they do not stop that tournament before
+# a later candidate is tested against the exact playing cut.
+_VERDICT_VERSION = 26
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -277,13 +281,20 @@ def _store_verdict(key, verdict):
         return
     try:
         data = _load_verdicts()
-        data[key] = {'ts': time.time(), 'v': _VERDICT_VERSION,
-                     'status': verdict.get('status'),
-                     'scale': verdict.get('scale', 1.0),
-                     'offset_ms': verdict.get('offset_ms', 0.0),
-                     'mode': verdict.get('mode', 'global'),
-                     'segments': verdict.get('segments') or [],
-                     'diag': verdict.get('diag', '')}
+        # Piecewise verdicts carry their validation certificate.  Dropping it
+        # made apply_verdict correctly refuse a cached map on the next play.
+        # Verdict dictionaries contain only small JSON-safe scalar/list data;
+        # preserve that proof instead of reducing every record to a global
+        # offset-shaped subset.
+        entry = dict(verdict or {})
+        entry.update({'ts': time.time(), 'v': _VERDICT_VERSION,
+                      'status': verdict.get('status'),
+                      'scale': verdict.get('scale', 1.0),
+                      'offset_ms': verdict.get('offset_ms', 0.0),
+                      'mode': verdict.get('mode', 'global'),
+                      'segments': verdict.get('segments') or [],
+                      'diag': verdict.get('diag', '')})
+        data[key] = entry
         if len(data) > _MAX_VERDICTS:
             data = dict(sorted(data.items(),
                                key=lambda kv: kv[1].get('ts', 0),
@@ -1097,6 +1108,7 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
             return rows
         human_indexes = []
         checked = []
+        cut_signature = (bundle.get('cut_signature') or '').strip().lower()
         for index, candidate in enumerate(rows):
             text, payload = _ready_candidate_text(info, candidate)
             listed_lang = (candidate.get('language') or '').strip().lower()
@@ -1106,17 +1118,39 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
             human_indexes.append(index)
             if text and len(checked) < max(1, int(max_candidates)):
                 verdict, label, count = _verify_file_bundle(bundle, text)
+                verdict = verdict or {}
+                status = verdict.get('status')
+                # This comparison uses the cached cue profile of the exact
+                # playing object.  Keep the proof under that cut identity so a
+                # later click can apply a proven correction immediately instead
+                # of repeating the same analysis in the service worker.
+                if (status in (sync_align.STATUS_CONFIRMED,
+                               sync_align.STATUS_FIXABLE)
+                        and re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature)):
+                    exact_key = _cache_key(text, playing, cut_signature)
+                    _store_verdict(exact_key, verdict)
+                    candidate['_subsync_state'] = (
+                        'confirmed' if status == sync_align.STATUS_CONFIRMED
+                        else 'fixable')
+                    candidate['_subsync_label'] = (
+                        'תזמון אומת לקובץ זה' if
+                        status == sync_align.STATUS_CONFIRMED else
+                        'יסונכרן אוטומטית')
                 checked.append({'index': index, 'candidate': candidate,
                                 'payload': payload, 'verdict': verdict or {},
                                 'label': label, 'count': count})
-        if len(checked) < 2 or not human_indexes:
+        if not checked or not human_indexes:
             return rows
-        confirmed = [x for x in checked
-                     if x['verdict'].get('status')
-                     == sync_align.STATUS_CONFIRMED]
-        if not confirmed:
+        accepted = [x for x in checked
+                    if x['verdict'].get('status') in (
+                        sync_align.STATUS_CONFIRMED,
+                        sync_align.STATUS_FIXABLE)]
+        if not accepted:
             return rows
-        chosen = max(confirmed, key=lambda x: (
+        chosen = max(accepted, key=lambda x: (
+            1 if x['verdict'].get('status')
+            == sync_align.STATUS_CONFIRMED else 0,
+            float(x['verdict'].get('after_score') or 0.0),
             float(x['verdict'].get('overlap') or 0.0),
             float(x['verdict'].get('vote') or 0.0), x['count']))
         first_index = human_indexes[0]
@@ -1132,9 +1166,14 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
             _pct, tier, _diag = release_match.score(playing, first_release)
             if tier in release_match.AUTO_OK_TIERS:
                 return rows
-        elif (first_checked['verdict'].get('status')
-              == sync_align.STATUS_CONFIRMED):
-            return rows
+        else:
+            first_status = first_checked['verdict'].get('status')
+            chosen_status = chosen['verdict'].get('status')
+            if first_status == sync_align.STATUS_CONFIRMED:
+                return rows
+            if (first_status == sync_align.STATUS_FIXABLE
+                    and chosen_status != sync_align.STATUS_CONFIRMED):
+                return rows
         picked = rows[chosen['index']]
         # Preserve every non-human slot, including an interleaved AI fallback.
         rows[first_index], rows[chosen['index']] = (
@@ -1145,6 +1184,32 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
         return rows
     except Exception as e:
         _log('autosub timing-rank skipped: %r' % e, level='DEBUG')
+        return candidates
+
+
+def rank_picker_candidates(info, candidates, max_candidates=4):
+    """Put the strongest ready Hebrew choices first in the manual picker.
+
+    Provider search order is not timing evidence.  Reuse the exact same
+    conservative release and cached-media proof used by autosub, while keeping
+    an already-applied row at the top so reopening the chooser never hides what
+    is currently on screen.  This performs no provider or media request: on a
+    first visit it uses release metadata; after the bounded media profile has
+    been learned it can check a few subtitle files that are already cached.
+    """
+    try:
+        rows = list(candidates or [])
+        current = [row for row in rows if
+                   (row.get('filename') or '').startswith('» נוכחית')]
+        if not current:
+            return rank_ready_candidates(
+                info, rows, max_candidates=max_candidates)
+        pinned = current[0]
+        rest = [row for row in rows if row is not pinned]
+        return [pinned] + rank_ready_candidates(
+            info, rest, max_candidates=max_candidates)
+    except Exception as e:
+        _log('picker timing-rank skipped: %r' % e, level='DEBUG')
         return candidates
 
 
@@ -1185,7 +1250,8 @@ def proven_pool_ai_fallback(info, candidates):
 
 # ---- main entry -------------------------------------------------------------
 
-def process(info, path, delivered_release, selection=None, fallback_link=''):
+def process(info, path, delivered_release, selection=None, fallback_link='',
+            fallback_links=None):
     """Verify (and when confidently possible, FIX) the timing of the Hebrew
     sub at `path` against the playing release. Returns (final_path, verdict)
     where verdict is a dict with at least {'status'} plus 'applied': True when
@@ -1292,11 +1358,13 @@ def process(info, path, delivered_release, selection=None, fallback_link=''):
                             if status == sync_align.STATUS_CONFIRMED
                             else 'unverified'),
                     source='cache')
-                if (status == sync_align.STATUS_UNKNOWN and fallback_link
+                if (status == sync_align.STATUS_UNKNOWN
+                        and (fallback_link or fallback_links)
                         and _mark_pending(key, selection=selection)):
                     _enqueue_deep(
                         info, path, rel, playing, key, selection=selection,
-                        fallback_link=fallback_link)
+                        fallback_link=fallback_link,
+                        fallback_links=fallback_links)
                 return path, {'status': status, 'cached': True,
                               'diag': cached.get('diag', '')}
 
@@ -1367,7 +1435,8 @@ def process(info, path, delivered_release, selection=None, fallback_link=''):
                          cut_signature=cut_signature, selection=selection)
         if (delivery_staged and _enqueue_deep(
                 info, path, rel, playing, key, selection=selection,
-                fallback_link=fallback_link)):
+                fallback_link=fallback_link,
+                fallback_links=fallback_links)):
             return path, {'status': 'PENDING'}
         # Remove only this selection's half-created coordination records. A
         # newer pick has another token and cannot be disturbed here.
@@ -2985,7 +3054,7 @@ def _clear_job_pending(job):
 
 
 def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
-                  selection=None, fallback_link=''):
+                  selection=None, fallback_link='', fallback_links=None):
     """Drop a deep-verify job for the service drainer. True on success."""
     d = _queue_dir()
     if not d:
@@ -3025,6 +3094,11 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
             'stream_url': _current_stream_transport(),
             # Autosub-only escape hatch, revalidated by the worker before use.
             'fallback_link': fallback_link or '',
+            # Other human Hebrew rows discovered by the same autosub search.
+            # The worker tries at most a small bounded prefix and stops at the
+            # first candidate proven against this exact media cue profile.
+            'fallback_links': [str(link) for link in
+                               list(fallback_links or [])[:6] if link],
             'info': {k: info.get(k) for k in _INFO_KEYS
                      if isinstance(info.get(k), (str, int, float, bool))},
         }
@@ -3118,6 +3192,167 @@ def _apply_proven_pool_fallback(job):
         except Exception:
             pass
         return False
+
+
+def _tournament_candidate_text(info, link):
+    """Obtain one already-discovered candidate for timing comparison.
+
+    Prefer disk/pool memory.  A cache miss may perform the candidate's normal
+    single subtitle download, but never repeats the provider search and never
+    opens the media URL; the exact media cue profile was built once by the
+    current deep job.
+    """
+    candidate = {'link': link, 'language': 'he'}
+    text, payload = _ready_candidate_text(info, candidate)
+    if text:
+        return text, payload
+    payload = _decode_link(link) or {}
+    if not _is_human_hebrew_candidate(payload):
+        return '', payload
+    try:
+        kind = payload.get('type')
+        path = ''
+        if kind == 'pool':
+            from resources.lib import translate
+            text, _sid = translate._pool_source_text(
+                info, payload.get('hash'), cache_only=False)
+            return text or '', payload
+        if kind == 'engine' and not payload.get('embedded'):
+            from resources.lib import subs_engine_bridge as bridge
+            path = bridge.download(payload, for_delivery=False) or ''
+        elif kind == 'passthrough':
+            path = payload.get('path') or ''
+        if path and os.path.isfile(path):
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                return f.read(), payload
+    except Exception as e:
+        _log('autosub tournament candidate unavailable: %r' % e,
+             level='DEBUG')
+    return '', payload
+
+
+def _apply_verified_human_fallback(job):
+    """Find and apply the first alternate human row proven for this cut.
+
+    This is the first-play continuation path: the initially displayed row may
+    be the best release-name guess because no media profile existed yet.  Once
+    its deep check has built that profile and abstained, test a bounded set of
+    rows returned by the same search.  Only CONFIRMED/FIXABLE evidence may
+    replace the visible subtitle.
+    """
+    links = [str(link) for link in (job.get('fallback_links') or []) if link]
+    if (not links or not _job_matches_current(job)
+            or not _job_stream_is_current(job)):
+        return False
+    info = dict(job.get('info') or {})
+    info['_subsync_stream_url'] = (job.get('stream_url') or '').strip()
+    bundle = _cached_reference_bundle(info)
+    cut_signature = (bundle.get('cut_signature') or '').strip().lower()
+    if (not bundle.get('cues')
+            or not re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature)):
+        return False
+    playing = job.get('playing') or ''
+    old_link = kodi_utils.get_current_subtitle() or ''
+    attempted = 0
+    for link in links[:4]:
+        if not _job_matches_current(job):
+            return False
+        text, payload = _tournament_candidate_text(info, link)
+        if not text.strip() or not _is_human_hebrew_candidate(payload):
+            continue
+        attempted += 1
+        verdict, label, count = _verify_file_bundle(bundle, text)
+        verdict = verdict or {}
+        status = verdict.get('status')
+        rel = (payload.get('filename') or payload.get('release') or '?')
+        _log('autosub tournament: %r vs %s (%d cues): %s' % (
+            rel, label, count, verdict.get('diag', 'no verdict')))
+        if status not in (sync_align.STATUS_CONFIRMED,
+                          sync_align.STATUS_FIXABLE):
+            continue
+        # Preserve the complete proof (including piecewise certificates) for
+        # this canonical subtitle/cut pair. Delivery-side RTL may produce a
+        # different text hash, in which case its own fast background check
+        # repeats against the already-cached media profile.
+        _store_verdict(_cache_key(text, playing, cut_signature), verdict)
+        fallback_selection = {}
+        try:
+            # Candidate retrieval/analysis can take seconds.  Re-check the old
+            # ownership immediately before changing the selected-row token, so
+            # a user choice made during that work always wins.
+            if not _job_matches_current(job):
+                return False
+            kodi_utils.set_current_subtitle(link, renew=True)
+            fallback_selection = kodi_utils.current_subtitle_selection(
+                expected_link=link) or {}
+            if (fallback_selection.get('stream_hash')
+                    != (job.get('stream_hash') or '')
+                    or not _selection_matches(fallback_selection)
+                    or not _job_stream_is_current(job)):
+                raise RuntimeError('tournament selection/stream changed')
+            from resources.lib import translate
+            path = translate.resolve(
+                link, info, selection=fallback_selection)
+            if not path or not _selection_matches(fallback_selection):
+                raise RuntimeError('verified candidate resolve failed')
+
+            # RTL cleanup changes glyph order/punctuation but never timings,
+            # so bind the same timing proof to the exact delivery bytes.  For
+            # a FIXABLE row apply the proven map now, rather than briefly
+            # showing the uncorrected alternative and asking a nested worker to
+            # rediscover it.  Cancel that nested pending marker; its queue file
+            # is harmless and will fail its ownership check when drained.
+            try:
+                with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                    delivery_text = f.read()
+            except Exception:
+                delivery_text = ''
+            if not delivery_text.strip():
+                raise RuntimeError('verified candidate delivery is unreadable')
+            _store_verdict(
+                _cache_key(delivery_text, playing, cut_signature), verdict)
+            delivery_path = path
+            if status == sync_align.STATUS_FIXABLE:
+                fixed_text = sync_align.apply_verdict(delivery_text, verdict)
+                delivery_path = _write_fixed(path, fixed_text)
+                if not delivery_path:
+                    raise RuntimeError('verified correction could not be written')
+                cancel_pending()
+                if not kodi_utils.stage_subtitle_sync_fix(
+                        delivery_path, selection=fallback_selection,
+                        source='tournament', notice=(
+                            'הכתובית סונכרנה אוטומטית')):
+                    raise RuntimeError('verified correction could not be staged')
+            else:
+                if not kodi_utils.stage_subtitle_delivery(
+                        delivery_path, selection=fallback_selection,
+                        status='confirmed', source='tournament'):
+                    raise RuntimeError('verified delivery could not be staged')
+            if not kodi_utils.apply_subtitle_file(
+                    delivery_path, selection=fallback_selection):
+                raise RuntimeError('verified candidate delivery failed')
+            _log('autosub tournament: applied verified human candidate %r'
+                 % rel)
+            try:
+                kodi_utils.notify(
+                    'נבחרה אוטומטית כתובית שתזמונה אומת', time_ms=4500)
+            except Exception:
+                pass
+            return True
+        except Exception as e:
+            _log('autosub tournament apply skipped: %r' % e,
+                 level='WARNING')
+            try:
+                if (old_link and fallback_selection
+                        and kodi_utils.get_current_subtitle() == link
+                        and _selection_matches(fallback_selection)):
+                    kodi_utils.set_current_subtitle(old_link, renew=True)
+            except Exception:
+                pass
+            return False
+    if attempted:
+        _log('autosub tournament: no alternate passed exact-cut proof')
+    return False
 
 
 def _announce(verdict, fresh, offset_hint=None, selection=None):
@@ -3366,6 +3601,8 @@ def run_deep_job(job):
                     _publish_selection_status(
                         'confirmed', 'cache', selection=job_selection)
                 else:
+                    if _apply_verified_human_fallback(job):
+                        return
                     if _apply_proven_pool_fallback(job):
                         return
                     _publish_selection_status(
@@ -3409,8 +3646,9 @@ def run_deep_job(job):
         if current and not swapped:
             if (verdict.get('status') in (
                     sync_align.STATUS_UNKNOWN, _STATUS_NO_ORACLE)
-                    and _apply_proven_pool_fallback(job)):
-                return
+                    and (_apply_verified_human_fallback(job)
+                         or _apply_proven_pool_fallback(job))):
+                    return
             # The original subtitle is still on screen.  Refresh only its exact
             # cut identity (not an unapplied proposed shift), so any later manual
             # delay learns safely even after an UNKNOWN/CONFIRMED result.
