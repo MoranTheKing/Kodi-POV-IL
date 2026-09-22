@@ -1,3 +1,7 @@
+0.2.556
+- Complete a season-pack playing release with the active Kodi episode before automatic ranking, cache binding and timing proof.
+- Retry every prior timing refusal made against an incomplete Sxx identity, while preserving existing episode identities and refusing season mismatches.
+- Restore the clearly closer first human subtitle and the proven multi-region correction when POV exposes a season-pack source name.
 0.2.555
 - Re-run timing verification for every subtitle after the synchronization proof schema changes, instead of accepting stale UNKNOWN decisions from an older release.
 - Generalize strict multi-region correction to other movies and episodes when a matching exact/same-group oracle passes five independent holdouts and strong structural gates.

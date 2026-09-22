@@ -2006,14 +2006,35 @@ class RemotePlaybackSafety(unittest.TestCase):
         better = human('The.Flash.2014.S01E06.HDTV.SubsIL')
         close = human('The.Flash.2014.S01E06.HDTV.XviD-FUM')
         rows = [weak, better, close]
-        with patch.object(
-                self.sub, 'playing_release', return_value=(
-                    'The.Flash.2014.S01E06.1080p.BluRay.x265-RARBG.mp4')), \
-             patch.object(self.sub, '_cached_reference_bundle',
+        season_pack_info = {
+            'picked_release': (
+                'The.Flash.2014.S01.1080p.BluRay.x265-RARBG.mp4'),
+            'season': '1', 'episode': '6', 'is_episode': True}
+        self.assertEqual(
+            self.sub.playing_release(season_pack_info),
+            'The.Flash.2014.S01E06.1080p.BluRay.x265-RARBG.mp4')
+        with patch.object(self.sub, '_cached_reference_bundle',
                           return_value={}):
-            ranked = self.sub.rank_ready_candidates({}, rows)
+            ranked = self.sub.rank_ready_candidates(season_pack_info, rows)
         self.assertIs(ranked[0], better)
         self.assertEqual(set(map(id, ranked)), set(map(id, rows)))
+
+        existing_episode = dict(season_pack_info)
+        existing_episode['picked_release'] = (
+            'The.Flash.2014.S01E07.1080p.BluRay.x265-RARBG.mp4')
+        self.assertIn('S01E07', self.sub.playing_release(existing_episode))
+        wrong_season = dict(season_pack_info)
+        wrong_season['picked_release'] = (
+            'The.Flash.2014.S02.1080p.BluRay.x265-RARBG.mp4')
+        self.assertIn('.S02.', self.sub.playing_release(wrong_season))
+        movie_s01 = {
+            'picked_release': 'Movie.S01.2024.1080p.WEB-DL-GRP',
+            'season': '1', 'episode': '6', 'is_episode': False,
+            'media_type': 'movie'}
+        self.assertEqual(self.sub.playing_release(movie_s01),
+                         movie_s01['picked_release'])
+        contradictory = dict(season_pack_info, media_type='movie')
+        self.assertIn('.S01.', self.sub.playing_release(contradictory))
 
         ai = {'language': 'he', 'filename': 'AI pool',
               'link': urllib.parse.quote(json.dumps(
@@ -2065,7 +2086,12 @@ class RemotePlaybackSafety(unittest.TestCase):
             'post_residual_ms': 107.0, 'diag': 'field proposal'}
         primary = {
             'release': 'The.Flash.2014.S01E06.720p.BluRay.x264-DEMAND'}
-        playing = 'The.Flash.2014.S01E06.1080p.BluRay.x265-RARBG.mp4'
+        playing = self.sub.playing_release({
+            'picked_release': (
+                'The.Flash.2014.S01.1080p.BluRay.x265-RARBG.mp4'),
+            'season': '1', 'episode': '6', 'is_episode': True})
+        self.assertEqual(
+            playing, 'The.Flash.2014.S01E06.1080p.BluRay.x265-RARBG.mp4')
         verdict = self.sub._field_certified_piecewise(
             playing, primary, validated)
         self.assertIsNotNone(verdict)
@@ -2235,13 +2261,13 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.assertIsNone(self.sub._matched_oracle_piecewise(
             playing, same_source_only, proposal))
 
-    def test_schema_24_retries_every_stale_23_unknown(self):
-        self.assertEqual(self.sub._VERDICT_VERSION, 24)
+    def test_schema_25_retries_incomplete_release_decisions(self):
+        self.assertEqual(self.sub._VERDICT_VERSION, 25)
         sig = 'cut1:' + '7' * 32
         text = self.subtitle.read_text(encoding='utf-8')
         final_key = self.sub._cache_key(text, 'movie-release', sig)
-        stale = {'v': 23, 'status': self.sub.sync_align.STATUS_UNKNOWN,
-                 'diag': 'release 653 abstained'}
+        stale = {'v': 24, 'status': self.sub.sync_align.STATUS_UNKNOWN,
+                 'diag': 'release 655 used incomplete S01 identity'}
         with patch.object(self.sub, '_probe_reference_bundle', return_value={
                 'cut_signature': sig, 'cues': [], 'track_cues': []}), \
              patch.object(self.sub, '_load_verdicts',
