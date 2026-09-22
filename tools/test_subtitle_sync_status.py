@@ -96,7 +96,7 @@ class SubtitleSyncStatus(unittest.TestCase):
         self.assertNotIn(old_prop, self.props)
         self.assertEqual(self.ku.get_current_subtitle(), 'candidate-A')
 
-    def test_custom_chooser_renders_result_only_on_current_row(self):
+    def test_custom_chooser_renders_proof_on_current_and_recommended_rows(self):
         spec = importlib.util.spec_from_file_location(
             'subs_chooser_status_test', LIB / 'subs_chooser.py')
         chooser = importlib.util.module_from_spec(spec)
@@ -114,7 +114,8 @@ class SubtitleSyncStatus(unittest.TestCase):
 
         other = dict(current, filename='כתובית אחרת — Other.Release')
         _head, rel, *_rest = chooser._classify(other, {}, None)
-        self.assertNotIn('כבר מסונכרנת', rel)
+        self.assertIn('כבר מסונכרנת', rel)
+        self.assertIn('Other.Release', rel)
 
     def test_refreshed_pool_link_keeps_initial_auto_selection_current(self):
         import urllib.parse

@@ -536,7 +536,7 @@ def _rtl_delivery_copy(path, legacy_engine='auto'):
 
 
 def _sync_hebrew_delivery(info, path, source_release='', embedded_timing=False,
-                          selection=None, fallback_link=''):
+                          selection=None, fallback_link='', fallback_links=None):
     """Run any file-based Hebrew subtitle through the ordinary timing gate.
 
     Local, engine, pool and AI files can all carry the timing of a different
@@ -573,6 +573,8 @@ def _sync_hebrew_delivery(info, path, source_release='', embedded_timing=False,
         kwargs = {'selection': selection}
         if fallback_link:
             kwargs['fallback_link'] = fallback_link
+        if fallback_links:
+            kwargs['fallback_links'] = list(fallback_links)
         delivered, _verdict = subsync.process(
             info, path, (source_release or '').strip(), **kwargs)
         return delivered or path
@@ -2549,7 +2551,8 @@ def _build_prev_context_by_idx(chunks, prev_context_lines):
 
 
 def resolve(link, info, progress_cb=None, progressive_cb=None,
-            extract_progress_cb=None, selection=None, fallback_link=''):
+            extract_progress_cb=None, selection=None, fallback_link='',
+            fallback_links=None):
     """Return a filesystem path to the SRT for the chosen link.
 
     For passthrough, hand back the existing file path. For ai
@@ -2665,7 +2668,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             return _sync_hebrew_delivery(
                 info, _rtl_delivery_copy(path),
                 source_release=payload.get('release') or '',
-                selection=_timing_selection, fallback_link=fallback_link)
+                selection=_timing_selection, fallback_link=fallback_link,
+                fallback_links=fallback_links)
         return None
 
     if kind == 'pool':
@@ -2698,7 +2702,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # against a release-matched oracle. Fail-open.
             out = _sync_hebrew_delivery(
                 info, out, source_release=payload.get('release') or '',
-                selection=_timing_selection, fallback_link=fallback_link)
+                selection=_timing_selection, fallback_link=fallback_link,
+                fallback_links=fallback_links)
             _status('כתוביות מהמאגר הקהילתי', time_ms=4000)
             return out
         except OSError:
@@ -2865,7 +2870,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 path = _sync_hebrew_delivery(
                     info, path,
                     source_release=payload.get('filename') or '',
-                    selection=_timing_selection, fallback_link=fallback_link)
+                    selection=_timing_selection, fallback_link=fallback_link,
+                    fallback_links=fallback_links)
             _status('כתוביות עברית מ-{0}'.format(
                 payload.get('source') or 'מקור'), time_ms=4000)
             return path
@@ -3018,7 +3024,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         return _sync_hebrew_delivery(
             info, path, source_release=_timing_release,
             embedded_timing=_embedded_timing,
-            selection=_timing_selection, fallback_link=fallback_link)
+            selection=_timing_selection, fallback_link=fallback_link,
+            fallback_links=fallback_links)
 
     # Arabic-gender-reference (opt-in, default OFF). When ON we operate in a
     # separate 'ar' quality tier: cache + pool live under their own key, so an

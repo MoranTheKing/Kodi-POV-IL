@@ -365,6 +365,23 @@ def autosub_on_play():
         # skip the rest from that SAME source (they fail identically) and move
         # straight on to the next source -- OpenSubtitles / pool / Wizdom.
         he_list = [c for c in cands if c.get('language') == 'he']
+        # Keep a bounded set of human alternatives from THIS already-completed
+        # search.  If the first metadata-ranked row later fails exact-cut
+        # verification, the service worker can test these against the one
+        # media profile it just learned and self-heal to the first proven row.
+        # No second provider search is needed.
+        _human_alternatives = []
+        try:
+            for _candidate in he_list:
+                _link = _candidate.get('link') or ''
+                _payload = translate._decode_link(_link) or {}
+                if (_link and subsync._is_human_hebrew_candidate(_payload)
+                        and not _payload.get('embedded')):
+                    _human_alternatives.append(_link)
+                if len(_human_alternatives) >= 6:
+                    break
+        except Exception:
+            _human_alternatives = []
         applied = False
         chosen_link = None
         chosen_name = ''
@@ -410,9 +427,16 @@ def autosub_on_play():
                 if _fallback:
                     path = translate.resolve(
                         link2, info, selection=selection,
-                        fallback_link=_fallback)
+                        fallback_link=_fallback,
+                        fallback_links=[
+                            link for link in _human_alternatives
+                            if link != link2])
                 else:
-                    path = translate.resolve(link2, info, selection=selection)
+                    path = translate.resolve(
+                        link2, info, selection=selection,
+                        fallback_links=[
+                            link for link in _human_alternatives
+                            if link != link2])
             except Exception:
                 path = None
             if not _autosub_owns_player():
