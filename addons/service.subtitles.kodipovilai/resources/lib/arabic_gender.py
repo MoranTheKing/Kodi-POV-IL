@@ -108,6 +108,7 @@ _SCALES = sorted({1.0} | {round(p / q, 6) for p in _FPS for q in _FPS
                           if 0.9 <= p / q <= 1.11})
 _TOL = 500
 _TIGHT = 250
+_MAX_OVERLAP_SCAN = 256
 _MAXOFF = 600000
 _SAMPLE = 500
 
@@ -207,9 +208,15 @@ def _arabic_for_blocks(src_blocks, ar_cues, a, b, segments=None):
             applied_b = float(segments[si].get('offset_ms') or 0.0)
         es, ee = a * s + applied_b, a * e + applied_b
         lo = bisect.bisect_right(latest_end, es)
+        hi = bisect.bisect_left(ar_starts, ee)
+        # A corrupt hours-long reference cue can keep the prefix maximum high
+        # across an entire episode. Do not turn every source line into a long
+        # scan or trust that malformed cue as gender evidence.
+        if hi - lo > _MAX_OVERLAP_SCAN:
+            continue
         cand = []
         k = lo
-        while k < len(ar_cues) and ar_starts[k] < ee:
+        while k < hi:
             ov = min(ee, ar_ends[k]) - max(es, ar_starts[k])
             if ov > 0:
                 cand.append((ov, k))

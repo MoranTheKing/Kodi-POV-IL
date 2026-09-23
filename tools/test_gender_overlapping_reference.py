@@ -61,4 +61,12 @@ aligned, diagnostic = gender.align_one(
     '\n\n'.join(reference_blocks))
 assert aligned is not None, diagnostic
 assert aligned[6] == 'את מוכנה.', (aligned[6], diagnostic)
+
+# A broken episode-long cue must not make each later line scan hundreds of
+# reference entries or supply an arbitrary gender hint.
+broken = [{'start': 0, 'end': 10_000_000, 'text': 'Malformed long cue'}]
+broken.extend({'start': n * 1000, 'end': n * 1000 + 300,
+               'text': 'Reference %d' % n} for n in range(1, 1000))
+far = block(31, 900_000, 900_500, 'You are ready.')
+assert gender._arabic_for_blocks([far], broken, 1.0, 0.0) == {}
 print('PASS overlapping gender-reference cues remain visible')
