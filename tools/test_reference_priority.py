@@ -8,7 +8,7 @@ class Priority(unittest.TestCase):
   node=next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='_call_gemini')
   index=next(i for i,n in enumerate(node.body) if isinstance(n,ast.Assign) and any(isinstance(x,ast.Name) and x.id=='overload_attempts' for x in n.targets))
   node.body=node.body[:index]+[ast.Return(ast.Name('full_prompt',ast.Load()))]
-  scope=dict(prompt=prompt,prev_context_by_idx={},_ref_stack=[(lang,{1:'את מוכנה.'})] if lang else [],prompt_template=prompt.build('en','',0,[]),_AR_EXPLICIT_MARKERS=[])
+  scope=dict(prompt=prompt,prev_context_by_idx={},_ref_stack=[(lang,{1:'את מוכנה.'})] if lang else [],prompt_template=prompt.build('en','',0,[]),_AR_EXPLICIT_MARKERS=[],whole_subtitle_request=False,chunks=[],prev_context_lines=5,_source_context_for_subchunk=lambda *args: [])
   exec(compile(ast.fix_missing_locations(ast.Module(body=[node],type_ignores=[])),'actual-prompt-assembly','exec'),scope)
   return scope['_call_gemini'](0,['1\n00:00:01,000 --> 00:00:02,000\nYou are ready.'])
  def test_actual_hebrew_path_uses_source_priority(self):
