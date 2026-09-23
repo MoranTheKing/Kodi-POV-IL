@@ -199,8 +199,8 @@ def build_prev_context_block(prev_context_lines):
     if not body.strip():
         return ''
     return (
-        'PREVIOUS DIALOGUE CONTEXT (for continuity only -- ALREADY '
-        'translated in a previous chunk; DO NOT include these in '
+        'PREVIOUS SOURCE DIALOGUE (for continuity only; these lines are '
+        'not the translated output; DO NOT include them in '
         'your output, just use them to remember who was just '
         'speaking and which gender forms apply):\n'
         + body + '\n\n'
