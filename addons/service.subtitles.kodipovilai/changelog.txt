@@ -1,3 +1,5 @@
+0.2.560
+- Check already-found Hebrew subtitle alternatives against the playing file before starting a slower foreign-subtitle oracle search, and switch only when the alternative is proven.
 0.2.559
 - Show the first automatic subtitle's actual timing state in the playback overlay, so an unverified candidate is not called ready while background verification may still replace it.
 0.2.558
