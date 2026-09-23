@@ -149,15 +149,19 @@ def _estimate_map(en, ar):
 def _overlap_rate(en, ar, a, b):
     import bisect
     ar_starts = [c['start'] for c in ar]
-    ar_ends = [c['end'] for c in ar]
+    # Starts are sorted, but ends need not be: a long two-line cue can overlap
+    # a shorter cue that starts later. Bisecting raw ends silently skips it.
+    latest_end = []
+    for cue in ar:
+        latest_end.append(max(cue['end'], latest_end[-1] if latest_end else 0))
     ok = 0
     for c in en:
         es, ee = a * c['start'] + b, a * c['end'] + b
-        lo = bisect.bisect_left(ar_ends, es)
+        lo = bisect.bisect_right(latest_end, es)
         k = lo
         hit = False
         while k < len(ar) and ar_starts[k] < ee:
-            if min(ee, ar_ends[k]) - max(es, ar_starts[k]) > 0:
+            if min(ee, ar[k]['end']) - max(es, ar_starts[k]) > 0:
                 hit = True
                 break
             k += 1
@@ -176,6 +180,9 @@ def _arabic_for_blocks(src_blocks, ar_cues, a, b, segments=None):
     ar_centers = [(c['start'] + c['end']) / 2.0 for c in ar_cues]
     ar_starts = [c['start'] for c in ar_cues]
     ar_ends = [c['end'] for c in ar_cues]
+    latest_end = []
+    for end in ar_ends:
+        latest_end.append(max(end, latest_end[-1] if latest_end else 0))
     out = {}
     segments = list(segments or [])
     ref_boundaries = [float(seg.get('ref_from_ms')) for seg in segments[1:]
@@ -199,7 +206,7 @@ def _arabic_for_blocks(src_blocks, ar_cues, a, b, segments=None):
             si = min(si, len(segments) - 1)
             applied_b = float(segments[si].get('offset_ms') or 0.0)
         es, ee = a * s + applied_b, a * e + applied_b
-        lo = bisect.bisect_left(ar_ends, es)
+        lo = bisect.bisect_right(latest_end, es)
         cand = []
         k = lo
         while k < len(ar_cues) and ar_starts[k] < ee:
