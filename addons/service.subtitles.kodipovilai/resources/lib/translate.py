@@ -2550,6 +2550,31 @@ def _build_prev_context_by_idx(chunks, prev_context_lines):
     return context
 
 
+def _source_context_for_subchunk(chunks, idx, ch, prev_context_lines):
+    """Immediate source-cue tail before a worker or recursively split child.
+
+    The parallel workers still depend only on source text. A split child must
+    use its own starting position, rather than inherit the parent's original
+    cross-chunk window. Count cues before filtering blank dialogue so a blank
+    cue cannot silently widen the window into an older scene.
+    """
+    if prev_context_lines <= 0 or not ch or not (1 <= idx <= len(chunks)):
+        return []
+    parent = chunks[idx - 1]
+    try:
+        start = parent.index(ch[0])
+    except ValueError:
+        return []
+    # A top-up can send scattered missing cues in one request. In that case
+    # the first cue's neighbors are not valid context for the later cues.
+    if parent[start:start + len(ch)] != ch:
+        return []
+    prior = (chunks[idx - 2][-prev_context_lines:] if idx > 1 else [])
+    prior = (prior + parent[:start])[-prev_context_lines:]
+    return [text for block in prior
+            for text in [srt.block_text_only(block)] if text]
+
+
 def resolve(link, info, progress_cb=None, progressive_cb=None,
             extract_progress_cb=None, selection=None, fallback_link='',
             fallback_links=None):
@@ -4163,23 +4188,19 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             _count('src', len(ch))
             return '\n\n'.join(ch)
 
-    # Cross-chunk continuity. For chunk N, give the model the last
-    # PREV_CONTEXT_LINES dialogue lines from chunk N-1's SOURCE so
-    # the model has the same conversational thread it would have
-    # had if everything ran in one giant chunk. Computed once
-    # up-front (deterministic per index) so parallel chunk
-    # dispatch still works -- no inter-chunk dependency.
+    # Cross-chunk continuity uses only known source cues, so workers remain
+    # independent. The lookup also handles a retry child that starts partway
+    # through its original chunk; it must see the cues immediately before its
+    # own boundary, not the parent's stale predecessor window.
     prev_context_lines = max(0, kodi_utils.get_int(
         'prev_context_lines', 5))
-    prev_context_by_idx = {}
-    if not whole_subtitle_request:
-        prev_context_by_idx = _build_prev_context_by_idx(
-            chunks, prev_context_lines)
 
     def _call_gemini(idx, ch, ref_level=0):
         body = '\n\n'.join(ch)
         prev_ctx_block = prompt.build_prev_context_block(
-            prev_context_by_idx.get(idx) or [])
+            _source_context_for_subchunk(
+                chunks, idx, ch, prev_context_lines)
+            if not whole_subtitle_request else [])
         # Gender reference for THIS chunk's entries (opt-in), keyed by the block's
         # own SRT number so it stays aligned regardless of chunking. `ref_level`
         # selects WHICH human-subtitle language: 0 = primary, 1.. = fallback
