@@ -124,11 +124,14 @@ _MAX_VERDICTS = 400
 # already-discovered Hebrew alternatives after the first candidate cannot be
 # verified.  Recompute old UNKNOWNs so they do not stop that tournament before
 # a later candidate is tested against the exact playing cut.
-_VERDICT_VERSION = 26
+# v27: autosub tries cached, already-discovered human alternatives before a
+# slow foreign-oracle search. Retry earlier UNKNOWN decisions under that order.
+_VERDICT_VERSION = 27
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
 _STATUS_NO_ORACLE = 'NO_ORACLE'
+_STATUS_ALTERNATE_APPLIED = 'ALTERNATE_APPLIED'
 # A community sync record with a shift larger than this is only APPLIED blindly
 # when a human confirmed it. A large AUTO (machine-computed) offset can be a
 # poisoned share (field: a spurious -20.3s file-probe verdict reached the
@@ -2790,7 +2793,7 @@ def _verify_file_bundle(bundle, text):
     return verdict, label, len(chosen.get('cues') or [])
 
 
-def _deep_verify(info, path, text, rel, playing, key):
+def _deep_verify(info, path, text, rel, playing, key, early_job=None):
     """Cross-check the actual file, exact-cut memory, oracle, then local audio.
 
     The playing file is stronger than a release name, so it is evaluated first.
@@ -2865,6 +2868,26 @@ def _deep_verify(info, path, text, rel, playing, key):
             _log('verdict for %r vs %s (%d ref cues): %s'
                  % (rel or '?', ref_kind, ref_count,
                     file_verdict.get('diag', '?')))
+
+        # Autosub has already discovered its Hebrew alternatives. If the
+        # original cannot be proved against this exact file, check only rows
+        # whose subtitle bytes are ALREADY cached against the media profile
+        # BEFORE searching/downloading a foreign oracle. Do not start new
+        # candidate downloads here: that could make the supposed fast path
+        # slower. The ordinary late tournament retains its download fallback.
+        # The helper itself checks the live selection/stream before changing
+        # Kodi's subtitle, so a later manual pick always wins.
+        if (early_job and early_job.get('fallback_links')
+                and cut_signature and bundle.get('cues')
+                and (not file_verdict
+                     or file_verdict.get('status') not in accepted)
+                and _apply_verified_human_fallback(
+                    early_job, cache_only=True)):
+            _log('autosub tournament: proven alternate selected before '
+                 'provider oracle')
+            return path, {'status': _STATUS_ALTERNATE_APPLIED,
+                          'cut_signature': cut_signature,
+                          'cache_key': final_key}
 
         fixed_text = None
         transient_oracle_search = False
@@ -3282,7 +3305,7 @@ def _apply_proven_pool_fallback(job):
         return False
 
 
-def _tournament_candidate_text(info, link):
+def _tournament_candidate_text(info, link, cache_only=False):
     """Obtain one already-discovered candidate for timing comparison.
 
     Prefer disk/pool memory.  A cache miss may perform the candidate's normal
@@ -3295,6 +3318,8 @@ def _tournament_candidate_text(info, link):
     if text:
         return text, payload
     payload = _decode_link(link) or {}
+    if cache_only:
+        return '', payload
     if not _is_human_hebrew_candidate(payload):
         return '', payload
     try:
@@ -3319,7 +3344,7 @@ def _tournament_candidate_text(info, link):
     return '', payload
 
 
-def _apply_verified_human_fallback(job):
+def _apply_verified_human_fallback(job, cache_only=False):
     """Find and apply the first alternate human row proven for this cut.
 
     This is the first-play continuation path: the initially displayed row may
@@ -3345,7 +3370,8 @@ def _apply_verified_human_fallback(job):
     for link in links[:4]:
         if not _job_matches_current(job):
             return False
-        text, payload = _tournament_candidate_text(info, link)
+        text, payload = _tournament_candidate_text(
+            info, link, cache_only=cache_only)
         if not text.strip() or not _is_human_hebrew_candidate(payload):
             continue
         attempted += 1
@@ -3706,9 +3732,12 @@ def run_deep_job(job):
             _finish_unverified('empty')
             return
         rel = job.get('release') or ''
-        out, verdict = _deep_verify(info, path, text, rel, playing, key)
+        out, verdict = _deep_verify(
+            info, path, text, rel, playing, key, early_job=job)
         if not verdict:
             _finish_unverified('no-result')
+            return
+        if verdict.get('status') == _STATUS_ALTERNATE_APPLIED:
             return
         swapped = False
         current = _job_matches_current(job)
