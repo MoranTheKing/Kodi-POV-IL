@@ -1,3 +1,5 @@
+0.2.562
+- Keep a longer overlapping human subtitle visible when matching gender hints to dialogue, and decline pathological reference timelines without slowing playback.
 0.2.561
 - Keep the immediate source-dialogue context when a long AI translation batch is split for retry, without coupling parallel workers to other batches.
 - Record background subtitle-probe and oracle durations in the Kodi log to pinpoint slow first-play synchronization.
