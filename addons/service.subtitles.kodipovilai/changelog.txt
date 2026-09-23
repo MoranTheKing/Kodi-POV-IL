@@ -1,3 +1,6 @@
+0.2.561
+- Keep the immediate source-dialogue context when a long AI translation batch is split for retry, without coupling parallel workers to other batches.
+- Record background subtitle-probe and oracle durations in the Kodi log to pinpoint slow first-play synchronization.
 0.2.560
 - Check already-found Hebrew subtitle alternatives against the playing file before starting a slower foreign-subtitle oracle search, and switch only when the alternative is proven.
 0.2.559
