@@ -167,6 +167,121 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.sub._swap_if_current.assert_not_called()
         self.sub._announce.assert_not_called()
 
+    def test_first_play_proven_human_alternate_precedes_slow_oracle(self):
+        cut = 'cut1:' + 'a' * 32
+        unknown = {'status': self.sub.sync_align.STATUS_UNKNOWN,
+                   'diag': 'original did not pass exact-file proof'}
+        job = self._bound_job(
+            key='first-play', path=str(self.subtitle),
+            playing='movie-release', info={},
+            fallback_links=['already-found-human-link'])
+        self._set_pending_for(job)
+        with patch.object(self.sub, '_probe_reference_bundle', return_value={
+                'cut_signature': cut, 'cues': [{'start': 1000, 'end': 2000}]}), \
+             patch.object(self.sub, '_community_verdict', return_value=None), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(unknown, 'FILE', 1)), \
+             patch.object(self.sub, '_apply_verified_human_fallback',
+                          return_value=True) as alternate, \
+             patch.object(self.sub, '_oracle_candidates', side_effect=
+                          AssertionError('slow oracle ran before proven human')):
+            self.sub.run_deep_job(job)
+        alternate.assert_called_once_with(job, cache_only=True)
+        self.assertNotIn(('unverified', 'local'), self.successful_status)
+        self.sub._swap_if_current.assert_not_called()
+
+    def test_first_play_real_tournament_applies_proven_alternate_before_oracle(self):
+        payload = {'type': 'pool', 'pool_kind': 'ktuvit',
+                   'hash': 'c' * 16,
+                   'release': 'Movie.2026.1080p.WEB.H264-CAKES'}
+        link = urllib.parse.quote(json.dumps(payload))
+        job = self._bound_job(
+            key='initial-human', path=str(self.subtitle),
+            playing='Movie.2026.1080p.WEB.H264', info={},
+            fallback_links=[link])
+        self._set_pending_for(job)
+        bundle = {'cut_signature': 'cut1:' + 'c' * 32,
+                  'cues': [{'start': 1000, 'end': 2000}]}
+        unknown = {'status': self.sub.sync_align.STATUS_UNKNOWN,
+                   'diag': 'initial human failed exact-cut proof'}
+        confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                     'scale': 1.0, 'offset_ms': 0.0,
+                     'diag': 'alternate passed exact-cut proof'}
+        fake_translate = types.ModuleType('resources.lib.translate')
+        fake_translate._pool_source_text = Mock(
+            return_value=('proven alternate text', payload['hash']))
+        fake_translate.resolve = Mock(return_value=str(self.subtitle))
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.get_current_subtitle = Mock(return_value='initial-human-link')
+        ku.set_current_subtitle = Mock()
+        ku.current_subtitle_selection = Mock(
+            return_value=self._selection_snapshot())
+        ku.apply_subtitle_file = Mock(return_value=True)
+        ku.notify = Mock()
+        with patch.dict(sys.modules, {
+                'resources.lib.translate': fake_translate}), \
+             patch.object(self.sub, '_probe_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_community_verdict', return_value=None), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          side_effect=[(unknown, 'FILE', 1),
+                                       (confirmed, 'FILE', 1)]), \
+             patch.object(self.sub, '_oracle_candidates', side_effect=
+                          AssertionError('oracle must not precede proof')):
+            self.sub.run_deep_job(job)
+        ku.set_current_subtitle.assert_called_once_with(link, renew=True)
+        self.assertTrue(any(
+            call.kwargs.get('cache_only') is True
+            for call in fake_translate._pool_source_text.call_args_list))
+        ku.apply_subtitle_file.assert_called_once()
+        self.assertNotIn(('unverified', 'local'), self.successful_status)
+
+    def test_failed_early_alternate_still_uses_original_oracle_path(self):
+        cut = 'cut1:' + 'b' * 32
+        unknown = {'status': self.sub.sync_align.STATUS_UNKNOWN,
+                   'diag': 'original did not pass exact-file proof'}
+        job = self._bound_job(
+            key='first-play', path=str(self.subtitle),
+            playing='movie-release', info={},
+            fallback_links=['unproven-human-link'])
+        self._set_pending_for(job)
+        with patch.object(self.sub, '_probe_reference_bundle', return_value={
+                'cut_signature': cut, 'cues': [{'start': 1000, 'end': 2000}]}), \
+             patch.object(self.sub, '_community_verdict', return_value=None), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(unknown, 'FILE', 1)), \
+             patch.object(self.sub, '_apply_verified_human_fallback',
+                          return_value=False) as alternate, \
+             patch.object(self.sub, '_oracle_candidates',
+                          return_value=[]) as oracle:
+            self.sub.run_deep_job(job)
+        self.assertGreaterEqual(alternate.call_count, 1)
+        oracle.assert_called_once()
+        self.assertIn(('unverified', 'local'), self.successful_status)
+
+    def test_early_tournament_never_downloads_an_uncached_subtitle(self):
+        payload = {'type': 'pool', 'pool_kind': 'ktuvit',
+                   'hash': 'd' * 16}
+        link = urllib.parse.quote(json.dumps(payload))
+        fake_translate = types.ModuleType('resources.lib.translate')
+
+        def local_only(_info, _hash, cache_only=False):
+            if not cache_only:
+                raise AssertionError('early tournament started a download')
+            return '', ''
+
+        fake_translate._pool_source_text = Mock(side_effect=local_only)
+        with patch.dict(sys.modules, {
+                'resources.lib.translate': fake_translate}):
+            text, decoded = self.sub._tournament_candidate_text(
+                {}, link, cache_only=True)
+        self.assertEqual(text, '')
+        self.assertEqual(decoded['hash'], payload['hash'])
+        fake_translate._pool_source_text.assert_called_once_with(
+            {}, payload['hash'], cache_only=True)
+
     def test_deep_worker_waits_for_foreground_delivery_ack(self):
         job = self._bound_job(
             key='ack-key', path=str(self.subtitle),
@@ -2623,8 +2738,8 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.assertIsNone(self.sub._matched_oracle_piecewise(
             playing, same_source_only, proposal))
 
-    def test_schema_26_retries_incomplete_release_and_tournament_decisions(self):
-        self.assertEqual(self.sub._VERDICT_VERSION, 26)
+    def test_schema_27_retries_incomplete_release_and_tournament_decisions(self):
+        self.assertEqual(self.sub._VERDICT_VERSION, 27)
         sig = 'cut1:' + '7' * 32
         text = self.subtitle.read_text(encoding='utf-8')
         final_key = self.sub._cache_key(text, 'movie-release', sig)
