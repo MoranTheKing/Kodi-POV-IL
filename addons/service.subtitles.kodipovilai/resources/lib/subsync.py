@@ -600,9 +600,14 @@ def _remote_reference_bundle(url):
     validates byte ranges and trips on provider pressure.  Failure is a silent
     miss; the selected subtitle remains untouched.
     """
+    ready_started = time.monotonic()
     if not url or not _remote_probe_ready(expected_url=url):
+        _log('remote-cues: playback not ready after %.2fs'
+             % (time.monotonic() - ready_started))
         return {}
     started = time.monotonic()
+    _log('remote-cues: playback ready in %.2fs'
+         % (started - ready_started))
 
     def abort():
         if time.monotonic() - started > 35.0:
@@ -627,8 +632,12 @@ def _remote_reference_bundle(url):
             raw = {'starts': starts or [], 'track_starts': [],
                    'legacy_single_track': True}
     except Exception as e:
-        _log('remote cue-index probe failed: %r' % e, level='WARNING')
+        _log('remote cue-index probe failed after %.2fs: %r'
+             % (time.monotonic() - started, e), level='WARNING')
         return {}
+    _log('remote-cues: index read in %.2fs (%d request(s), %d byte(s))'
+         % (time.monotonic() - started, int(raw.get('requests') or 0),
+            int(raw.get('bytes') or 0)))
     cues = _starts_to_cues(raw.get('starts') or [])
     profiles = []
     for item in raw.get('track_starts') or []:
@@ -2895,13 +2904,20 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
             verdict = file_verdict
         else:
             # The file could not decide, so only now pay for a provider oracle.
+            oracle_started = time.monotonic()
             cands = _oracle_candidates(info)
+            _log('oracle: discovery in %.2fs (%d candidate(s))'
+                 % (time.monotonic() - oracle_started, len(cands)))
             oracle, tier = (sync_align.pick_oracle(cands, playing)
                             if cands else (None, ''))
             oracle_verdict = None
             oracle_fixed = None
             if oracle is not None:
+                download_started = time.monotonic()
                 oracle_text = _download_oracle(oracle['payload'])
+                _log('oracle: download in %.2fs (%d character(s))'
+                     % (time.monotonic() - download_started,
+                        len(oracle_text)))
                 if oracle_text.strip():
                     okw = {}
                     if tier == release_match.TIER_SOURCE:
