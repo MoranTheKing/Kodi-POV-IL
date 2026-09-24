@@ -476,12 +476,32 @@ class RemotePlaybackSafety(unittest.TestCase):
         heavy.assert_not_called()
         self.network.assert_not_called()
 
-    def test_remote_audio_second_pass_keeps_cached_cues_without_network(self):
+    def test_remote_audio_never_reuses_legacy_release_cache(self):
         cues = [{'start': 1000, 'end': 2000}]
         key = self.sub.release_match.normalize('movie-release') + '|audio'
         self.cache.write_text(json.dumps({key: {'pv': self.sub._PROBE_CACHE_VERSION,
                                                'cues': cues}}))
-        self.assertEqual(self.sub._audio_probe_reference({}, 'movie-release', second_pass=True), cues)
+        self.assertIsNone(self.sub._audio_probe_reference({}, 'movie-release', second_pass=True))
+        self.network.assert_not_called()
+
+    def test_local_audio_cache_is_scoped_to_the_exact_media_file(self):
+        cues = [{'start': 1000, 'end': 2000}]
+        self.url = str(self.media)
+        first_key = 'audio2:' + self.sub._transport_cache_key({})
+        self.cache.write_text(json.dumps({first_key: {
+            'pv': self.sub._PROBE_CACHE_VERSION, 'cues': cues, 'pass2': True}}))
+        self.assertEqual(self.sub._audio_probe_reference(
+            {}, 'same-release', second_pass=True), cues)
+        second = self.root / 'other-cut.mkv'
+        second.write_bytes(b'different local media bytes')
+        self.url = str(second)
+        second_key = 'audio2:' + self.sub._transport_cache_key({})
+        self.assertNotEqual(first_key, second_key)
+        from resources.lib import mkv_probe
+        with patch.object(mkv_probe, 'audio_segments', return_value=[]) as probe:
+            self.assertIsNone(self.sub._audio_probe_reference(
+                {}, 'same-release', second_pass=True))
+        probe.assert_called_once()
         self.network.assert_not_called()
 
     def test_remote_cached_container_reference_still_available(self):
