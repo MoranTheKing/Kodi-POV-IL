@@ -9,6 +9,7 @@ import hashlib
 import json
 import time
 import urllib.parse
+import re
 
 try:
     import xbmc
@@ -412,6 +413,25 @@ def notify(msg, title=None, icon=None, time_ms=4000):
         pass
 
 
+_EXPLICIT_EPISODE_RE = re.compile(
+    r'(?i)(?<![a-z0-9])s0*(\d{1,2})e0*(\d{1,3})(?![a-z0-9])')
+
+
+def release_conflicts_with_episode(name, season, episode):
+    """Reject a remembered source name explicitly naming another episode.
+
+    A window property can survive autoplay and is not bound to the current
+    player item.  Names without an explicit SxxEyy remain inconclusive.
+    """
+    try:
+        expected = (int(season), int(episode))
+    except (TypeError, ValueError):
+        return False
+    matches = _EXPLICIT_EPISODE_RE.findall(str(name or ''))
+    return bool(matches and any(
+        (int(s), int(e)) != expected for s, e in matches))
+
+
 def current_video_info():
     """Best-effort snapshot of what Kodi is currently playing.
     Returns a dict with imdb_id, tmdb_id, title, year, season,
@@ -464,7 +484,11 @@ def current_video_info():
     # (set by pov_source_name_patcher / subs_filename_publisher, the same
     # one DarkSubs reads). This is the most reliable release name for
     # sync-% matching on debrid streams.
-    info['picked_release'] = gi('Window(10000).Property(subs.player_filename)')
+    picked = gi('Window(10000).Property(subs.player_filename)')
+    if release_conflicts_with_episode(
+            picked, info['season'], info['episode']):
+        picked = ''
+    info['picked_release'] = picked
     info['is_episode'] = bool(info['tvshow'] and info['episode'])
     return info
 

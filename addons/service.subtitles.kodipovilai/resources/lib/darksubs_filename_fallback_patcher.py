@@ -48,7 +48,8 @@ except Exception:
 DARKSUBS_ADDON_ID = 'service.subtitles.All_Subs'
 GENERAL_REL_PATH = 'resources/modules/general.py'
 
-MARKER = '# AI_SUBS_FILENAME_FALLBACK_v2'
+V2_MARKER = '# AI_SUBS_FILENAME_FALLBACK_v2'
+MARKER = '# AI_SUBS_FILENAME_FALLBACK_v3'
 
 # Match: original "    file_original_path = os.path.basename(...)" +
 # the indented blank line + "    return file_original_path"
@@ -105,10 +106,10 @@ V1_NEW_BLOCK = (
     '    return file_original_path\r\n'
 )
 
-NEW_BLOCK = (
+V2_NEW_BLOCK = (
     '    file_original_path = os.path.basename(file_original_path)\r\n'
     '            \r\n'
-    '    ' + MARKER + ': prefer the release name POV picked from the\r\n'
+    '    ' + V2_MARKER + ': prefer the release name POV picked from the\r\n'
     '    # source-select dialog (stashed in a Window(10000) property by\r\n'
     '    # POV before play()). This gives the matcher the real release\r\n'
     '    # name -- complete with encoder/source/group tokens -- regardless\r\n'
@@ -144,6 +145,16 @@ NEW_BLOCK = (
     '    \r\n'
     '    return file_original_path\r\n'
 )
+
+# v2 deleted shared window properties whenever Kodi returned a URL different
+# from the pre-player source link. Debrid redirects and URL normalization make
+# that an ambiguous signal: the name may belong to this very playback while
+# VideoPlayer labels still describe the preceding episode. v3 does not delete
+# anything on a mismatch. It only declines to *use* the unproven name here;
+# MoranSubs' own readers separately reject explicit S/E conflicts.
+NEW_BLOCK = V1_NEW_BLOCK.replace(
+    '    # AI_SUBS_FILENAME_FALLBACK:',
+    '    ' + MARKER + ':', 1)
 
 # Helper functions appended at the end of general.py.
 HELPER_BLOCK = (
@@ -247,18 +258,22 @@ def ensure_patched():
     except OSError as e:
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
-    if MARKER.encode('utf-8') in content:
+    if NEW_BLOCK.encode('utf-8') in content:
         return 'unchanged'
     old_bytes = OLD_BLOCK.encode('utf-8')
     v1_bytes = V1_NEW_BLOCK.encode('utf-8')
+    v2_bytes = V2_NEW_BLOCK.encode('utf-8')
     # Detect legacy v1 injection (shipped in v0.2.28). Revert it so
     # the v2 anchor (the vanilla OLD_BLOCK) is back in the file
     # before we re-patch with v2. v1's HELPER_BLOCK is preserved --
     # the helper functions themselves are unchanged in v2.
-    helpers_already = b'_ai_subs_filename_looks_like_hash' in content
-    if v1_bytes in content:
+    helpers_already = b'def _ai_subs_filename_looks_like_hash(' in content
+    if v2_bytes in content:
+        content = content.replace(v2_bytes, old_bytes, 1)
+        _log('reverted v2 injection before applying v3', level='INFO')
+    elif v1_bytes in content:
         content = content.replace(v1_bytes, old_bytes, 1)
-        _log('reverted v1 injection before applying v2', level='INFO')
+        _log('reverted v1 injection before applying v3', level='INFO')
     if old_bytes not in content:
         _log('get_playing_filename body shape changed upstream -- '
              'skipping', level='WARNING')

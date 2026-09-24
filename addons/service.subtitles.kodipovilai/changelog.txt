@@ -1,3 +1,7 @@
+0.2.563
+- Avoid repeating the same expensive timing check for duplicate subtitle timelines during one playback; retain exact-file safety gates.
+- Ignore a previous episode's remembered source name when matching the current episode; preserve a fresh pick through Kodi URL redirects and lagging player labels.
+- Read embedded timed-text indexes from local MP4/MOV files when present; leave unsupported or text-free files untouched.
 0.2.562
 - Keep a longer overlapping human subtitle visible when matching gender hints to dialogue, and decline pathological reference timelines without slowing playback.
 0.2.561

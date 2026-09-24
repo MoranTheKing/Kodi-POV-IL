@@ -69,6 +69,9 @@ def _detect_release_name(info):
     cands = []
     # POV's captured pick is the most reliable release name -- prefer it.
     pr = (info.get('picked_release') or '').strip()
+    if kodi_utils.release_conflicts_with_episode(
+            pr, info.get('season'), info.get('episode')):
+        pr = ''
     if pr:
         cands.append(pr)
     for key in ('filepath', 'li_filename'):
@@ -84,6 +87,9 @@ def _detect_release_name(info):
             cands.append(v)
     best, best_score = '', -1
     for c in cands:
+        if kodi_utils.release_conflicts_with_episode(
+                c, info.get('season'), info.get('episode')):
+            continue
         sc = _release_score(c)
         # tie-break: prefer the longer (more specific) string
         if sc > best_score or (sc == best_score and len(c) > len(best)):
@@ -100,11 +106,20 @@ def _release_ready(info):
     release before its pre-search and (b) refuse to cache a search done before
     the release settled -- which is why users previously had to exit + re-enter
     the subtitle list to get correct percentages."""
-    if (info.get('picked_release') or '').strip():
+    if ((info.get('picked_release') or '').strip()
+            and not kodi_utils.release_conflicts_with_episode(
+                info.get('picked_release'), info.get('season'),
+                info.get('episode'))):
         return True
-    if (info.get('li_filename') or '').strip():
+    if ((info.get('li_filename') or '').strip()
+            and not kodi_utils.release_conflicts_with_episode(
+                info.get('li_filename'), info.get('season'),
+                info.get('episode'))):
         return True
-    if (info.get('tagline') or '').strip():
+    if ((info.get('tagline') or '').strip()
+            and not kodi_utils.release_conflicts_with_episode(
+                info.get('tagline'), info.get('season'),
+                info.get('episode'))):
         return True
     fp = (info.get('filepath') or '').strip()
     # A real local file path is itself the release name; a stream / debrid
