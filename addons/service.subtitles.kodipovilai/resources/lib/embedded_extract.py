@@ -2014,7 +2014,7 @@ def probe_tracks(url_or_path, head_bytes=DEFAULT_HEAD_BYTES, log=None):
 
 def cue_reference_profile(url_or_path, head_bytes=DEFAULT_HEAD_BYTES,
                           allow_http=False, abort_cb=None, log=None):
-    """Read every useful embedded subtitle timeline independently.
+    """Read Matroska Cues or a bounded MP4/MOV timed-text index.
 
     Returns ``{'starts', 'track_starts', 'tracks', 'cut_signature', ...}``.
     ``starts`` is the legacy all-track union; ``track_starts`` preserves the
@@ -2038,9 +2038,39 @@ def cue_reference_profile(url_or_path, head_bytes=DEFAULT_HEAD_BYTES,
             seg_start, ts_scale, tracks, seeks = _parse_head(
                 src, head_bytes, _log)
         except Exception as e:
-            # MP4 and other byte-addressable sources have no Matroska Cues, but
-            # their content identity is still valuable: manual-delay learning
-            # can remain scoped to this cut without any audio/cluster scan.
+            # The same bounded HTTP Range source can read an ISO BMFF/QuickTime
+            # movie index.  Debrid URLs frequently hide the file extension, so
+            # select by the bytes already fetched for the Matroska head rather
+            # than by URL suffix.  A missing text track remains an unknown.
+            head = getattr(src, '_cut_head', b'')
+            if len(head) >= 8 and head[4:8] in (
+                    b'ftyp', b'moov', b'wide', b'mdat', b'free', b'skip'):
+                try:
+                    from resources.lib import mp4_probe
+                    reference = mp4_probe.subtitle_reference_source(
+                        src.total, src.read, log=_log) or {}
+                    if reference.get('track_cues'):
+                        profiles = [
+                            {'track': item.get('track') or {},
+                             'starts': [cue['start'] for cue in
+                                        item.get('cues') or []]}
+                            for item in reference['track_cues']]
+                        union = sorted({t for item in profiles
+                                        for t in item['starts']})
+                        cut_sig = _cut_signature_from_source(
+                            src, head_hint=head, log=_log)
+                        _log('cue-profile: MP4 %d cue(s), %d track(s)'
+                             % (len(union), len(profiles)))
+                        return {'starts': union,
+                                'track_starts': profiles,
+                                'tracks': reference.get('tracks') or [],
+                                'cut_signature': cut_sig,
+                                'bytes': src.fetched, 'requests': src.reqs}
+                except Exception as mp4_error:
+                    _log('cue-profile: MP4 index skipped (%s)'
+                         % type(mp4_error).__name__)
+            # Other byte-addressable sources may still have a useful cut ID:
+            # manual-delay learning can be scoped without an audio scan.
             cut_sig = _cut_signature_from_source(
                 src, head_hint=getattr(src, '_cut_head', b''), log=_log)
             _log('cue-profile: no Matroska index (%s), cut=%s'
