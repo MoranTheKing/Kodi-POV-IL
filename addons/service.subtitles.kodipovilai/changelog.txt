@@ -1,3 +1,5 @@
+0.2.564
+- Read bounded timed-text indexes from directly streamed MP4/MOV files when present, including opaque Debrid URLs; leave files without a usable track untouched.
 0.2.563
 - Avoid repeating the same expensive timing check for duplicate subtitle timelines during one playback; retain exact-file safety gates.
 - Ignore a previous episode's remembered source name when matching the current episode; preserve a fresh pick through Kodi URL redirects and lagging player labels.

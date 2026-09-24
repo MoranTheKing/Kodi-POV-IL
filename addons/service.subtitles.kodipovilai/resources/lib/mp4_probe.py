@@ -1,4 +1,4 @@
-"""Bounded, local-only MP4 timed-text reference for subtitle timing checks.
+"""Bounded MP4 timed-text reference for subtitle timing checks.
 
 Reads only the movie index, never the video/audio payload. Unsupported sample
 codecs, fragmented files, and complex edit lists fail closed.
@@ -10,40 +10,50 @@ _MAX_INDEX_BYTES = 16 * 1024 * 1024
 _MAX_SUBTITLE_SAMPLES = 50000
 
 
-def _read_movie_index(path):
-    """Read a single bounded moov box, even when it is at the file tail."""
-    file_size = Path(path).stat().st_size
+def _read_movie_index_source(file_size, read):
+    """Read one moov box using bounded positional reads, including tail moov."""
     if file_size < 16:
         raise ValueError('short MP4 file')
-    with open(path, 'rb') as source:
-        pos = 0
-        while pos + 8 <= file_size:
-            source.seek(pos)
-            header = source.read(16)
-            if len(header) < 8:
-                break
-            size = struct.unpack_from('>I', header)[0]
-            kind = header[4:8]
-            min_header = 8
-            if size == 1:
-                if len(header) < 16:
-                    raise ValueError('short large-box header')
-                size = struct.unpack_from('>Q', header, 8)[0]
-                min_header = 16
-            elif size == 0:
-                size = file_size - pos
-            if size < min_header or size > file_size - pos:
-                raise ValueError('bad MP4 box size')
-            if kind == b'moov':
-                if size > _MAX_INDEX_BYTES:
-                    raise ValueError('MP4 index exceeds read limit')
-                source.seek(pos)
-                data = source.read(size)
-                if len(data) != size:
+    pos = 0
+    while pos + 8 <= file_size:
+        header = read(pos, min(16, file_size - pos))
+        if len(header) < 8:
+            break
+        size = struct.unpack_from('>I', header)[0]
+        kind = header[4:8]
+        min_header = 8
+        if size == 1:
+            if len(header) < 16:
+                raise ValueError('short large-box header')
+            size = struct.unpack_from('>Q', header, 8)[0]
+            min_header = 16
+        elif size == 0:
+            size = file_size - pos
+        if size < min_header or size > file_size - pos:
+            raise ValueError('bad MP4 box size')
+        if kind == b'moov':
+            if size > _MAX_INDEX_BYTES:
+                raise ValueError('MP4 index exceeds read limit')
+            chunks = []
+            for offset in range(0, size, 4 * 1024 * 1024):
+                want = min(4 * 1024 * 1024, size - offset)
+                piece = read(pos + offset, want)
+                if len(piece) != want:
                     raise ValueError('short MP4 index')
-                return data
-            pos += size
+                chunks.append(piece)
+            return b''.join(chunks)
+        pos += size
     raise ValueError('MP4 movie index absent')
+
+
+def _read_movie_index(path):
+    """Read the bounded moov box from a local file."""
+    file_size = Path(path).stat().st_size
+    with open(path, 'rb') as source:
+        def read(offset, size):
+            source.seek(offset)
+            return source.read(size)
+        return _read_movie_index_source(file_size, read)
 
 
 def boxes(data, begin=0, end=None):
@@ -226,12 +236,10 @@ def cue_onsets(path, index_data=None):
     return result
 
 
-def subtitle_reference(path, log=None):
-    """Return the same per-track cue profile shape as the Matroska probe."""
+def _reference_from_index(index_bytes, log=None):
     emit = log or (lambda _message: None)
     try:
-        index_bytes = _read_movie_index(path)
-        profiles = cue_onsets(path, index_data=index_bytes)
+        profiles = cue_onsets(None, index_data=index_bytes)
     except (OSError, ValueError, struct.error, OverflowError) as exc:
         emit('MP4 index probe skipped: %s' % type(exc).__name__)
         return None
@@ -264,3 +272,29 @@ def subtitle_reference(path, log=None):
             'track': best['track'],
             'tracks': [item['track'] for item in track_cues],
             'bytes': len(index_bytes)}
+
+
+def subtitle_reference(path, log=None):
+    """Return per-track cues from a local MP4/MOV file."""
+    try:
+        index_bytes = _read_movie_index(path)
+    except (OSError, ValueError, struct.error, OverflowError) as exc:
+        (log or (lambda _message: None))(
+            'MP4 index probe skipped: %s' % type(exc).__name__)
+        return None
+    return _reference_from_index(index_bytes, log=log)
+
+
+def subtitle_reference_source(file_size, read, log=None):
+    """Return cues from a positional byte source (e.g. safe HTTP Range).
+
+    The caller owns HTTP readiness, request limits and connection cleanup.
+    This parser itself reads only box headers and at most 16 MiB of moov.
+    """
+    try:
+        index_bytes = _read_movie_index_source(file_size, read)
+    except (OSError, ValueError, struct.error, OverflowError) as exc:
+        (log or (lambda _message: None))(
+            'MP4 index probe skipped: %s' % type(exc).__name__)
+        return None
+    return _reference_from_index(index_bytes, log=log)
