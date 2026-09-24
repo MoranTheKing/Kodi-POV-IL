@@ -35,6 +35,9 @@ class RemotePlaybackSafety(unittest.TestCase):
         lib.__path__ = [str(LIB)]
         ku = types.ModuleType('resources.lib.kodi_utils')
         ku.log = Mock()
+        ku.release_conflicts_with_episode = lambda name, season, episode: (
+            bool(__import__('re').search(r'(?i)S01E07', name or ''))
+            and str(episode) != '7')
         ku.get_setting = lambda key, default='': 'test-only' if key == 'api_key' else default
         ku.cache_dir = lambda: str(self.root)
         self.successful_status = []
@@ -146,6 +149,54 @@ class RemotePlaybackSafety(unittest.TestCase):
             'selection_hash': job.get('selection_hash') or '',
             'stream_hash': job.get('stream_hash') or '',
         })
+
+    def test_local_isobmff_uses_mp4_index_and_not_matroska_reader(self):
+        self.media.write_bytes(b'\0\0\0\x18ftypisom' + b'\0' * 12)
+        info = {'_subsync_stream_url': str(self.media)}
+        mp4 = types.ModuleType('resources.lib.mp4_probe')
+        mkv = types.ModuleType('resources.lib.mkv_probe')
+        expected = {'cues': [{'start': 1000, 'end': 2000}],
+                    'track_cues': [], 'tracks': [], 'bytes': 24}
+        mp4.subtitle_reference = Mock(return_value=expected)
+        mkv.subtitle_reference = Mock(side_effect=AssertionError('MKV used'))
+        with patch.dict(sys.modules, {'resources.lib.mp4_probe': mp4,
+                                      'resources.lib.mkv_probe': mkv}):
+            result = self.sub._probe_reference_bundle(info, 'movie')
+        self.assertEqual(result['cues'], expected['cues'])
+        mp4.subtitle_reference.assert_called_once()
+        mkv.subtitle_reference.assert_not_called()
+
+    def test_local_hls_manifest_is_not_used_as_movie_cut_identity(self):
+        for suffix in ('.m3u8', '.mpd', '.f4m'):
+            with self.subTest(suffix=suffix):
+                playlist = self.root / ('movie' + suffix)
+                playlist.write_text('synthetic playlist', encoding='utf-8')
+                info = {'_subsync_stream_url': str(playlist)}
+                self.assertEqual(self.sub._playing_url(info), '')
+                self.assertEqual(self.sub._local_cut_signature(info), '')
+
+    def test_local_webm_prefers_exact_subtitle_index_over_sparse_scan(self):
+        media = self.root / 'movie.webm'
+        media.write_bytes(b'\x1a\x45\xdf\xa3' + b'\0' * 20)
+        info = {'_subsync_stream_url': str(media)}
+        starts = list(range(1000, 91000, 1000))
+        exact = {'starts': starts,
+                 'track_starts': [{'track': {'num': 2, 'codec': 'S_TEXT/WEBVTT'},
+                                   'starts': starts}],
+                 'tracks': [{'num': 2, 'codec': 'S_TEXT/WEBVTT'}],
+                 'cut_signature': 'cut1:' + 'a' * 32, 'bytes': 2048}
+        index = Mock(return_value=exact)
+        engine = sys.modules['resources.lib.embedded_extract']
+        scanner = types.ModuleType('resources.lib.mkv_probe')
+        scanner.subtitle_reference = Mock(side_effect=AssertionError('sparse scan used'))
+        with patch.object(engine, 'cue_reference_profile', index,
+                          create=True), patch.dict(
+                              sys.modules, {'resources.lib.mkv_probe': scanner}):
+            result = self.sub._probe_reference_bundle(info, 'movie')
+        self.assertEqual(len(result['cues']), 90)
+        self.assertEqual(result['cut_signature'], exact['cut_signature'])
+        index.assert_called_once()
+        scanner.subtitle_reference.assert_not_called()
 
     def test_remote_missing_oracle_uses_only_bounded_cue_reader(self):
         out, verdict = self.sub._deep_verify({}, str(self.subtitle), self.subtitle.read_text(),
@@ -2182,7 +2233,7 @@ class RemotePlaybackSafety(unittest.TestCase):
         existing_episode = dict(season_pack_info)
         existing_episode['picked_release'] = (
             'The.Flash.2014.S01E07.1080p.BluRay.x265-RARBG.mp4')
-        self.assertIn('S01E07', self.sub.playing_release(existing_episode))
+        self.assertNotIn('S01E07', self.sub.playing_release(existing_episode))
         wrong_season = dict(season_pack_info)
         wrong_season['picked_release'] = (
             'The.Flash.2014.S02.1080p.BluRay.x265-RARBG.mp4')
@@ -2316,6 +2367,87 @@ class RemotePlaybackSafety(unittest.TestCase):
         ku.set_current_subtitle.assert_called_once_with(second, renew=True)
         fake_translate.resolve.assert_called_once()
         ku.apply_subtitle_file.assert_called_once()
+
+    def test_autosub_tournament_does_not_reverify_identical_srt_bytes(self):
+        def link(row_id):
+            return urllib.parse.quote(json.dumps({
+                'type': 'engine', 'source': 'opensubtitles',
+                'language': 'Hebrew', 'filename': 'Candidate-%d' % row_id,
+                'download_data': {'id': row_id}}))
+
+        links = [link(i) for i in range(3)]
+        job = self._bound_job(
+            key='original', playing='Show.S01E08.HULU',
+            fallback_links=links, info={})
+        bundle = {'cues': [1], 'cut_signature': 'cut1:' + 'b' * 32}
+        unknown = {'status': self.sub.sync_align.STATUS_UNKNOWN,
+                   'diag': 'different edit'}
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.get_current_subtitle = Mock(return_value='original-link')
+        texts = [('same exact SRT', self.sub._decode_link(links[0])),
+                 ('same exact SRT', self.sub._decode_link(links[1])),
+                 ('different SRT', self.sub._decode_link(links[2]))]
+        with patch.object(self.sub, '_job_matches_current',
+                          return_value=True), \
+             patch.object(self.sub, '_job_stream_is_current',
+                          return_value=True), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_tournament_candidate_text',
+                          side_effect=texts), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(unknown, 'track', 200)) as verify:
+            self.assertFalse(self.sub._apply_verified_human_fallback(job))
+        self.assertEqual(verify.call_count, 2)
+
+    def test_tournament_reuses_rejected_timing_across_passes_and_release_names(self):
+        def link(row_id):
+            return urllib.parse.quote(json.dumps({
+                'type': 'engine', 'source': 'opensubtitles',
+                'language': 'Hebrew', 'filename': 'Release-%d' % row_id,
+                'download_data': {'id': row_id}}))
+
+        links = [link(i) for i in range(3)]
+        job = self._bound_job(
+            key='original', playing='Show.S01E08.HULU',
+            fallback_links=links, info={})
+        cut = 'cut1:' + 'b' * 32
+        bundle = {'cues': [1], 'cut_signature': cut}
+        original = '1\n00:00:01,000 --> 00:00:02,000\nשלום עולם\n'
+        same_timing = '1\n00:00:01,000 --> 00:00:02,000\nמשפט אחר\n'
+        different = '1\n00:00:04,000 --> 00:00:05,000\nמשפט אחר\n'
+        unknown = {'status': self.sub.sync_align.STATUS_UNKNOWN,
+                   'diag': 'different edit'}
+        self.sub._remember_rejected_timing(job, original, cut, unknown)
+        sys.modules['resources.lib.kodi_utils'].get_current_subtitle = Mock(
+            return_value='original-link')
+        texts = [(same_timing, self.sub._decode_link(links[0])),
+                 (different, self.sub._decode_link(links[1])),
+                 (different, self.sub._decode_link(links[2]))]
+        with patch.object(self.sub, '_job_matches_current', return_value=True), \
+             patch.object(self.sub, '_job_stream_is_current',
+                          return_value=True), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_tournament_candidate_text',
+                          side_effect=texts * 2), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(unknown, 'track', 200)) as verify:
+            self.assertFalse(self.sub._apply_verified_human_fallback(job,
+                                                                     cache_only=True))
+            self.assertFalse(self.sub._apply_verified_human_fallback(job))
+        self.assertEqual(verify.call_count, 1)
+
+    def test_rejected_timing_key_preserves_dialogue_and_cut_boundaries(self):
+        text = '1\n00:00:01,000 --> 00:00:02,000\nשלום עולם\n'
+        sfx = '1\n00:00:01,000 --> 00:00:02,000\n♪ music ♪\n'
+        cut_a = 'cut1:' + 'a' * 32
+        cut_b = 'cut1:' + 'b' * 32
+        key = self.sub._timing_attempt_key(text, cut_a)
+        self.assertIsNotNone(key)
+        self.assertNotEqual(key, self.sub._timing_attempt_key(sfx, cut_a))
+        self.assertNotEqual(key, self.sub._timing_attempt_key(text, cut_b))
+        self.assertIsNone(self.sub._timing_attempt_key('bad srt', cut_a))
 
     def test_autosub_alternatives_sample_distinct_release_families(self):
         def human(release, row_id):

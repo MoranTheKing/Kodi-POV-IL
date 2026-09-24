@@ -558,7 +558,7 @@ pin('darksubs_embedded_demote_patcher', 'UNPROVEN',
 pin('darksubs_embedded_insert_patcher', 'UNPROVEN',
     'AI_SUBS_EMBED_ENG_LAST_v2')
 pin('darksubs_filename_fallback_patcher', 'UNPROVEN',
-    'AI_SUBS_FILENAME_FALLBACK_v2')
+    'AI_SUBS_FILENAME_FALLBACK_v2', 'AI_SUBS_FILENAME_FALLBACK_v3')
 pin('darksubs_hook_diagnostics', 'UNPROVEN',
     'NAG_VERSION=1')
 pin('darksubs_opensubtitles_patcher', 'UNPROVEN',
