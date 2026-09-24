@@ -76,6 +76,7 @@ STANDALONE_LIB_FILES = {
     #     every subsync call site in translate.py is already try/guarded
     #     (fail-open), so this can only add re-timing, never break a path.
     "mkv_probe.py",
+    "mp4_probe.py",
     "release_match.py",
     "sync_align.py",
     "subsync.py",
