@@ -1,3 +1,5 @@
+0.2.565
+- Keep local audio timing evidence tied to the exact media file, so another source with the same release name cannot inherit its sync result.
 0.2.564
 - Read bounded timed-text indexes from directly streamed MP4/MOV files when present, including opaque Debrid URLs; leave files without a usable track untouched.
 0.2.563
