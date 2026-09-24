@@ -434,9 +434,10 @@ _MAX_PROBE_ENTRIES = 60
 # bitmap tracks, matching the local-file probe and covering PGS-only releases.
 # v5: cache entries are scoped to the hashed playback transport/content rather
 # than a release label and preserve every track separately plus a cut signature.
-# v6: local ISO BMFF/QuickTime timed-text indexes are now probeable; previous
-# negative MP4/MOV cache entries must be retried once after upgrade.
-_PROBE_CACHE_VERSION = 6
+# v6: local ISO BMFF/QuickTime timed-text indexes are now probeable.
+# v7: opaque remote MP4/MOV streams use the same bounded Range source; old
+# negative entries must not suppress the new index probe after upgrade.
+_PROBE_CACHE_VERSION = 7
 _NEGATIVE_PROBE_TTL_S = 6 * 60 * 60
 
 
@@ -603,7 +604,7 @@ def _starts_to_cues(starts):
 
 
 def _remote_reference_bundle(url):
-    """Per-track video reference + cut id via compact Matroska reads only.
+    """Per-track video reference + cut id via bounded container-index reads.
 
     This deliberately does not extract subtitle text or scan media clusters.
     The underlying reader reuses one keep-alive connection, paces requests,
