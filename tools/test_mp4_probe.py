@@ -117,6 +117,30 @@ class MP4ProbeTests(unittest.TestCase):
         self.path.write_bytes(b'\0\0\0\x20moov')
         self.assertIsNone(MP4.subtitle_reference(self.path))
 
+    def test_positional_reader_supports_head_and_tail_index_with_bounded_reads(self):
+        for at_end in (False, True):
+            with self.subTest(at_end=at_end):
+                media = make_mp4(index_at_end=at_end)
+                reads = []
+
+                def read(offset, size):
+                    reads.append((offset, size))
+                    return media[offset:offset + size]
+
+                result = MP4.subtitle_reference_source(len(media), read)
+                self.assertEqual(len(result['cues']), 40)
+                self.assertTrue(all(size <= 4 * 1024 * 1024
+                                    for _offset, size in reads))
+                self.assertLess(sum(size for _offset, size in reads), 2048)
+
+    def test_positional_reader_abstains_on_truncated_range(self):
+        media = make_mp4(index_at_end=True)
+
+        def read(offset, size):
+            return media[offset:offset + max(0, size - 1)]
+
+        self.assertIsNone(MP4.subtitle_reference_source(len(media), read))
+
 
 if __name__ == '__main__':
     unittest.main()
