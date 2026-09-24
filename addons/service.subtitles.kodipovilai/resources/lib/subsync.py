@@ -718,7 +718,8 @@ def _audio_probe_reference(info, playing, second_pass=False):
     own AUDIO, timestamped by Gemini (user's existing key). Only reached when
     there is no matching sub in any DB AND no embedded subtitle track. AAC
     audio only (Gemini accepts it as-is after ADTS wrap; AC3/DTS cannot be
-    sent or decoded on device). Cached per release. None when unavailable.
+    sent or decoded on device). Cached per exact local transport, never by
+    release name. None when unavailable.
     second_pass=True samples ADDITIONAL positions and MERGES with the cached
     cues (used once when a promising peak failed the tight check for lack of
     reference points); it marks the cache so it never repeats."""
@@ -729,8 +730,16 @@ def _audio_probe_reference(info, playing, second_pass=False):
         api_key = (kodi_utils.get_setting('api_key', '') or '').strip()
         if not api_key:
             return None
-        rel_key = ((release_match.normalize(playing) if release_match
-                    else (playing or '').lower()) + '|audio')
+        # A cache hit must obey the same local-only contract as extraction.
+        # A release-keyed entry could belong to a different cut, or be reused
+        # by a remote stream carrying the same release label.
+        url = _playing_url(info)
+        if not url:
+            return None
+        transport_key = _transport_cache_key(info)
+        if not transport_key:
+            return None
+        rel_key = 'audio2:' + transport_key
         cpath = _probe_cache_path()
         data = {}
         prior = []
@@ -752,9 +761,6 @@ def _audio_probe_reference(info, playing, second_pass=False):
                     return prior or None
                 if ent.get('pass2'):
                     return prior or None   # already extended once -- done
-        url = _playing_url(info)
-        if not url:
-            return prior or None
         try:
             from resources.lib import mkv_probe
             from resources.lib import gemini
