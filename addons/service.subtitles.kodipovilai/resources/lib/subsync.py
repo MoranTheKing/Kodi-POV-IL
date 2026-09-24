@@ -208,10 +208,13 @@ def playing_release(info):
     uses), or '' when unknown/synthetic -- a synthesized player filename must
     never anchor verification."""
     try:
-        ref = ((info.get('picked_release') or info.get('tagline')
-                or info.get('label')
-                or os.path.basename(info.get('filepath') or '')
-                or info.get('title') or '')).strip()
+        candidates = (info.get('picked_release'), info.get('tagline'),
+                      info.get('label'),
+                      os.path.basename(info.get('filepath') or ''),
+                      info.get('title'))
+        ref = next((str(value).strip() for value in candidates
+                    if value and not kodi_utils.release_conflicts_with_episode(
+                        value, info.get('season'), info.get('episode'))), '')
         if not ref or release_match is None:
             return ''
         if release_match.is_synthetic(ref):
@@ -431,7 +434,9 @@ _MAX_PROBE_ENTRIES = 60
 # bitmap tracks, matching the local-file probe and covering PGS-only releases.
 # v5: cache entries are scoped to the hashed playback transport/content rather
 # than a release label and preserve every track separately plus a cut signature.
-_PROBE_CACHE_VERSION = 5
+# v6: local ISO BMFF/QuickTime timed-text indexes are now probeable; previous
+# negative MP4/MOV cache entries must be retried once after upgrade.
+_PROBE_CACHE_VERSION = 6
 _NEGATIVE_PROBE_TTL_S = 6 * 60 * 60
 
 
@@ -456,6 +461,10 @@ def _playing_url(info):
     low = clean.lower()
     if not low:
         return ''
+    if low.endswith(('.m3u8', '.mpd', '.f4m')) or 'manifest' in low:
+        # A playlist is not the media bytes. Hashing its text as a cut ID
+        # would scope corrections to the manifest rather than the video.
+        return ''
     if low.startswith(('http://', 'https://')):
         _log('remote media probing skipped to protect playback')
         return ''
@@ -467,7 +476,7 @@ def _playing_url(info):
 def _remote_playing_url(info):
     """Direct HTTP(S) Matroska URL, stripped of Kodi's `|Header=...` suffix.
 
-    HLS/manifests are not byte-addressable Matroska files and never enter the
+    HLS/DASH manifests are not byte-addressable media files and never enter the
     cue-index probe.  This is intentionally separate from _playing_url(), whose
     contract remains local-only for the heavier mkv_probe/audio paths.
     """
@@ -475,7 +484,8 @@ def _remote_playing_url(info):
     clean = (url or '').split('|')[0]
     low = clean.lower()
     if (low.startswith(('http://', 'https://'))
-            and '.m3u8' not in low and 'manifest' not in low):
+            and '.m3u8' not in low and '.mpd' not in low
+            and '.f4m' not in low and 'manifest' not in low):
         return clean
     return ''
 
@@ -969,12 +979,40 @@ def _probe_reference_bundle(info, playing):
     local_url = _playing_url(info)
     if local_url:
         try:
-            from resources.lib import mkv_probe
-            res = mkv_probe.subtitle_reference(
-                local_url, log=lambda m: _log('probe: ' + m)) or {}
+            with open(local_url, 'rb') as media_file:
+                header = media_file.read(12)
+            if header[4:8] in (b'ftyp', b'moov', b'wide',
+                               b'mdat', b'free', b'skip'):
+                from resources.lib import mp4_probe
+                res = mp4_probe.subtitle_reference(
+                    local_url, log=lambda m: _log('probe: ' + m)) or {}
+            else:
+                res = {}
+                if local_url.lower().endswith('.webm'):
+                    # WebM commonly has an exact subtitle Cues index. Read it
+                    # before the older sparse byte-window fallback.
+                    from resources.lib import embedded_extract
+                    raw = embedded_extract.cue_reference_profile(
+                        local_url, allow_http=False,
+                        log=lambda m: _log('probe: ' + m)) or {}
+                    cues = _starts_to_cues(raw.get('starts') or [])
+                    if len(cues) >= MIN_REMOTE_CUES:
+                        track_cues = [
+                            {'track': item.get('track') or {},
+                             'cues': _starts_to_cues(item.get('starts') or [])}
+                            for item in raw.get('track_starts') or []]
+                        res = {'cues': cues, 'track_cues': track_cues,
+                               'tracks': raw.get('tracks') or [],
+                               'cut_signature': raw.get('cut_signature') or '',
+                               'bytes': raw.get('bytes') or 0}
+                if not res:
+                    from resources.lib import mkv_probe
+                    res = mkv_probe.subtitle_reference(
+                        local_url, log=lambda m: _log('probe: ' + m)) or {}
         except Exception:
             res = {}
-        res['cut_signature'] = _local_cut_signature(info)
+        res['cut_signature'] = (res.get('cut_signature') or
+                                _local_cut_signature(info))
     else:
         remote_url = _remote_playing_url(info)
         if not remote_url:
@@ -2802,6 +2840,37 @@ def _verify_file_bundle(bundle, text):
     return verdict, label, len(chosen.get('cues') or [])
 
 
+def _timing_attempt_key(text, cut_signature):
+    """Identity of verifier input, independent of provider release labels.
+
+    Only strict, well-formed SRTs qualify. The timing of *all* blocks and the
+    dialogue-filtered subset both matter: captions with different words can
+    share a timeline, while an SFX/credit change can change verifier input.
+    Never persist this key or use it across playing-file cut signatures.
+    """
+    cues, error = sync_align._preflight_srt(text)
+    if error or not cut_signature:
+        return None
+    dialogue = sync_align.dialogue_cues(cues)
+    skeleton = (
+        tuple((c['start'], c['end']) for c in cues),
+        tuple((c['start'], c['end']) for c in dialogue),
+    )
+    return (cut_signature,
+            hashlib.sha256(repr(skeleton).encode('ascii')).digest())
+
+
+def _remember_rejected_timing(job, text, cut_signature, verdict):
+    """Memoize only a failed verification during this one first-play job."""
+    if not isinstance(job, dict) or not isinstance(verdict, dict):
+        return
+    if verdict.get('status') not in (sync_align.STATUS_UNKNOWN, None):
+        return
+    timing_key = _timing_attempt_key(text, cut_signature)
+    if timing_key:
+        job.setdefault('_rejected_timing', set()).add(timing_key)
+
+
 def _deep_verify(info, path, text, rel, playing, key, early_job=None):
     """Cross-check the actual file, exact-cut memory, oracle, then local audio.
 
@@ -2873,6 +2942,8 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 return path, result
 
         file_verdict, ref_kind, ref_count = _verify_file_bundle(bundle, text)
+        _remember_rejected_timing(early_job, text, cut_signature,
+                                  file_verdict)
         if file_verdict:
             _log('verdict for %r vs %s (%d ref cues): %s'
                  % (rel or '?', ref_kind, ref_count,
@@ -3383,12 +3454,26 @@ def _apply_verified_human_fallback(job, cache_only=False):
     playing = job.get('playing') or ''
     old_link = kodi_utils.get_current_subtitle() or ''
     attempted = 0
+    seen_text = set()
+    rejected_timing = job.setdefault('_rejected_timing', set())
     for link in links[:4]:
         if not _job_matches_current(job):
             return False
         text, payload = _tournament_candidate_text(
             info, link, cache_only=cache_only)
         if not text.strip() or not _is_human_hebrew_candidate(payload):
+            continue
+        # Providers often list one SRT under several release names.  Skip
+        # exact bytes within this pass; the timing key below also covers
+        # different text with identical verifier inputs across both passes.
+        text_key = hashlib.sha1(text.encode('utf-8', 'replace')).digest()
+        if text_key in seen_text:
+            continue
+        seen_text.add(text_key)
+        timing_key = _timing_attempt_key(text, cut_signature)
+        if timing_key and timing_key in rejected_timing:
+            _log('autosub tournament: identical rejected timing already '
+                 'checked for this playing file', level='DEBUG')
             continue
         attempted += 1
         verdict, label, count = _verify_file_bundle(bundle, text)
@@ -3399,6 +3484,7 @@ def _apply_verified_human_fallback(job, cache_only=False):
             rel, label, count, verdict.get('diag', 'no verdict')))
         if status not in (sync_align.STATUS_CONFIRMED,
                           sync_align.STATUS_FIXABLE):
+            _remember_rejected_timing(job, text, cut_signature, verdict)
             continue
         # Preserve the complete proof (including piecewise certificates) for
         # this canonical subtitle/cut pair. Delivery-side RTL may produce a

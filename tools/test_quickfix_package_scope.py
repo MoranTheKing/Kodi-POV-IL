@@ -232,6 +232,19 @@ def test_the_packages_carry_the_current_addon_BYTES():
           "checks cannot see.")
 
 
+def test_standalone_sync_dependency_is_packaged():
+    """The standalone add-on must carry the MP4 reader that SubSync imports."""
+    package = DIST / "service.subtitles.kodipovilai-latest.zip"
+    source = ROOT / "addons/service.subtitles.kodipovilai/resources/lib/mp4_probe.py"
+    member = "service.subtitles.kodipovilai/resources/lib/mp4_probe.py"
+    with zipfile.ZipFile(package) as archive:
+        assert member in archive.namelist(), (
+            "standalone add-on omits mp4_probe.py; local MP4 sync would "
+            "silently fall back despite the build edition having it")
+        assert archive.read(member) == source.read_bytes(), (
+            "standalone mp4_probe.py is stale")
+
+
 def test_the_full_build_carries_the_current_addons():
     """The same rule for the artifact a FRESH install gets, and for both
     add-ons in it rather than just the wizard.
