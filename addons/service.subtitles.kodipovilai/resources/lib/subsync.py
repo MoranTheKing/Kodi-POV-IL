@@ -1284,12 +1284,17 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
         first_checked = next((x for x in checked
                               if x['index'] == first_index), None)
         if first_checked is None:
-            # Do not demote a not-yet-downloaded exact/same-release subtitle.
+            # A real cut-scoped confirmation beats a release-name guess even
+            # when the guessed first file has not yet been downloaded. Without
+            # that exact proof, keep the old protection for trusted names.
             first_payload = _decode_link(rows[first_index].get('link') or '') or {}
             first_release = (first_payload.get('filename') or
                              rows[first_index].get('filename') or '')
             _pct, tier, _diag = release_match.score(playing, first_release)
-            if tier in release_match.AUTO_OK_TIERS:
+            exact_confirmed = (
+                chosen['verdict'].get('status') == sync_align.STATUS_CONFIRMED
+                and re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature))
+            if tier in release_match.AUTO_OK_TIERS and not exact_confirmed:
                 return rows
         else:
             first_status = first_checked['verdict'].get('status')
