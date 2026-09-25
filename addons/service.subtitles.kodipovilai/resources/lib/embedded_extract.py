@@ -419,11 +419,12 @@ _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
        '(KHTML, like Gecko) Chrome/120.0 Safari/537.36')
 
 _TEXT_CODEC_PREFIX = 'S_TEXT'
+_LEGACY_ASS_CODECS = ('S_ASS', 'S_SSA')
 
 # The codecs that really are pictures. NOT the complement of _TEXT_CODEC_PREFIX:
 # Matroska has text subtitle codecs that predate the S_TEXT/* naming and sit
-# outside it -- S_ASS, S_SSA and S_USF (what pre-2010 muxers wrote, still found
-# in older anime rips), S_HDMV/TEXTST (BluRay TEXT subtitles), S_KATE, S_ARIBSUB.
+# outside it -- S_ASS and S_SSA (handled here), plus S_USF, S_HDMV/TEXTST,
+# S_KATE and S_ARIBSUB (not decoded by this extractor).
 # Calling "no S_TEXT/* track" the same thing as "all bitmap" would say the file
 # has nothing but pictures when it actually has a text track this extractor
 # simply does not read -- and that is a message that sends the next reader AWAY
@@ -1508,7 +1509,8 @@ def _parse_head(src, head_bytes, log):
 
 
 def _is_text_codec(codec):
-    return (codec or '').upper().startswith(_TEXT_CODEC_PREFIX)
+    up = (codec or '').upper()
+    return up.startswith(_TEXT_CODEC_PREFIX) or up in _LEGACY_ASS_CODECS
 
 
 def _sub_tracks(tracks):
@@ -1890,10 +1892,12 @@ def _decode_frame(frame, codec):
     except Exception:
         return ''
     up = (codec or '').upper()
-    if up in ('S_TEXT/ASS', 'S_TEXT/SSA'):
+    if up in ('S_TEXT/ASS', 'S_TEXT/SSA', 'S_ASS', 'S_SSA'):
         # MKV ASS block body: ReadOrder,Layer,Style,Name,ML,MR,MV,Effect,Text
         parts = text.split(',', 8)
-        text = parts[8] if len(parts) >= 9 else text
+        if len(parts) < 9:
+            return ''  # malformed ASS packet, not dialogue to expose as-is
+        text = parts[8]
         text = text.replace('\\N', '\n').replace('\\n', '\n')
         text = _ASS_TAG.sub('', text)
     elif up == 'S_TEXT/WEBVTT':
@@ -2363,7 +2367,7 @@ def extract_srt(url_or_path, track_num=None, lang=None,
             elif not any(_is_text_codec(t['codec']) for t in subs):
                 # Text, but spelled in a way this extractor does not read. Say
                 # exactly that: it is worth a look, not a shrug.
-                _log('none of these is an S_TEXT/* track, but they are not all '
+                _log('none of these is a supported text track, but they are not all '
                      'picture formats either -- at least one is a text codec '
                      'this extractor does not read yet. Worth investigating '
                      'rather than treating as "this file has no text subs"')
