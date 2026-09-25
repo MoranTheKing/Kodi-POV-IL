@@ -1905,6 +1905,59 @@ class RemotePlaybackSafety(unittest.TestCase):
             out = self.sub.rank_ready_candidates({}, [first, second])
         self.assertEqual([x['filename'] for x in out], ['second', 'first'])
 
+    def test_exact_cut_proof_beats_an_unread_release_name_without_fetching(self):
+        def candidate(name):
+            payload = {'type': 'engine', 'source': 'Ktuvit',
+                       'language': 'Hebrew', 'filename': name}
+            return {'filename': name, 'language': 'he',
+                    'link': urllib.parse.quote(json.dumps(payload))}
+
+        unknown = candidate('Show.S01E03.1080p.WEB.H264-CAKES')
+        proven = candidate('Show.S01E03.1080p.WEB.H264-OTHER')
+        bundle = {'cues': [1], 'cut_signature': 'cut1:' + 'a' * 32}
+        confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                     'scale': 1.0, 'offset_ms': 0.0, 'vote': .95,
+                     'overlap': .95, 'diag': 'confirmed'}
+        with patch.object(self.sub, 'playing_release',
+                          return_value='Show.S01E03.1080p.WEB.H264-CAKES'), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_ready_candidate_text', side_effect=[
+                 ('', self.sub._decode_link(unknown['link'])),
+                 ('subtitle text', self.sub._decode_link(proven['link']))]), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(confirmed, 'track', 200)), \
+             patch.object(self.sub, '_store_verdict') as stored:
+            out = self.sub.rank_ready_candidates({}, [unknown, proven])
+        self.assertIs(out[0], proven)
+        stored.assert_called_once()
+
+    def test_unsealed_timing_proof_cannot_demote_an_unread_exact_release(self):
+        def candidate(name):
+            payload = {'type': 'engine', 'source': 'Ktuvit',
+                       'language': 'Hebrew', 'filename': name}
+            return {'filename': name, 'language': 'he',
+                    'link': urllib.parse.quote(json.dumps(payload))}
+
+        unknown = candidate('Show.S01E03.1080p.WEB.H264-CAKES')
+        other = candidate('Show.S01E03.1080p.WEB.H264-OTHER')
+        confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                     'scale': 1.0, 'offset_ms': 0.0, 'vote': .95,
+                     'overlap': .95, 'diag': 'confirmed'}
+        with patch.object(self.sub, 'playing_release',
+                          return_value='Show.S01E03.1080p.WEB.H264-CAKES'), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={'cues': [1], 'cut_signature': ''}), \
+             patch.object(self.sub, '_ready_candidate_text', side_effect=[
+                 ('', self.sub._decode_link(unknown['link'])),
+                 ('subtitle text', self.sub._decode_link(other['link']))]), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(confirmed, 'track', 200)), \
+             patch.object(self.sub, '_store_verdict') as stored:
+            out = self.sub.rank_ready_candidates({}, [unknown, other])
+        self.assertIs(out[0], unknown)
+        stored.assert_not_called()
+
     def test_candidate_timing_rank_reads_cache_only_and_never_downloads(self):
         from resources.lib import subs_engine_bridge as bridge
         from resources.lib import translate
