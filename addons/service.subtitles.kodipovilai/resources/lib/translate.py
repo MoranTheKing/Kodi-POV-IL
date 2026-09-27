@@ -1764,6 +1764,30 @@ def _is_mostly_hebrew(text, min_ratio=0.30):
     return (he / letters) >= min_ratio
 
 
+def _is_untranslated_chunk_response(source_blocks, response_blocks):
+    """Catch a substantial Gemini reply with no Hebrew dialogue at all.
+
+    A whole source-language chunk can have valid SRT indices/times and still be
+    wholly untranslated. It can also precede a second, Hebrew copy in the same
+    reply; the first copy would win when the output is aligned to source cues.
+    The final-document Hebrew gate can miss one such chunk among many translated
+    ones. Require at least three cues and enough alphabetic dialogue to avoid
+    retrying tiny proper-name/title-card tails. One Hebrew dialogue character
+    in the first source-length run abstains: partial failures remain with the
+    existing per-cue/final-file checks rather than a broad heuristic.
+    """
+    if len(source_blocks) < 3 or len(response_blocks) < 3:
+        return False
+    letters = 0
+    for block in response_blocks[:len(source_blocks)]:
+        for ch in srt.block_text_only(block):
+            if '\u0590' <= ch <= '\u05ff':
+                return False
+            if ch.isalpha():
+                letters += 1
+    return letters >= 60
+
+
 def set_quiet(value):
     global _QUIET
     _QUIET = bool(value)
@@ -4269,13 +4293,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     ch, parsed_response)
                 negation_loss = srt.generated_negation_loss_indices(
                     ch, parsed_response)
-                if editorial or source_echo or negation_loss:
+                untranslated = _is_untranslated_chunk_response(
+                    ch, parsed_response)
+                if editorial or source_echo or negation_loss or untranslated:
                     kodi_utils.log(
                         'Chunk {0}/{1}: generated-output integrity rejection '
-                        '(self_edit={2}, source_echo={3}, negation_loss={4}) '
+                        '(self_edit={2}, source_echo={3}, negation_loss={4}, '
+                        'untranslated={5}) '
                         '-- retrying safely'
                         .format(idx, total, len(editorial), len(source_echo),
-                                len(negation_loss)), level='WARNING')
+                                len(negation_loss), bool(untranslated)),
+                        level='WARNING')
                     raise gemini.FilteredResponse(
                         'generated-output integrity violation')
                 return response
