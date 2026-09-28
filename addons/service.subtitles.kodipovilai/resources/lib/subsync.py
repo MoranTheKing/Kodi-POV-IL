@@ -4096,9 +4096,17 @@ def _write_fixed(orig_path, fixed_text):
         import hashlib
         digest = hashlib.sha1(
             fixed_text.encode('utf-8', 'replace')).hexdigest()[:12]
-        out = os.path.join(
-            kodi_utils.cache_dir(),
-            '{0}.{1}.synced.he.srt'.format(base, digest))
+        cache = kodi_utils.cache_dir()
+        suffix = '.{0}.synced.he.srt'.format(digest)
+        # Windows Kodi commonly runs without long-path support.  The source
+        # subtitle can already have a long release name; appending our suffix
+        # and the temporary-file extension must still fit MAX_PATH.  Keep the
+        # hash intact so truncating a display name cannot merge different
+        # corrected subtitles.
+        max_base = 240 - len(os.path.abspath(cache)) - 1 - len(suffix) - len('.tmp')
+        if max_base < 1:
+            raise OSError('subtitle cache path is too long')
+        out = os.path.join(cache, '{0}{1}'.format(base[:max_base], suffix))
         tmp = out + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(fixed_text)
