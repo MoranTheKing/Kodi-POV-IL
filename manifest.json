@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-09-28T20:55:45Z",
+  "generated": "2026-09-28T21:29:38Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -36,13 +36,13 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.4.4",
+      "version": "0.4.5",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.4.4.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.4.zip",
-      "size": 2193933,
-      "sha256": "fdb12c460421cfe72d3a3fc474dfc3ace82c0da573d8634fcc4fba43500a0d23",
-      "updated": "2026-09-28T20:05:39Z"
+      "filename": "plugin.program.kodipovilwizard-0.4.5.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.5.zip",
+      "size": 2194576,
+      "sha256": "7934a8d5aa2541f685c5ee5c793411a04426d97c4aba9cb7ddcc91e388770f4a",
+      "updated": "2026-09-28T21:29:38Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
