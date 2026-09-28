@@ -24,6 +24,7 @@ on:
       - "skin.*/**"
       - "userdata/**"
       - ".github/pov-host-migration.json"
+      - ".github/workflows/build-and-release.yml"
   workflow_dispatch: {}
 
 permissions:
@@ -44,15 +45,22 @@ jobs:
     if: github.repository == 'MoranTheKing/Kodi-POV-IL'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (full history for diff)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      # This repository allows only owner-authored Actions. The runner already
+      # includes Git, Python 3 and gh, so no third-party Action is necessary.
+      - name: Checkout source and prepare Python
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-tags --branch "$GITHUB_REF_NAME" \
+            "https://github.com/$GITHUB_REPOSITORY.git" .
+          git checkout --detach "$GITHUB_SHA"
+          command -v python3
+          python3 -c 'import sys; assert sys.version_info >= (3, 11), sys.version'
+          if ! command -v python >/dev/null 2>&1; then
+            mkdir -p "$RUNNER_TEMP/bin"
+            ln -s "$(command -v python3)" "$RUNNER_TEMP/bin/python"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+          gh auth setup-git
 
       - name: Carry verified community-pool credential from last public quickfix
         run: |
@@ -98,7 +106,8 @@ jobs:
         id: detect
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
+             [ ! -f manifest.json ]; then
             IDS=$(python .github/scripts/list_changed.py all)
           else
             IDS=$(python .github/scripts/list_changed.py diff "${{ github.event.before }}" "${{ github.sha }}")
@@ -117,7 +126,8 @@ jobs:
           # Manual runs always rebuild the config; pushes rebuild it only when
           # a file under userdata/ actually changed.
           CONFIG_CHANGED=false
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
+             [ ! -f manifest.json ]; then
             CONFIG_CHANGED=true
           elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null \
                  | grep -qE '^userdata/'; then
@@ -126,7 +136,8 @@ jobs:
           echo "config=$CONFIG_CHANGED" >> "$GITHUB_OUTPUT"
 
           HOST_CHANGED=false
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
+             [ ! -f manifest.json ]; then
             HOST_CHANGED=true
           elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null \
                | grep -qFx '.github/pov-host-migration.json'; then
