@@ -20,7 +20,7 @@ class _VFS:
         self.home = Path(home)
 
     def translatePath(self, path):
-        return str(self.home / path.removeprefix('special://home/').replace('/', '\\'))
+        return str(self.home / path.removeprefix('special://home/'))
 
     @staticmethod
     def exists(path):
