@@ -1,5 +1,10 @@
 # Kodi RD IL POV Fentastic Migration
 
+**המצב העדכני:** הבילד משתמש בחבילות תוספים נפרדות ובעדכונים דרך
+`manifest.json`. להוראות התקנה עדכניות ראו [שיטה 5](install.html#filemanager);
+לכללי שמירת הגדרות במעבר ראו [מדיניות userdata](userdata/README.md).
+הסעיפים ההיסטוריים בהמשך מתארים גם גרסאות קודמות של הבילד.
+
 מטרת הריפו הזה היא להכין גרסת `POV` עם `FENtastic` וכל ההגדרות הרלוונטיות, בהתבסס על הריפו הציבורי:
 
 - `https://github.com/kodi7rd/kodi7rd.github.io`
