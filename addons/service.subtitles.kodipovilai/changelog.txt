@@ -1,3 +1,7 @@
+0.2.566
+- Keep verified subtitle corrections loadable on Windows when a long release filename would exceed the path limit.
+- Prefer a proven exact-file human subtitle, read additional embedded subtitle formats, and share bounded background timing checks without delaying the first subtitle.
+- Retry substantial untranslated AI chunks and prioritize translation near the current playback position after a seek.
 0.2.565
 - Keep local audio timing evidence tied to the exact media file, so another source with the same release name cannot inherit its sync result.
 0.2.564
