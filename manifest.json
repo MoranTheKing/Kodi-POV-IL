@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-09-28T20:05:39Z",
+  "generated": "2026-09-28T20:55:45Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -14,12 +14,12 @@
     "sha256": "820d381303bf86fabed506193b11fc1e7b72fe4644f52194ef347ba20401d3ad"
   },
   "config": {
-    "config_version": "2.0.7",
-    "filename": "config-2.0.7.zip",
-    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/config-2.0.7.zip",
-    "size": 32899,
-    "sha256": "f9cb7fb9dd3e9808f438505f208aaa392bf1792d46d18b49a5a8004f8d58090f",
-    "updated": "2026-09-28T20:05:39Z"
+    "config_version": "2.0.8",
+    "filename": "config-2.0.8.zip",
+    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/config-2.0.8.zip",
+    "size": 32898,
+    "sha256": "352b91abdf076c3131f20b0def7bef7a622481f888b85eada295427510430ee3",
+    "updated": "2026-09-28T20:55:45Z"
   },
   "addons": {
     "plugin.program.autocompletion": {
