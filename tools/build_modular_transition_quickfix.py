@@ -27,8 +27,9 @@ def _without_key(data):
     return KEY_BLOCK.sub(b'', data)
 
 
-def build(previous, bridge, output):
-    previous, bridge, output = map(Path, (previous, bridge, output))
+def build(previous, bridge, output, expected_wizard):
+    previous, bridge, output, expected_wizard = map(
+        Path, (previous, bridge, output, expected_wizard))
     if output.resolve() in (previous.resolve(), bridge.resolve()):
         raise ValueError('output overlaps an input')
     with zipfile.ZipFile(previous) as old, zipfile.ZipFile(bridge) as staged:
@@ -50,8 +51,12 @@ def build(previous, bridge, output):
         if b'b64decode' not in KEY_BLOCK.search(old_pool).group():
             raise ValueError('previous quickfix has a pool placeholder')
         plan = json.loads(staged.read(REQUEST))
-        if hashlib.sha256(staged.read(STAGED_WIZARD)).hexdigest() != plan.get('sha256'):
+        wizard_bytes = staged.read(STAGED_WIZARD)
+        if hashlib.sha256(wizard_bytes).hexdigest() != plan.get('sha256'):
             raise ValueError('staged Wizard hash differs from migration plan')
+        # An internally valid bridge may still carry an older Wizard build.
+        if wizard_bytes != expected_wizard.read_bytes():
+            raise ValueError('staged Wizard differs from reviewed release package')
         output.parent.mkdir(parents=True, exist_ok=True)
         bridge_by_name = {info.filename: info for info in bridge_infos}
         with zipfile.ZipFile(output, 'w') as result:
@@ -92,8 +97,10 @@ def main():
     parser.add_argument('previous', type=Path)
     parser.add_argument('bridge', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('expected_wizard', type=Path)
     args = parser.parse_args()
-    print(json.dumps(build(args.previous, args.bridge, args.output), indent=2))
+    print(json.dumps(build(args.previous, args.bridge, args.output,
+                           args.expected_wizard), indent=2))
 
 
 if __name__ == '__main__':
