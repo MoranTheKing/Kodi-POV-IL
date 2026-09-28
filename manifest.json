@@ -1,0 +1,180 @@
+{
+  "manifest_version": 1,
+  "name": "Kodi POV IL Build",
+  "repo": "MoranTheKing/Kodi-POV-IL",
+  "release_tag": "addons-latest",
+  "generated": "2026-09-28T20:05:39Z",
+  "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
+  "pov_host_migration": {
+    "id": "plugin.video.pov",
+    "version": "6.09.06",
+    "filename": "plugin.video.pov-6.09.06.zip",
+    "zip": "https://kodiyashimaru.github.io/repo/plugin.video.pov/plugin.video.pov-6.09.06.zip",
+    "size": 789161,
+    "sha256": "820d381303bf86fabed506193b11fc1e7b72fe4644f52194ef347ba20401d3ad"
+  },
+  "config": {
+    "config_version": "2.0.7",
+    "filename": "config-2.0.7.zip",
+    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/config-2.0.7.zip",
+    "size": 32899,
+    "sha256": "f9cb7fb9dd3e9808f438505f208aaa392bf1792d46d18b49a5a8004f8d58090f",
+    "updated": "2026-09-28T20:05:39Z"
+  },
+  "addons": {
+    "plugin.program.autocompletion": {
+      "id": "plugin.program.autocompletion",
+      "name": "AutoCompletion for virtual keyboard (Hebrew)",
+      "version": "2.1.3",
+      "type": "plugin",
+      "filename": "plugin.program.autocompletion-2.1.3.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.autocompletion-2.1.3.zip",
+      "size": 21581,
+      "sha256": "b3245ebd2eb58b036b0a488b3a9b8ea0ea6cbd1bd035bd501ba5f68f2d3250df",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "plugin.program.kodipovilwizard": {
+      "id": "plugin.program.kodipovilwizard",
+      "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
+      "version": "0.4.4",
+      "type": "plugin",
+      "filename": "plugin.program.kodipovilwizard-0.4.4.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.4.zip",
+      "size": 2193933,
+      "sha256": "fdb12c460421cfe72d3a3fc474dfc3ace82c0da573d8634fcc4fba43500a0d23",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "plugin.program.orderfavourites-hebrew": {
+      "id": "plugin.program.orderfavourites-hebrew",
+      "name": "מועדפים ואייקונים",
+      "version": "1.4.5",
+      "type": "plugin",
+      "filename": "plugin.program.orderfavourites-hebrew-1.4.5.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.5.zip",
+      "size": 13334711,
+      "sha256": "26b5b0e83e330ce34a5a8c9b9745a2b30188894eba4127b92a41a3e9bed95f84",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "repository.709": {
+      "id": "repository.709",
+      "name": " The[COLOR FF0C5EB4][B]7o9[/B][/COLOR]Repo",
+      "version": "1.0.2",
+      "type": "repository",
+      "filename": "repository.709-1.0.2.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/repository.709-1.0.2.zip",
+      "size": 707104,
+      "sha256": "b934678a5445b47137e05c602aa7a4773792156a0053ff1eaeaed3544d9ccd1d",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "repository.Fishenzon": {
+      "id": "repository.Fishenzon",
+      "name": "Fishenzon repo",
+      "version": "1.0.3",
+      "type": "repository",
+      "filename": "repository.Fishenzon-1.0.3.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/repository.Fishenzon-1.0.3.zip",
+      "size": 19175,
+      "sha256": "18a47fdc9cc7ef3b13f40d99e607a93ef4d57a46198e0d6c6091bd77c401e244",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "repository.jurialmunkey": {
+      "id": "repository.jurialmunkey",
+      "name": "jurialmunkey Alpha Repository",
+      "version": "3.4",
+      "type": "repository",
+      "filename": "repository.jurialmunkey-3.4.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/repository.jurialmunkey-3.4.zip",
+      "size": 7217,
+      "sha256": "88af3e286666e1a15e435cc5e3b7fe2dc8ca5455690e20693f46aba74207f31a",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "repository.kodifitzwell": {
+      "id": "repository.kodifitzwell",
+      "name": "kodifitzwell repository",
+      "version": "0.0.1",
+      "type": "repository",
+      "filename": "repository.kodifitzwell-0.0.1.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/repository.kodifitzwell-0.0.1.zip",
+      "size": 13219,
+      "sha256": "1483e7cba18cb22fa418d164da6f9b91fb6bdd2e70923550d0ebd824fd35fe5e",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "repository.otaku": {
+      "id": "repository.otaku",
+      "name": "Otaku's Repository",
+      "version": "1.0",
+      "type": "repository",
+      "filename": "repository.otaku-1.0.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/repository.otaku-1.0.zip",
+      "size": 453823,
+      "sha256": "ae9ffdb5dc44ce540b75ddf0f40ef6bf9079c0b8cae61060152261b5e652262f",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "script.fentastic.helper": {
+      "id": "script.fentastic.helper",
+      "name": "FENtastic Helper",
+      "version": "0.6.20a",
+      "type": "module",
+      "filename": "script.fentastic.helper-0.6.20a.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/script.fentastic.helper-0.6.20a.zip",
+      "size": 19065,
+      "sha256": "d5947ac0fb6fd89b8353cce4b4160687cdfcde805a0f86f9bacc7602a1fc9d44",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "script.module.autocompletion": {
+      "id": "script.module.autocompletion",
+      "name": "AutoCompletion library",
+      "version": "2.1.2",
+      "type": "module",
+      "filename": "script.module.autocompletion-2.1.2.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/script.module.autocompletion-2.1.2.zip",
+      "size": 180777,
+      "sha256": "7109a155bf2c28e904c6cda5066ffe1b17525c549bb933ca53446a693a62154b",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "service.subtitles.kodipovilai": {
+      "id": "service.subtitles.kodipovilai",
+      "name": "MoranSubs",
+      "version": "0.3.15",
+      "type": "subtitle",
+      "filename": "service.subtitles.kodipovilai-0.3.15.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.15.zip",
+      "size": 3630521,
+      "sha256": "4b0ef942c8bdffc0847735be58e860f4f5470998f9ddda022ccc0579b73785fa",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "skin.estuary": {
+      "id": "skin.estuary",
+      "name": "Estuary (Kodi + Real Debrid Israel)",
+      "version": "4.0.3",
+      "type": "skin",
+      "filename": "skin.estuary-4.0.3.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.estuary-4.0.3.zip",
+      "size": 6817082,
+      "sha256": "3c862ac5c48dd820c9199a984e6238fbfcbfff73a66d3d9e9848236dc46797fc",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "skin.fentastic": {
+      "id": "skin.fentastic",
+      "name": "FENtastic",
+      "version": "1.0.29",
+      "type": "skin",
+      "filename": "skin.fentastic-1.0.29.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.fentastic-1.0.29.zip",
+      "size": 20853110,
+      "sha256": "ae58ba2c4baa0efbaedb5e2e07b06719c4923647a4f7e6ef34fd590ae2a2ea36",
+      "updated": "2026-09-28T20:05:39Z"
+    },
+    "skin.povil.nox": {
+      "id": "skin.povil.nox",
+      "name": "Kodi POV IL - NOX",
+      "version": "1.0.11",
+      "type": "skin",
+      "filename": "skin.povil.nox-1.0.11.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.nox-1.0.11.zip",
+      "size": 24372898,
+      "sha256": "4b9931828ff2e9492ca3c8c135a6526babe0756ea9abb0d1f995c44cc180482b",
+      "updated": "2026-09-28T20:05:39Z"
+    }
+  }
+}
