@@ -8,6 +8,8 @@ on:
       - "tools/build_modular_preview.py"
       - "tools/test_local_addon_imports.py"
       - "tools/test_build_config_migration.py"
+      - "tools/test_modular_host_migration.py"
+      - "tools/audit_modular_host_migration.py"
       - ".github/workflows/modular-preview-check.yml"
   workflow_dispatch: {}
 
@@ -26,6 +28,7 @@ jobs:
         run: |
           python tools/test_local_addon_imports.py
           python tools/test_build_config_migration.py
+          python tools/test_modular_host_migration.py
           python tools/test_no_duplicate_definitions.py
           python tools/test_patcher_health.py
       - name: Build and inspect local-only modular preview
