@@ -189,6 +189,7 @@ jobs:
             gh release create "$TAG" \
               --title "POV IL Addons (latest)" \
               --notes "Rolling release that always holds the current zip of every addon. Updated automatically by CI; consumed via manifest.json." \
+              --latest=false \
               --target main
           fi
 

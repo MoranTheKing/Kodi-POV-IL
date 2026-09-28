@@ -1,5 +1,5 @@
 {
-  "config_version": "2.0.7",
+  "config_version": "2.0.8",
   "_comment": "Declarative policy for the Wizard's shipped userdata pack. Bump config_version whenever any file changes. Fresh installs seed build defaults; existing devices retain their chosen values. Modes: replace, merge_id (build wins), merge_missing_id (add only missing setting IDs), merge_name (add missing sources), seed_if_absent.",
   "files": [
     {
