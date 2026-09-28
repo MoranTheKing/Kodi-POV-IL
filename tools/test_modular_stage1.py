@@ -1,5 +1,6 @@
 """Filesystem rehearsal for the old-service Wizard bootstrap and bridge ZIP."""
 
+import ast
 import importlib.util
 import json
 import sys
@@ -36,6 +37,19 @@ def candidate_zip(path, version='0.4.3', extra=None):
 
 
 class ModularStage1Tests(unittest.TestCase):
+    def test_pov_addon_window_respects_clean_host_switch(self):
+        source = (ROOT / 'addons/service.subtitles.kodipovilai/service.py').read_text(
+            encoding='utf-8')
+        tree = ast.parse(source)
+        function = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef)
+                        and node.name == '_maybe_patch_pov_addon_window')
+        namespace = {'_skip_pov_patchers': lambda: True}
+        exec(compile(ast.Module(body=[function], type_ignores=[]),
+                     '<pov-addon-window-guard>', 'exec'), namespace)
+        with mock.patch.dict(sys.modules, {'resources': None}):
+            self.assertIsNone(namespace['_maybe_patch_pov_addon_window']())
+
     def test_path_scope_rejects_parent_escape(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw) / 'addons'
