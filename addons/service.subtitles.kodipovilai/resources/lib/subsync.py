@@ -17,6 +17,7 @@ import json
 import time
 import hashlib
 import math
+import threading
 
 try:
     from resources.lib import kodi_utils
@@ -615,7 +616,7 @@ def _remote_reference_bundle(url):
     if not url or not _remote_probe_ready(expected_url=url):
         _log('remote-cues: playback not ready after %.2fs'
              % (time.monotonic() - ready_started))
-        return {}
+        return {'probe_error': True}
     started = time.monotonic()
     _log('remote-cues: playback ready in %.2fs'
          % (started - ready_started))
@@ -645,7 +646,7 @@ def _remote_reference_bundle(url):
     except Exception as e:
         _log('remote cue-index probe failed after %.2fs: %r'
              % (time.monotonic() - started, e), level='WARNING')
-        return {}
+        return {'probe_error': True}
     _log('remote-cues: index read in %.2fs (%d request(s), %d byte(s))'
          % (time.monotonic() - started, int(raw.get('requests') or 0),
             int(raw.get('bytes') or 0)))
@@ -951,7 +952,19 @@ def _learn_cut_signature(info):
     return sig
 
 
+_PROBE_LOCK = threading.RLock()
+_PREFETCH_KEYS = set()
+
+
 def _probe_reference_bundle(info, playing):
+    # Autosub may begin this same exact-file read while its first subtitle is
+    # downloading.  The service worker must reuse that result, never send a
+    # second set of Range requests to the playback provider.
+    with _PROBE_LOCK:
+        return _probe_reference_bundle_unlocked(info, playing)
+
+
+def _probe_reference_bundle_unlocked(info, playing):
     """Actual playing-file reference, with independent track timelines.
 
     The disk cache is keyed by an opaque transport identity, never merely the
@@ -1037,11 +1050,97 @@ def _probe_reference_bundle(info, playing):
                           ((ent or {}).get('cut_signature') or '')),
         'bytes': int(res.get('bytes') or 0),
         'legacy_single_track': bool(res.get('legacy_single_track')),
-        'timing_attempted': True,
+        'timing_attempted': not bool(res.get('probe_error')),
     }
-    if cpath and cache_key:
+    # A blocked/not-ready Range read is not evidence that the media has no
+    # subtitle track.  In particular, an early prefetch must never poison the
+    # negative cache and prevent the ordinary deep worker from retrying.
+    if cpath and cache_key and not res.get('probe_error'):
         _write_probe_cache(cache_key, bundle)
     return bundle
+
+
+def prefetch_autosub_reference(info, candidates):
+    """Overlap one safe media read with an uncertain human candidate download.
+
+    This is deliberately narrower than generic on-play prefetch: exact/group
+    matches and a single Hebrew choice already have a fast foreground path.
+    No provider subtitle search, audio read or Gemini call is started here.
+    The deep worker shares _PROBE_LOCK and the same cache entry.
+    """
+    registered_key = ''
+    try:
+        if (not _probe_enabled()
+                or (kodi_utils.get_setting('subsync_autorank', 'true') or
+                    'true').strip().lower() == 'false'):
+            return False
+        playing = playing_release(info)
+        if not playing or _cached_reference_bundle(info):
+            return False
+        humans = []
+        for candidate in candidates or []:
+            if (candidate.get('language') or '').strip().lower() not in (
+                    'he', 'heb', 'hebrew'):
+                continue
+            payload = _decode_link(candidate.get('link') or '') or {}
+            if _is_human_hebrew_candidate(payload):
+                humans.append((candidate, payload))
+            if len(humans) >= 2:
+                break
+        if len(humans) < 2:
+            return False
+        first, payload = humans[0]
+        release = (payload.get('filename') or payload.get('release') or
+                   first.get('filename') or '').strip()
+        _pct, tier, _diag = release_match.score(playing, release)
+        if tier in release_match.AUTO_OK_TIERS:
+            return False
+        local_url = _playing_url(info)
+        remote_url = '' if local_url else _remote_playing_url(info)
+        if not (local_url or remote_url):
+            return False
+        key = _transport_cache_key(info)
+        if not key:
+            return False
+        with _PROBE_LOCK:
+            if key in _PREFETCH_KEYS or _cached_reference_bundle(info):
+                return False
+            _PREFETCH_KEYS.add(key)
+            registered_key = key
+        frozen = dict(info)
+
+        def work():
+            started = time.monotonic()
+            try:
+                # Waiting for playback stability must not poison the negative
+                # cache.  The ordinary deep worker can still retry later.
+                if remote_url and not _remote_probe_ready(
+                        max_wait_s=18.0, expected_url=remote_url):
+                    _log('autosub reference prefetch: playback not ready '
+                         'after %.2fs' % (time.monotonic() - started))
+                    return
+                if remote_url and _current_stream_url() != remote_url:
+                    return
+                bundle = _probe_reference_bundle(frozen, playing)
+                _log('autosub reference prefetch: %.2fs, %d cue(s)'
+                     % (time.monotonic() - started,
+                        len(bundle.get('cues') or [])))
+            except Exception as e:
+                _log('autosub reference prefetch failed: %r' % e,
+                     level='DEBUG')
+            finally:
+                with _PROBE_LOCK:
+                    _PREFETCH_KEYS.discard(key)
+
+        threading.Thread(target=work, daemon=True,
+                         name='MoranSubs-ReferencePrefetch').start()
+        return True
+    except Exception as e:
+        if registered_key:
+            with _PROBE_LOCK:
+                _PREFETCH_KEYS.discard(registered_key)
+        _log('autosub reference prefetch skipped: %r' % e, level='DEBUG')
+        return False
 
 
 def _probe_reference_cues(info, playing):
@@ -2901,6 +3000,10 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
         if pinned and _current_stream_transport() != pinned:
             _log('deep verify discarded: playback changed during media probe')
             return path, None
+        if early_job and not _job_matches_current(early_job):
+            _log('deep verify stopped: subtitle selection changed during '
+                 'media probe')
+            return path, None
         cut_signature = (bundle.get('cut_signature') or '').strip().lower()
         if not re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature):
             # A useful cue profile can survive optional signature-range
@@ -2991,6 +3094,10 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
             cands = _oracle_candidates(info)
             _log('oracle: discovery in %.2fs (%d candidate(s))'
                  % (time.monotonic() - oracle_started, len(cands)))
+            if early_job and not _job_matches_current(early_job):
+                _log('deep verify stopped: subtitle selection changed during '
+                     'oracle discovery')
+                return path, None
             oracle, tier = (sync_align.pick_oracle(cands, playing)
                             if cands else (None, ''))
             oracle_verdict = None
@@ -3001,6 +3108,10 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 _log('oracle: download in %.2fs (%d character(s))'
                      % (time.monotonic() - download_started,
                         len(oracle_text)))
+                if early_job and not _job_matches_current(early_job):
+                    _log('deep verify stopped: subtitle selection changed '
+                         'during oracle download')
+                    return path, None
                 if oracle_text.strip():
                     okw = {}
                     if tier == release_match.TIER_SOURCE:
@@ -3771,6 +3882,8 @@ def run_deep_job(job):
     """Service-side execution of one queued deep-verify job. Computes the
     verdict, and on FIXABLE swaps the playing subtitle in place. One gentle
     toast per pair, ever (see _announce). Never raises."""
+    started = time.monotonic()
+    started_wall = time.time()
     try:
         key = job.get('key') or ''
         path = job.get('path') or ''
@@ -3915,6 +4028,17 @@ def run_deep_job(job):
         except Exception:
             pass
         _log('deep job failed: %r' % e, level='WARNING')
+    finally:
+        try:
+            queued = float(job.get('ts') or 0.0)
+            wait_s = (max(0.0, started_wall - queued)
+                      if queued > 0.0 else 0.0)
+            _log('deep job timing: processing=%.2fs queue_wait=%.2fs '
+                 'identity_only=%s' % (
+                     time.monotonic() - started, wait_s,
+                     bool(job.get('identity_only'))))
+        except Exception:
+            pass
 
 
 def drain_queue_once():

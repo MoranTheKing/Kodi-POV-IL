@@ -7,6 +7,7 @@ keep-alive cue-index API after playback is stable.
 import importlib.util
 import hashlib
 import json
+import threading
 from pathlib import Path
 import sys
 import tempfile
@@ -667,6 +668,25 @@ class RemotePlaybackSafety(unittest.TestCase):
         probe.assert_called_once()
         self.assertEqual(out['cues'], full['cues'])
         self.assertTrue(out['timing_attempted'])
+
+    def test_remote_probe_failure_never_becomes_a_negative_cache_hit(self):
+        with patch.object(self.sub, '_probe_enabled', return_value=True), \
+             patch.object(self.sub, '_playing_url', return_value=''), \
+             patch.object(self.sub, '_remote_playing_url',
+                          return_value=self.url), \
+             patch.object(self.sub, '_remote_reference_bundle',
+                          return_value={'probe_error': True}) as probe:
+            first = self.sub._probe_reference_bundle({}, 'playing')
+            second = self.sub._probe_reference_bundle({}, 'playing')
+        self.assertFalse(first['timing_attempted'])
+        self.assertFalse(second['timing_attempted'])
+        self.assertEqual(probe.call_count, 2)
+        self.assertFalse(self.cache.exists())
+
+        with patch.object(self.sub, '_remote_probe_ready',
+                          return_value=False):
+            self.assertTrue(
+                self.sub._remote_reference_bundle(self.url)['probe_error'])
 
     def test_identity_job_records_exact_cut_without_timing_or_provider_work(self):
         sig = 'cut1:' + 'd' * 32
@@ -2345,6 +2365,153 @@ class RemotePlaybackSafety(unittest.TestCase):
                                        (18, 'cross', {})]):
             unchanged = self.sub.rank_ready_candidates({}, rows)
         self.assertEqual(unchanged, rows)
+
+    def test_uncertain_autosub_prefetch_is_one_bounded_read_and_skips_trusted(self):
+        def human(name):
+            payload = {'type': 'engine', 'language': 'Hebrew',
+                       'source': 'Ktuvit', 'filename': name}
+            return {'language': 'he', 'filename': name,
+                    'link': urllib.parse.quote(json.dumps(payload))}
+
+        rows = [human('other-cut-a'), human('other-cut-b')]
+        started, release = threading.Event(), threading.Event()
+
+        def slow_probe(_info, _playing):
+            started.set()
+            self.assertTrue(release.wait(2))
+            return {'cues': [1]}
+
+        with patch.object(self.sub, '_probe_enabled', return_value=True), \
+             patch.object(self.sub, 'playing_release', return_value='playing'), \
+             patch.object(self.sub.release_match, 'score',
+                          return_value=(15, 'cross', {})), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}), \
+             patch.object(self.sub, '_playing_url', return_value=''), \
+             patch.object(self.sub, '_remote_playing_url',
+                          return_value=self.url), \
+             patch.object(self.sub, '_current_stream_url',
+                          return_value=self.url), \
+             patch.object(self.sub, '_transport_cache_key',
+                          return_value='same-media'), \
+             patch.object(self.sub, '_remote_probe_ready',
+                          return_value=True) as ready, \
+             patch.object(self.sub, '_probe_reference_bundle',
+                          side_effect=slow_probe) as probe:
+            self.assertTrue(self.sub.prefetch_autosub_reference({}, rows))
+            self.assertTrue(started.wait(2))
+            self.assertFalse(self.sub.prefetch_autosub_reference({}, rows))
+            release.set()
+            for _ in range(100):
+                if not self.sub._PREFETCH_KEYS:
+                    break
+                threading.Event().wait(.01)
+            self.assertFalse(self.sub._PREFETCH_KEYS)
+            probe.assert_called_once()
+            self.assertEqual(ready.call_args.kwargs['expected_url'], self.url)
+            self.assertEqual(ready.call_args.kwargs['max_wait_s'], 18.0)
+
+        trusted = next(iter(self.sub.release_match.AUTO_OK_TIERS))
+        with patch.object(self.sub, '_probe_enabled', return_value=True), \
+             patch.object(self.sub, 'playing_release', return_value='playing'), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}), \
+             patch.object(self.sub.release_match, 'score',
+                          return_value=(100, trusted, {})), \
+             patch.object(self.sub, '_probe_reference_bundle') as probe:
+            self.assertFalse(self.sub.prefetch_autosub_reference({}, rows))
+            probe.assert_not_called()
+
+    def test_unready_prefetch_does_not_write_negative_probe_cache(self):
+        payload = {'type': 'engine', 'language': 'Hebrew',
+                   'source': 'Ktuvit', 'filename': 'other-cut'}
+        rows = [{'language': 'he',
+                 'link': urllib.parse.quote(json.dumps(payload))}] * 2
+        ready_done = threading.Event()
+
+        def unready(**_kwargs):
+            ready_done.set()
+            return False
+
+        with patch.object(self.sub, '_probe_enabled', return_value=True), \
+             patch.object(self.sub, 'playing_release', return_value='playing'), \
+             patch.object(self.sub.release_match, 'score',
+                          return_value=(15, 'cross', {})), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}), \
+             patch.object(self.sub, '_playing_url', return_value=''), \
+             patch.object(self.sub, '_remote_playing_url',
+                          return_value=self.url), \
+             patch.object(self.sub, '_transport_cache_key',
+                          return_value='not-ready'), \
+             patch.object(self.sub, '_remote_probe_ready',
+                          side_effect=unready), \
+             patch.object(self.sub, '_probe_reference_bundle') as probe:
+            self.assertTrue(self.sub.prefetch_autosub_reference({}, rows))
+            self.assertTrue(ready_done.wait(2))
+            for _ in range(100):
+                if not self.sub._PREFETCH_KEYS:
+                    break
+                threading.Event().wait(.01)
+            self.assertFalse(self.sub._PREFETCH_KEYS)
+            probe.assert_not_called()
+
+    def test_manual_pick_during_media_probe_skips_slow_oracle_work(self):
+        job = self._bound_job(key='first-selection')
+        self._set_pending_for(job)
+
+        def probe_then_manual_pick(_info, _playing):
+            self.selection = {'token': 'manual-selection',
+                              'link_hash': 'manual-link'}
+            return {'cues': []}
+
+        with patch.object(self.sub, '_probe_reference_bundle',
+                          side_effect=probe_then_manual_pick), \
+             patch.object(self.sub, '_oracle_candidates') as oracle:
+            output, verdict = self.sub._deep_verify(
+                {'_subsync_stream_url': self.url}, str(self.subtitle),
+                self.subtitle.read_text(encoding='utf-8'),
+                'other-cut', 'playing', 'first-selection', early_job=job)
+        self.assertEqual(output, str(self.subtitle))
+        self.assertIsNone(verdict)
+        oracle.assert_not_called()
+
+    def test_prefetch_and_deep_worker_share_one_media_probe(self):
+        first_read = threading.Event()
+        finish_read = threading.Event()
+        profile = {'cues': [{'start': 1000, 'end': 2000}],
+                   'track_cues': [], 'track': {},
+                   'cut_signature': 'cut1:' + 'a' * 32}
+
+        def read_once(_url):
+            first_read.set()
+            self.assertTrue(finish_read.wait(2))
+            return profile
+
+        with patch.object(self.sub, '_probe_enabled', return_value=True), \
+             patch.object(self.sub, '_transport_cache_key',
+                          return_value='shared-media'), \
+             patch.object(self.sub, '_playing_url', return_value=''), \
+             patch.object(self.sub, '_remote_playing_url',
+                          return_value=self.url), \
+             patch.object(self.sub, '_remote_reference_bundle',
+                          side_effect=read_once) as remote:
+            outputs = []
+            threads = [threading.Thread(
+                target=lambda: outputs.append(
+                    self.sub._probe_reference_bundle({}, 'playing')))
+                       for _ in range(2)]
+            threads[0].start()
+            self.assertTrue(first_read.wait(2))
+            threads[1].start()
+            finish_read.set()
+            for thread in threads:
+                thread.join(2)
+                self.assertFalse(thread.is_alive())
+        self.assertEqual(remote.call_count, 1)
+        self.assertEqual(len(outputs), 2)
+        self.assertEqual(outputs[0]['cues'], profile['cues'])
+        self.assertEqual(outputs[1]['cues'], profile['cues'])
 
     def test_picker_promotes_and_labels_candidate_proven_for_cached_cut(self):
         def human(release, row_id):
