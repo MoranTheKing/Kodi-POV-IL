@@ -815,6 +815,21 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.assertEqual(self.subtitle.read_text(encoding='utf-8'),
                          '1\n00:00:01,000 --> 00:00:02,000\nHello\n')
 
+    def test_fixed_delivery_bounded_path_writes_long_release_name(self):
+        cache = self.root / ('cache-' + 'x' * 45) / ('profile-' + 'y' * 45)
+        cache.mkdir(parents=True)
+        long_source = self.root / (('long.release.name.' * 12) + '.he.srt')
+        with patch.object(sys.modules['resources.lib.kodi_utils'],
+                          'cache_dir', return_value=str(cache)):
+            first = self.sub._write_fixed(str(long_source), 'corrected A')
+            second = self.sub._write_fixed(str(long_source), 'corrected B')
+        self.assertTrue(first)
+        self.assertTrue(second)
+        self.assertNotEqual(first, second)
+        self.assertLessEqual(len(str(Path(first).resolve()) + '.tmp'), 240)
+        self.assertEqual(Path(first).read_text(encoding='utf-8'), 'corrected A')
+        self.assertEqual(Path(second).read_text(encoding='utf-8'), 'corrected B')
+
     def test_soft_file_probe_nudge_is_refused_but_real_shift_survives(self):
         base = {'status': self.sub.sync_align.STATUS_FIXABLE,
                 'mode': 'global', 'scale': 1.0, 'offset_ms': -699.0,
