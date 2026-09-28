@@ -74,6 +74,15 @@ assert translate._source_context_for_subchunk(chunks, 2, chunks[1][1:], 0) == []
 assert translate._source_context_for_subchunk(
     chunks, 2, [chunks[1][0], chunks[1][2]], 5) == []
 
+# Seeking into a later chunk changes only request launch order.  Its original
+# worker index still selects the same source-neighbor context and output slot.
+assert translate._chunk_dispatch_order(chunks, 0) == [1, 2, 3]
+assert translate._chunk_dispatch_order(chunks, 9000) == [2, 3, 1]
+assert translate._chunk_dispatch_order(chunks, 12000) == [3, 2, 1]
+assert translate._chunk_dispatch_order(chunks, None) == [1, 2, 3]
+assert translate._chunk_dispatch_order(chunks, 999000) == [1, 2, 3]
+assert translate._source_context_for_subchunk(chunks, 2, chunks[1], 5) == context[2]
+
 with_blank = [[cue(1, 'old'), cue(2, ''), cue(3, 'recent')],
               [cue(4, 'current')]]
 assert translate._source_context_for_subchunk(
@@ -97,5 +106,9 @@ assert any(isinstance(node, ast.Call)
            and isinstance(node.func, ast.Name)
            and node.func.id == '_source_context_for_subchunk'
            for node in ast.walk(gemini_node))
+assert any(isinstance(node, ast.Call)
+           and isinstance(node.func, ast.Name)
+           and node.func.id == '_chunk_dispatch_order'
+           for node in ast.walk(resolve_node))
 
 print("ok - chunk 1 has no context; later 1-based workers receive only the previous source tail")

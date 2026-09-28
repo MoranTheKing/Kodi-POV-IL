@@ -2599,6 +2599,46 @@ def _source_context_for_subchunk(chunks, idx, ch, prev_context_lines):
             for text in [srt.block_text_only(block)] if text]
 
 
+def _chunk_dispatch_order(chunks, playback_ms):
+    """Put the visible part of a seeked video first without changing cue order.
+
+    Worker indices and the final SRT remain in source order.  Only the order in
+    which independent requests enter the executor changes.  An unparseable or
+    out-of-range playback position keeps the ordinary start-to-end schedule.
+    """
+    ordinary = list(range(1, len(chunks) + 1))
+    if len(ordinary) < 2 or playback_ms is None:
+        return ordinary
+    try:
+        position = int(playback_ms)
+        starts = [srt._block_start(chunk[0]) for chunk in chunks if chunk]
+        ends = [srt._block_times(chunk[-1]) for chunk in chunks if chunk]
+        if (len(starts) != len(chunks) or len(ends) != len(chunks)
+                or any(value is None for value in starts + ends)
+                or position < starts[0] or position > ends[-1][1]):
+            return ordinary
+        current = next((i for i, end in enumerate(ends)
+                        if position <= end[1]), None)
+        if current is None or current == 0:
+            return ordinary
+        nearby = [current + 1, current + 2, current]
+        return ([index for index in nearby if index in ordinary]
+                + [index for index in ordinary if index not in nearby])
+    except (TypeError, ValueError, IndexError):
+        return ordinary
+
+
+def _current_playback_ms():
+    try:
+        import xbmc
+        player = xbmc.Player()
+        if player.isPlayingVideo():
+            return int(float(player.getTime()) * 1000)
+    except Exception:
+        pass
+    return None
+
+
 def resolve(link, info, progress_cb=None, progressive_cb=None,
             extract_progress_cb=None, selection=None, fallback_link='',
             fallback_links=None):
@@ -4429,9 +4469,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     try:
         from concurrent.futures import ThreadPoolExecutor, as_completed
         with ThreadPoolExecutor(max_workers=parallel) as executor:
+            dispatch_order = _chunk_dispatch_order(
+                chunks, _current_playback_ms())
             future_to_idx = {
-                executor.submit(_translate_one, i + 1, ch): i + 1
-                for i, ch in enumerate(chunks)
+                executor.submit(_translate_one, idx, chunks[idx - 1]): idx
+                for idx in dispatch_order
             }
             for future in as_completed(future_to_idx):
                 idx = future_to_idx[future]

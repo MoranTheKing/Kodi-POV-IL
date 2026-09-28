@@ -347,13 +347,22 @@ def autosub_on_play():
         # Non-modal search (the overlay above is the progress). list_candidates
         # returns everything in priority order; the first 'he' row is the best
         # Hebrew (embedded > human > pool > MT).
+        search_started = time.monotonic()
         cands = translate.list_candidates(info, modal_progress=False)
+        kodi_utils.log('autosub timing: search={0:.2f}s candidates={1}'
+                       .format(time.monotonic() - search_started,
+                               len(cands or [])), level='INFO')
         # (list_candidates already queued every human Ktuvit release for the
         # background harvest; the service drainer downloads + uploads them
         # gently over time. Nothing to do here.)
         _proven_ai_fallback = ''
         try:
             from resources.lib import subsync
+            # Begin the exact-file cue read only for a genuinely uncertain
+            # multi-human choice.  It runs alongside the normal first subtitle
+            # download; the deep verifier reuses the same read if it is still
+            # in flight.  The initial application never waits for this thread.
+            subsync.prefetch_autosub_reference(info, cands)
             cands = subsync.rank_ready_candidates(info, cands)
             # Metadata-only. Human stays first; this is used only if the deep
             # worker definitively cannot align that human row.

@@ -30,6 +30,7 @@ LIB = os.path.join(HERE, '..', 'addons', 'service.subtitles.kodipovilai',
                    'resources', 'lib')
 
 FAIL = []
+PREFETCH_EVENTS = []
 
 
 def check(label, cond, detail=''):
@@ -53,6 +54,7 @@ HUMAN_LINK = link({'type': 'engine', 'source': 'ktuvit',
 def run(stream_labels, sabotage=False, manual_switch=False,
         pending_overlay=False):
     """Run the real autosub_on_play(); return what it resolved and applied."""
+    PREFETCH_EVENTS.clear()
     resolved, streams_set, overlay_messages = [], [], []
     for name in list(sys.modules):
         if name.split('.')[0] in ('resources', 'xbmc', 'xbmcgui', 'xbmcaddon',
@@ -235,6 +237,18 @@ def run(stream_labels, sabotage=False, manual_switch=False,
     sys.modules['resources.lib.pool'].share_enabled = lambda: False
     sys.modules['resources.lib.pool'].enqueue_harvest = lambda *a, **k: None
 
+    ss = types.ModuleType('resources.lib.subsync')
+    ss.prefetch_autosub_reference = lambda info, rows: (
+        PREFETCH_EVENTS.append('prefetch') or False)
+    ss.rank_ready_candidates = lambda info, rows: (
+        PREFETCH_EVENTS.append('rank') or rows)
+    ss.proven_pool_ai_fallback = lambda info, rows: ''
+    ss.diverse_human_alternatives = lambda rows, limit=6: []
+    ss._is_human_hebrew_candidate = lambda payload: bool(
+        payload.get('type') == 'engine' and not payload.get('embedded'))
+    sys.modules['resources.lib.subsync'] = ss
+    lib.subsync = ss
+
     src_path = os.path.join(LIB, 'autosub_service.py')
     if sabotage:
         import tempfile
@@ -273,6 +287,8 @@ check('autosub NEVER resolves the embedded_sync row',
       'embedded_sync' not in resolved, repr(resolved))
 check('autosub still applies the plain embedded track instead',
       'engine' in resolved, repr(resolved))
+check('autosub begins reference prefetch before ranking candidates',
+      PREFETCH_EVENTS == ['prefetch', 'rank'], repr(PREFETCH_EVENTS))
 
 # --- and the fast path itself still works when the label IS 'heb' ----------
 resolved2, streams_set2 = run(['heb', 'eng'])
