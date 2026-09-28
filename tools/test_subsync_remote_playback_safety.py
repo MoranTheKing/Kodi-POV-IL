@@ -7,6 +7,7 @@ keep-alive cue-index API after playback is stable.
 import importlib.util
 import hashlib
 import json
+import threading
 from pathlib import Path
 import sys
 import tempfile
@@ -668,6 +669,25 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.assertEqual(out['cues'], full['cues'])
         self.assertTrue(out['timing_attempted'])
 
+    def test_remote_probe_failure_never_becomes_a_negative_cache_hit(self):
+        with patch.object(self.sub, '_probe_enabled', return_value=True), \
+             patch.object(self.sub, '_playing_url', return_value=''), \
+             patch.object(self.sub, '_remote_playing_url',
+                          return_value=self.url), \
+             patch.object(self.sub, '_remote_reference_bundle',
+                          return_value={'probe_error': True}) as probe:
+            first = self.sub._probe_reference_bundle({}, 'playing')
+            second = self.sub._probe_reference_bundle({}, 'playing')
+        self.assertFalse(first['timing_attempted'])
+        self.assertFalse(second['timing_attempted'])
+        self.assertEqual(probe.call_count, 2)
+        self.assertFalse(self.cache.exists())
+
+        with patch.object(self.sub, '_remote_probe_ready',
+                          return_value=False):
+            self.assertTrue(
+                self.sub._remote_reference_bundle(self.url)['probe_error'])
+
     def test_identity_job_records_exact_cut_without_timing_or_provider_work(self):
         sig = 'cut1:' + 'd' * 32
         key = 'legacy-sub-hash|movie-release'
@@ -794,6 +814,21 @@ class RemotePlaybackSafety(unittest.TestCase):
                          'second fixed text')
         self.assertEqual(self.subtitle.read_text(encoding='utf-8'),
                          '1\n00:00:01,000 --> 00:00:02,000\nHello\n')
+
+    def test_fixed_delivery_bounded_path_writes_long_release_name(self):
+        cache = self.root / ('cache-' + 'x' * 45) / ('profile-' + 'y' * 45)
+        cache.mkdir(parents=True)
+        long_source = self.root / (('long.release.name.' * 12) + '.he.srt')
+        with patch.object(sys.modules['resources.lib.kodi_utils'],
+                          'cache_dir', return_value=str(cache)):
+            first = self.sub._write_fixed(str(long_source), 'corrected A')
+            second = self.sub._write_fixed(str(long_source), 'corrected B')
+        self.assertTrue(first)
+        self.assertTrue(second)
+        self.assertNotEqual(first, second)
+        self.assertLessEqual(len(str(Path(first).resolve()) + '.tmp'), 240)
+        self.assertEqual(Path(first).read_text(encoding='utf-8'), 'corrected A')
+        self.assertEqual(Path(second).read_text(encoding='utf-8'), 'corrected B')
 
     def test_soft_file_probe_nudge_is_refused_but_real_shift_survives(self):
         base = {'status': self.sub.sync_align.STATUS_FIXABLE,
@@ -1905,6 +1940,59 @@ class RemotePlaybackSafety(unittest.TestCase):
             out = self.sub.rank_ready_candidates({}, [first, second])
         self.assertEqual([x['filename'] for x in out], ['second', 'first'])
 
+    def test_exact_cut_proof_beats_an_unread_release_name_without_fetching(self):
+        def candidate(name):
+            payload = {'type': 'engine', 'source': 'Ktuvit',
+                       'language': 'Hebrew', 'filename': name}
+            return {'filename': name, 'language': 'he',
+                    'link': urllib.parse.quote(json.dumps(payload))}
+
+        unknown = candidate('Show.S01E03.1080p.WEB.H264-CAKES')
+        proven = candidate('Show.S01E03.1080p.WEB.H264-OTHER')
+        bundle = {'cues': [1], 'cut_signature': 'cut1:' + 'a' * 32}
+        confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                     'scale': 1.0, 'offset_ms': 0.0, 'vote': .95,
+                     'overlap': .95, 'diag': 'confirmed'}
+        with patch.object(self.sub, 'playing_release',
+                          return_value='Show.S01E03.1080p.WEB.H264-CAKES'), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_ready_candidate_text', side_effect=[
+                 ('', self.sub._decode_link(unknown['link'])),
+                 ('subtitle text', self.sub._decode_link(proven['link']))]), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(confirmed, 'track', 200)), \
+             patch.object(self.sub, '_store_verdict') as stored:
+            out = self.sub.rank_ready_candidates({}, [unknown, proven])
+        self.assertIs(out[0], proven)
+        stored.assert_called_once()
+
+    def test_unsealed_timing_proof_cannot_demote_an_unread_exact_release(self):
+        def candidate(name):
+            payload = {'type': 'engine', 'source': 'Ktuvit',
+                       'language': 'Hebrew', 'filename': name}
+            return {'filename': name, 'language': 'he',
+                    'link': urllib.parse.quote(json.dumps(payload))}
+
+        unknown = candidate('Show.S01E03.1080p.WEB.H264-CAKES')
+        other = candidate('Show.S01E03.1080p.WEB.H264-OTHER')
+        confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                     'scale': 1.0, 'offset_ms': 0.0, 'vote': .95,
+                     'overlap': .95, 'diag': 'confirmed'}
+        with patch.object(self.sub, 'playing_release',
+                          return_value='Show.S01E03.1080p.WEB.H264-CAKES'), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={'cues': [1], 'cut_signature': ''}), \
+             patch.object(self.sub, '_ready_candidate_text', side_effect=[
+                 ('', self.sub._decode_link(unknown['link'])),
+                 ('subtitle text', self.sub._decode_link(other['link']))]), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(confirmed, 'track', 200)), \
+             patch.object(self.sub, '_store_verdict') as stored:
+            out = self.sub.rank_ready_candidates({}, [unknown, other])
+        self.assertIs(out[0], unknown)
+        stored.assert_not_called()
+
     def test_candidate_timing_rank_reads_cache_only_and_never_downloads(self):
         from resources.lib import subs_engine_bridge as bridge
         from resources.lib import translate
@@ -2292,6 +2380,153 @@ class RemotePlaybackSafety(unittest.TestCase):
                                        (18, 'cross', {})]):
             unchanged = self.sub.rank_ready_candidates({}, rows)
         self.assertEqual(unchanged, rows)
+
+    def test_uncertain_autosub_prefetch_is_one_bounded_read_and_skips_trusted(self):
+        def human(name):
+            payload = {'type': 'engine', 'language': 'Hebrew',
+                       'source': 'Ktuvit', 'filename': name}
+            return {'language': 'he', 'filename': name,
+                    'link': urllib.parse.quote(json.dumps(payload))}
+
+        rows = [human('other-cut-a'), human('other-cut-b')]
+        started, release = threading.Event(), threading.Event()
+
+        def slow_probe(_info, _playing):
+            started.set()
+            self.assertTrue(release.wait(2))
+            return {'cues': [1]}
+
+        with patch.object(self.sub, '_probe_enabled', return_value=True), \
+             patch.object(self.sub, 'playing_release', return_value='playing'), \
+             patch.object(self.sub.release_match, 'score',
+                          return_value=(15, 'cross', {})), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}), \
+             patch.object(self.sub, '_playing_url', return_value=''), \
+             patch.object(self.sub, '_remote_playing_url',
+                          return_value=self.url), \
+             patch.object(self.sub, '_current_stream_url',
+                          return_value=self.url), \
+             patch.object(self.sub, '_transport_cache_key',
+                          return_value='same-media'), \
+             patch.object(self.sub, '_remote_probe_ready',
+                          return_value=True) as ready, \
+             patch.object(self.sub, '_probe_reference_bundle',
+                          side_effect=slow_probe) as probe:
+            self.assertTrue(self.sub.prefetch_autosub_reference({}, rows))
+            self.assertTrue(started.wait(2))
+            self.assertFalse(self.sub.prefetch_autosub_reference({}, rows))
+            release.set()
+            for _ in range(100):
+                if not self.sub._PREFETCH_KEYS:
+                    break
+                threading.Event().wait(.01)
+            self.assertFalse(self.sub._PREFETCH_KEYS)
+            probe.assert_called_once()
+            self.assertEqual(ready.call_args.kwargs['expected_url'], self.url)
+            self.assertEqual(ready.call_args.kwargs['max_wait_s'], 18.0)
+
+        trusted = next(iter(self.sub.release_match.AUTO_OK_TIERS))
+        with patch.object(self.sub, '_probe_enabled', return_value=True), \
+             patch.object(self.sub, 'playing_release', return_value='playing'), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}), \
+             patch.object(self.sub.release_match, 'score',
+                          return_value=(100, trusted, {})), \
+             patch.object(self.sub, '_probe_reference_bundle') as probe:
+            self.assertFalse(self.sub.prefetch_autosub_reference({}, rows))
+            probe.assert_not_called()
+
+    def test_unready_prefetch_does_not_write_negative_probe_cache(self):
+        payload = {'type': 'engine', 'language': 'Hebrew',
+                   'source': 'Ktuvit', 'filename': 'other-cut'}
+        rows = [{'language': 'he',
+                 'link': urllib.parse.quote(json.dumps(payload))}] * 2
+        ready_done = threading.Event()
+
+        def unready(**_kwargs):
+            ready_done.set()
+            return False
+
+        with patch.object(self.sub, '_probe_enabled', return_value=True), \
+             patch.object(self.sub, 'playing_release', return_value='playing'), \
+             patch.object(self.sub.release_match, 'score',
+                          return_value=(15, 'cross', {})), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}), \
+             patch.object(self.sub, '_playing_url', return_value=''), \
+             patch.object(self.sub, '_remote_playing_url',
+                          return_value=self.url), \
+             patch.object(self.sub, '_transport_cache_key',
+                          return_value='not-ready'), \
+             patch.object(self.sub, '_remote_probe_ready',
+                          side_effect=unready), \
+             patch.object(self.sub, '_probe_reference_bundle') as probe:
+            self.assertTrue(self.sub.prefetch_autosub_reference({}, rows))
+            self.assertTrue(ready_done.wait(2))
+            for _ in range(100):
+                if not self.sub._PREFETCH_KEYS:
+                    break
+                threading.Event().wait(.01)
+            self.assertFalse(self.sub._PREFETCH_KEYS)
+            probe.assert_not_called()
+
+    def test_manual_pick_during_media_probe_skips_slow_oracle_work(self):
+        job = self._bound_job(key='first-selection')
+        self._set_pending_for(job)
+
+        def probe_then_manual_pick(_info, _playing):
+            self.selection = {'token': 'manual-selection',
+                              'link_hash': 'manual-link'}
+            return {'cues': []}
+
+        with patch.object(self.sub, '_probe_reference_bundle',
+                          side_effect=probe_then_manual_pick), \
+             patch.object(self.sub, '_oracle_candidates') as oracle:
+            output, verdict = self.sub._deep_verify(
+                {'_subsync_stream_url': self.url}, str(self.subtitle),
+                self.subtitle.read_text(encoding='utf-8'),
+                'other-cut', 'playing', 'first-selection', early_job=job)
+        self.assertEqual(output, str(self.subtitle))
+        self.assertIsNone(verdict)
+        oracle.assert_not_called()
+
+    def test_prefetch_and_deep_worker_share_one_media_probe(self):
+        first_read = threading.Event()
+        finish_read = threading.Event()
+        profile = {'cues': [{'start': 1000, 'end': 2000}],
+                   'track_cues': [], 'track': {},
+                   'cut_signature': 'cut1:' + 'a' * 32}
+
+        def read_once(_url):
+            first_read.set()
+            self.assertTrue(finish_read.wait(2))
+            return profile
+
+        with patch.object(self.sub, '_probe_enabled', return_value=True), \
+             patch.object(self.sub, '_transport_cache_key',
+                          return_value='shared-media'), \
+             patch.object(self.sub, '_playing_url', return_value=''), \
+             patch.object(self.sub, '_remote_playing_url',
+                          return_value=self.url), \
+             patch.object(self.sub, '_remote_reference_bundle',
+                          side_effect=read_once) as remote:
+            outputs = []
+            threads = [threading.Thread(
+                target=lambda: outputs.append(
+                    self.sub._probe_reference_bundle({}, 'playing')))
+                       for _ in range(2)]
+            threads[0].start()
+            self.assertTrue(first_read.wait(2))
+            threads[1].start()
+            finish_read.set()
+            for thread in threads:
+                thread.join(2)
+                self.assertFalse(thread.is_alive())
+        self.assertEqual(remote.call_count, 1)
+        self.assertEqual(len(outputs), 2)
+        self.assertEqual(outputs[0]['cues'], profile['cues'])
+        self.assertEqual(outputs[1]['cues'], profile['cues'])
 
     def test_picker_promotes_and_labels_candidate_proven_for_cached_cut(self):
         def human(release, row_id):

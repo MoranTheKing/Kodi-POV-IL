@@ -30,6 +30,7 @@ LIB = os.path.join(HERE, '..', 'addons', 'service.subtitles.kodipovilai',
                    'resources', 'lib')
 
 FAIL = []
+PREFETCH_EVENTS = []
 
 
 def check(label, cond, detail=''):
@@ -51,9 +52,14 @@ HUMAN_LINK = link({'type': 'engine', 'source': 'ktuvit',
 
 
 def run(stream_labels, sabotage=False, manual_switch=False,
-        pending_overlay=False):
+        pending_overlay=False, audio_ready=False,
+        media_url='http://cdn/movie.mkv', delayed_stream_after_ms=0,
+        timing_probe=False):
     """Run the real autosub_on_play(); return what it resolved and applied."""
+    PREFETCH_EVENTS.clear()
     resolved, streams_set, overlay_messages = [], [], []
+    virtual_sleep_ms = [0]
+    search_at_ms = [None]
     for name in list(sys.modules):
         if name.split('.')[0] in ('resources', 'xbmc', 'xbmcgui', 'xbmcaddon',
                                   'xbmcvfs'):
@@ -66,10 +72,14 @@ def run(stream_labels, sabotage=False, manual_switch=False,
             return True
 
         def getPlayingFile(self):
-            return 'http://cdn/movie.mkv'
+            return media_url
 
         def getAvailableSubtitleStreams(self):
-            return list(stream_labels)
+            return (list(stream_labels) if virtual_sleep_ms[0]
+                    >= delayed_stream_after_ms else [])
+
+        def getAvailableAudioStreams(self):
+            return ['eng'] if audio_ready else []
 
         def setSubtitleStream(self, i):
             streams_set.append(i)
@@ -84,7 +94,8 @@ def run(stream_labels, sabotage=False, manual_switch=False,
             return 5400.0
     xbmc.Player = _Player
     xbmc.log = lambda *a, **k: None
-    xbmc.sleep = lambda ms: None
+    xbmc.sleep = lambda ms: virtual_sleep_ms.__setitem__(
+        0, virtual_sleep_ms[0] + ms)
     xbmc.getInfoLabel = lambda k: ''
     xbmc.getCondVisibility = lambda k: False
     xbmc.executebuiltin = lambda *a, **k: None
@@ -201,7 +212,10 @@ def run(stream_labels, sabotage=False, manual_switch=False,
         rows = [rows[0], rows[2], rows[1]]
     if pending_overlay:
         rows = [rows[2]]
-    tr.list_candidates = lambda info, modal_progress=True: list(rows)
+    def _candidates(info, modal_progress=True):
+        search_at_ms[0] = virtual_sleep_ms[0]
+        return list(rows)
+    tr.list_candidates = _candidates
 
     def _resolve(l, info, **kwargs):
         decoded = _decode(l) or {}
@@ -235,6 +249,18 @@ def run(stream_labels, sabotage=False, manual_switch=False,
     sys.modules['resources.lib.pool'].share_enabled = lambda: False
     sys.modules['resources.lib.pool'].enqueue_harvest = lambda *a, **k: None
 
+    ss = types.ModuleType('resources.lib.subsync')
+    ss.prefetch_autosub_reference = lambda info, rows: (
+        PREFETCH_EVENTS.append('prefetch') or False)
+    ss.rank_ready_candidates = lambda info, rows: (
+        PREFETCH_EVENTS.append('rank') or rows)
+    ss.proven_pool_ai_fallback = lambda info, rows: ''
+    ss.diverse_human_alternatives = lambda rows, limit=6: []
+    ss._is_human_hebrew_candidate = lambda payload: bool(
+        payload.get('type') == 'engine' and not payload.get('embedded'))
+    sys.modules['resources.lib.subsync'] = ss
+    lib.subsync = ss
+
     src_path = os.path.join(LIB, 'autosub_service.py')
     if sabotage:
         import tempfile
@@ -256,6 +282,8 @@ def run(stream_labels, sabotage=False, manual_switch=False,
         mod.autosub_on_play()
     except Exception as e:
         print('   (autosub_on_play raised: %r)' % (e,))
+    if timing_probe:
+        return resolved, streams_set, search_at_ms[0]
     if manual_switch:
         return resolved, streams_set, current['link']
     if pending_overlay:
@@ -273,6 +301,8 @@ check('autosub NEVER resolves the embedded_sync row',
       'embedded_sync' not in resolved, repr(resolved))
 check('autosub still applies the plain embedded track instead',
       'engine' in resolved, repr(resolved))
+check('autosub begins reference prefetch before ranking candidates',
+      PREFETCH_EVENTS == ['prefetch', 'rank'], repr(PREFETCH_EVENTS))
 
 # --- and the fast path itself still works when the label IS 'heb' ----------
 resolved2, streams_set2 = run(['heb', 'eng'])
@@ -305,6 +335,21 @@ check('pending automatic subtitle is visibly described as still checking',
       pending_resolved == ['engine'] and 'התזמון נבדק ברקע' in pending_final
       and 'כתובית מוכנה' not in pending_final,
       'resolved=%r final=%r' % (pending_resolved, pending_final))
+
+# A late embedded Hebrew stream must still win over provider search. A
+# two-second empty-stream shortcut lost this track on progressive playback.
+_resolved, _streams, manifest_search_ms = run(
+    [], audio_ready=True, media_url='http://cdn/playlist.m3u8',
+    timing_probe=True)
+check('HLS manifest keeps the conservative embedded-track wait',
+      manifest_search_ms is not None and manifest_search_ms >= 7900,
+      'search at %r ms' % manifest_search_ms)
+_resolved, late_streams, late_search_ms = run(
+    ['heb'], audio_ready=True, delayed_stream_after_ms=3000,
+    timing_probe=True)
+check('Hebrew embedded track arriving after two seconds still wins',
+      late_streams == [0] and late_search_ms is None,
+      'streams=%r search=%r' % (late_streams, late_search_ms))
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
