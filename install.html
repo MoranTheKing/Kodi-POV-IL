@@ -270,7 +270,7 @@
       <li><a href="#windows">💻 שיטה 2 — Windows</a></li>
       <li><a href="#webos">📺 שיטה 3 — LG webOS</a></li>
       <li><a href="#wizard">🧙 שיטה 4 — מסלול Wizard קודם</a></li>
-      <li><a href="#filemanager">📂 שיטה 5 — Wizard חדש מקובץ</a></li>
+      <li><a href="#filemanager">📂 שיטה 5 — Wizard חדש דרך Source או קובץ (מומלץ)</a></li>
       <li><a href="#ai-only">🤖 שיטה 6 — רק תוסף AI</a></li>
       <li><a href="#gemini">🔑 חיבור Gemini AI</a></li>
       <li><a href="#tmdb">⭐ חיבור TMDB</a></li>
@@ -462,19 +462,24 @@
     </section>
 
     <section id="filemanager">
-      <h2>📂 שיטה 5 — התקנת ה־Wizard החדש מקובץ</h2>
-      <p>ל־Kodi 21+ שכבר מותקן במכשיר. ההתקנה הנקייה מומלצת למכשיר חדש; משתמשי הבילד הקיים יכולים להמשיך בעדכון הרגיל ולשמור על ההגדרות שלהם.</p>
+      <h2>📂 שיטה 5 — התקנת ה־Wizard החדש דרך Source או קובץ</h2>
+      <p><strong>זו השיטה להתקנה חדשה על Kodi 21+.</strong> שיטה 4 מיועדת ל־Wizard הישן; אל תבחר בה להתקנת הבילד החדש. משתמשי הבילד הקיים יכולים להמשיך בעדכון הרגיל ולשמור על ההגדרות שלהם.</p>
       <div class="callout warn">
         <strong>חובה לפני התחלה ב-Kodi 21:</strong> Settings → System → Add-ons → "Unknown sources" → ON (ולאשר את ההתראה). בלי זה התקנת ה-zip תיכשל עם ההודעה "נכשל בהתקנת הרחבה מקובץ".
       </div>
+      <h3>אפשרות א' — דרך Source (מומלצת)</h3>
       <ul>
-        <li>הורד את <a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-latest.zip" target="_blank"><code>plugin.program.kodipovilwizard-latest.zip</code></a> מהקישור הקבוע של הבילד</li>
-        <li>העתק את הקובץ למכשיר</li>
-        <li>ב-Kodi: Add-ons → קופסה → Install from zip file → בחר את הוויזרד</li>
-        <li>הפעל את Kodi POV IL Wizard דרך Programs, ובחר בהתקנת הבילד. ה־Wizard יוריד ויתקין את הרכיבים הדרושים</li>
+        <li>Kodi → הגדרות → מנהל קבצים (File Manager) → הוסף מקור (Add Source)</li>
+        <li>הזן את הכתובת <code>https://morantheking.github.io/Kodi-POV-IL/wizard-new/</code> ותן למקור את השם <code>pov-new</code></li>
+        <li>Kodi → Add-ons → סמל הקופסה → Install from zip file → <code>pov-new</code> → <code>plugin.program.kodipovilwizard-latest.zip</code></li>
+      </ul>
+      <h3>אפשרות ב' — הורדת קובץ ישירות</h3>
+      <ul>
+        <li>הורד את <a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-latest.zip" target="_blank"><code>plugin.program.kodipovilwizard-latest.zip</code></a> מהקישור הקבוע של הבילד והעתק אותו למכשיר</li>
+        <li>ב-Kodi: Add-ons → סמל הקופסה → Install from zip file → בחר את הקובץ שהורדת</li>
       </ul>
       <div class="callout tip">
-        אין צורך להוריד קובץ בילד בסיס נוסף. בסיום ההתקנה סגור ופתח את Kodi כדי להשלים את טעינת התוספים.
+        לאחר התקנת ה־Wizard, פתח אותו דרך Programs ובחר בהתקנת הבילד אם ההתקנה לא התחילה אוטומטית. אין צורך בקובץ בילד בסיס נוסף. בסיום סגור ופתח את Kodi כדי להשלים את טעינת התוספים.
       </div>
     </section>
 
