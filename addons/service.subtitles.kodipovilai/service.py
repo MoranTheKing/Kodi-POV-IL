@@ -2918,6 +2918,8 @@ def _maybe_patch_pov_addon_window():
     toggle hits it too, so the wait belongs inside POV. NOT cycled afterwards:
     cycling is the thing that opens the window, and the patch is on disk for
     the next one either way."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_addon_window_patcher, kodi_utils
     except Exception:
