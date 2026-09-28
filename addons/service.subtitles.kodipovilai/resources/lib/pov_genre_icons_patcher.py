@@ -149,6 +149,10 @@ def _install_genre_pngs(base):
         src = os.path.join(src_dir, fn)
         dst = os.path.join(dst_dir, fn)
         try:
+            if os.path.isfile(dst) and os.path.getsize(src) == os.path.getsize(dst):
+                with open(src, 'rb') as source_file, open(dst, 'rb') as target_file:
+                    if source_file.read() == target_file.read():
+                        continue
             tmp = dst + '.aitmp'
             shutil.copyfile(src, tmp)
             os.replace(tmp, dst)
