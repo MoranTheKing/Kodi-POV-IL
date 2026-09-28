@@ -114,6 +114,7 @@ class Config:
         # Notification Window
         self.ENABLE_NOTIFICATION = getattr(uservar, 'ENABLE', 'No')
         self.NOTIFICATION = getattr(uservar, 'NOTIFICATION', '')
+        self.RECENT_UPDATES_URL = getattr(uservar, 'RECENT_UPDATES_URL', '')
         
         #########################################################################################################
         # KODI-RD-IL - BUILD SKIN SWITCH

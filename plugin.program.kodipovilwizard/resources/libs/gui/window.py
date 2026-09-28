@@ -398,7 +398,11 @@ def show_update_window(name='Testing Window', current='1.0', new='1.1', icon=CON
 
 
 def split_notify(notify):
-    response = tools.open_url(notify)
+    try:
+        response = tools.open_url(notify)
+    except Exception as exc:
+        logging.log('[Notifications] Could not load {0}: {1}'.format(notify, exc))
+        return False, False
 
     if response:
         link = response.text
@@ -412,7 +416,7 @@ def split_notify(notify):
         if link.find('|||') == -1:
             return False, False
 
-        _id, msg = link.split('|||')
+        _id, msg = link.split('|||', 1)
         _id = _id.replace('[CR]', '')
         if msg.startswith('[CR]'):
             msg = msg[4:]
@@ -420,6 +424,52 @@ def split_notify(notify):
         return _id, msg
     else:
         return False, False
+
+
+def recent_updates_text():
+    """Format the published ten-note archive for Kodi's text dialog."""
+    try:
+        response = tools.open_url(CONFIG.RECENT_UPDATES_URL)
+    except Exception as exc:
+        logging.log('[RecentUpdates] Could not load archive: {0}'.format(exc))
+        return ''
+    if not response:
+        return ''
+    raw = response.text
+    if isinstance(raw, bytes):
+        raw = raw.decode('utf-8', 'replace')
+    raw = raw.replace('\r\n', '\n').replace('\r', '\n').replace('\t', '    ')
+    if len(raw) > 100000:
+        return ''
+    parts = re.split(r'(?m)^(\d+)\|\|\|', raw)
+    out = []
+    count = 0
+    for index in range(1, len(parts) - 1, 2):
+        chunk = parts[index + 1].strip('\n')
+        if not chunk:
+            continue
+        title, _, body = chunk.partition('\n')
+        out.append(CONFIG.THEME3.format(title.strip()))
+        if body.strip():
+            out.append(body.strip())
+        out.append('')
+        count += 1
+        if count >= 10:
+            break
+    if not out:
+        return ''
+    return '[CR]'.join(out[:-1])
+
+
+def show_recent_updates():
+    text = recent_updates_text()
+    if not text:
+        logging.log_notify(CONFIG.ADDONTITLE,
+                           '[COLOR {0}]לא הצלחנו לטעון את העדכונים האחרונים[/COLOR]'
+                           .format(CONFIG.COLOR2))
+        return False
+    show_text_box('10 העדכונים האחרונים', text)
+    return True
 
 
 def show_notification(msg, test=False):
