@@ -98,7 +98,9 @@ def build_zip(addon: Addon) -> str:
     files = _collect_files(addon)
     # Keep CI packages within the staged installer's explicit Kodi limits.
     # A larger future skin must fail before the manifest points users at it.
-    if len(files) > 2000 or sum(os.path.getsize(path) for path, _arc in files) > 30 * 1024 * 1024:
+    sizes = [os.path.getsize(path) for path, _arc in files]
+    if (len(files) > 2000 or sum(sizes) > 30 * 1024 * 1024 or
+            any(size > 16 * 1024 * 1024 for size in sizes)):
         raise ValueError(f'{addon.id} exceeds staged installer file/size limit')
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for abs_path, arc in files:
