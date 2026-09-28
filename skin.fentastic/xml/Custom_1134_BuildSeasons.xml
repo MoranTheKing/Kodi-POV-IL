@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="seasonsdialog" id="1134">
+	<defaultcontrol always="true">5000</defaultcontrol>
+	<controls>
+
+	<!--############### fake button -->
+	<control type="button" id="5001">
+		<height>1</height>
+		<width>1</width>
+		<label />
+		<onfocus>ReplaceWindow(1132)</onfocus>
+	</control>
+	<!--################ -->
+
+	<!--################ -->
+	<control type="group">
+	<include content="AdvancedGlobalViewBackGround">
+		<param name="fanart">$INFO[Window(home).Property(bgimageinfo)]</param>
+	</include>
+	</control>
+	<include>__TopBasedExtndedinfo__</include>
+	<control type="group">
+	<width>95%</width>
+	<centerleft>50%</centerleft>
+	<control type="grouplist">
+	<align>center</align>
+	<aligny>center</aligny>
+	<height>365</height>
+	<centertop>50%</centertop>
+	<itemgap>15</itemgap>
+	<include>GlobalTop2DownAnimation</include>
+	<control type="group">
+	<width>650</width>
+	<height>120</height>
+	<control type="image">
+		<left>700</left>
+		<width max="420">auto</width>
+		<height>120</height>
+		<aspectratio align="center">stretch</aspectratio>
+		<texture background="true">$INFO[Window(home).Property(extendedinfoclearlogo)]</texture>
+		<animation effect="zoom" start="0,100" end="90" time="1000" delay="350" center="auto" tween="back" easing="out" reversible="true">Visible</animation>
+		<animation effect="zoom" start="0,100" end="90" time="1000" delay="350" center="auto" tween="back" easing="out" reversible="true">WindowOpen</animation>
+	</control>
+	</control>
+	<control type="label">
+		<align>center</align>
+		<font>font45_title</font>
+		<height max="55">auto</height>
+		<label>$INFO[Container(5000).ListItem.TvShowTitle]</label>
+	</control>
+	<control type="label">
+		<align>center</align>
+		<font>font32_title</font>
+		<height max="45">auto</height>
+		<label>$INFO[Container(5000).ListItem.Genre]</label>
+	</control>
+	<control type="textbox">
+		<align>center</align>
+		<font>font37</font>
+		<height max="160">auto</height>
+		<label>$INFO[Container(5000).ListItem.Plot]</label>
+	</control>
+	</control>
+	</control>
+	
+	<control type="fixedlist" id="5000">
+	<include>GlobalDown2TopAnimation</include>
+	<height>100</height>
+	<centertop>74%</centertop>
+	<centerleft>50%</centerleft>
+	<width>50%</width>
+	<onright>false</onright>
+	<onleft>false</onleft>
+	<focusposition>2</focusposition>
+	<movement>2</movement>
+	<onback>5001</onback>
+	<onclick>ReplaceWindow(1135)</onclick>
+	<orientation>horizontal</orientation>
+	<scrolltime tween="cubic">550</scrolltime>
+	<itemlayout width="195" height="65">
+	<control type="group">
+	<width>180</width>
+		<control type="image">
+			<texture colordiffuse="25FFFFFF">masks/menu.png</texture>
+		</control>
+		<control type="label">
+			<font>font10</font>
+			<align>center</align>
+			<aligny>center</aligny>
+			<label>$INFO[ListItem.Label]</label>
+		</control>
+	</control>
+	</itemlayout>
+	<focusedlayout width="195" height="65">
+	<control type="group">
+	<width>180</width>
+		<control type="image">
+			<texture colordiffuse="25FFFFFF">masks/menu.png</texture>
+		</control>
+		<control type="image">
+			<texture>masks/menu.png</texture>
+		</control>
+		<control type="label">
+			<font>font10</font>
+			<align>center</align>
+			<aligny>center</aligny>
+			<textcolor>black</textcolor>
+			<label>$INFO[ListItem.Label]</label>
+		</control>
+	</control>
+	<include>__EpisodesExtraction__</include>
+	</focusedlayout>
+	<content target="videos">$INFO[Window(home).Property(extendedinfoopentvshow)]</content>
+	</control>
+
+
+	</controls>
+</window>

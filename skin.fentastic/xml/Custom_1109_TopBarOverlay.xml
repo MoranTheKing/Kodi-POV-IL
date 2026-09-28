@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<window type="dialog" id="1109">
+	<onload>Skin.TimerStart(1110_topbaroverlay)</onload>
+	<!-- <visible>Window.IsActive(videoosd)</visible> -->
+	<depth>DepthOSD</depth>
+	<include>Animation_TopSlide</include>
+	<zorder>0</zorder>
+	<controls>
+	
+	
+	<control type="group">
+	<visible>$EXP[__SimplePlayerVisiblity] + !Player.Paused</visible>
+	<include>RightOsdTopBar</include>
+	<include>LeftOsdTopBar</include>
+	</control>
+	
+	<control type="group">
+	<visible>!$EXP[__SimplePlayerVisiblity]</visible>
+	<include>RightOsdTopBar</include>
+	<include>LeftOsdTopBar</include>
+	</control>
+	</controls>
+</window>

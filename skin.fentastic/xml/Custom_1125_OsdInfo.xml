@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="dialog" id="1125">
+	<defaultcontrol always="true">5000</defaultcontrol>
+	<backgroundcolor>background</backgroundcolor>
+	<include>bottom2topslideanimation</include>
+	<controls>
+	
+	<control type="scrollbar" id="5000">
+		<visible>Container(5000).HasNext</visible>
+		<left>Padxy5</left>
+		<right>Padxy10</right>
+		<height>Pad400</height>
+		<bottom>osdzerobottom</bottom>
+	</control>
+	
+	<control type="group">
+	<left>Padxy10</left>
+	<right>Padxy10</right>
+	<height>Pad400</height>
+	<bottom>osdzerobottom</bottom>
+	<control type="image">
+		<texture colordiffuse="black">colors/white.png</texture>
+		<include>osdbackwindowopecityanim</include>
+	</control>
+		<control type="grouplist" id="5000">
+			<top>Padxy10</top>
+			<left>Padxy10</left>
+			<right>Padxy10</right>
+			<bottom>osdzerobottom</bottom>
+			<itemgap>Padxy5</itemgap>
+			<pagecontrol>5000</pagecontrol>
+			<control type="label">
+				<height max="55">auto</height>
+				<font>font45_title</font>
+				<label>$INFO[Window(home).Property(getosdtitlevar)] $INFO[Window(home).Property(getosdyearvar)]</label>
+				<visible>!String.IsEmpty(Window(home).Property(getosdtitlevar))</visible>
+			</control>
+			<control type="label">
+				<height max="35">auto</height>
+				<textcolor>yellow</textcolor>
+				<label>$INFO[Window(home).Property(getosdgenrevar)]</label>
+				<visible>!String.IsEmpty(Window(home).Property(getosdgenrevar))</visible>
+			</control>		
+			<control type="label">
+				<height max="35">auto</height>
+				<textcolor>yellow</textcolor>
+				<label>$VAR[__Osdprettyplayerlabeltime]</label>
+			</control>
+			<control type="textbox">
+				<height max="350">auto</height>
+				<font>font45</font>
+				<label>$INFO[Window(home).Property(getosdplotvar)]</label>
+				<visible>!String.IsEmpty(Window(home).Property(getosdplotvar))</visible>
+			</control>
+		</control>
+	</control>
+	
+	
+	</controls>
+</window>
