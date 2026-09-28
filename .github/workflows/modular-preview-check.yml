@@ -1,0 +1,36 @@
+name: Modular preview checks (no release)
+
+on:
+  pull_request:
+    paths:
+      - "addons/service.subtitles.kodipovilai/**"
+      - "wizard/source/plugin.program.kodipovilwizard/**"
+      - "tools/build_modular_preview.py"
+      - "tools/test_local_addon_imports.py"
+      - "tools/test_build_config_migration.py"
+      - ".github/workflows/modular-preview-check.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate active source and settings migration
+        run: |
+          python tools/test_local_addon_imports.py
+          python tools/test_build_config_migration.py
+          python tools/test_no_duplicate_definitions.py
+          python tools/test_patcher_health.py
+      - name: Build and inspect local-only modular preview
+        run: |
+          python tools/build_modular_preview.py --output "$RUNNER_TEMP/modular-preview"
+          archive=$(find "$RUNNER_TEMP/modular-preview" -maxdepth 1 -name 'service.subtitles.kodipovilai-*.zip' -print -quit)
+          test -n "$archive"
+          python tools/test_local_addon_imports.py --zip "$archive"
