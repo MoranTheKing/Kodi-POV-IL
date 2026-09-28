@@ -147,7 +147,9 @@ class ProvisioningGateTests(unittest.TestCase):
             ROOT / 'plugin.program.kodipovilwizard' / 'resources' / 'libs'
             / 'modular_updater.py', 'run_update_check',
             {'logging': types.SimpleNamespace(log=lambda *_a, **_k: None),
-             'xbmc': types.SimpleNamespace(LOGINFO=1, LOGWARNING=2)},
+             'xbmc': types.SimpleNamespace(LOGINFO=1, LOGWARNING=2),
+             'CONFIG': types.SimpleNamespace(ADDON_DATA='/tmp/qa', ADDON_ID='wizard'),
+             'os': os},
             class_name='ModularUpdater')
         manifest = {'addons': {
             'service.subtitles.kodipovilai': {
@@ -171,12 +173,32 @@ class ProvisioningGateTests(unittest.TestCase):
         patch_engine = types.ModuleType('resources.libs.patch_engine')
         patch_engine.PatchEngine = lambda: types.SimpleNamespace(
             legacy_pov_host_present=lambda: True)
+        receipt = types.ModuleType('resources.libs.addon_install_receipt')
+        receipt.needs_retry = lambda *_args: False
+        libs.addon_install_receipt = receipt
         with patch.dict(sys.modules, {
                 'resources': resources, 'resources.libs': libs,
-                'resources.libs.patch_engine': patch_engine}):
+                'resources.libs.patch_engine': patch_engine,
+                'resources.libs.addon_install_receipt': receipt}):
             self.assertTrue(fn(updater))
-        self.assertEqual([item['id'] for item in queued],
-                         ['plugin.program.orderfavourites-hebrew'])
+            self.assertEqual([item['id'] for item in queued],
+                             ['plugin.program.orderfavourites-hebrew'])
+            queued.clear()
+            updater.get_local_version = lambda aid: manifest['addons'][aid]['version']
+            receipt.needs_retry = lambda _data, aid: (
+                aid == 'plugin.program.orderfavourites-hebrew')
+            self.assertTrue(fn(updater))
+            self.assertEqual([item['id'] for item in queued],
+                             ['plugin.program.orderfavourites-hebrew'],
+                             'same-version interrupted extraction must retry')
+            queued.clear()
+            updater.get_local_version = lambda aid: (
+                None if aid == 'plugin.program.orderfavourites-hebrew'
+                else manifest['addons'][aid]['version'])
+            self.assertTrue(fn(updater))
+            self.assertEqual([item['id'] for item in queued],
+                             ['plugin.program.orderfavourites-hebrew'],
+                             'missing addon.xml during interrupted extraction must retry')
 
     def test_service_handoff_requires_all_active_patches(self):
         path = (ROOT / 'plugin.program.kodipovilwizard' / 'resources' / 'libs'

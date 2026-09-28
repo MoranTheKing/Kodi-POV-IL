@@ -103,8 +103,9 @@ def clear_handoff(userdata):
 
 
 def _paths(addons_dir, package_path, addon_id):
-    if addon_id != 'service.subtitles.kodipovilai':
-        raise ValueError('staged installer is limited to MoranSubs')
+    if (not isinstance(addon_id, str) or
+            not re.fullmatch(r'[A-Za-z][A-Za-z0-9_.-]{1,100}', addon_id)):
+        raise ValueError('invalid add-on id')
     addons = Path(addons_dir).resolve()
     package = Path(package_path).resolve()
     # Keep the temporary root short. Kodi on Windows still encounters MAX_PATH
@@ -114,21 +115,27 @@ def _paths(addons_dir, package_path, addon_id):
     stage_area = addons.parent
     if os.path.splitdrive(str(addons))[0].lower() != os.path.splitdrive(str(package))[0].lower():
         raise ValueError('staging and add-ons must be on the same volume')
-    return addons / addon_id, stage_area / '.kodipovil-ms-new', stage_area / '.kodipovil-ms-backup'
+    if addon_id == 'service.subtitles.kodipovilai':
+        stem = '.kodipovil-ms'
+    else:
+        stem = '.kodipovil-' + hashlib.sha256(addon_id.encode('utf-8')).hexdigest()[:12]
+    return addons / addon_id, stage_area / (stem + '-new'), stage_area / (stem + '-backup')
 
 
 def _ready_path(stage):
-    return stage.parent / '.kodipovil-ms-ready.json'
+    # Every staged add-on needs its own receipt. Sharing the MoranSubs name
+    # lets a later skin/plugin update erase its prepared handoff on restart.
+    return stage.parent / (stage.name[:-4] + '-ready.json')
 
 
-def _read_ready(stage):
+def _read_ready(stage, addon_id):
     try:
         path = _ready_path(stage)
         if path.stat().st_size > 1024:
             return None
         data = json.loads(path.read_text(encoding='utf-8'))
         if (data.get('schema') == 1 and
-                data.get('addon_id') == 'service.subtitles.kodipovilai' and
+                data.get('addon_id') == addon_id and
                 isinstance(data.get('version'), str) and
                 isinstance(data.get('files'), int) and
                 isinstance(data.get('sha256'), str) and
@@ -139,10 +146,10 @@ def _read_ready(stage):
     return None
 
 
-def _write_ready(stage, version, sha256, files):
+def _write_ready(stage, addon_id, version, sha256, files):
     path = _ready_path(stage)
     temp = path.with_name(path.name + '.tmp')
-    data = {'schema': 1, 'addon_id': 'service.subtitles.kodipovilai',
+    data = {'schema': 1, 'addon_id': addon_id,
             'version': version, 'sha256': sha256, 'files': files,
             'created': int(time.time())}
     with open(temp, 'w', encoding='utf-8') as output:
@@ -155,8 +162,8 @@ def _write_ready(stage, version, sha256, files):
 def recover(addons_dir, package_path, addon_id):
     """Complete or roll back an interrupted directory swap, without deletion of live data."""
     target, stage, backup = _paths(addons_dir, package_path, addon_id)
-    extract_root = stage.parent / '.kodipovil-ms-extract'
-    if extract_root.exists():
+    extract_root = stage.parent / '.kodipovil-ms-extract' if addon_id == 'service.subtitles.kodipovilai' else None
+    if extract_root is not None and extract_root.exists():
         if extract_root.is_symlink():
             raise ValueError('symlinked extraction root')
         shutil.rmtree(str(extract_root))
@@ -167,7 +174,7 @@ def recover(addons_dir, package_path, addon_id):
             shutil.rmtree(str(backup))
         else:
             raise RuntimeError('installed add-on lacks addon.xml; keeping backup')
-    ready = _read_ready(stage)
+    ready = _read_ready(stage, addon_id)
     if stage.exists() and ready and int(time.time()) - ready['created'] < 7 * 86400:
         return
     if stage.exists():
@@ -229,7 +236,7 @@ def _activate(target, stage, backup):
 
 def prepared_matches(addons_dir, addon_id, version, sha256):
     _target, stage, _backup = _paths(addons_dir, addons_dir, addon_id)
-    ready = _read_ready(stage)
+    ready = _read_ready(stage, addon_id)
     return bool(stage.is_dir() and ready and ready['version'] == version and
                 ready['sha256'] == str(sha256).lower() and
                 (stage / 'addon.xml').is_file())
@@ -238,7 +245,7 @@ def prepared_matches(addons_dir, addon_id, version, sha256):
 def activate_prepared(addons_dir, addon_id, expected_version, expected_sha256):
     """Activate only a complete previously verified package after service yield."""
     target, stage, backup = _paths(addons_dir, addons_dir, addon_id)
-    ready = _read_ready(stage)
+    ready = _read_ready(stage, addon_id)
     if (not ready or ready['version'] != expected_version or
             ready['sha256'] != str(expected_sha256).lower() or
             not stage.is_dir()):
@@ -256,7 +263,7 @@ def install(zip_path, addons_dir, addon_id, expected_version, expected_sha256,
             defer_swap=False):
     target, stage, backup = _paths(addons_dir, zip_path, addon_id)
     recover(addons_dir, zip_path, addon_id)
-    ready = _read_ready(stage)
+    ready = _read_ready(stage, addon_id)
     if (ready and stage.is_dir() and ready['version'] == expected_version and
             ready['sha256'] == str(expected_sha256).lower()):
         if defer_swap:
@@ -270,13 +277,13 @@ def install(zip_path, addons_dir, addon_id, expected_version, expected_sha256,
     except OSError:
         pass
     if Path(zip_path).stat().st_size > 25 * 1024 * 1024:
-        raise ValueError('MoranSubs ZIP exceeds compressed size limit')
+        raise ValueError('add-on ZIP exceeds compressed size limit')
     # Kodi's 32-bit Windows Python repeatedly stalled while ZipFile sought
     # between members on the package file. The service ZIP is bounded at
     # 25 MB; one read avoids those per-member file seeks.
     payload = Path(zip_path).read_bytes()
     if hashlib.sha256(payload).hexdigest() != str(expected_sha256).lower():
-        raise ValueError('MoranSubs ZIP SHA-256 mismatch')
+        raise ValueError('add-on ZIP SHA-256 mismatch')
     total = 0
     files = 0
     seen = set()
@@ -312,9 +319,10 @@ def install(zip_path, addons_dir, addon_id, expected_version, expected_sha256,
                         total > 30 * 1024 * 1024 or files > 2000):
                     raise ValueError('add-on ZIP exceeds safety limits')
                 if info.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
-                    raise ValueError('unsupported MoranSubs ZIP compression')
+                    raise ValueError('unsupported add-on ZIP compression')
                 members.append((info, rel))
-            native = _extract_kodi(zip_path, stage, addon_id, files)
+            native = (addon_id == 'service.subtitles.kodipovilai' and
+                      _extract_kodi(zip_path, stage, addon_id, files))
             if not native:
                 stage.mkdir(parents=True, exist_ok=False)
             for info, rel in members:
@@ -360,7 +368,7 @@ def install(zip_path, addons_dir, addon_id, expected_version, expected_sha256,
         root = ET.parse(str(addon_xml)).getroot()
         if root.get('id') != addon_id or root.get('version') != expected_version:
             raise ValueError('add-on identity or version mismatch')
-        _write_ready(stage, expected_version, str(expected_sha256).lower(), files)
+        _write_ready(stage, addon_id, expected_version, str(expected_sha256).lower(), files)
         prepared = True
         if defer_swap:
             return files
