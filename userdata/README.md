@@ -14,19 +14,21 @@ its sha256, and applies each file per `config_policy.json`.
 
 * **Fresh install** can be fully configured from the addon zips + this pack —
   no monolithic build zip required.
-* **Updates** apply at the `<setting id=...>` / `<source><name>` level, so a
-  user's Real-Debrid / Trakt keys, widgets, and personal tweaks are **never**
-  clobbered — which is what used to force people to re-link every update.
+* **Updates** follow the per-file policy below. Existing account credentials,
+  Kodi GUI choices, widgets and favourites are retained; missing build defaults
+  can be added without replacing a user's values.
 
 ## Files
 
 | File | What it is | fresh | update |
 |------|------------|-------|--------|
-| `guisettings.xml` | Curated build-identity Kodi settings (active skin, Hebrew locale, subtitle config, player/cache). **Not** a full dump — only the settings the build changes, minus machine-specific ones. | `merge_id` | `merge_id` |
-| `addon_data/skin.fentastic/settings.xml` | The FENtastic ("Twilight") look + Hebrew menu labels. | `replace` | `merge_id` |
+| `guisettings.xml` | Curated build-identity Kodi settings. Kodi rewrites this file on shutdown, so an existing device keeps its live choices. | `merge_id` | `seed_if_absent` |
+| `addon_data/skin.fentastic/settings.xml` | FENtastic defaults and Hebrew menu labels. | `replace` | `merge_missing_id` |
+| `addon_data/plugin.video.pov/settings.xml` | POV defaults, excluding user account credentials on update. | `replace` | `merge_missing_id` |
 | `favourites.xml` | Build's default favourites / home shortcuts. | `replace` | `seed_if_absent` |
 | `sources.xml` | Build's repository file-sources (kodifitzwell, Fishenzon, Otaku, CocoScrapers) — cleaned to match the hybrid provisioning repos. | `replace` | `merge_name` |
-| `advancedsettings.xml` | Cache/network performance tuning. | `replace` | `replace` |
+| `advancedsettings.xml` | Cache/network performance tuning. | `replace` | `seed_if_absent` |
+| POV navigation/view databases and FENtastic helper cache | Starter data for a new device; existing layouts and view choices remain. | `replace` | `seed_if_absent` |
 | `config_policy.json` | Declarative apply policy (modes, `exclude_ids`, cleanup). | — | — |
 
 ### Apply modes
@@ -35,6 +37,8 @@ its sha256, and applies each file per `config_policy.json`.
 * `merge_id` — per `<setting id=...>`: the build value wins; every other user
   setting in the file is left untouched. ids in `exclude_ids` are never written
   (machine-specific: `services.deviceuuid`, display resolutions, …).
+* `merge_missing_id` — add only setting IDs absent from the existing file;
+  preserve all existing values. Credential IDs in `exclude_ids` are not added.
 * `merge_name` — per `<source><name>`: add the build's sources, keep the user's.
 * `seed_if_absent` — write only if the destination does not already exist.
 
