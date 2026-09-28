@@ -269,8 +269,8 @@
       <li><a href="#downloader">📱 שיטה 1 — Android (טלפון / טאבלט / סטרימר) דרך Downloader</a></li>
       <li><a href="#windows">💻 שיטה 2 — Windows</a></li>
       <li><a href="#webos">📺 שיטה 3 — LG webOS</a></li>
-      <li><a href="#wizard">🧙 שיטה 4 — דרך Wizard</a></li>
-      <li><a href="#filemanager">📂 שיטה 5 — File Manager</a></li>
+      <li><a href="#wizard">🧙 שיטה 4 — מסלול Wizard קודם</a></li>
+      <li><a href="#filemanager">📂 שיטה 5 — Wizard חדש מקובץ</a></li>
       <li><a href="#ai-only">🤖 שיטה 6 — רק תוסף AI</a></li>
       <li><a href="#gemini">🔑 חיבור Gemini AI</a></li>
       <li><a href="#tmdb">⭐ חיבור TMDB</a></li>
@@ -295,7 +295,7 @@
         <div class="row"><strong>אין לי Kodi בכלל, יש לי טלפון אנדרואיד / טאבלט / סטרימר Android TV</strong><br>→ <a href="#downloader">שיטה 1 (Downloader)</a></div>
         <div class="row"><strong>אין לי Kodi, יש לי מחשב Windows</strong><br>→ <a href="#windows">שיטה 2 (Windows Setup)</a></div>
         <div class="row"><strong>אין לי Kodi, יש לי טלוויזיית LG (webOS)</strong><br>→ <a href="#webos">שיטה 3 (IPK)</a></div>
-        <div class="row"><strong>יש לי Kodi מותקן (ריק או עם משהו אחר)</strong><br>→ <a href="#wizard">שיטה 4 (Wizard)</a> או <a href="#filemanager">שיטה 5 (File Manager)</a></div>
+        <div class="row"><strong>יש לי Kodi 21+ מותקן ואני רוצה את הבילד החדש</strong><br>→ <a href="#filemanager">שיטה 5 (Wizard חדש מקובץ)</a></div>
         <div class="row"><strong>יש לי בילד אחר ורק רוצה תרגום AI</strong><br>→ <a href="#ai-only">שיטה 6 (תוסף בודד)</a></div>
       </div>
     </section>
@@ -362,8 +362,8 @@
         <h4>שלב ד' — הפעלה ראשונה</h4>
         <ul>
           <li>פתח את <strong>"Kodi POV IL"</strong></li>
-          <li>חכה 30-60 שניות — הוויזרד יותקן אוטומטית ויטעין את הבילד</li>
-          <li>בסיום יופיע מסך הבית עם POV מותקן</li>
+          <li>המתן להשלמת התקנת הבילד והעדכונים. הזמן תלוי במכשיר ובחיבור האינטרנט</li>
+          <li>בסיום סגור ופתח את Kodi כדי להשלים את טעינת התוספים</li>
         </ul>
       </div>
 
@@ -410,8 +410,8 @@
     </section>
 
     <section id="wizard">
-      <h2>🧙 שיטה 4 — התקנה דרך Wizard (אם כבר יש Kodi)</h2>
-      <p>מתאים לך אם יש לך Kodi 21+ ריק או עם בילד אחר ואתה רוצה להתקין את POV IL FENtastic.</p>
+      <h2>🧙 שיטה 4 — מסלול ההתקנה הקודם דרך Wizard</h2>
+      <p>מסלול זה מתאר את ה־Wizard הישן. להתקנת הבילד החדש על Kodi 21+ בחר <a href="#filemanager">בשיטה 5</a>.</p>
 
       <div class="step">
         <h4>שלב א' — הוסף Source</h4>
@@ -462,19 +462,19 @@
     </section>
 
     <section id="filemanager">
-      <h2>📂 שיטה 5 — התקנה דרך File Manager (ידנית מלאה)</h2>
-      <p>עבור מי שרוצה שליטה מלאה ולא רוצה Source.</p>
+      <h2>📂 שיטה 5 — התקנת ה־Wizard החדש מקובץ</h2>
+      <p>ל־Kodi 21+ שכבר מותקן במכשיר. ההתקנה הנקייה מומלצת למכשיר חדש; משתמשי הבילד הקיים יכולים להמשיך בעדכון הרגיל ולשמור על ההגדרות שלהם.</p>
       <div class="callout warn">
         <strong>חובה לפני התחלה ב-Kodi 21:</strong> Settings → System → Add-ons → "Unknown sources" → ON (ולאשר את ההתראה). בלי זה התקנת ה-zip תיכשל עם ההודעה "נכשל בהתקנת הרחבה מקובץ".
       </div>
       <ul>
-          <li>הורד ידנית מ-GitHub: <a href="https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/plugin.program.kodipovilwizard-latest.zip" target="_blank"><code>plugin.program.kodipovilwizard-latest.zip</code></a> (הוויזרד) ואת <strong>בילד הבסיס</strong> <code>Kodi-POV-IL-FENtastic-test-*.zip</code> (המספר הגבוה ביותר) מתיקיית <a href="https://github.com/MoranTheKing/Kodi-POV-IL/tree/main/dist" target="_blank"><code>dist</code></a></li>
-        <li>העתק את שני הקבצים למכשיר</li>
+        <li>הורד את <a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-latest.zip" target="_blank"><code>plugin.program.kodipovilwizard-latest.zip</code></a> מהקישור הקבוע של הבילד</li>
+        <li>העתק את הקובץ למכשיר</li>
         <li>ב-Kodi: Add-ons → קופסה → Install from zip file → בחר את הוויזרד</li>
-        <li>הפעל את הוויזרד דרך Programs ובחר Install Build → Install from local zip (ובחר את הזיפ של הבילד)</li>
+        <li>הפעל את Kodi POV IL Wizard דרך Programs, ובחר בהתקנת הבילד. ה־Wizard יוריד ויתקין את הרכיבים הדרושים</li>
       </ul>
-      <div class="callout warn">
-        <strong>חובה אחרי ההתקנה — אחרת התוספים יהיו מיושנים:</strong> בילד הבסיס (<code>FENtastic-test-*</code>) לא כולל את העדכונים האחרונים (למשל תיקוני כתוביות העברית). מיד אחרי ההתקנה פתח את הוויזרד דרך <strong>Programs → Kodi POV IL Wizard</strong> ואשר את עדכון ה-<em>quickfix</em> האחרון כשמוצע — זה מביא את הגרסה העדכנית של התוספים. (בהתקנה דרך APK / Downloader / Wizard רגיל זה קורה אוטומטית, ולכן זו הדרך המומלצת.)
+      <div class="callout tip">
+        אין צורך להוריד קובץ בילד בסיס נוסף. בסיום ההתקנה סגור ופתח את Kodi כדי להשלים את טעינת התוספים.
       </div>
     </section>
 
@@ -534,7 +534,7 @@
       <div class="step">
         <h4>שלב א' — הורד את התוסף הבודד</h4>
         <p><a href="https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/service.subtitles.kodipovilai-latest.zip" target="_blank">service.subtitles.kodipovilai-latest.zip</a></p>
-        <p class="muted">קישור יציב — תמיד מצביע על הגרסה העדכנית. (שים לב: בדרך הזו תצטרך להוריד שוב ידנית כדי לעדכן.)</p>
+        <p class="muted">זהו ערוץ התוסף העצמאי, הנפרד מחבילות הבילד המלא. בדרך הזו תצטרך להוריד שוב ידנית כדי לעדכן.</p>
       </div>
       <div class="step">
         <h4>שלב ב' — אפשר "מקורות לא ידועים" (כנ"ל)</h4>
@@ -700,15 +700,14 @@
 
     <section id="updates">
       <h2>🔄 עדכונים — איך לוודא שיש לי את הגרסה האחרונה</h2>
-      <p>הבילד מתעדכן אוטומטית דרך <strong>Quick Update</strong>:</p>
+      <p>ה־Wizard בודק עדכוני בילד ותוספים בעת פתיחת Kodi:</p>
       <ul>
-        <li>בכל פעם שעולה Kodi → אם יש עדכון, יופיע popup</li>
-        <li>ניתן גם להריץ ידנית: tile <strong>"עדכון מהיר - Wizard"</strong> במסך הבית</li>
-        <li>אחרי quick_update → <strong>restart ל-Kodi</strong> (סגירה + פתיחה מחדש)</li>
-        <li>כל ה-patchers ירוצו ויחילו את השינויים</li>
+        <li>משתמשי הבילד הישן יקבלו מעבר חד־פעמי דרך העדכון המהיר הקיים</li>
+        <li>לאחר המעבר, רכיבי הבילד מתעדכנים בנפרד לפי הצורך</li>
+        <li>אחרי עדכון משמעותי סגור ופתח את Kodi מחדש</li>
       </ul>
       <div class="callout tip">
-        אם יש בעיה — לפני שתפנה לעזרה: הרץ quick_update + restart פעם אחת. רוב הבעיות נפתרות.
+        עדכון תוספים אינו דורש התקנה מחדש של APK או Setup. עדכון לאפליקציה עצמה יוצע בנפרד רק כאשר יש גרסת אפליקציה חדשה.
       </div>
     </section>
 
