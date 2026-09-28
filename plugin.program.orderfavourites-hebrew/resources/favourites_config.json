@@ -1,0 +1,304 @@
+{
+  "_comment": "Canonical favourites for the Kodi POV IL build. favourites_generator.generate_favourites_xml(skin_id) builds userdata/favourites.xml from this per active skin. Each tile: 'name' (label), 'icon' (bare filename -> prefixed with icon_base, OR a full special:// path used as-is), 'action' (the <favourite> body). A skin either 'inherit's another skin's order or defines its own 'order' (list of tile keys) plus optional per-tile 'overrides'.",
+  "icon_base": "special://home/media/povil_icons/",
+  "tiles": {
+    "pov": {
+      "name": "[B]POV[/B]",
+      "icon": "Logo_POV_IL.png",
+      "action": "RunAddon(\"plugin.video.pov\")"
+    },
+    "umbrella": {
+      "name": "[B][COLOR orange]Umbrella[/COLOR][/B]",
+      "icon": "special://home/addons/plugin.video.umbrella/icon.png",
+      "action": "RunAddon(\"plugin.video.umbrella\")",
+      "condition": "umbrella"
+    },
+    "search_provider": {
+      "name": "[B][COLOR orange]מנוע החיפוש - POV / Umbrella[/COLOR][/B]",
+      "icon": "special://home/addons/plugin.video.pov/resources/skins/Default/media/search.png",
+      "action": "RunScript(service.subtitles.kodipovilai,action=search_provider)",
+      "condition": "umbrella"
+    },
+    "connect_services": {
+      "_note": "Opens POV's real 'My Services' account-linking menu (Real-Debrid, Trakt, Premiumize, TorBox, ... + our injected Gemini). mode=myservices calls POV's modules.myservices.authorize(), which pops the select dialog. The previous action used mode=navigator.build_shortcut_folder_list&shortcut_folder=True -- a generic skin-shortcut browser that opens EMPTY here, which is why the popup never appeared.",
+      "name": "[B][COLOR orange]חיבור שירותים להרחבת POV[/COLOR][/B]",
+      "icon": "Connect_Services.png",
+      "action": "RunPlugin(\"plugin://plugin.video.pov/?mode=myservices\")"
+    },
+    "debrid_notice": {
+      "name": "[B][COLOR orange]הגדרת התראות מנוי[/COLOR][/B]",
+      "icon": "Connect_Services.png",
+      "action": "RunScript(service.subtitles.kodipovilai,action=debrid_notice_settings)"
+    },
+    "my_shows_tmdb": {
+      "name": "[B]הסדרות שלי (TMDB)[/B]",
+      "icon": "My_Shows_TMDB.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_my_tvshows&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png&mode=build_tvshow_list&name=TV%20Show%20Favorites\",return)",
+      "condition": "tmdb"
+    },
+    "my_shows_trakt": {
+      "name": "[B]הסדרות שלי (Trakt)[/B]",
+      "icon": "My_Shows.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=trakt_my_tvshows&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png&mode=build_tvshow_list&name=TV%20Shows\",return)",
+      "condition": "trakt"
+    },
+    "my_shows_pov": {
+      "name": "[B]הסדרות שלי (POV)[/B]",
+      "icon": "My_Shows_POV.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=favorites_tvshows&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ffavorites.png&mode=build_tvshow_list&name=TV%20Show%20Favorites%20(POV)\",return)"
+    },
+    "my_shows_mdblist": {
+      "name": "[B]הסדרות שלי (MDBList)[/B]",
+      "icon": "My_Shows_MDBList.png",
+        "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=mdblist_my_tvshows&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2fmdblist.png&mode=build_tvshow_list&name=MDBList%20Watchlist\",return)",
+        "condition": "mdblist"
+    },
+    "my_movies_tmdb": {
+      "name": "[B]הסרטים שלי (TMDB)[/B]",
+      "icon": "My_Movies_TMDB.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_my_movies&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png&mode=build_movie_list&name=Movie%20Favorites\",return)",
+      "condition": "tmdb"
+    },
+    "my_movies_trakt": {
+      "name": "[B]הסרטים שלי (Trakt)[/B]",
+      "icon": "My_Movies.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=trakt_my_movies&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png&mode=build_movie_list&name=Movies\",return)",
+      "condition": "trakt"
+    },
+    "my_movies_pov": {
+      "name": "[B]הסרטים שלי (POV)[/B]",
+      "icon": "My_Movies_POV.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=favorites_movies&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ffavorites.png&mode=build_movie_list&name=Movie%20Favorites%20(POV)\",return)"
+    },
+    "my_movies_mdblist": {
+      "name": "[B]הסרטים שלי (MDBList)[/B]",
+      "icon": "My_Movies_MDBList.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=mdblist_my_movies&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2fmdblist.png&mode=build_movie_list&name=MDBList%20Watchlist\",return)",
+      "condition": "mdblist"
+    },
+    "shows_popular": {
+      "name": "[B]סדרות פופולריות[/B]",
+      "icon": "Shows_Popular.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=trakt_tv_trending&iconImage=trending.png&mode=build_tvshow_list&name=32458\",return)"
+    },
+    "movies_new": {
+      "name": "[B]סרטים חדשים[/B]",
+      "icon": "Movies_Popular.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_movies_latest_releases&iconImage=dvd.png&mode=build_movie_list&name=32461\",return)"
+    },
+    "movies_popular": {
+      "name": "[B]סרטים פופולריים[/B]",
+      "icon": "Movies_Popular.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_movies_popular&iconImage=popular.png&mode=build_movie_list&name=32459\",return)"
+    },
+    "shows_new": {
+      "name": "[B]סדרות חדשות[/B]",
+      "icon": "Shows_Popular.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_tv_premieres&iconImage=fresh.png&mode=build_tvshow_list&name=32460\",return)"
+    },
+    "episodes_in_progress": {
+      "name": "[B]פרקים להמשך צפייה[/B]",
+      "icon": "Episodes_In_Progress.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?iconImage=next_episodes.png&mode=build_next_episode&name=32483\",return)"
+    },
+    "movies_in_progress": {
+      "name": "[B]סרטים להמשך צפייה[/B]",
+      "icon": "Movies_In_Progress.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=in_progress_movies&iconImage=player.png&mode=build_movie_list&name=32476\",return)"
+    },
+    "idanplus": {
+      "name": "[B]עידן פלוס[/B]",
+      "icon": "idan_plus.png",
+      "action": "RunAddon(plugin.video.idanplus)"
+    },
+    "otaku": {
+      "name": "[B]אנימה[/B]",
+      "icon": "Otaku.png",
+      "action": "RunAddon(\"plugin.video.otaku\")"
+    },
+    "shows_genres": {
+      "name": "[B]סדרות לפי ז'אנר[/B]",
+      "icon": "Shows_Genres.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?iconImage=genres.png&menu_type=tvshow&mode=navigator.genres&name=32470\",return)"
+    },
+    "movies_genres": {
+      "name": "[B]סרטים לפי ז'אנר[/B]",
+      "icon": "Movies_Genres.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?iconImage=genres.png&menu_type=movie&mode=navigator.genres&name=32470\",return)"
+    },
+    "net_netflix": {
+      "name": "[B]Netflix סדרות[/B]",
+      "icon": "Shows_Netflix.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=https%3a%2f%2fi.imgur.com%2fjI5c3bw.png&mode=build_tvshow_list&name=Netflix&network_id=213\",return)"
+    },
+    "net_disney": {
+      "name": "[B]Disney+ סדרות[/B]",
+      "icon": "Shows_Disney_Plus.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=https%3a%2f%2fi.imgur.com%2fDVrPgbM.png&mode=build_tvshow_list&name=Disney%2b&network_id=2739\",return)"
+    },
+    "net_apple": {
+      "name": "[B]Apple TV סדרות[/B]",
+      "icon": "Shows_AppleTV.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=https%3a%2f%2fi.imgur.com%2ffAQMVNp.png&mode=build_tvshow_list&name=Apple%20TV%20%2b&network_id=2552\",return)"
+    },
+    "net_hbo": {
+      "name": "[B]HBO סדרות[/B]",
+      "icon": "Shows_HBO.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=https%3a%2f%2fi.imgur.com%2fHyu8ZGq.png&mode=build_tvshow_list&name=HBO&network_id=49\",return)"
+    },
+    "net_hbomax": {
+      "name": "[B]HBO Max סדרות[/B]",
+      "icon": "Shows_HBO_Max.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=https%3a%2f%2fi.imgur.com%2fmmRMG75.png&mode=build_tvshow_list&name=HBO%20Max&network_id=3186\",return)"
+    },
+    "net_fox": {
+      "name": "[B]FOX סדרות[/B]",
+      "icon": "Shows_FOX.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=https%3a%2f%2fi.imgur.com%2f6vc0Iov.png&mode=build_tvshow_list&name=FOX&network_id=19\",return)"
+    },
+    "net_amazon": {
+      "name": "[B]Amazon סדרות[/B]",
+      "icon": "Shows_Amazon.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=https%3a%2f%2fi.imgur.com%2fru9DDlL.png&mode=build_tvshow_list&name=Amazon&network_id=1024\",return)"
+    },
+    "net_hulu": {
+      "name": "[B]Hulu סדרות[/B]",
+      "icon": "Shows_Hulu.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=https%3a%2f%2fi.imgur.com%2fuSD2Cdw.png&mode=build_tvshow_list&name=Hulu&network_id=453\",return)"
+    },
+    "net_cw": {
+      "name": "[B]CW סדרות[/B]",
+      "icon": "Shows_CW.png",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=https%3a%2f%2fi.imgur.com%2fQ8tooeM.png&mode=build_tvshow_list&name=The%20CW&network_id=71\",return)"
+    },
+    "wizard": {
+      "name": "[B][COLOR yellow]אשף ההתקנה - Wizard[/COLOR][/B]",
+      "icon": "wizard_pov_il.png",
+      "action": "RunAddon(\"plugin.program.kodipovilwizard\")"
+    },
+    "fast_update": {
+      "name": "[B][COLOR blue]עדכון מהיר - Wizard[/COLOR][/B]",
+      "icon": "fast_update_pov_il.png",
+      "action": "PlayMedia(\"plugin://plugin.program.kodipovilwizard/?mode=install&action=quick_update&name=Kodi+POV+IL+-+FENtastic&auto_quick_update=false\")"
+    },
+    "rd_status": {
+      "name": "[B]סטטוס מנוי Real Debrid[/B]",
+      "icon": "RD_Account_Status.png",
+      "action": "PlayMedia(\"plugin://plugin.video.pov/?mode=real_debrid.show_account_info&name=Account+Info&isFolder=false&iconImage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.pov%2Fresources%2Fskins%2FDefault%2Fmedia%2Frealdebrid.png\")",
+      "condition": "real_debrid"
+    },
+    "torbox_status": {
+      "name": "[B]סטטוס מנוי TorBox[/B]",
+      "icon": "special://home/addons/plugin.video.pov/resources/skins/Default/media/torbox.png",
+      "action": "RunPlugin(plugin://plugin.video.pov/?mode=torbox.show_account_info)",
+      "condition": "torbox"
+    },
+    "premiumize_status": {
+      "name": "[B]סטטוס מנוי Premiumize[/B]",
+      "icon": "special://home/addons/plugin.video.pov/resources/skins/Default/media/premiumize.png",
+      "action": "PlayMedia(\"plugin://plugin.video.pov/?mode=premiumize.show_account_info&name=Account+Info&isFolder=false&iconImage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.pov%2Fresources%2Fskins%2FDefault%2Fmedia%2Fpremiumize.png\")",
+      "condition": "premiumize"
+    },
+    "speed_test": {
+      "name": "[B]בדיקת מהירות[/B]",
+      "icon": "speed_test_icon.png",
+      "action": "PlayMedia(\"plugin://plugin.program.kodipovilwizard/?mode=build_speed_test\")"
+    },
+    "send_log": {
+      "name": "[B]שליחת לוג[/B]",
+      "icon": "twilight_send_log.png",
+      "action": "RunPlugin(\"plugin://plugin.program.kodipovilwizard/?mode=uploadlog\")"
+    },
+    "order_favourites": {
+      "name": "[B]סידור מועדפים[/B]",
+      "icon": "Order_Favorites.png",
+      "action": "RunAddon(plugin.program.orderfavourites-hebrew)"
+    }
+  },
+  "skins": {
+    "default": {
+      "order": [
+        "pov",
+        "umbrella",
+        "connect_services",
+        "search_provider",
+        "debrid_notice",
+        "my_shows_tmdb",
+        "my_shows_trakt",
+        "my_shows_pov",
+        "my_shows_mdblist",
+        "my_movies_tmdb",
+        "my_movies_trakt",
+        "my_movies_pov",
+        "my_movies_mdblist",
+        "shows_popular",
+        "movies_new",
+        "movies_popular",
+        "shows_new",
+        "episodes_in_progress",
+        "movies_in_progress",
+        "idanplus",
+        "otaku",
+        "shows_genres",
+        "movies_genres",
+        "net_netflix",
+        "net_disney",
+        "net_apple",
+        "net_hbo",
+        "net_hbomax",
+        "net_fox",
+        "net_amazon",
+        "net_hulu",
+        "net_cw",
+        "wizard",
+        "fast_update",
+        "rd_status",
+        "torbox_status",
+        "premiumize_status",
+        "speed_test",
+        "send_log",
+        "order_favourites"
+      ]
+    },
+    "skin.estuary": {
+      "inherit": "default"
+    },
+    "skin.fentastic": {
+      "inherit": "default"
+    },
+    "skin.arctic.fuse.3": {
+      "order": [
+        "pov",
+        "umbrella",
+        "search_provider",
+        "connect_services",
+        "rd_status",
+        "torbox_status",
+        "speed_test",
+        "idanplus",
+        "otaku",
+        "wizard",
+        "fast_update",
+        "send_log",
+        "order_favourites"
+      ],
+      "overrides": {
+        "pov": {
+          "icon": "Logo_POV.png"
+        },
+        "rd_status": {
+          "icon": "special://home/addons/plugin.video.pov/resources/skins/Default/media/realdebrid.png"
+        },
+        "torbox_status": {
+          "action": "PlayMedia(\"plugin://plugin.video.pov/?mode=torbox.show_account_info&name=Account+Info&isFolder=false&iconImage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.pov%2Fresources%2Fskins%2FDefault%2Fmedia%2Ftorbox.png\")"
+        },
+        "wizard": {
+          "icon": "wizard.png"
+        },
+        "fast_update": {
+          "icon": "fast_update.png"
+        }
+      }
+    }
+  }
+}

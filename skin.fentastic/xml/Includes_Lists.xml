@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+
+
+<include name="BasedExtrainfoMainMenu">
+<param name="list_type">fixedlist</param>
+<param name="list_id">5000</param>
+<param name="centertop">50%</param>
+<param name="centerleft">50%</param>
+<param name="width">1412</param>
+<param name="focusposition">3</param>
+<param name="movement">3</param>
+<param name="onback">5001</param>
+<param name="onclick">$PARAM[onclick]</param>
+<param name="orientation">horizontal</param>
+<param name="animation">$PARAM[animation]</param>
+<param name="layoutwidth">202</param>
+<param name="layoutheight">65</param>
+<param name="groupwidth">200</param>
+<param name="fucusedlayoutinclude">$PARAM[fucusedlayoutinclude]</param>
+<definition>
+	<control type="$PARAM[list_type]" id="$PARAM[list_id]">
+	<height>100</height>
+	<centertop>$PARAM[centertop]</centertop>
+	<centerleft>$PARAM[centerleft]</centerleft>
+	<width>$PARAM[width]</width>
+	<onright>false</onright>
+	<onleft>false</onleft>
+	<focusposition>$PARAM[focusposition]</focusposition>
+	<movement>$PARAM[movement]</movement>
+	<onback>$PARAM[onback]</onback>
+	<include>$PARAM[onclick]</include>
+	<orientation>$PARAM[orientation]</orientation>
+	<scrolltime tween="cubic">550</scrolltime>
+	<include>$PARAM[animation]</include>
+	<itemlayout width="$PARAM[layoutwidth]" height="$PARAM[layoutheight]">
+	<control type="group">
+	<width>$PARAM[groupwidth]</width>
+	<control type="label">
+		<font>font10</font>
+		<align>center</align>
+		<aligny>center</aligny>
+		<label>$INFO[ListItem.Label]</label>
+	</control>
+	</control>
+	</itemlayout>
+	<focusedlayout width="$PARAM[layoutwidth]" height="$PARAM[layoutheight]">
+	<control type="group">
+	<width>$PARAM[groupwidth]</width>
+	<control type="image">
+	<texture>masks/menu.png</texture>
+	</control>
+	<control type="label">
+		<font>font10</font>
+		<align>center</align>
+		<aligny>center</aligny>
+		<textcolor>black</textcolor>
+		<label>$INFO[ListItem.Label]</label>
+	</control>
+	</control>
+	<include>$PARAM[fucusedlayoutinclude[</include>
+	</focusedlayout>
+	<content>$PARAM[content]</content>
+	</control>
+</definition>
+</include>
+
+</includes>

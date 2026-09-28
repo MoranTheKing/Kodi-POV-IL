@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="episodesdialog" id="1135">
+	<defaultcontrol always="true">5000</defaultcontrol>
+	<controls>
+
+	<!--############### fake button -->
+	<control type="button" id="5001">
+		<height>1</height>
+		<width>1</width>
+		<label />
+		<onfocus>ReplaceWindow(1134)</onfocus>
+	</control>
+	<!--################ -->
+
+	<!--################ -->
+	<control type="group">
+	<include content="AdvancedGlobalViewBackGround">
+		<param name="fanart">$INFO[Window(home).Property(bgimageinfo)]</param>
+	</include>
+	</control>
+	<!--################ -->
+	<include>__TopBasedExtndedinfo__</include>
+	<!--################ -->
+	<control type="grouplist">
+	<align>center</align>
+	<aligny>center</aligny>
+	<height>365</height>
+	<width>95%</width>
+	<left>20</left>
+	<right>20</right>
+	<itemgap>15</itemgap>
+	<centertop>40%</centertop>
+	<centerleft>50%</centerleft>
+	<include>GlobalTop2DownAnimation</include>
+	<control type="group">
+	<width>650</width>
+	<height>120</height>
+	<control type="image">
+		<left>700</left>
+		<width max="420">auto</width>
+		<height>120</height>
+		<aspectratio align="center">stretch</aspectratio>
+		<texture background="true">$INFO[Window(home).Property(extendedinfoclearlogo)]</texture>
+		<animation effect="zoom" start="0,100" end="90" time="1000" delay="350" center="auto" tween="back" easing="out" reversible="true">Visible</animation>
+		<animation effect="zoom" start="0,100" end="90" time="1000" delay="350" center="auto" tween="back" easing="out" reversible="true">WindowOpen</animation>
+	</control>
+	</control>
+	<control type="label">
+		<align>center</align>
+		<font>font45_title</font>
+		<height max="55">auto</height>
+		<label>$INFO[Container(5000).ListItem.TvShowTitle]</label>
+	</control>
+	<control type="label">
+		<align>center</align>
+		<font>font32_title</font>
+		<height max="45">auto</height>
+		<label>$INFO[Container(5000).ListItem.Genre]</label>
+	</control>
+	<control type="textbox">
+		<align>center</align>
+		<font>font37</font>
+		<height max="160">auto</height>
+		<label>$INFO[Container(5000).ListItem.Plot]</label>
+	</control>
+	</control>
+	<!--################ -->
+	
+	<!--################ -->
+	<control type="fixedlist" id="5000">
+	<include>GlobalDown2TopAnimation</include>
+	<height>400</height>
+	<width>87%</width>
+	<centertop>88%</centertop>
+	<centerleft>50%</centerleft>
+	<align>center</align>
+	<left>7%</left>
+	<right>20</right>
+	<movement>4</movement>
+	<onleft>false</onleft>
+	<onright>false</onright>
+	<onback>5001</onback>
+	<scrolltime tween="cubic">550</scrolltime>
+	<orientation>horizontal</orientation>
+	<itemlayout width="420" height="225">
+	<control type="group">
+	<width>400</width>
+	<control type="label">
+		<top>100%</top>
+		<align>center</align>
+		<height max="45">auto</height>
+		<label>$INFO[ListItem.Label]</label>
+	</control>
+	<control type="image">
+		<left>2</left>
+		<right>2</right>
+		<top>2</top>
+		<bottom>2</bottom>
+		<texture diffuse="masks/landscape1.png">$INFO[ListItem.Icon]</texture>
+	</control>	
+	<control type="label">
+		<left>18</left>
+		<top>81%</top>
+		<align>left</align>
+		<height max="45">auto</height>
+		<font>font10</font>
+		<shadowcolor>black</shadowcolor>
+		<label> עונה $INFO[ListItem.Season,(,)] פרק $INFO[ListItem.Episode,(,)]</label>
+	</control>
+	</control>
+	</itemlayout>
+	<focusedlayout  width="420" height="225">
+	<control type="group">
+	<width>400</width>
+	<control type="image">
+		<texture colordiffuse="white">masks/landscape1.png</texture>
+	</control>
+	<control type="label">
+		<top>100%</top>
+		<align>center</align>
+		<height max="45">auto</height>
+		<label>$INFO[ListItem.Label]</label>
+	</control>
+	<control type="image">
+		<left>2</left>
+		<right>2</right>
+		<top>2</top>
+		<bottom>2</bottom>
+		<texture diffuse="masks/landscape1.png">$INFO[ListItem.Icon]</texture>
+		<bordertexture colordiffuse="black">masks/landscape1.png</bordertexture>
+		<bordersize>1</bordersize>
+	</control>	
+	<control type="label">
+		<left>18</left>
+		<top>81%</top>
+		<align>left</align>
+		<height max="45">auto</height>
+		<font>font10</font>
+		<shadowcolor>black</shadowcolor>
+		<label> עונה $INFO[ListItem.Season,(,)] פרק $INFO[ListItem.Episode,(,)]</label>
+	</control>
+	</control>
+	</focusedlayout>
+	<content target="videos">$INFO[Window(home).Property(__EpisodesExtraction__)]</content>
+	</control>
+	<!--################ -->
+
+	</controls>
+</window>

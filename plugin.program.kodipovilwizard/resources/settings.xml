@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="הגדרות בילד">
+        <setting type="lsep" label="בילד נוכחי:"/>
+        <setting id="buildname" type="text" label="שם הבילד שמותקן:" enable="false" default=""/>
+        <setting id="buildversion" type="text" label="גרסת בילד נוכחית:" enable="false" default=""/>
+        <setting id="buildtheme" type="text" label="ערכה נוכחית:" enable="false" default=""/>
+        <setting id="latestversion" type="text" label="גרסת בילד אחרונה:" enable="false" default=""/>
+        <setting id="nextbuildcheck" type="text" label="בדיקת עדכון גרסה מתוזמנת ל:" enable="false" default="2019-01-01 00:00:00" />
+        <setting type="lsep" label="חלון התראות בהפעלה:"/>
+        <setting id="notify" type="bool" label="כבה התראות בהפעלה" default="false" visible="false"/>
+        <setting id="noteid" type="number" label="התראה אחרונה" visible="true" default="0" enable="false"/>
+        <setting id="notedismiss" type="bool" label="הזכר מאוחר יותר" visible="false" />
+        <setting id="acctmgr_auto" type="text" label="Account Manager auto-install" default="" visible="false" enable="false"/>
+        <setting id="umbrella_auto" type="text" label="Umbrella auto-install" default="" visible="false" enable="false"/>
+        <setting id="build_skin_switch_notifcation_dismiss" type="bool" label="הצגת חלון מידע על החלפת סקין לאחר התקנה ראשונית של הבילד" default="false" visible="false" />
+        <setting type="lsep" label="הצג בילדים:"/>
+        <setting id="show20" type="bool" label="הצג בילדים לקודי 20 (Nexus)" default="true"/>
+        <setting id="show21" type="bool" label="הצג בילדים לקודי 21 (Omega)" default="true"/>
+        <setting id="separate" type="bool" label="בטל הפרדה לפי גרסה" default="false"/>
+        <setting type="lsep" label="ייצוב הפעלה ראשונה (First Boot):"/>
+        <setting id="first_boot_warmup_seconds" type="slider" label="זמן חימום POV בהפעלה הראשונה (שניות)" default="25" range="5,5,120" option="int"/>
+        <setting id="pov_remember_source" type="bool" label="32504" default="true"/>
+        <setting id="_pov_remember_migrated_v1" type="bool" label="32504" default="false" visible="false"/>
+        <!-- Hidden Settings -->
+        <setting id="first_install" type="bool" label="First Install" visible="false" default="true" />
+        <setting id="enable_all" type="bool" label="Enable all Add-ons on Start" visible="false" default="false" />
+        <setting id="time_started" type="number" label="Time Startup Script Last Run" visible="false" default="0" />
+        <setting id="installed" type="text" label="Build Installed" visible="false" default="false" />
+        <setting id="extract" type="number" label="Extract Build %" visible="false" default="100" />
+        <setting id="errors" type="number" label="Extract Error" visible="false" default="0" />
+        <setting id="defaultskin" type="text" label="Default Skin: " enable="false" default="" visible="false"/>
+        <setting id="defaultskinname" type="text" label="Default Skin Name: " enable="false" default="" visible="false"/>
+        <setting id="defaultskinignore" type="bool" label="Ignore default skin check:" enable="false" default="false" visible="false"/>
+        <setting id="default.enablerssfeeds" type="text" label="Default lookandfeel.enablerssfeeds:" enable="false" default="" visible="false"/>
+        <setting id="default.font" type="text" label="Default lookandfeel.font:" enable="false" default="" visible="false"/>
+        <setting id="default.rssedit" type="text" label="Default lookandfeel.rssedit:" enable="false" default="" visible="false"/>
+        <setting id="default.skincolors" type="text" label="Default lookandfeel.skincolors:" enable="false" default="" visible="false"/>
+        <setting id="default.skintheme" type="text" label="Default lookandfeel.skintheme:" enable="false" default="" visible="false"/>
+        <setting id="default.skinzoom" type="text" label="Default lookandfeel.skinzoom:" enable="false" default="" visible="false"/>
+        <setting id="default.soundskin" type="text" label="Default lookandfeel.soundskin:" enable="false" default="" visible="false"/>
+        <setting id="default.startupwindow" type="text" label="Default lookandfeel.startupwindow:" enable="false" default="" visible="false"/>
+        <setting id="default.stereostrength" type="text" label="Default lookandfeel.stereostrength:" enable="false" default="" visible="false"/>
+        <setting id="default.addonupdate" type="text" label="Default general.addonupdate:" enable="false" default="" visible="false"/>
+    </category>
+
+    <category label="תחזוקה">
+        <setting type="lsep" label="הרחבות"/>
+        <setting id="forceupdateFAST_on_startup" type="bool" label="חפש עדכוני הרחבות בהפעלה" default="true"/>
+        <setting id="forceupdateFAST_on_startup_notify" type="bool" label="הצג הודעה של חיפוש העדכונים" default="false" visible="eq(-1,true)"/>
+        <setting type="lsep" label="העלאת לוג"/>
+        <setting id="oldlog" type="bool" label="כלול Kodi.Old.Log" default="false"/>
+        <setting id="wizlog" type="bool" label="כלול לוג Wizard" default="false"/>
+        <setting id="crashlog" type="bool" label="כלול לוג קריסה של קודי" default="false"/>
+        <setting type="lsep" label="תפריט תחזוקה"/>
+        <setting id="path" type="folder" label="בחר מיקום גיבוי" default="special://home/"/>
+        <setting type="lsep" label="ניקוי אוטומטי בהפעלה"/>
+        <setting id="autoclean" type="bool" label="אפשר ניקוי אוטומטי" default="false"/>
+        <setting id="clearcache" type="bool" label="נקה מטמון בהפעלה" default="false" enable="!eq(-1,false)"/>
+        <setting id="clearpackages" type="bool" label="נקה חבילות בהפעלה" default="false" enable="!eq(-2,false)"/>
+        <setting id="clearthumbs" type="bool" label="ניקוי שבועי - תמונות בהפעלה" default="false" enable="!eq(-3,false)"/>
+        <setting id="autocleanfreq" type="enum" label="תזמון ניקוי אוטומטי בהפעלה" values="תמיד|יומי|3 ימים|שבועי|חודשי" default="3" enable="!eq(-4,false)"/>
+        <setting id="nextautocleanup" type="text" label="Next Auto Clean Up:" enable="false" visible="false" default="2019-01-01 00:00:00" />
+        <setting type="lsep" label="ניקוי מטמון וידאו"/>
+        <setting id="includevideo" type="bool" label="כלול ניקוי מטמון בהרחבות וידאו" default="true"/>
+        <setting id="includeall" type="bool" label="כלול את כל ההרחבות " default="true" enable="!eq(-1,false)"/>
+    </category>
+
+    <category label="הגדרות התקנה ושמירת נתונים">
+        <setting type="lsep" label="שמירת נתוני הרחבות בזמן התקנת בילד:"/>
+        <setting id="keepacctmgr" type="bool" label="שמור נתוני חשבונות (Account Manager Lite)" default="true"/>
+        <setting id="keeppovdata" type="bool" label="שמור היסטוריה ומועדפים (POV)" default="true"/>
+        <setting id="keepumbrelladata" type="bool" label="שמור היסטוריה ומועדפים (Umbrella)" default="true"/>
+        <setting id="keepfentasticdata" type="bool" label="שמור הגדרות ועיצוב סקין FENtastic" default="true"/>
+        <setting type="lsep" label="שמירת הגדרות קודי בזמן התקנת בילד:"/>
+        <setting id="keepfavourites" type="bool" label="שמור מועדפים של קודי (Favourites.xml)" default="false"/>
+        <setting id="keepsources" type="bool" label="שמור מקורות קבצים (Sources.xml)" default="false"/>
+        <setting id="keepprofiles" type="bool" label="שמור פרופילי משתמש (Profiles.xml)" default="false"/>
+        <setting id="keepplayercore" type="bool" label="שמור הגדרות נגן (playercorefactory.xml)" default="false"/>
+        <setting id="keepadvanced" type="bool" label="שמור הגדרות מתקדמות (advancedsettings.xml)" default="false"/>
+        <setting id="keepguisettings" type="bool" label="שמור הגדרות ממשק פנימיות (guisettings.xml)" default="false"/>
+        <setting id="keeprepos" type="bool" label="שמור מאגרי הרחבות (Repositories)" default="false"/>
+        <setting id="keepsuper" type="bool" label="שמור Super Favourites" default="false"/>
+        <setting id="keepwhitelist" type="bool" label="שמור רשימת הרחבות מוגנות (Whitelist)" default="false"/>
+        <setting id="keepaddons33db" type="bool" label="שמור מסד נתוני הרחבות (Addons33.db)" default="false"/>
+    </category>
+
+    <category label="הגדרות תצוגה">
+        <setting id="developer" type="bool" label="הצג אפשרויות מפתח" enable="true" default="false"/>
+        <setting id="adult" type="bool" label="הצג הרחבות למבוגרים" enable="true" default="false"/>
+        <setting id="auto-view" type="bool" label="הפעל Auto View" default="false"/>
+        <setting id="viewType" type="number" label="סוג View" default="50" visible="!eq(-1, false)" enable="!eq(-1,false)"/>
+    </category>
+
+    <category label="הגדרות לוג">
+        <setting type="lsep" label="אירועי לוג ב-Wizard"/>
+        <setting id="debuglevel" type="enum" label="בחר Wizard Log Level" values="ללא|רגיל|מלא" default="1"/>
+        <setting id="wizardlog" type="bool" label="הפעל לוגים מה-Wizard" default="true"/>
+        <setting id="autocleanwiz" type="bool" label="ניקוי לוג אוטומטי ב-Wizard" visible="!eq(-1,false)" default="true"/>
+        <setting id="wizlogcleanby" type="enum" label="על פי מה לנקות לוג Wizard?" visible="!eq(-2,false)+!eq(-1,false)" values="ימים|גודל|שורות" default="1"/>
+        <setting id="wizlogcleandays" type="enum" subsetting="true" label="בחירת ימים לשמירת הלוג" enable="!eq(-2,false)" visible="eq(-1,0)+!eq(-2,false)+!eq(-3,false)" values="1|2|3|7" default="2"/>
+        <setting id="wizlogcleansize" type="enum" subsetting="true" label="גודל מקסימלי עבור wizard.log" enable="!eq(-3,false)" visible="eq(-2,1)+!eq(-3,false)+!eq(-4,false)" values="100 KB|200 KB|300 KB|400 KB|500 KB|1 MB" default="1"/>
+        <setting id="wizlogcleanlines" type="enum" subsetting="true" label="מספר שורות מקסימלי בשמירת wizard.log" enable="!eq(-4,false)" visible="eq(-3,2)+!eq(-4,false)+!eq(-5,false)" values="100|200|300|400|500" default="2"/>
+        <setting id="nextwizcleandate" type="text" label="ניקוי הבא של לוג ה-Wizard" visible="false" default="2019-01-01 00:00:00"/>
+    </category>
+</settings>

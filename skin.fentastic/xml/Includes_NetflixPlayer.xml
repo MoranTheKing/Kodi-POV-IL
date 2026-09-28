@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+<!-- NETFLIX PLAYER -->
+<include name="NetFlix_ReSize">
+	<right>$PARAM[right]</right>
+	<width>$PARAM[width]</width>
+	<height>$PARAM[height]</height>
+	<bottom>$PARAM[bottom]</bottom>
+	<centerleft>$PARAM[centerleft]</centerleft>
+</include>
+
+<include name="NetFlix_Based_Image">
+	<param name="flipy">false</param>
+	<definition>
+	<control type="image">
+		<nested />
+		<texture flipy="$PARAM[flipy]" colordiffuse="$PARAM[colordiffuse]">$PARAM[texture]</texture>
+		<visible>$PARAM[visible]</visible>
+	</control>
+	</definition>
+</include>
+
+<include name="Netflix_BorderBased_Image">
+	<control type="image">
+		<nested />
+		<texture colordiffuse="$PARAM[colordiffuse]">$PARAM[texture]</texture>
+		<bordertexture colordiffuse="$PARAM[bordertexturecolor]">$PARAM[bordertexture]</bordertexture>
+		<visible>$PARAM[visible]</visible>
+	</control>
+</include>
+
+<include name="NetFlix_Based_Label">
+	<param name="textcolor">white</param>
+	<definition>
+	<control type="label">
+		<nested />
+		<align>$PARAM[align]</align>
+		<font>$PARAM[font]</font>
+		<label>$PARAM[label]</label>
+		<textcolor>$PARAM[textcolor]</textcolor>
+		<visible>$PARAM[visible]</visible>
+	</control>
+	</definition>
+</include>
+
+<include name="NetFlix_Base_Info">
+<control type="grouplist">
+	<animation type="Visible">
+		<effect type="slide" start="0,20" end="0,0" time="150" tween="sine" easing="inout"/>
+		<effect type="fade" start="0" end="100" time="150" tween="sine" easing="inout"/>
+	</animation>
+	<animation type="Hidden">
+		<effect type="slide" start="0,0" end="0,20" time="150" tween="sine" easing="inout"/>
+		<effect type="fade" start="100" end="0" time="150" tween="sine" easing="inout"/>
+	</animation>
+	<orientation>$PARAM[orientation]</orientation>
+	<height>$PARAM[height]</height>
+	<width>$PARAM[width]</width>
+	<bottom>$PARAM[bottom]</bottom>
+	<align>$PARAM[groupalign]</align>
+	<right>10</right>
+	<itemgap>$PARAM[iGap]</itemgap>
+	<visible>$PARAM[visible]</visible>
+	<nested />
+	<control type="textbox">
+		<height max="auto">auto</height>
+		<align>right</align>
+		<font>font45_title</font>
+		<label>$PARAM[label2]</label>
+	</control>
+	<control type="textbox">
+	<height max="auto">auto</height>
+		<align>right</align>
+		<font>font22</font>
+		<textcolor>98FFFFFF</textcolor>
+		<label>$PARAM[label1]</label>
+	</control>
+	<control type="textbox">
+		<height max="125">auto</height>
+		<align>right</align>
+		<label>$PARAM[label3]</label>
+		<visible>$PARAM[label3visible]</visible>
+		<autoscroll fade="5000" time="5000" repeat="5000">Control.HasFocus(52000)</autoscroll>
+	</control>
+	<nested />
+</control>
+</include>
+
+<include name="Netflix_Base_Menu_Items">
+<param name="width">55</param>
+<param name="height">55</param>
+<param name="radiowidth">35</param>
+<param name="radioheight">35</param>
+<param name="radioposx">10</param>
+<param name="radioposy">10</param>
+<param name="visible">true</param>
+<param name="iconfocus">masks/circle.png</param>
+<param name="radioicon">osd/fullscreen/buttons/previous.png</param>
+<param name="nofocuscolor">white</param>
+<param name="radiooffnofocus">white</param>
+<definition>
+	<control type="radiobutton" id="$PARAM[button_id]">
+      <width>$PARAM[width]</width>
+      <height>$PARAM[height]</height>
+	  <radiowidth>$PARAM[radiowidth]</radiowidth>
+	  <radioheight>$PARAM[radioheight]</radioheight>
+	  <radioposx>$PARAM[radioposx]</radioposx>
+	  <radioposy>$PARAM[radioposy]</radioposy>
+      <colordiffuse>FFFFFFFF</colordiffuse>
+	  <texturefocus>$PARAM[iconfocus]</texturefocus>
+      <texturenofocus />
+      <textureradioonfocus colordiffuse="98000000">$PARAM[radioicon]</textureradioonfocus>
+      <textureradioonnofocus colordiffuse="$PARAM[nofocuscolor]">$PARAM[radioicon]</textureradioonnofocus>
+      <textureradioofffocus colordiffuse="98000000">$PARAM[radioicon]</textureradioofffocus>
+      <textureradiooffnofocus colordiffuse="$PARAM[radiooffnofocus]">$PARAM[radioicon]</textureradiooffnofocus>
+	  <textureradioondisabled colordiffuse="deeppink">$PARAM[radioicon]</textureradioondisabled>
+      <!-- <selected>Player.Paused</selected> -->
+      <onclick>$PARAM[onclick]</onclick>
+	  <include>$PARAM[__Onclick]</include>
+	  <visible>$PARAM[visible]</visible>
+	  <enable>$PARAM[enable]</enable>
+	</control>
+</definition>
+</include>
+	
+</includes>
