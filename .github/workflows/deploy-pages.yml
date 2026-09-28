@@ -88,6 +88,12 @@ jobs:
             --pattern "Kodi-POV-IL-32bit.apk" \
             --dir gh/downloads --clobber \
             || echo "No release APK assets yet; skipping APK publish."
+          # Keep method 5's Kodi File Manager source on the newest released
+          # Wizard. A checked-in ZIP gives the source an initial fallback, but
+          # future addon releases must replace it without a manual site edit.
+          gh release download addons-latest --repo "$REPO_SLUG" \
+            --pattern "plugin.program.kodipovilwizard-latest.zip" \
+            --dir gh/wizard-new --clobber
           touch gh/.nojekyll
           cd gh
           git add -A
