@@ -168,6 +168,21 @@ class ModularUpdater:
                 logging.log('[ModularUpdater] service recovery failed: {0}'.format(exc),
                             level=xbmc.LOGERROR)
                 return False
+            try:
+                from resources.libs import addon_install_receipt
+                data_dir = os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID)
+                pending_addons = addon_install_receipt.pending_addons(data_dir)
+                if pending_addons:
+                    from resources.libs import staged_addon_install
+                for addon_id in pending_addons:
+                    if addon_id == 'service.subtitles.kodipovilai':
+                        continue
+                    staged_addon_install.recover(CONFIG.ADDONS, CONFIG.ADDONS,
+                                                 addon_id)
+            except Exception as exc:
+                logging.log('[ModularUpdater] interrupted add-on recovery failed: {0}'
+                            .format(exc), level=xbmc.LOGERROR)
+                return False
         # Finish a package prepared on the previous boot before any network
         # request. The old service has already acknowledged and exited; a
         # manifest outage must not strand a complete local handoff.
@@ -215,19 +230,25 @@ class ModularUpdater:
             if not remote_ver:
                 continue
 
+            pending = False
+            if (not getattr(self, 'fresh', False) and
+                    addon_id != 'service.subtitles.kodipovilai'):
+                from resources.libs import addon_install_receipt
+                pending = addon_install_receipt.needs_retry(
+                    os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID), addon_id)
             if not local_ver:
-                if addon_id in self.ON_DEMAND_SKINS:
+                if addon_id in self.ON_DEMAND_SKINS and not pending:
                     logging.log('[ModularUpdater] on-demand skin remains optional: {0}'
                                 .format(addon_id), level=xbmc.LOGINFO)
                     continue
-                if install_missing:
+                if install_missing or pending:
                     update_queue.append(mod)
                 else:
                     logging.log("[ModularUpdater] Skipping not-installed addon {0}".format(addon_id),
                                 level=xbmc.LOGINFO)
                 continue
 
-            if self._version_tuple(local_ver) < self._version_tuple(remote_ver):
+            if pending or self._version_tuple(local_ver) < self._version_tuple(remote_ver):
                 logging.log("[ModularUpdater] {0}: {1} -> {2}".format(addon_id, local_ver, remote_ver),
                             level=xbmc.LOGINFO)
                 update_queue.append(mod)
@@ -1033,13 +1054,36 @@ class ModularUpdater:
                             str(mod.get('version')), want_sha)
                         logging.log('[ModularUpdater] verified and swapped {0} files for {1}'
                                     .format(count, addon_id), level=xbmc.LOGINFO)
+                    elif addon_id != 'service.subtitles.kodipovilai':
+                        if not want_sha:
+                            raise ValueError('add-on update requires SHA-256')
+                        from resources.libs import staged_addon_install, addon_install_receipt
+                        data_dir = os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID)
+                        addon_install_receipt.begin(
+                            data_dir, addon_id, mod.get('version'), want_sha)
+                        count = staged_addon_install.install(
+                            zip_path, CONFIG.ADDONS, addon_id,
+                            str(mod.get('version')), want_sha)
+                        addon_install_receipt.complete(data_dir, addon_id)
+                        logging.log('[ModularUpdater] verified and swapped {0} files for {1}'
+                                    .format(count, addon_id), level=xbmc.LOGINFO)
                     else:
+                        from resources.libs import addon_install_receipt
+                        data_dir = os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID)
+                        addon_install_receipt.begin(
+                            data_dir, addon_id, mod.get('version'), want_sha)
                         _percent, errors, detail = extract.all(
                             zip_path, CONFIG.ADDONS, ignore=True, title=title,
                             progress_dialog_bg=self.background)
                         if errors:
                             raise RuntimeError('{0} extraction errors: {1}'
                                                .format(errors, detail[:500]))
+                        count = addon_install_receipt.verify(
+                            zip_path, CONFIG.ADDONS, addon_id,
+                            mod.get('version'))
+                        addon_install_receipt.complete(data_dir, addon_id)
+                        logging.log('[ModularUpdater] verified {0} files for {1}'
+                                    .format(count, addon_id), level=xbmc.LOGINFO)
                     extracted_addons.append(addon_id)
                     logging.log('[ModularUpdater] extracted {0}'.format(addon_id),
                                 level=xbmc.LOGINFO)
