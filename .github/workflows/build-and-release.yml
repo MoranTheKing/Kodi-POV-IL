@@ -25,6 +25,7 @@ on:
       - "userdata/**"
       - ".github/pov-host-migration.json"
       - ".github/workflows/build-and-release.yml"
+      - "tests/test_search_provider_skins.py"
   workflow_dispatch: {}
 
 permissions:
