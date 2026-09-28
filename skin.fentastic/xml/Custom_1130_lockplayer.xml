@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="dialog" id="1130">
+	<defaultcontrol always="true">9001</defaultcontrol>
+	<zorder>4</zorder>
+	<controls>
+	
+	<!-- LOCK PLAYERS -->
+	<include content="BaseMainMenu">
+		<param name="id" value="9001"/>
+		<param name="basedmenuleft">650</param>
+		<param name="basedmenuheight">400</param>
+		<param name="movement">Padxy5</param>
+		<param name="centertop">42%</param>
+		<param name="headlinebackgroundheight">10%</param>
+		<param name="top_list">45</param>
+		<param name="list_left">12</param>
+		<param name="basedmenuwidth">435</param>
+		<param name="list_height">380</param>
+		<param name="onback">9000</param>
+		<param name="topimage">false</param>
+		<param name="TopHeadLineBaseMenu">LockedPlayerLabel</param>
+		<param name="animation" value="bottom2topslideanimation"/>
+		<param name="visible" value="Control.HasFocus(9001)"/>
+		<param name="items" value="PlayerLockItems"/>
+		<param name="layout" value="PlayerLockedLayout"/>
+	</include>
+	
+	</controls>
+</window>

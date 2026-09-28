@@ -1,0 +1,20 @@
+<keymap>
+  <!-- Kodi POV IL: make the remote/keyboard "Back" STOP playback while a
+       video is fullscreen, instead of Kodi's default (minimise and keep
+       playing in the background). Scoped to FullscreenVideo ONLY, so it never
+       overrides Back during normal menu navigation and cannot wedge the UI. -->
+  <FullscreenVideo>
+    <keyboard>
+      <backspace>Stop</backspace>
+    </keyboard>
+    <remote>
+      <back>Stop</back>
+    </remote>
+    <gamepad>
+      <back>Stop</back>
+    </gamepad>
+    <appcommand>
+      <browser_back>Stop</browser_back>
+    </appcommand>
+  </FullscreenVideo>
+</keymap>

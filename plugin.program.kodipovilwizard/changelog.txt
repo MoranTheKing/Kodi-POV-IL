@@ -1,0 +1,517 @@
+v0.1.48
+- A quick update no longer discards the settings you changed that evening.
+  Kodi was being killed rather than closed, which skips the save it does on a
+  normal shutdown. That is correct after a full build install, where the save
+  would overwrite the guisettings.xml just extracted, and wrong after a quick
+  update, where nothing of the kind was written. Audio passthrough switching
+  itself back off is what made it visible; every setting was affected. The
+  quick update now asks Kodi to close properly and falls back to the kill only
+  if that does not take within twenty seconds.
+- Umbrella and its scraper module now install themselves on every device,
+  once, in the background, instead of waiting behind a menu entry. Their own
+  repositories come with them, so their developers publish the updates from
+  then on. Removing Umbrella afterwards is respected -- it is not reinstalled
+  at the next start.
+- Account Manager arrives current on a new install. The pack carried 1.1.5a
+  while its own developer's repository was publishing 1.1.6, so a fresh device
+  spent its first day downloading what should have come with it -- the same
+  thing that had happened to the video add-on. Umbrella, the scraper module
+  and the account viewer were checked against their own repositories in the
+  same pass and were already current.
+- A pack whose files are only half there now repairs itself. The check for
+  "already installed" looked at ONE file and skipped the download for the
+  whole pack, so a device missing the rest stayed missing them for ever. It
+  looks at all of them, and a download that fails to extract no longer tells
+  Kodi the add-ons are there when they are not.
+
+v0.1.47
+- A quick update now writes only the files that actually changed. It used to
+  lay down all 1,969 files of the build every time -- including 1,330 belonging
+  to the skin drawing the progress bar on screen -- to change a handful, and on
+  some devices Kodi force-closed partway through before it could finish. A
+  device several updates behind still receives everything it is missing: the
+  comparison is against that device's own files.
+
+v0.1.46
+- Switching skin now leaves a mark, so the build can tell a home tile the skin
+  switch removed from one you removed yourself, and put back only the first.
+- You are no longer asked, at every start, to reinstall the whole application
+  for a package that carries nothing an existing install needs. Asking for the
+  check yourself in the menu still finds and offers it.
+
+v0.1.45
+- A quick update waits for POV to be usable again before refreshing the skin,
+  so an update can no longer rebuild the home screen while POV is restarting.
+- When it cannot be applied straight away the update now says so plainly
+  instead of reporting that it was applied.
+
+v0.1.44
+- Recovering an add-on left switched off by an interrupted update is
+  quicker and no longer gives up on a temporary hiccup.
+
+v0.1.43
+- Fixes a fresh install failing to start: the startup script logged before
+  it created its own folder, and the log write took the whole script down.
+- The wizard log can no longer break whatever was writing to it.
+
+v0.1.42
+- A quick update is applied without closing Kodi. Anything that cannot be
+  applied in place still falls back to the old restart, and an add-on left
+  disabled by an interrupted reload is switched back on at the next start.
+- Nothing is reloaded while something is playing.
+
+[COLOR yellow][B]v0.1.41[/B][/COLOR]
+* Account Manager is no longer opt-in: it installs by itself, once, on every
+  device including ones that already have the build. It is what lets
+  "Connect Services" fill a debrid account into every add-on at once instead
+  of into POV alone. Nothing you have already connected changes, and if you
+  uninstall it we do not put it back.
+
+[COLOR yellow][B]v0.1.40[/B][/COLOR]
+* New opt-in pilot: "Install Account Manager (experimental)" in the wizard
+  menu. Connect your debrid accounts once in one place and it fills them
+  into every add-on you have installed, POV and Umbrella included, and into
+  anything you install later. Ships with its developer's own repository so
+  it updates straight from him. Nothing changes for anyone who does not
+  pick it.
+
+[COLOR yellow][B]v0.1.39[/B][/COLOR]
+* New opt-in pilot: "Install Umbrella (experimental)" in the wizard menu
+  installs the Umbrella addon + CocoScrapers alongside POV, with both of
+  their official repositories so they update straight from their developers.
+  Nothing changes for anyone who does not pick it.
+
+[COLOR yellow][B]v0.1.38[/B][/COLOR]
+* NOX skin updated to 1.0.11: the seek bar now slides away on its own after
+  five seconds of pause, matching FENtastic, and returns on any key press.
+* Devices already on NOX pick the new skin pack up automatically on the next
+  quick update via the existing version gate.
+
+[COLOR yellow][B]v0.1.37[/B][/COLOR]
+* Arctic Fuse 3 skin updated to the current upstream release (6.3.2.14),
+  keeping the mod layer, the Hebrew localisation and all build integrations.
+* A device already ON Arctic Fuse 3 now refreshes the skin pack automatically
+  on quick update, same as NOX -- no need to switch skins back and forth.
+* Re-extracting the AF3 skin now clears the old skin folder first, so files
+  the skin author removed can no longer linger and load as zombie windows.
+
+[COLOR yellow][B]v0.1.36[/B][/COLOR]
+* A new installation no longer skips the five FENtastic home-widget files, so
+  Movies, TV shows and Idan+ come up with their content instead of empty.
+* A home layout you customised is still kept on a quick update; only files that
+  are missing get written.
+
+[COLOR yellow][B]v0.1.35[/B][/COLOR]
+* Legacy Android and Windows installations without a POV package marker no
+  longer receive an automatic full-application dialog after quick maintenance.
+* Manual checks still offer the current package, while marked .48+ packages
+  remain eligible for important future application releases.
+
+[COLOR yellow][B]v0.1.34[/B][/COLOR]
+* Android and Windows application updates now compare the complete POV IL
+  package release (for example 21.3-povil.48), instead of trying to parse that
+  value as Kodi's 21.3 core version.
+* Windows update detection now recognizes the actual Kodi POV IL installation
+  folder, downloads the stable current installer filename, and stages it
+  outside portable_data so the repair setup can safely protect that profile.
+* Existing pre-marker installations are bridged from .47 once, so they receive
+  the repaired .48 package and then use the embedded release marker normally.
+
+[COLOR yellow][B]v0.1.33[/B][/COLOR]
+* Quick-update delivery state is now committed only after the package finishes
+  successfully. A transient download/install failure therefore retries on the
+  next Kodi startup instead of permanently suppressing that release.
+* Automatic quick updates fetch an immutable notification-specific build
+  manifest path, preventing a fresh notification from being paired with a stale
+  quickfix URL at the raw.githubusercontent CDN (which ignores query strings in
+  its cache key).
+* A quick update is accepted only after extraction reaches 100% with zero
+  errors; corrupt or partially extracted packages now return failure and retry
+  instead of advancing the delivery id.
+[COLOR yellow][B]v0.1.32[/B][/COLOR]
+* Fixed the "Kodi POV IL" rebrand not sticking after an update. The update-
+  notification frame and the bottom badge are now carried inside the FENtastic
+  quickfix, so a quick update no longer re-imposes the old Real-Debrid/KODI art
+  on top of the new branding. The wizard bundled in the build is rebuilt from
+  source (correct icons + notification title, home-widget preservation across
+  quick updates, NOX skin 1.0.10) instead of a stale snapshot.
+
+[COLOR yellow][B]v0.1.31[/B][/COLOR]
+* Rebrand: the update-notification title now reads "KODI POV IL" and the bottom
+  badge is the POV IL square (replacing the old circular Real-Debrid/KODI logo).
+
+[COLOR yellow][B]v0.1.30[/B][/COLOR]
+* NOX gate -> skin 1.0.10. Reordered the "my content" tiles on the NOX home
+  so each provider's movies and series sit next to each other -- my movies
+  (Trakt) + my series (Trakt), then TMDB pair, then POV pair -- instead of
+  all movies followed by all series. The updated Custom_nox_main_menu.xml is
+  also shipped inside the FENtastic quickfix for fast propagation.
+
+[COLOR yellow][B]v0.1.29[/B][/COLOR]
+* NOX gate -> skin 1.0.9. The 1.0.8 vendor-logo image still rendered small
+  (the wide logo had to fit a short box, and the framed square dominated).
+  Replaced it with a large frameless TEXT logo on the NOX home: "POV IL" in
+  font60 (white + gold "IL") with "KODI BUILD" beneath it -- no image, no
+  frame, scales crisply. Also shipped the new Home_nox.xml inside the
+  FENtastic quickfix so existing NOX users get it on the next quick-update
+  restart instead of waiting for the full skin-pack re-pull.
+
+[COLOR yellow][B]v0.1.28[/B][/COLOR]
+* NOX gate -> skin 1.0.8. Enlarged the POV logo on the NOX home screen and
+  switched it to the wide "POV IL / KODI BUILD" vendor logo (same artwork
+  FENtastic uses top-left) instead of the small square K-logo. New media
+  file media/logos/pov_il_vendor_logo.png; both home logo controls now point
+  at it at 300x83. Bumped skin.povil.nox to 1.0.8 so the version gate fires
+  and devices already on NOX re-pull the pack via auto_update_active_skin_pack.
+
+[COLOR yellow][B]v0.1.27[/B][/COLOR]
+* NOX gate -> skin 1.0.7. The 6-tile favorites fix (PR #240) was packed
+  as 1.0.6 IN PLACE -- but 1.0.6 had already shipped via PR #239, so
+  devices that pulled it (gate==on-disk==1.0.6) would never re-download
+  the fixed pack. Bumped the skin to 1.0.7 so the version gate fires.
+  Lesson encoded: never rebuild a skin pack in place once its version
+  has been merged to main.
+
+[COLOR yellow][B]v0.1.26[/B][/COLOR]
+* NOX gate -> skin 1.0.6:
+  - "הסרטים שלי / הסדרות שלי" on the home now open POV's unified
+    "My Content" hub (navigator.my_content) instead of the POV-only
+    favorites list, which showed 0 for users who keep their lists on
+    Trakt/TMDB rather than POV.
+  - Focused submenu item is highlighted yellow instead of gray.
+* FENtastic: applied Tal Levi's updated player set (new VideoOSD /
+  OsdSettings / NetflixPlayer + supporting includes -- 26 files), kept all
+  other skin files, and preserved our clear-cache RunPlugin fix.
+
+[COLOR yellow][B]v0.1.25[/B][/COLOR]
+* NOX gate -> skin 1.0.5.
+  - Movies/TV/Kids reverted to a SINGLE row (popular) -- the two stacked
+    rows collided with the top info panel so the title/plot was unreadable.
+  - NOX is now the default home: no more "choose view (Nox/Fentastic/...)"
+    prompt on first switch to NOX (Home.xml defaults HomeS=Home_nox and
+    sets firsttimerun; the chooser is still reachable from Skin settings).
+  - Removed the broken "אוספי סרטים" (Movie Collections) search entry that
+    threw a POV error.
+  - Removed the "כאן 11" Israeli-content row (kept channel 13 + 12).
+
+[COLOR yellow][B]v0.1.24[/B][/COLOR]
+* NOX gate -> skin 1.0.4. Fixes the overlapping home rows: Movies / TV /
+  Kids now show two separate stacked rows (Popular + New / kids movies +
+  kids series) instead of both widgets rendering at the same position.
+  Each row is wrapped in its own group with a vertical offset (mirroring
+  the working VOD layout); the category groups moved up so both rows fit.
+* Israeli content (תוכן ישראלי): added the "כאן 11" row beneath
+  channel 13 and channel 12 (idanplus module=kan), so it shows 13/12/11.
+
+[COLOR yellow][B]v0.1.23[/B][/COLOR]
+* NOX skin now auto-updates for users already ON it. Added
+  auto_update_active_skin_pack() (called from startup.py): if the active
+  skin is skin.povil.nox and the on-disk version is behind NOX_SKIN_VERSION,
+  it re-downloads the pack and reloads the skin -- so a published NOX update
+  reaches existing NOX users on their next quick update + restart, like the
+  other skins, without having to switch skins and back. Version-gated, so it
+  never re-downloads when already current (no wipe of the user's favourites
+  order / skin settings, which live in addon_data, not in the pack).
+* Gate bumped to NOX skin 1.0.3.
+* Fixed the mojibake "current build" header in the wizard's Builds menu
+  (THEME4 was double-encoded gibberish) -> now reads "בילד נוכחי:".
+
+[COLOR yellow][B]v0.1.22[/B][/COLOR]
+* Fix NOX skin being auto-disabled as "incompatible add-on" right after
+  switching to it (Kodi then fell back to plain Estuary, so it looked
+  identical to the simple skin). Cause: skin.povil.nox declared
+  <import addon="xbmc.gui" version="5.15.0"/> (Nexus), which Kodi 21
+  Omega rejects. The build's working skins (Estuary, FENtastic) keep that
+  import commented out; NOX now matches. Skin bumped to 1.0.1 and
+  NOX_SKIN_VERSION gated to 1.0.1 so devices that already pulled the
+  broken 1.0.0 re-download the fixed pack on the next switch.
+
+[COLOR yellow][B]v0.1.21[/B][/COLOR]
+* Fix the "Kodi hangs for a few seconds on the first launch after an
+  install / quick update, force-stop required" bug. startup.py is an
+  xbmc.service with start="startup", so it runs before Kodi's GUI
+  exists; the first-launch modal dialogs (build notification, skin-
+  switch notification) were doModal()'d that early and deadlocked the
+  boot. Because those blocks set their one-shot dismiss flag BEFORE
+  showing, the hang happened exactly once and a force-stop recovered --
+  matching the symptom. Added wait_for_gui_ready(): the service now
+  blocks (bounded) until the Home window is actually live before any
+  first-launch dialog, so each modal has a real parent window.
+
+[COLOR yellow][B]v0.1.20[/B][/COLOR]
+* New 4th skin: NOX (skin.povil.nox), a rebranded + scrubbed Estuary MOD
+  with a Hebrew home menu remapped to our POV / idanplus / otaku addons.
+  Like Arctic Fuse 3 it is NOT bundled in the base build -- it downloads
+  on demand the first time the user picks it in Switch Skin, so it costs
+  nothing for users who do not use it. The on-demand installer was
+  generalised (_ensure_packs_installed) so AF3 and NOX share one path,
+  including the critical Addons-DB register step that prevents the silent
+  Estuary fallback. The side-loader and all foreign wizard/IPTV calls in
+  the original skin were removed.
+
+[COLOR yellow][B]v0.1.19[/B][/COLOR]
+* CRITICAL: kill_kodi() is a true hard kill again (os._exit, no Quit).
+  The graceful Quit added earlier made Kodi save its in-memory settings
+  on shutdown, overwriting the guisettings.xml / Addons33.db that a
+  fresh build install had just extracted -- so clean installs rebooted
+  into Estuary with everything disabled, while quick updates (whose
+  zips carry no guisettings) kept working. This restores the original
+  wizard behavior that fresh installs depend on.
+* fresh_build_auto_install_if_needed() now skips hydration when
+  plugin.video.pov is already on disk (pre-seeded installs, e.g. the
+  Windows installer), letting the auto-set-buildname block adopt the
+  existing install instead of re-downloading the build over it.
+
+[COLOR yellow][B]v0.1.14[/B][/COLOR]
+* Fix the version gate from 0.1.13: _af3_read_addon_version() was matching
+  the FIRST version=" in the file, which is the XML declaration
+  (<?xml version="1.0"?>), not the <addon> tag. So jurialmunkey 0.2.28 read
+  as "1.0", 1.0 >= 0.2.35 passed, and the deps pack was skipped -> the
+  TMDbHelper crash persisted after "fixing" it. Now we search from the
+  '<addon' tag so the real addon version is read.
+
+[COLOR yellow][B]v0.1.13[/B][/COLOR]
+* AF3 deps pack now has a VERSION GATE on jurialmunkey (>= 0.2.35).
+  Previously _af3_pack_current() returned True as soon as the addon.xml
+  merely existed, so users who switched to AF3 with an old jurialmunkey
+  (e.g. 0.2.28) were never upgraded -- but the bundled TMDbHelper 6.15.6
+  needs jurialmunkey.ftools (0.2.35+) and crash-looped its service on
+  startup, breaking AF3 widgets/ratings. The gate forces a re-extract that
+  overwrites the stale module. Version compare is now ">= expected" so a
+  newer installed version is never needlessly downgraded.
+
+[COLOR yellow][B]v0.1.12[/B][/COLOR]
+* AF3 Switch Skin fix #2: ship 4 transitive Python deps that the
+  AF3 skin scripts need (script.module.jurialmunkey 0.2.35,
+  script.module.infotagger 0.0.8, script.module.addon.signals,
+  script.module.qrcode). 0.1.11 finally let AF3 LOAD instead of
+  silently falling back to Estuary -- but it then hung forever on
+  "Initialising Skin..." because script.skinvariables crashed
+  with ModuleNotFoundError: No module named 'jurialmunkey'. With
+  skinvariables dead, the dynamically-generated includes file
+  (script-skinvariables-generator-includes-.xml) never landed, so
+  AF3's Startup.xml had no home content to render -> black screen.
+  Same root failure also blew up plugin.video.themoviedb.helper.
+  New tiny pack (139 KB) Kodi-POV-IL-AF3-deps-pack.zip pre-installs
+  + DB-registers the missing modules before the skin pack runs.
+* The packs list now leads with the deps pack so it's already on
+  disk by the time skinvariables / texturemaker / tmdbhelper try
+  to import anything.
+[COLOR yellow][B]v0.1.11[/B][/COLOR]
+* Switch Skin -> Arctic Fuse 3 now actually loads AF3 instead of
+  silently falling back to Estuary. Root cause: ensure_arctic_
+  fuse_3_installed() extracted the AF3 packs to disk but never
+  registered the skin + its 6 dependencies (script.skinvariables,
+  script.texturemaker, plugin.video.themoviedb.helper,
+  resource.images.weathericons.white, resource.font.robotocjksc,
+  resource.images.studios.coloured) in Kodi's Addons DB. From
+  Kodi's POV the deps were "not installed", so it refused to load
+  AF3 and fell back to skin.estuary -- the "it says switched but I
+  get the simple skin" bug. Fix: register + enable every pack's
+  addons in the Addons DB after extraction (mirrors quick_update /
+  Fresh Install), then UpdateLocalAddons so the dependency graph
+  is satisfiable in-session too.
+* RETROACTIVE: users who already switched to AF3 with the old
+  (DB-less) code are healed automatically -- the "files already on
+  disk" fast-path now ALSO re-registers the addons in the DB
+  instead of skipping outright. Re-pick AF3 from Switch Skin and
+  it will stick after the restart, no re-download needed.
+[COLOR yellow][B]v0.1.10[/B][/COLOR]
+* quick_update: now passes ignore=True to extract.all so the
+  wizard's own files inside the quickfix zip actually get
+  written to disk. Without this, every wizard-update shipped
+  via quick_update was silently skipped (extract.all has a
+  safety guard that excludes anything whose path contains the
+  wizard's addon id). End-user symptom: after quick_update +
+  restart, Switch Skin kept showing the pre-update list and
+  the addon DB version disagreed with the code on disk. PR #161
+  Arctic Fuse 3 support was the first user-visible breakage.
+[COLOR yellow][B]v0.1.9[/B][/COLOR]
+* Switch Skin: added Arctic Fuse 3 as a third skin option
+  alongside Estuary and FENtastic. AF3 is jurialmunkey's modern
+  skin (CC BY-NC-SA 4.0); shipping it as experimental so users
+  can try it without breaking the existing FENtastic flow.
+* update_favourites_xml_file(): now tolerates a missing
+  favourites.xml seed for the target skin and leaves the
+  existing file in place instead of failing the whole switch.
+  Required for AF3 which drives its home via skinvariables,
+  not Kodi's favourites.xml.
+[COLOR yellow][B]v0.1.8[/B][/COLOR]
+* Switch Skin crash-fix: when the active skin isn't in our
+  mapping (e.g. user manually picked AF3 via Settings ->
+  Interface), `next()` no longer raises StopIteration and
+  crashes the wizard. Falls back to a generic Hebrew label so
+  the dialog still renders and the user can recover.
+[COLOR yellow][B]v0.1.7[/B][/COLOR]
+* Python 3.14 compatibility: resources/libs/common/logging.py
+  used to do `try: from urllib.request import FancyURLopener
+  except ImportError: from urllib import urlencode` -- both
+  paths break on Python 3.14 (FancyURLopener was removed,
+  `urllib.urlencode` was Py2-only). On Arch Linux + Py3.14 the
+  whole wizard refused to start (clear.py -> logging.py import
+  chain crashed at module load). Rewrote the failing import to
+  a single `from urllib.parse import urlencode`, and replaced
+  the `LogURLopener(FancyURLopener)` class + `post_log()` body
+  with a `requests.post()` call (requests is already a wizard
+  dependency). post_log behaviour is identical; the only
+  visible change is that Linux + Py3.14 users can now actually
+  launch the wizard.
+[COLOR yellow][B]v0.1.6[/B][/COLOR]
+* Reverted the AI subtitle Connect Services entries that v0.1.5
+  shipped. They belonged in plugin.video.pov's My Services menu,
+  not the wizard's login_menu (two different UIs that I'd
+  conflated). The AI addon's pov_services_patcher now handles
+  the right place; the wizard menu goes back to the original
+  set of services.
+[COLOR yellow][B]v0.1.5[/B][/COLOR]
+* Connect Services menu: added two entries for the AI subtitles
+  addon (service.subtitles.kodipovilai):
+    - 'Gemini AI - תרגום כתוביות' (api_key)
+    - 'Wyzie - מקור כתוביות לתרגום AI' (wyzie_api_key)
+  Both follow the same pattern as the existing TMDB / Trakt /
+  OpenSubtitles entries: shows current key status, lets the user
+  open the addon's settings, save the key to wizard backup, and
+  restore from backup on a fresh install.
+[COLOR yellow][B]v0.1.4[/B][/COLOR]
+* Critical hotfix on top of v0.1.3: the auto-set step also populates
+  'buildversion', 'latestversion' and 'nextbuildcheck'. Without these
+  the next check_build_update saw buildversion='' and treated any
+  published version as newer, popping the Fresh-Install dialog that
+  overwrites the user's userdata (wiping connected services). Also
+  pushes nextbuildcheck 30 days out as a safety net.
+[COLOR yellow][B]v0.1.3[/B][/COLOR]
+* Auto-set 'buildname' setting on startup if empty and plugin.video.pov
+  is present on disk. Fixes the silent breakage of auto_quick_update for
+  users who installed via APK (where the wizard's Fresh Install flow
+  never ran, so 'buildname' stayed empty and every quick_update gate
+  no-op'd). With this in place, future quickfix updates and build
+  update checks fire automatically on APK installs too.
+[COLOR yellow][B]v1.6.4[/B][/COLOR]
+* Removed: Temporary migrate build name from Hebrew to English.
+[COLOR yellow][B]v1.6.3[/B][/COLOR]
+* Temporary migrate build name from Hebrew to English.
+[COLOR yellow][B]v1.6.2[/B][/COLOR]
+* Change APK_PACKAGE_ID to 'org.xbmc.kodirdil'
+* Remove temporary Kodi 21 migration message.
+[COLOR yellow][B]v1.6.1[/B][/COLOR]
+* Wizard update dialog progress doesn't close bug fix.
+[COLOR yellow][B]v1.6.0[/B][/COLOR]
+* Kodi 21 migration message typo.
+* Hide "Build designed for..." in build menu.
+[COLOR yellow][B]v1.5.9[/B][/COLOR]
+* APK auto update - TEMPORARY show kodi 21 migration message.
+[COLOR yellow][B]v1.5.8[/B][/COLOR]
+* Windows auto update - make WINDOWS_DOWNLOAD_URL  in uservar.py generic, build download URL using LATEST_WINDOWS_VERSION_TEXT_FILE.
+[COLOR yellow][B]v1.5.7[/B][/COLOR]
+* Remove Kodi 19 builds settings in builds menu.
+[COLOR yellow][B]v1.5.6[/B][/COLOR]
+* Rename NotificationsWithDownloaderImage.xml to NotificationsWithExtraImage.xml.
+* Change function show_notification_with_extra_image to get generic image id and URL.
+* Add build skin switch notifcation window on manual build skin switch / first build launch.
+[COLOR yellow][B]v1.5.5[/B][/COLOR]
+* Wizard auto update - Change dialog progress to BG for smoother wizard update.
+[COLOR yellow][B]v1.5.4[/B][/COLOR]
+* BUG FIX: First build launch notification doesn't show after installing on existing build.
+[COLOR yellow][B]v1.5.3[/B][/COLOR]
+* Small Real Debrid Speed Test function refactor.
+[COLOR yellow][B]v1.5.2[/B][/COLOR]
+* Add Real Debrid Speed Test function (Android/Windows only).
+[COLOR yellow][B]v1.5.1[/B][/COLOR]
+* Windows kodi auto update - remove open browser, direct download only.
+[COLOR yellow][B]v1.5.0[/B][/COLOR]
+* Kodi version update - Added verification if custom Kodi APK/Windows software installed.
+[COLOR yellow][B]v1.4.9[/B][/COLOR]
+* Add support for custom Windows kodi software auto update check (Open browser, direct downloaded commented).
+* Refactor code
+[COLOR yellow][B]v1.4.8[/B][/COLOR]
+* Migrate auto quick update notification URL + settings to custom to avoid default notification vars.
+* Enable wizard's default notification settings - show post build install message.
+* Remove startup build switch skin popup post build install.
+[COLOR yellow][B]v1.4.7[/B][/COLOR]
+* Refactor startup.py.
+* wizard.py - on build install - enable all addons in build ZIP file.
+[COLOR yellow][B]v1.4.6[/B][/COLOR]
+* Revert Custom APK Installer code (unnecessary).
+[COLOR yellow][B]v1.4.5[/B][/COLOR]
+* Downloader notification window - switch to remote image "APK_DOWNLOADER_CODE_IMAGE_URL".
+* wizard.py - apk_update_check - Fix yesno dialogs correct buttons order.
+[COLOR yellow][B]v1.4.4[/B][/COLOR]
+* AUTO BUILD INSTALL ON FIRST LAUNCH - Auto install single build (no prompt), else - open builds menu
+[COLOR yellow][B]v1.4.3[/B][/COLOR]
+* APK Update prompt - Remove TV Bro support - only Downloader/Google Chrome.
+* Always show Downloader code notification window before checking if installed.
+[COLOR yellow][B]v1.4.2[/B][/COLOR]
+* APK Update prompt - Open Downloader / Browser (Chrome/TV Bro) instead of wizard's APK menu.
+[COLOR yellow][B]v1.4.1[/B][/COLOR]
+* Add APK update check: 2 options - open Downloader manually, or download through Kodi to externalFX
+[COLOR yellow][B]v1.4.0[/B][/COLOR]
+* Add auto prompt for APK update check on Kodi startup.
+* Cancel downloader as default fx app. must configure on inital setup.
+[COLOR yellow][B]v1.3.9[/B][/COLOR]
+* install.py - show configured file explorer if not downloader.
+[COLOR yellow][B]v1.3.8[/B][/COLOR]
+* "downloader_installed_text" text change.
+[COLOR yellow][B]v1.3.7[/B][/COLOR]
+* APK installer menu - add settings button to kodi android update addon.
+[COLOR yellow][B]v1.3.6[/B][/COLOR]
+* APK installer menu - add settings button to kodi android update addon.
+* Prompt to change file explorer if Downloader app installed + configured.
+[COLOR yellow][B]v1.3.5[/B][/COLOR]
+* Adjust APK download finished dialog by downloader_app_installed bool
+[COLOR yellow][B]v1.3.4[/B][/COLOR]
+* Add support for APK download through Downloader.
+* Disable auto kodi restart on PC on build updates.
+[COLOR yellow][B]v1.3.3[/B][/COLOR]
+* BUG FIX: Auto Quick Update note_id integer fix.
+[COLOR yellow][B]v1.3.2[/B][/COLOR]
+* Remove from startup.py temporary build migration code.
+* Rename build install / quick update menu text.
+* Comment out unused "use_github_custom_save_data_config" code + remove from save data menu.
+[COLOR yellow][B]v1.3.1[/B][/COLOR]
+* Support restarting Kodi for custom Windows software (using -p flag, for portable_data dir)
+[COLOR yellow][B]v1.2.9[/B][/COLOR]
+* Skin switch - Don't show the current skin in the skins list.
+[COLOR yellow][B]v1.2.8[/B][/COLOR]
+* Go back to single quick update notification file URL.
+[COLOR yellow][B]v1.2.7[/B][/COLOR]
+* Rename main menu from "בחירת בילד להתקנה" to "התקן בילד"
+[COLOR yellow][B]v1.2.6[/B][/COLOR]
+* Temporary force users to migrate to new unified build - PROD.
+[COLOR yellow][B]v1.2.5[/B][/COLOR]
+* Temporary force users to migrate to new unified build - COMMENTED.
+* Renable the setting of auto cache clean on startup.
+[COLOR yellow][B]v1.2.4[/B][/COLOR]
+* Build skin switch prompt now shows up after fresh build install.
+* BUG Fix: Remove "default" attribute when editing lookandfeel.skin setting.
+[COLOR yellow][B]v1.2.3[/B][/COLOR]
+* Added "build_switch_skin" functionality for unified build.
+[COLOR yellow][B]v1.2.2[/B][/COLOR]
+* Added dialog window when quick update starts.
+[COLOR yellow][B]v1.2.1[/B][/COLOR]
+* Now shows latest quick update notification number in Wizard settings.
+[COLOR yellow][B]v1.2.0[/B][/COLOR]
+* Redesigned quick update notification window.
+* Removed build "disableupdate" setting.
+* Refactored quick update notification files switching.
+[COLOR yellow][B]v1.1.8[/B][/COLOR]
+* After build install - sync to latest quick update notification version - to avoid running quick update.
+* Added restart kodi function after build install / quick update. (Windows PC only)
+[COLOR yellow][B]v1.1.7[/B][/COLOR]
+* Removed "כבה עדכון מהיר אוטומטי בעליית הקודי" setting.
+* Refactored "force_close_kodi_in_5_seconds" window dialog appearance.
+* Added "force_close_kodi_in_5_seconds" to build install. (instead of confirm dialog)
+[COLOR yellow][B]v1.1.6[/B][/COLOR]
+* Added automatic Quick Updates for builds on Kodi startup.
+[COLOR yellow][B]v1.1.5[/B][/COLOR]
+* Reordered wizard startup functions order.
+[COLOR yellow][B]v1.1.4[/B][/COLOR]
+* Made wizard auto update on Kodi startup without user confirmation.
+* Removed force refresh repositories on Build install/update.
+[COLOR yellow][B]v1.1.3[/B][/COLOR]
+* Added setting to enable/disable notification for Force Addon Updates on Kodi startup. (תחזוקה - הצג הודעה של חיפוש העדכונים)
+[COLOR yellow][B]v1.1.2[/B][/COLOR]
+* Delay the "מחפש עדכוני הרחבות..." message for 4 seconds on Kodi startup.
+[COLOR yellow][B]v1.1.1[/B][/COLOR]
+* Added save Debrid data support to Twilight - Premiumize.
+[COLOR yellow][B]v1.1.0[/B][/COLOR]
+* Added setting to auto Force Addon Updates on Kodi startup. (תחזוקה - חפש עדכוני הרחבות בהפעלה)

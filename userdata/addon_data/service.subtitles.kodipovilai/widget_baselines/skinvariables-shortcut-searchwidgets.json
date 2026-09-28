@@ -1,0 +1,18 @@
+[
+    {
+        "guid": "pov-search-movies",
+        "label": "סרטים",
+        "icon": "special://home/media/povil_icons/Movies_Popular.png",
+        "path": "DefaultSearch-POVMovies",
+        "target": "videos",
+        "widget_style": "Poster"
+    },
+    {
+        "guid": "pov-search-tv",
+        "label": "סדרות",
+        "icon": "special://home/media/povil_icons/Shows_Popular.png",
+        "path": "DefaultSearch-POVTv",
+        "target": "videos",
+        "widget_style": "Poster"
+    }
+]

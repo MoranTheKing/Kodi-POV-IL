@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+<include name="BasedResizedWidgetImage">
+<param name="resize">5</param>
+<param name="bottom">5</param>
+<param name="centerleft">$PARAM[centerleft]</param>
+<param name="centertop">$PARAM[centertop]</param>
+<definition>
+	<centertop>$PARAM[centertop]</centertop>
+	<centerleft>$PARAM[centerleft]</centerleft>
+	<left>$PARAM[resize]</left>
+	<right>$PARAM[resize]</right>
+	<top>$PARAM[resize]</top>
+	<bottom>$PARAM[bottom]</bottom>
+</definition>
+</include>
+
+<include name="BasedResizedLabelOBJ">
+<param name="height">25</param>
+<param name="align">center</param>
+<param name="aligny">center</param>
+<param name="font">$PARAM[font]</param>
+<param name="textcolor">$PARAM[textcolor]</param>
+<param name="centerleft">$PARAM[centerleft]</param>
+<param name="centertop">$PARAM[centertop]</param>
+<definition>
+	<centertop>$PARAM[centertop]</centertop>
+	<centerleft>$PARAM[centerleft]</centerleft>
+	<height>$PARAM[height]</height>
+	<align>$PARAM[align]</align>
+	<aligny>$PARAM[aligny]</aligny>
+	<font>$PARAM[font]</font>
+	<textcolor>$PARAM[textcolor]</textcolor>
+</definition>
+</include>
+
+<include name="BasedResizedWidgetFrame">
+<param name="texture">icons/box21.png</param>
+<param name="colordiffuse">FF181818</param>
+<definition>
+<control type="image">
+	<nested />
+	<texture border="16">$PARAM[texture]</texture>
+	<colordiffuse>$PARAM[colordiffuse]</colordiffuse>
+</control>
+</definition>
+</include>
+
+<include name="BasedResizedWidgetFrameBox">
+<param name="boxcolordiffuse">98181818</param>
+<definition>
+<control type="image">
+	<nested />
+	<texture border="16">icons/box.png</texture>
+	<colordiffuse>$PARAM[boxcolordiffuse]</colordiffuse>
+</control>
+</definition>
+</include>
+
+<include name="BasedResizedWidgetTexture">
+<control type="image">
+<nested />
+	<texture>$PARAM[texture]</texture>
+</control>
+</include>
+
+<include name="BasedLabelWidgetOBJ">
+<param name="label">$VAR[osd_top_info_var]</param>
+<definition>
+<control type="label">
+<nested />
+	<label>$PARAM[label]</label>
+</control>
+</definition>
+</include>
+
+<!-- <include name="dateandtimebgobj"> -->
+	<!-- <control type="image"> -->
+		<!-- <centerleft>50%</centerleft> -->
+		<!-- <top>$PARAM[headlinebackgroundtop]</top> -->
+		<!-- <width>$PARAM[headlinebackgroundwidth]</width> -->
+		<!-- <height>$PARAM[headlinebackgroundheight]</height> -->
+		<!-- <texture border="16" colordiffuse="98000000">masks/categorywidget.png</texture> -->
+		<!-- <bordertexture border="16">masks/categorywidget-unfocused.png</bordertexture> -->
+	<!-- </control> -->
+<!-- </include> -->
+
+<include name="IconSizedBackGround">
+<param name="width" value="$PARAM[width]" default="$PARAM[width]"/>
+<param name="height" value="$PARAM[height]" default="$PARAM[height]"/>
+<param name="SizedBgAnim" value="$PARAM[SizedBgAnim]" default="$PARAM[SizedBgAnim]"/>
+<param name="visible" value="$PARAM[visible]" default="true"/>
+<definition>
+<control type="group">
+<top>$PARAM[top]</top>
+<left>$PARAM[left]</left>
+<right>$PARAM[right]</right>
+<width>$PARAM[width]</width>
+<height>$PARAM[height]</height>
+<include>$PARAM[SizedBgAnim]</include>
+<visible>$PARAM[visible]</visible>
+<include>$PARAM[animation]</include>
+<control type="image">
+	<top>2</top>
+	<left>2</left>
+	<right>2</right>
+	<bottom>2</bottom>
+	<animation condition="true" effect="fade" start="100" end="85" time="0">Conditional</animation>
+	<texture border="3" background="true" infill="true" colordiffuse="FF181818">masks/box.png</texture>
+</control>
+<control type="image">
+	<top>0</top>
+	<left>0</left>
+	<right>0</right>
+	<bottom>0</bottom>
+	<texture border="8" background="true" infill="true" colordiffuse="gray">masks/box21.png</texture>
+</control>
+<control type="image" id="$PARAM[id]">
+	<top>5</top>
+	<left>5</left>
+	<right>5</right>
+	<bottom>5</bottom>
+	<fadetime>450</fadetime>
+	<aspectratio>$PARAM[aspectratio]</aspectratio>
+	<texture>$PARAM[icon]</texture>
+</control>
+</control>
+</definition>
+<nested />
+</include>
+
+<include name="settingsbackground">
+	<control type="image">
+		<texture colordiffuse="85FFFFFF">masks/poster_w460_h680.png</texture>
+	</control>
+	<control type="image">
+		<left>0</left>
+		<right>0</right>
+		<top>0</top>
+		<bottom>0</bottom>
+		<animation condition="true" effect="fade" end="95" time="0">Conditional</animation>
+		<texture colordiffuse="98000000">lists/contentpanel-fade.png</texture>
+	</control>
+	<control type="image">
+		<left>0</left>
+		<right>0</right>
+		<top>0</top>
+		<bottom>0</bottom>
+		<animation condition="true" effect="fade" end="5" time="0">Conditional</animation>
+		<texture flipx="true" colordiffuse="purple">lists/shadow_mask_v.png</texture>
+	</control>
+</include>
+
+<include name="lockviewbackground">
+	<control type="image">
+		<texture colordiffuse="85FFFFFF">masks/landscape_w1140_h680.png</texture>
+	</control>
+	<control type="image">
+		<left>0</left>
+		<right>0</right>
+		<top>0</top>
+		<bottom>0</bottom>
+		<animation condition="true" effect="fade" end="95" time="0">Conditional</animation>
+		<texture colordiffuse="98000000">lists/contentpanel-fade.png</texture>
+	</control>
+	<control type="image">
+		<left>0</left>
+		<right>0</right>
+		<top>0</top>
+		<bottom>0</bottom>
+		<animation condition="true" effect="fade" end="5" time="0">Conditional</animation>
+		<texture flipx="true" colordiffuse="purple">lists/shadow_mask_v.png</texture>
+	</control>
+</include>
+</includes>

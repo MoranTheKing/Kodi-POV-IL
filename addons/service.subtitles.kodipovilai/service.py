@@ -946,6 +946,8 @@ def _maybe_patch_pov_navigator_read():
     The fix is on POV's read path, not in the database: converting the rows to
     JSON would break six other patchers here that match on the repr spelling.
     See pov_navigator_read_patcher for the full reasoning."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_navigator_read_patcher, kodi_utils
     except Exception:
@@ -1302,6 +1304,8 @@ def _maybe_patch_fentastic_widgets():
 
 def _maybe_patch_pov_widget_budget():
     """Keep home widgets light while leaving ordinary POV lists complete."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_widget_budget_patcher, kodi_utils
         results = pov_widget_budget_patcher.ensure_patched()
@@ -1324,6 +1328,8 @@ def _maybe_patch_pov_widget_budget():
 
 def _maybe_patch_pov_watched_lazy_imports():
     """Defer POV watched-account backends until an operation needs them."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_watched_lazy_import_patcher, kodi_utils
         status = pov_watched_lazy_import_patcher.ensure_patched()
@@ -1344,6 +1350,8 @@ def _maybe_patch_pov_watched_lazy_imports():
 
 def _maybe_patch_pov_http_lazy_imports():
     """Defer POV's catalogue HTTP stack until a cache miss needs it."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_http_lazy_import_patcher, kodi_utils
         results = pov_http_lazy_import_patcher.ensure_patched()
@@ -2497,6 +2505,8 @@ def _maybe_fix_pov_alldebrid_status():
     and resolve_external_sources gives up on every source in turn. Two field
     logs show it dozens of times each. See pov_alldebrid_status_fix.
     """
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_alldebrid_status_fix, kodi_utils
         st = pov_alldebrid_status_fix.ensure_patched()
@@ -2523,6 +2533,8 @@ def _maybe_shim_pov_internal_scrapers():
     sources.py so pkgutil scans both. POV's own folder stays first, so nothing
     stale can shadow its modules. See pov_internal_scraper_shim.
     """
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_internal_scraper_shim, kodi_utils
         st = pov_internal_scraper_shim.ensure_patched()
@@ -2918,6 +2930,8 @@ def _maybe_patch_pov_addon_window():
     toggle hits it too, so the wait belongs inside POV. NOT cycled afterwards:
     cycling is the thing that opens the window, and the patch is on disk for
     the next one either way."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_addon_window_patcher, kodi_utils
     except Exception:
@@ -2982,6 +2996,8 @@ def _maybe_fix_pov_container_refresh_crash():
     interpreter -> CPython dict corruption -> native crash (confirmed from a
     field log). Restoring container_refresh() to stock removes the crash; POV
     is cycled so the fix applies this session, not only after a restart."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_container_refresh_crash_fix, kodi_utils
     except Exception:
@@ -6562,4 +6578,10 @@ def main():
 # spawning them as `python service.py`, so __name__ is the module name
 # here -- the `if __name__ == '__main__':` guard would skip main()
 # entirely. Call it directly.
-main()
+try:
+    from resources.lib import modular_service_handoff
+    _modular_service_yield = modular_service_handoff.maybe_yield()
+except Exception:
+    _modular_service_yield = False
+if not _modular_service_yield:
+    main()
