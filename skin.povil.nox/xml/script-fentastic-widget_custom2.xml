@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="Custom2Widgets">
+        <include content="WidgetListBigPoster">
+            <param name="content_path" value="plugin://plugin.video.idanplus/?name=%5BB%5D%D7%98%D7%9C%D7%95%D7%99%D7%96%D7%99%D7%94%5B%2FB%5D&amp;url=&amp;mode=1&amp;iconimage=icon.png&amp;module=&amp;moredata="/>
+            <param name="widget_header" value="טלויזיה"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="24011"/>
+        </include>
+        <include content="WidgetListBigPoster">
+            <param name="content_path" value="plugin://plugin.video.idanplus/?iconimage=icon.png&amp;mode=3&amp;module&amp;moredata&amp;name=%5bB%5d%d7%a8%d7%93%d7%99%d7%95%5b%2fB%5d&amp;url"/>
+            <param name="widget_header" value="רדיו"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="24012"/>
+        </include>
+    </include>
+</includes>

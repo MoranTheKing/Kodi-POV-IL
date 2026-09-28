@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="Custom2MainMenu">
+        <item>
+            <label>טלויזיה ורדיו</label>
+            <onclick>ActivateWindow(2104)</onclick>
+            <property name="menu_id">$NUMBER[24000]</property>
+            <thumb>icons/sidemenu/tv.png</thumb>
+            <property name="id">custom2</property>
+            <visible>!Skin.HasSetting(HomeMenuNoCustom2Button)</visible>
+        </item>
+    </include>
+</includes>

@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Foundation -->
+<window id="2102">
+	<defaultcontrol always="true">9501</defaultcontrol>
+    <controls>
+		<include>FullScreenDimensions</include>
+		<control type="multiimage">
+			<depth>DepthBackground</depth>
+			
+			<aspectratio>scale</aspectratio>
+			<fadetime>600</fadetime>
+			<imagepath background="true" colordiffuse="bg_overlay">$VAR[HomeFanartVarNox]</imagepath>
+			<visible>!Player.HasMedia</visible>
+		</control>
+		<include>TopBar</include>
+		<include>logo_icon</include>
+		<include>MainWindowMouseButtons</include>
+<!--         <include>Furniture_TopBar4</include>
+		<include>FullscreenBack</include>
+        <include>Furniture_RSS</include>        
+        <include>Furniture_Hub_Flags</include>
+		<include>MainWindowMouseButtons</include>
+		<include>VideoControl_hub</include> -->
+		
+        <control type="group">
+            <control type="group">
+                <top>230</top>
+                <left>side</left>
+                <right>side</right>
+                <height>800</height>
+                <control type="group">
+                    <left>0</left>
+                    <top>-50</top>
+                    <width>1310</width>
+                    <height>100%</height>
+					<control type="label">
+						<right>-555</right>
+						<top>-170</top>
+						<font>font_hub</font>
+						<align>center</align>
+						<bottom>pad</bottom>
+						<label>סדרות</label>
+					</control>
+				<control type="image">
+					<include>FocusBounce</include>
+					<left>10</left>
+					<top>-20</top>
+                      <width>1900</width>
+                      <height>840</height>
+					<texture colordiffuse="blue">masks/hub_background.png</texture>
+				</control>
+                    <control type="multiimage" id="9499">
+                      <width>1290</width>
+                      <height>800</height>
+                      <left>20</left>
+                      <top>pad</top>
+                      <bottom>pad</bottom>
+                      <aspectratio>scale</aspectratio>
+                      <timeperimage>5000</timeperimage>
+					  <visible>!Player.HasMedia</visible>
+                      <imagepath>special://skin/extras/hub-images/tvshowhub2.jpg</imagepath>
+                    </control>
+					<control type="videowindow">
+					<posx>20</posx>
+					<posy>-30</posy>
+					<width>1290</width>
+					<height>860</height>
+					</control>
+                </control>
+                <control type="group" description="hub side">
+                    <right>30</right>
+                    <top>-50</top>
+                    <width>560</width>
+                    <height>100%</height>
+					<control type="group">
+						<width>100%</width>
+						<height>100%</height>
+						<top>0</top>
+						<bottom>pad</bottom>
+						<visible>!Skin.HasSetting(darkoverlay) + !Skin.HasSetting(hubbars)</visible>
+					</control>	
+                    <control type="panel" id="9501">  
+						<onright>ReplaceWindow(2103)</onright>
+						<onleft>ReplaceWindow(2101)</onleft>
+                        <onup>9501</onup>
+                        <ondown>9501</ondown>
+                        <height>800</height>
+						<onfocus>ClearProperty(menulist)</onfocus>
+						<!-- <onright>800</onright> -->
+                        <pagecontrol>60</pagecontrol>
+                        <preloaditems>2</preloaditems>
+                        <orientation>vertical</orientation>
+                        <scrolltime tween="quadratic">400</scrolltime>
+                        <itemlayout width="560" height="100">
+                            <control type="image">
+                                <left>10</left>
+                                <top>0</top>
+                                <align>left</align>
+                                <bottom>pad</bottom>
+                                <width>125</width>
+                                <aspectratio>keep</aspectratio>
+                                <texture colordiffuse="ListLabel">$INFO[ListItem.Icon]</texture>
+                            </control>
+                            <control type="label">
+                                <right>25</right>
+                                <top>20</top>
+								<font>font36_title</font>
+                                <align>right</align>
+                                <bottom>pad</bottom>
+                                <label>$INFO[ListItem.Label]</label>
+                            </control>
+                        </itemlayout>
+                        <focusedlayout width="560" height="100">
+                            <control type="image">
+                                <width>100%</width>
+                                <top>0</top>
+                                <bottom>pad</bottom>
+								 <texture colordiffuse="ff00b7eb" border="4">nox/listselect_fo.png</texture>
+                            </control>
+                            <control type="image">
+                                <left>10</left>
+                                <top>0</top>
+                                <align>left</align>
+                                <bottom>pad</bottom>
+                                 <width>125</width>
+                                <aspectratio>keep</aspectratio>
+                                <texture colordiffuse="fff0f0f0">$INFO[ListItem.Icon]</texture>
+                            </control>
+                            <control type="label">
+                                <right>25</right>
+                                <align>right</align>
+								<font>font36_title</font>
+                                <top>20</top>
+                                <bottom>pad</bottom>
+                                <textcolor>fff0f0f0</textcolor>
+                                <label>$INFO[ListItem.Label]</label>
+                            </control>
+                        </focusedlayout>
+				<content>
+					<item>
+						<label>לוהט כעת</label>
+						<icon>special://skin/extras/icons/hot.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32458&amp;action=trakt_tv_trending&amp;iconImage=trending.png&amp;mode=build_tvshow_list",return)</onclick>
+
+					</item>
+					<item>
+						<label>פופולרי</label>
+						<icon>special://skin/extras/icons/popolar.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32459&amp;action=tmdb_tv_popular&amp;iconImage=popular.png&amp;mode=build_tvshow_list",return)</onclick>
+					</item>
+					<item>
+						<label>סדרות פופולריות</label>
+						<icon>special://skin/extras/icons/vip2.png</icon>
+						<onclick>ActivateWindow(2109)</onclick>
+						<visible>false</visible>
+					</item>
+<!-- 					<item>
+						<label>סדרות ישראליות</label>
+						<icon>special://skin/extras/icons/israel.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_tv_languages&amp;language=he&amp;iconImage=https%3A%2F%2Fi.imgur.com%2FgxgLI0J.png",return)</onclick>
+					</item> -->
+					<item>
+						<label>רשתות</label>
+						<icon>special://skin/extras/icons/tvshow3.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32480&amp;iconImage=networks.png&amp;mode=navigator.networks&amp;menu_type=tvshow",return)</onclick>
+					</item>
+<!-- 					<item>
+						<label>שידור בכורה</label>
+						<icon>special://skin/extras/icons/Premieres.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32460&amp;action=tmdb_tv_premieres&amp;iconImage=fresh.png&amp;mode=build_tvshow_list",return)</onclick>
+					</item>
+					<item>
+						<label>משודר היום</label>
+						<icon>special://skin/extras/icons/cinema.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32478&amp;action=tmdb_tv_airing_today&amp;iconImage=live.png&amp;mode=build_tvshow_list",return)</onclick>
+					</item> -->
+					<item>
+						<label>שידור בכורה</label>
+						<icon>special://skin/extras/icons/israeltvshow.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.pov/?action=tmdb_tv_premieres&amp;iconImage=fresh.png&amp;mode=build_tvshow_list&amp;name=32460",return)</onclick>
+					</item>
+					<item>
+						<label>הכי נצפה</label>
+						<icon>special://skin/extras/icons/top.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.pov/?action=trakt_tv_most_watched&amp;iconImage=most_watched.png&amp;mode=build_tvshow_list&amp;name=32043",return)</onclick>
+					</item>
+					<item>
+						<label>ז'אנר</label>
+						<icon>special://skin/extras/icons/Genres.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32470&amp;iconImage=genres.png&amp;mode=navigator.genres&amp;menu_type=tvshow",return)</onclick>
+					</item>
+					<item>
+						<label>שנים</label>
+						<icon>special://skin/extras/icons/years2.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32472&amp;iconImage=calender.png&amp;mode=navigator.years&amp;menu_type=tvshow",return)</onclick>
+					</item>
+<!-- 					<item>
+						<label>שפות</label>
+						<icon>special://skin/extras/icons/tvlang.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.pov/?iconImage=languages&amp;menu_type=tvshow&amp;mode=navigator.languages&amp;name=32471",return)</onclick>
+					</item> -->
+					<item>
+						<label>טראקט</label>
+						<icon>special://skin/extras/icons/trakt.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32454&amp;iconImage=lists.png&amp;mode=navigator.my_content",return)</onclick>
+					</item>
+					<item>
+						<label>בגלל שצפית...</label>
+						<icon>special://skin/extras/icons/watching.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32474&amp;iconImage=because_you_watched.png&amp;mode=navigator.because_you_watched&amp;menu_type=tvshow",return)</onclick>
+					</item>
+					<item>
+						<label>סדרות בתהליך</label>
+						<icon>special://skin/extras/icons/ep_pogress.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32481&amp;action=in_progress_tvshows&amp;iconImage=in_progress_tvshow.png&amp;mode=build_tvshow_list",return)</onclick>
+					</item>
+					<item>
+						<label>פרקים בתהליך</label>
+						<icon>special://skin/extras/icons/Play4.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32482&amp;iconImage=player.png&amp;mode=build_in_progress_episode",return)</onclick>
+					</item>
+					<item>
+						<label>הפרק הבא</label>
+						<icon>special://skin/extras/icons/nextep.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32483&amp;iconImage=next_episodes.png&amp;mode=build_next_episode",return)</onclick>
+					</item>
+					<item>
+						<label>חיפוש</label>
+						<icon>special://skin/extras/icons/search2.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.idanplus/?name=VOD&amp;url=&amp;mode=2&amp;iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;module=&amp;moredata=",return)</onclick>
+					</item>
+				</content>
+                    </control>
+                </control>
+            </control>
+        </control>
+    </controls>
+</window>

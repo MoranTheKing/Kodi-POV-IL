@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="Custom1WidgetsNoxVOD12">
+		<control type="group">
+		<top>380</top> 
+        <include content="WidgetVOD">
+            <param name="content_path" value="plugin://plugin.video.idanplus/?name=%5BB%5D%D7%9B%D7%9C+%D7%94%D7%AA%D7%9B%D7%A0%D7%99%D7%95%D7%AA%5B%2FB%5D&amp;url=https%253A%252F%252Fwww.mako.co.il%252Fmako-vod-index&amp;mode=1&amp;iconimage=mako.png&amp;module=keshet&amp;moredata="/>
+            <param name="widget_header" value="VOD 12"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="23011"/>
+        </include>
+		</control>
+    </include>
+</includes>

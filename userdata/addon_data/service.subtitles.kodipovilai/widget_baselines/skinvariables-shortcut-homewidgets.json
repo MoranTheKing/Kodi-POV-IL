@@ -1,0 +1,186 @@
+[
+    {
+        "label": "כלים וחיבורים",
+        "icon": "special://home/media/povil_icons/Connect_Services.png",
+        "path": "plugin://plugin.program.kodipovilwizard/?mode=install&action=af3_tools",
+        "target": "programs",
+        "widget_style": "Landscape",
+        "widget_limit": "7"
+    },
+    {
+        "label": "סרטים חדשים",
+        "icon": "special://home/media/povil_icons/Movies_Popular.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_movies_latest_releases&iconImage=dvd.png&mode=build_movie_list&name=32461",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "סדרות פופולריות",
+        "icon": "special://home/media/povil_icons/Shows_Popular.png",
+        "path": "plugin://plugin.video.pov/?action=trakt_tv_trending&iconImage=trending.png&mode=build_tvshow_list&name=32458",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "פרקים להמשך צפייה",
+        "icon": "special://home/media/povil_icons/Episodes_In_Progress.png",
+        "path": "plugin://plugin.video.pov/?iconImage=next_episodes.png&mode=build_next_episode&name=32483",
+        "target": "videos",
+        "widget_style": "Landscape",
+        "widget_limit": "7"
+    },
+    {
+        "label": "סרטים להמשך צפייה",
+        "icon": "special://home/media/povil_icons/Movies_In_Progress.png",
+        "path": "plugin://plugin.video.pov/?action=in_progress_movies&iconImage=player.png&mode=build_movie_list&name=32476",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "הסרטים שלי",
+        "icon": "special://home/media/povil_icons/My_Movies_TMDB.png",
+        "path": "plugin://plugin.video.pov/?action=favorites_movies&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png&mode=build_movie_list&name=Movie%20Favorites",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "הסרטים שלי (TMDB)",
+        "icon": "special://home/media/povil_icons/My_Movies_TMDB.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_my_movies&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png&mode=build_movie_list&name=Movie%20Favorites%20(TMDB)",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "הסרטים שלי (Trakt)",
+        "icon": "special://home/media/povil_icons/My_Movies.png",
+        "path": "plugin://plugin.video.pov/?action=trakt_my_movies&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png&mode=build_movie_list&name=Movies",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "הסדרות שלי",
+        "icon": "special://home/media/povil_icons/My_Shows_TMDB.png",
+        "path": "plugin://plugin.video.pov/?action=favorites_tvshows&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png&mode=build_tvshow_list&name=TV%20Show%20Favorites",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "הסדרות שלי (TMDB)",
+        "icon": "special://home/media/povil_icons/My_Shows_TMDB.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_my_tvshows&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png&mode=build_tvshow_list&name=TV%20Show%20Favorites%20(TMDB)",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "הסדרות שלי (Trakt)",
+        "icon": "special://home/media/povil_icons/My_Shows.png",
+        "path": "plugin://plugin.video.pov/?action=trakt_my_tvshows&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png&mode=build_tvshow_list&name=TV%20Shows",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "סרטים לפי ז׳אנר",
+        "icon": "special://home/media/povil_icons/Movies_Genres.png",
+        "path": "plugin://plugin.video.pov/?external_list_item=True&iconImage=special%3A%2F%2Fhome%2Fmedia%2Fbuild_icons%2FTwilight%2FMovies%2FMovies_Genres.png&mode=navigator.build_shortcut_folder_list&name=FENtastic%20-%20%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20-%20%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D&shortcut_folder=True",
+        "target": "videos",
+        "widget_style": "Landscape",
+        "widget_limit": "7"
+    },
+    {
+        "label": "סדרות לפי ז׳אנר",
+        "icon": "special://home/media/povil_icons/Shows_Genres.png",
+        "path": "plugin://plugin.video.pov/?external_list_item=True&iconImage=special%3A%2F%2Fhome%2Fmedia%2Fbuild_icons%2FTwilight%2FShows%2FShows_Genres.png&mode=navigator.build_shortcut_folder_list&name=FENtastic%20-%20%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20-%20%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D&shortcut_folder=True",
+        "target": "videos",
+        "widget_style": "Landscape",
+        "widget_limit": "7"
+    },
+    {
+        "label": "Netflix",
+        "icon": "special://home/media/povil_icons/Shows_Netflix.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=special%3A%2F%2Fhome%2Fmedia%2Fbuild_icons%2FTwilight%2FShows%2FNetworks%2FShows_Netflix.png&mode=build_tvshow_list&name=Netflix&network_id=213",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "Disney+",
+        "icon": "special://home/media/povil_icons/Shows_Disney.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=special%3A%2F%2Fhome%2Fmedia%2Fbuild_icons%2FTwilight%2FShows%2FNetworks%2FShows_Disney.png&mode=build_tvshow_list&name=Disney%2B&network_id=2739",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "Apple TV+",
+        "icon": "special://home/media/povil_icons/Shows_Apple_TV.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=special%3A%2F%2Fhome%2Fmedia%2Fbuild_icons%2FTwilight%2FShows%2FNetworks%2FShows_Apple_TV.png&mode=build_tvshow_list&name=Apple%20TV%2B&network_id=2552",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "HBO",
+        "icon": "special://home/media/povil_icons/Shows_HBO.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=special%3A%2F%2Fhome%2Fmedia%2Fbuild_icons%2FTwilight%2FShows%2FNetworks%2FShows_HBO.png&mode=build_tvshow_list&name=HBO&network_id=49",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "HBO Max",
+        "icon": "special://home/media/povil_icons/Shows_HBO_Max.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=special%3A%2F%2Fhome%2Fmedia%2Fbuild_icons%2FTwilight%2FShows%2FNetworks%2FShows_HBO_Max.png&mode=build_tvshow_list&name=HBO%20Max&network_id=3186",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "FOX",
+        "icon": "special://home/media/povil_icons/Shows_FOX.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=special%3A%2F%2Fhome%2Fmedia%2Fbuild_icons%2FTwilight%2FShows%2FNetworks%2FShows_FOX.png&mode=build_tvshow_list&name=FOX&network_id=19",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "Amazon",
+        "icon": "special://home/media/povil_icons/Shows_Amazon.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=special%3A%2F%2Fhome%2Fmedia%2Fbuild_icons%2FTwilight%2FShows%2FNetworks%2FShows_Amazon.png&mode=build_tvshow_list&name=Amazon&network_id=1024",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "Hulu",
+        "icon": "special://home/media/povil_icons/Shows_Hulu.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=special%3A%2F%2Fhome%2Fmedia%2Fbuild_icons%2FTwilight%2FShows%2FNetworks%2FShows_Hulu.png&mode=build_tvshow_list&name=Hulu&network_id=453",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "The CW",
+        "icon": "special://home/media/povil_icons/Shows_The_CW.png",
+        "path": "plugin://plugin.video.pov/?action=tmdb_tv_networks&iconImage=special%3A%2F%2Fhome%2Fmedia%2Fbuild_icons%2FTwilight%2FShows%2FNetworks%2FShows_The_CW.png&mode=build_tvshow_list&name=The%20CW&network_id=71",
+        "target": "videos",
+        "widget_style": "Poster",
+        "widget_limit": "7"
+    },
+    {
+        "label": "עידן פלוס",
+        "icon": "special://home/media/povil_icons/idan_plus.png",
+        "path": "plugin://plugin.video.idanplus/",
+        "target": "videos",
+        "widget_style": "Landscape",
+        "widget_limit": "7"
+    }
+]

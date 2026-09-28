@@ -254,6 +254,20 @@ def ensure_healed():
     | 'wizard_already_healthy' | 'no_staged_zip' | 'bad_zip'
     | 'write_failed' | 'healed'.
     """
+    # A bridge request/ready marker blocks this older healer from restoring
+    # its historical Wizard ZIP over the modular Wizard on the next boot.
+    try:
+        from . import modular_legacy_bootstrap
+        bridge_status = modular_legacy_bootstrap.ensure_bootstrapped()
+        if bridge_status != 'not_requested':
+            _log('modular bridge status: ' + bridge_status,
+                 level='WARNING' if bridge_status == 'failed' else 'INFO')
+            return 'modular_' + bridge_status
+    except Exception as bridge_error:
+        _log('modular bridge failed closed: ' + repr(bridge_error),
+             level='WARNING')
+        return 'modular_failed'
+
     if xbmcaddon is None or xbmcvfs is None:
         _log('not in a Kodi process; nothing to do', level='INFO')
         return 'no_kodi'

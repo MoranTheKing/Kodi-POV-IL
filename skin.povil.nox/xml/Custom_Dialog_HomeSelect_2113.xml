@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window   id="2113">
+	<defaultcontrol>9501</defaultcontrol>
+    <controls>
+		<include>FullScreenDimensions</include>
+		<control type="multiimage">
+			<depth>DepthBackground</depth>
+			
+			<aspectratio>scale</aspectratio>
+			<fadetime>600</fadetime>
+			<imagepath background="true" colordiffuse="bg_overlay">$VAR[HomeFanartVarNox]</imagepath>
+			<visible>!Player.HasMedia</visible>
+		</control>
+        <control type="group">
+            <control type="group">
+                <top>350</top>
+                <left>350</left>
+                <!-- <right>side</right> -->
+                <height>800</height>
+                <control type="group">
+					
+                    <left>0</left>
+                    <top>-50</top>
+                    <width>1310</width>
+                    <height>100%</height>
+
+				<control type="image">
+					<include>FocusBounce</include>
+					<left>10</left>
+					<top>-20</top>
+                      <width>1200</width>
+                      <height>540</height>
+					<texture colordiffuse="blue">masks/hub_background.png</texture>
+				</control>
+					<control type="label">
+						<left>-450</left>
+						<top>-10</top>
+						<font>font36_title</font>
+						<align>center</align>
+						<bottom>pad</bottom>
+						<label>בחר תצוגה ראשית</label>
+					</control>
+                    <control type="multiimage" id="9499">
+
+                      <width>790</width>
+                      <height>500</height>
+                      <left>20</left>
+                      <top>35</top>
+                      <bottom>pad</bottom>
+                      <aspectratio>keep</aspectratio>
+                      <timeperimage>5000</timeperimage>
+                      <imagepath fallback="special://skin/extras/backgrounds/home.jpg">$INFO[ListItem.Icon]</imagepath>
+                    </control>
+
+                </control>
+                <control type="group" description="hub side">
+                    <right>180</right>
+                    <top>-30</top>
+                    <width>560</width>
+                    <height>100%</height>
+
+                    <control type="panel" id="9501">  
+                        <onup>9501</onup>
+                        <ondown>9501</ondown>
+                        <height>500</height>
+                        <pagecontrol>60</pagecontrol>
+                        <preloaditems>2</preloaditems>
+                        <orientation>vertical</orientation>
+                        <scrolltime tween="quadratic">400</scrolltime>
+                        <itemlayout width="360" height="100">
+                            <control type="image">
+                                <left>0</left>
+                                <top>0</top>
+                                <align>left</align>
+                                <bottom>pad</bottom>
+                                <width>125</width>
+                                <aspectratio>keep</aspectratio>
+                                <!-- <texture colordiffuse="ListLabel">$INFO[ListItem.Icon]</texture> -->
+                            </control>
+                            <control type="label">
+                                <right>0</right>
+                                <top>20</top>
+								<font>font36_title</font>
+                                <align>center</align>
+                                <bottom>pad</bottom>
+                                <label>$INFO[ListItem.Label]</label>
+                            </control>
+                        </itemlayout>
+                        <focusedlayout width="360" height="100">
+                            <control type="image">
+                                <width>100%</width>
+                                <top>0</top>
+                                <bottom>pad</bottom>
+								 <texture colordiffuse="ff00b7eb" border="4">nox/listselect_fo.png</texture>
+                            </control>
+                            <control type="image">
+                                <left>10</left>
+                                <top>0</top>
+                                <align>left</align>
+                                <bottom>pad</bottom>
+                                 <width>125</width>
+                                <aspectratio>keep</aspectratio>
+                                <!-- <texture colordiffuse="fff0f0f0">$INFO[ListItem.Icon]</texture> -->
+                            </control>
+                            <control type="label">
+                                <right>0</right>
+                                <align>center</align>
+								<font>font36_title</font>
+                                <top>20</top>
+                                <bottom>pad</bottom>
+                                <textcolor>fff0f0f0</textcolor>
+                                <label>$INFO[ListItem.Label]</label>
+                            </control>
+                        </focusedlayout>
+				<content>
+                    <item>
+                        <label>Nox</label>
+                        <icon>special://skin/extras/main_menu/nox.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Skin.SetString(HomeS, Home_nox)</onclick>
+						<onclick>Skin.Setbool(firsttimerun)</onclick>
+						<onclick>back</onclick>
+						<onclick>RunScript(script.fentastic.helper,mode=remake_all_widgets)</onclick>
+						<!-- <onclick>ReloadSkin()</onclick>  -->
+                    </item>
+                    <item>
+                        <label>Fentastic</label>
+                        <icon>special://skin/extras/main_menu/fentastic.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Skin.SetString(HomeS, Home_default)</onclick>
+						<onclick>Skin.Setbool(firsttimerun)</onclick>
+						<onclick>back</onclick>
+						<onclick>RunScript(script.fentastic.helper,mode=remake_all_widgets)</onclick>
+						<onclick>ReloadSkin()</onclick> 
+                    </item>
+                    <item>
+                        <label>Aura</label>
+                        <icon>special://skin/extras/main_menu/aura.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Skin.SetString(HomeS, Home_aura)</onclick>
+						<onclick>Skin.Setbool(firsttimerun)</onclick>
+						<onclick>back</onclick>
+						<onclick>RunScript(script.fentastic.helper,mode=remake_all_widgets)</onclick>
+						<onclick>ReloadSkin()</onclick> 
+                    </item>
+                    <item>
+                        <label>Eminence</label>
+                        <icon>special://skin/extras/main_menu/eminence.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Skin.SetString(HomeS, Home_eminence)</onclick>
+						<onclick>Skin.Setbool(firsttimerun)</onclick>
+						<onclick>back</onclick>
+						<onclick>RunScript(script.fentastic.helper,mode=remake_all_widgets)</onclick>
+						<onclick>ReloadSkin()</onclick> 
+                    </item>
+                    <item>
+                        <label>Simple</label>
+                        <icon>special://skin/extras/main_menu/pol.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Skin.SetString(HomeS, Home_pellucid)</onclick>
+						<onclick>Skin.Setbool(firsttimerun)</onclick>
+						<onclick>back</onclick>
+						<onclick>RunScript(script.fentastic.helper,mode=remake_all_widgets)</onclick>
+						<onclick>ReloadSkin()</onclick> 
+                    </item>
+				</content>
+                    </control>
+                </control>
+            </control>
+        </control>
+    </controls>
+</window>

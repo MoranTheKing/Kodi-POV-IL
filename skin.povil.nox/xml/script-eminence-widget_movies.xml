@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="MovieWidgetsWatch">
+        <include content="WidgetListBigLandscapeCUSTOM">
+            <param name="content_path" value="plugin://plugin.video.pov/?name=32476&amp;iconImage=player&amp;mode=build_movie_list&amp;action=in_progress_movies"/>
+            <param name="widget_header" value="בתהליך צפיה..."/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="19012"/>
+        </include>
+    </include>
+</includes>

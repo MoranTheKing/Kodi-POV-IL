@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<addon id="skin.povil.nox" version="1.0.11" name="Kodi POV IL - NOX"
+	provider-name="MoranTheKing">
+	<requires>
+		<!-- <import addon="xbmc.gui" version="5.17.0" /> -->
+		<import addon="script.fentastic.helper" />
+	</requires>
+	<extension point="xbmc.gui.skin" debugging="false">
+		<res width="1920" height="1080" aspect="16:9" default="true" folder="xml" />
+	</extension>
+	<extension point="xbmc.addon.metadata">
+		<platform>all</platform>
+		<license>CC BY-SA 4.0, GNU GENERAL PUBLIC LICENSE Version 2.0</license>
+		<forum>http://forum.kodi.tv/</forum>
+		<source>https://github.com/xbmc/skin.estuary/</source>
+		<assets>
+			<icon>resources/icon.png</icon>
+			<fanart>resources/fanart.jpg</fanart>
+		</assets>
+		<summary lang="en_GB">Kodi POV IL - NOX skin (Estuary MOD)</summary>
+		<summary lang="he_IL">סקין NOX ל-Kodi POV IL (מבוסס Estuary)</summary>
+		<description lang="en_GB">NOX-styled skin for the Kodi POV IL build, based on the default Estuary skin with a custom Hebrew/RTL home. Switch skins from the Kodi POV IL Wizard.</description>
+		<description lang="he_IL">סקין בעיצוב NOX לבילד Kodi POV IL, מבוסס על סקין Estuary עם מסך בית מותאם בעברית. החלפת סקין דרך האשף של Kodi POV IL.</description>
+	</extension>
+</addon>

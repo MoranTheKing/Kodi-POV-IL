@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="MovieWidgets">
+        <include content="WidgetListCategory" condition="Skin.HasSetting(novix_widget)">
+            <param name="content_path" value="plugin://plugin.video.pov/?iconImage=genres&amp;menu_type=movie&amp;mode=navigator.genres&amp;name=32470"/>
+            <param name="widget_header" value="ז'אנר"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="19011"/>
+        </include>
+        <include content="WidgetListCategory" condition="!Skin.HasSetting(novix_widget)">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=tmdb_movies_popular&amp;iconImage=popular&amp;mode=build_movie_list&amp;name=32459"/>
+            <param name="widget_header" value="ז'אנר"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="19011"/>
+        </include>
+        <include content="WidgetListBigLandscape" condition="Skin.HasSetting(novix_widget)">
+            <param name="content_path" value="plugin://plugin.video.pov/?name=32476&amp;iconImage=player&amp;mode=build_movie_list&amp;action=in_progress_movies"/>
+            <param name="widget_header" value="בתהליך צפיה..."/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="19012"/>
+        </include>
+        <include content="WidgetListBigPoster" condition="!Skin.HasSetting(novix_widget)">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=tmdb_movies_popular&amp;iconImage=popular&amp;mode=build_movie_list&amp;name=32459"/>
+            <param name="widget_header" value="סרטים VIP"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="19013"/>
+        </include>
+        <include content="WidgetListBigPoster" condition="Skin.HasSetting(novix_widget)">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=tmdb_movies_latest_releases&amp;iconImage=dvd&amp;mode=build_movie_list&amp;name=32461"/>
+            <param name="widget_header" value="פופולרי לאחרונה"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="19013"/>
+        </include>
+    </include>
+</includes>

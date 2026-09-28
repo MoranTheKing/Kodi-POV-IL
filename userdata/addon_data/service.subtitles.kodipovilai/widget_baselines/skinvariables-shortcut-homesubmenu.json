@@ -1,0 +1,32 @@
+[
+    {
+        "label": "POV",
+        "icon": "special://home/media/povil_icons/Logo_POV_IL.png",
+        "path": "RunAddon(\"plugin.video.pov\")",
+        "target": ""
+    },
+    {
+        "label": "חיבור שירותים",
+        "icon": "special://home/media/povil_icons/Connect_Services.png",
+        "path": "RunPlugin(\"plugin://plugin.video.pov/?mode=myservices\")",
+        "target": ""
+    },
+    {
+        "label": "הגדרת התראות מנוי",
+        "icon": "special://home/media/povil_icons/Connect_Services.png",
+        "path": "RunScript(service.subtitles.kodipovilai,action=debrid_notice_settings)",
+        "target": ""
+    },
+    {
+        "label": "תרגום AI",
+        "icon": "special://home/media/povil_icons/icon.png",
+        "path": "Addon.OpenSettings(service.subtitles.kodipovilai)",
+        "target": ""
+    },
+    {
+        "label": "החלף סקין",
+        "icon": "special://home/media/povil_icons/wizard_pov_il.png",
+        "path": "RunPlugin(\"plugin://plugin.program.kodipovilwizard/?mode=install&action=build_switch_skin\")",
+        "target": ""
+    }
+]

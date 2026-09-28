@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="Custom3MainMenu">
+        <item>
+            <label>ילדים</label>
+            <onclick>ActivateWindow(2105)</onclick>
+            <property name="menu_id">$NUMBER[25000]</property>
+            <thumb>icons/sidemenu/tv.png</thumb>
+            <property name="id">custom3</property>
+            <visible>!Skin.HasSetting(HomeMenuNoCustom3Button)</visible>
+        </item>
+    </include>
+</includes>

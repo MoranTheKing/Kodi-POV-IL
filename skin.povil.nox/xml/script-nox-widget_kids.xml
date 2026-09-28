@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="Custom3WidgetsNox">
+        <include content="WidgetListBigPosterNox">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=tmdb_movies_genres&amp;genre_id=10751&amp;iconImage=family&amp;mode=build_movie_list&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D+%D7%9C%D7%99%D7%9C%D7%93%D7%99%D7%9D"/>
+            <param name="widget_header" value="סרטים לילדים"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="25011"/>
+        </include>
+    </include>
+</includes>

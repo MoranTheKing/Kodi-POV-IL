@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="Custom1WidgetsNoxVOD13">
+		<control type="group">
+		<!-- <top>-150</top> -->
+        <include content="WidgetVOD">
+            <param name="content_path" value="plugin://plugin.video.idanplus/?iconimage=13.jpg&amp;mode=0&amp;module=reshet&amp;moredata&amp;name=%5bB%5d%d7%9b%d7%9c%20%d7%94%d7%aa%d7%9b%d7%a0%d7%99%d7%95%d7%aa%5b%2fB%5d&amp;url=https%253A%252F%252F13tv.co.il%252Fallshows%252Fscreen%252F1170108%252F"/>
+            <param name="widget_header" value="VOD 13"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="23012"/>
+        </include>
+		</control>
+    </include>
+</includes>

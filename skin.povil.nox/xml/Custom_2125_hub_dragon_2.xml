@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Foundation -->
+<window id="2125">
+	<defaultcontrol always="true">9501</defaultcontrol>
+    <controls>
+		<include>FullScreenDimensions</include>
+		<control type="multiimage">
+			<depth>DepthBackground</depth>
+			
+			<aspectratio>scale</aspectratio>
+			<fadetime>600</fadetime>
+			<imagepath background="true" colordiffuse="bg_overlay">$VAR[HomeFanartVarNox]</imagepath>
+			<visible>!Player.HasMedia</visible>
+		</control>
+		<include>TopBar</include>
+		<include>logo_icon</include>
+		<include>MainWindowMouseButtons</include>
+<!--         <include>Furniture_TopBar4</include>
+		<include>FullscreenBack</include>
+        <include>Furniture_RSS</include>        
+        <include>Furniture_Hub_Flags</include>
+		<include>MainWindowMouseButtons</include>
+		<include>VideoControl_hub</include> -->
+		
+        <control type="group">
+            <control type="group">
+                <top>230</top>
+                <left>side</left>
+                <right>side</right>
+                <height>800</height>
+                <control type="group">
+                    <left>0</left>
+                    <top>-50</top>
+                    <width>1310</width>
+                    <height>100%</height>
+					<control type="label">
+						<right>-555</right>
+						<top>-170</top>
+						<font>font_hub</font>
+						<align>center</align>
+						<bottom>pad</bottom>
+						<label>סדרות טורקיות</label>
+					</control>
+				<control type="image">
+					<include>FocusBounce</include>
+					<left>10</left>
+					<top>-20</top>
+                      <width>1900</width>
+                      <height>840</height>
+					<texture colordiffuse="blue">masks/hub_background.png</texture>
+				</control>
+                    <control type="multiimage" id="9499">
+                      <width>1290</width>
+                      <height>800</height>
+                      <left>20</left>
+                      <top>pad</top>
+                      <bottom>pad</bottom>
+                      <aspectratio>scale</aspectratio>
+                      <timeperimage>5000</timeperimage>
+					  <visible>!Player.HasMedia</visible>
+                      <imagepath>special://skin/extras/hub-images/dragon.jpg</imagepath>
+                    </control>
+					<control type="videowindow">
+					<posx>20</posx>
+					<posy>-30</posy>
+					<width>1290</width>
+					<height>860</height>
+					</control>
+                </control>
+                <control type="group" description="hub side">
+                    <right>30</right>
+                    <top>-50</top>
+                    <width>560</width>
+                    <height>100%</height>
+					<control type="group">
+						<width>100%</width>
+						<height>100%</height>
+						<top>0</top>
+						<bottom>pad</bottom>
+						<visible>!Skin.HasSetting(darkoverlay) + !Skin.HasSetting(hubbars)</visible>
+					</control>	
+                    <control type="panel" id="9501">  
+						<onleft condition="Player.HasAudio | Player.HasVideo">9006</onleft>
+                        <onleft>800</onleft>
+                        <onup>9501</onup>
+                        <ondown>9501</ondown>
+                        <height>800</height>
+						<onfocus>ClearProperty(menulist)</onfocus>
+						<onright>800</onright>
+                        <pagecontrol>60</pagecontrol>
+                        <preloaditems>2</preloaditems>
+                        <orientation>vertical</orientation>
+                        <scrolltime tween="quadratic">400</scrolltime>
+                        <itemlayout width="560" height="100">
+                            <control type="image">
+                                <left>10</left>
+                                <top>0</top>
+                                <align>left</align>
+                                <bottom>pad</bottom>
+                                <width>125</width>
+                                <aspectratio>keep</aspectratio>
+                                <texture colordiffuse="ListLabel">$INFO[ListItem.Icon]</texture>
+                            </control>
+                            <control type="label">
+                                <right>25</right>
+                                <top>20</top>
+								<font>font36_title</font>
+                                <align>right</align>
+                                <bottom>pad</bottom>
+                                <label>$INFO[ListItem.Label]</label>
+                            </control>
+                        </itemlayout>
+                        <focusedlayout width="560" height="100">
+                            <control type="image">
+                                <width>100%</width>
+                                <top>0</top>
+                                <bottom>pad</bottom>
+								 <texture colordiffuse="ff00b7eb" border="4">nox/listselect_fo.png</texture>
+                            </control>
+                            <control type="image">
+                                <left>10</left>
+                                <top>0</top>
+                                <align>left</align>
+                                <bottom>pad</bottom>
+                                 <width>125</width>
+                                <aspectratio>keep</aspectratio>
+                                <texture colordiffuse="fff0f0f0">$INFO[ListItem.Icon]</texture>
+                            </control>
+                            <control type="label">
+                                <right>25</right>
+                                <align>right</align>
+								<font>font36_title</font>
+                                <top>20</top>
+                                <bottom>pad</bottom>
+                                <textcolor>fff0f0f0</textcolor>
+                                <label>$INFO[ListItem.Label]</label>
+                            </control>
+                        </focusedlayout>
+				<content>
+
+					<item>
+						<label>סדרות משודרות</label>
+						<icon>special://skin/extras/icons/dragon.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.pov/?action=trakt_tv_trending&amp;iconImage=trending&amp;mode=build_tvshow_list&amp;name=32458",return)</onclick>
+					</item>
+					<item>
+						<label>מה חדש - משודרות</label>
+						<icon>special://skin/extras/icons/dragon.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.pov/?action=trakt_tv_trending&amp;iconImage=trending&amp;mode=build_tvshow_list&amp;name=32458",return)</onclick>
+					</item>
+
+
+
+					<item>
+						<label>חיפוש</label>
+						<icon>special://skin/extras/icons/dragon.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.pov/?action=trakt_tv_trending&amp;iconImage=trending&amp;mode=build_tvshow_list&amp;name=32458",return)</onclick>
+						<!-- <visible>False</visible> -->
+
+					</item>
+					
+				</content>
+                    </control>
+                </control>
+            </control>
+        </control>
+    </controls>
+</window>

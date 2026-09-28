@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="MovieWidgetsNox">
+        <include content="WidgetListBigPosterNox">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=tmdb_movies_popular&amp;iconImage=popular&amp;mode=build_movie_list&amp;name=32459"/>
+            <param name="widget_header" value="סרטים פופולריים"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="19013"/>
+        </include>
+    </include>
+</includes>

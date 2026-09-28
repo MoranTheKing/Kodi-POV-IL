@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Foundation -->
+<window type="dialog" id="2107">
+	<defaultcontrol>9000</defaultcontrol>
+	<!-- <include>Animation_DialogPopupOpenClose</include> -->
+	<controls>
+		<control type="group">
+			<centerleft>50%</centerleft>
+			<width>600</width>
+			<centertop>51%</centertop>
+			<height>980</height>
+			<include content="DialogBackgroundCommons">
+				<param name="width" value="600" />
+				<param name="height" value="960" />
+				<param name="header_label" value="תחזוקה והגדרות" />
+				<param name="header_id" value="2" />
+				<param name="diffusetexture" value="masks/dialog-bg-squareish.png" />
+			</include>
+			<control type="panel" id="9000">
+				<include>ButtonMenuListTools</include>
+				<content>
+					<item>
+						<onclick>Close</onclick>
+						<label>הגדרות מערכת</label>
+						<icon>special://skin/extras/icons/kodi.png</icon>
+						<onclick>ActivateWindow(Settings)</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>Wizard</label>
+						<icon>special://skin/extras/icons/download.png</icon>
+						<onclick>ActivateWindow(Programs,"plugin://plugin.program.kodipovilwizard",return)</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>עדכון מערכת</label>
+						<icon>special://skin/extras/icons/download_repo.png</icon>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=quick_update&amp;name=Kodi+POV+IL+-+FENtastic&amp;auto_quick_update=false&amp;url=www)</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>1037</label>
+						<icon>special://skin/extras/icons/video-addons.png</icon>
+						<onclick>ActivateWindow(Videos,Addons,return)</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>הרחבת תוכנות</label>
+						<icon>special://skin/extras/icons/addons.png</icon>
+						<onclick>ActivateWindow(Programs,Addons,return)</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>שינוי תצוגה</label>
+						<icon>special://skin/extras/icons/profiles.png</icon>
+						<onclick>ActivateWindow(2113)</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>סייר הרחבות</label>
+						<icon>special://skin/extras/icons/addons.png</icon>
+						<onclick>ActivateWindow(AddonBrowser)</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>ניקוי קאש</label>
+						<icon>special://skin/extras/icons/battery.png</icon>
+						<onclick>RunPlugin(plugin://plugin.video.pov/?mode=clear_all_cache&amp;isFolder=false)</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>הגדר RD - Trakt</label>
+						<icon>special://skin/extras/icons/download.png</icon>
+						<onclick>RunPlugin(plugin://plugin.video.pov/?mode=myservices&amp;name=%D7%94%D7%A9%D7%99%D7%A8%D7%95%D7%AA%D7%99%D7%9D+%D7%A9%D7%9C%D7%99&amp;isFolder=false&amp;iconImage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.pov%2Fresources%2Fskins%2FDefault%2Fmedia%2Fsettings.png)</onclick>
+					</item>
+
+<!-- 					<item>
+						<onclick>Close</onclick>
+						<label>הגדר IPTV</label>
+						<icon>special://skin/extras/icons/download.png</icon>
+						<onclick>RunPlugin(Skin.SetString(_povil_noop,1) חשבון IPTV)</onclick>
+					</item> -->
+
+					<item>
+						<onclick>Close</onclick>
+						<label>מקש חזור - עצור ניגון</label>
+						<icon>special://skin/extras/icons/profiles.png</icon>
+						<onclick>RunPlugin(Skin.SetString(_povil_noop,1))</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>כיול מסך</label>
+						<icon>special://skin/extras/icons/profiles.png</icon>
+						<onclick>ActivateWindowAndFocus(screencalibration, -100,1,-8,0)</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>בדיקת מהירות</label>
+						<icon>special://skin/extras/icons/Speed.png</icon>
+						<onclick>PlayMedia("Skin.SetString(_povil_noop,1) מהירות")</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>השירותים שלי</label>
+						<icon>special://skin/extras/icons/download.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.pov/?iconImage=premium.png&amp;mode=navigator.premium&amp;name=32455",return)</onclick>
+					</item>
+					<item>
+						<onclick>Close</onclick>
+						<label>שלח לוג</label>
+						<icon>special://skin/extras/icons/cd.png</icon>
+						<onclick>RunPlugin(plugin://plugin.video.pov/?mode=navigator.log_utils&amp;name=Log&amp;url=www)</onclick>
+					</item>
+				</content>
+			</control>
+		<include content="UpDownArrows">
+			<param name="container_id" value="9000" />
+			<param name="posx" value="276" />
+			<param name="up_posy" value="-35" />
+			<param name="down_posy" value="970" />
+			</include>
+		</control>
+	</controls>
+</window>

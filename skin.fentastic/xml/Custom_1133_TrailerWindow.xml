@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="dialog" id="1133">
+	<defaultcontrol always="true">5000</defaultcontrol>
+	<zorder>4</zorder>
+	<include>Animation_DialogPopupOpenClose</include>
+	<onunload>Stop</onunload>
+	<onunload condition="Control.IsVisible(630)">Control.SetFocus(630)</onunload>
+	<onunload condition="Control.IsVisible(631)">Control.SetFocus(631)</onunload>
+	<controls>
+		
+	<control type="group">
+	<height>950</height>
+	<width>1600</width>
+	<centertop>50%</centertop>
+	<centerleft>50%</centerleft>
+	<control type="image">
+		<texture colordiffuse="black">colors/white.png</texture>
+		<bordertexture colordiffuse="gray">colors/white.png</bordertexture>
+		<bordersize>2</bordersize>
+	</control>
+	<control type="image">
+		<top>100</top>
+		<height>1</height>
+		<texture>colors/white.png</texture>
+		<colordiffuse>25FFFFFF</colordiffuse>
+		<left>25</left>
+		<right>25</right>
+	</control>
+	<control type="label">
+		<left>25</left>
+		<align>left</align>
+		<width>1000</width>
+		<top>10</top>
+		<height>20</height>
+		<scroll>true</scroll>
+		<label>[B]$INFO[VideoPlayer.Title][/B]</label>
+	</control>
+	<control type="label">
+		<left>25</left>
+		<align>left</align>
+		<top>45</top>
+		<height>20</height>
+		<label>שנת יציאה - $INFO[VideoPlayer.Year]</label>
+	</control>
+	<control type="VideoWindow">
+		<left>50</left>
+		<right>50</right>
+		<top>150</top>
+		<bottom>25</bottom>
+		<aspectratio>keep</aspectratio>
+	</control>
+	
+	
+	<control type="group">
+		<height>928</height>
+		<width>1598</width>
+		<centertop>50%</centertop>
+		<centerleft>50%</centerleft>
+		<visible>!Player.HasVideo</visible>
+		<include content="AdvancedGlobalViewBackGround">
+			<param name="fanart">$INFO[Window(home).Property(bgimageinfo)]</param>
+		</include>
+		<control type="image">
+
+			<top>350</top>
+			<width>1020</width>
+			<height>370</height>
+			<fadetime>350</fadetime>
+			<centertop>50%</centertop>
+			<centerleft>50%</centerleft>
+			<aspectratio align="center" aligny="bottom">strech</aspectratio>
+			<texture>$INFO[Window(home).Property(extendedinfoclearlogo)]</texture>
+			<aspectratio>keep</aspectratio>
+			<animation effect="fade" start="0" end="100" time="350">VisibleChange</animation>
+		</control>		
+		<control type="image">
+			<left>500</left>
+			<top>350</top>
+			<width>620</width>
+			<height>270</height>
+			<fadetime>350</fadetime>
+			<centertop>50%</centertop>
+			<centerleft>50%</centerleft>
+			<aspectratio align="center" aligny="bottom">strech</aspectratio>
+			<texture>$INFO[Window(home).Property(extendedinfoclearart)]</texture>
+			<visible>String.IsEmpty(Window(home).Property(extendedinfoclearlogo)</visible>
+			<aspectratio>keep</aspectratio>
+			<animation effect="fade" start="0" end="100" time="350">VisibleChange</animation>
+		</control>
+	</control>
+	
+	<control type="grouplist" id="5000">
+	<orientation>horizontal</orientation>
+	<align>right</align>
+	<height>45</height>
+	<top>30</top>
+	<right>20</right>
+	<align>justify</align>
+	<width>360</width>
+	<control type="button" id="300">
+		<width>120</width>
+		<height>35</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>נגן שוב</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>$INFO[Window(home).Property(extendedinfotrailer)]</onclick>
+	</control>
+	<control type="button" id="301">
+		<width>120</width>
+		<height>35</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>עצור</label>
+		<onclick>stop</onclick>
+		<focusedcolor>black</focusedcolor>
+		<visible>Player.HasVideo</visible>
+	</control>
+	<control type="button" id="302">
+		<width>120</width>
+		<height>35</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>סגור חלון</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>Dialog.Close(1133)</onclick>
+	</control>
+	</control>
+	</control>
+		
+	</controls>
+</window>

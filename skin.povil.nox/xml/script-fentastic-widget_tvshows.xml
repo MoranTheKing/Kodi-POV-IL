@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="TVShowWidgets">
+        <include content="WidgetListCategory" condition="Skin.HasSetting(novix_widget)">
+            <param name="content_path" value="plugin://plugin.video.pov/?iconImage=genres&amp;menu_type=tvshow&amp;mode=navigator.genres&amp;name=32470"/>
+            <param name="widget_header" value="ז'אנר"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="22011"/>
+        </include>
+        <include content="WidgetListCategory" condition="!Skin.HasSetting(novix_widget)">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=tmdb_movies_popular&amp;iconImage=popular&amp;mode=build_movie_list&amp;name=32459"/>
+            <param name="widget_header" value="ז'אנר"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="22011"/>
+        </include>
+        <include content="WidgetListBigEpisodes" condition="Skin.HasSetting(novix_widget)">
+            <param name="content_path" value="plugin://plugin.video.pov/?name=32483&amp;iconImage=next_episodes&amp;mode=build_next_episode"/>
+            <param name="widget_header" value="הפרק הבא"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="22012"/>
+        </include>
+        <include content="WidgetListBigPoster" condition="!Skin.HasSetting(novix_widget)">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=trakt_tv_trending&amp;iconImage=trending&amp;mode=build_tvshow_list&amp;name=32458"/>
+            <param name="widget_header" value="סדרות VIP"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="22013"/>
+        </include>
+        <include content="WidgetListBigPoster" condition="Skin.HasSetting(novix_widget)">
+            <param name="content_path" value="plugin://plugin.video.pov/?name=32458&amp;action=trakt_tv_trending&amp;iconImage=trending&amp;mode=build_tvshow_list"/>
+            <param name="widget_header" value="לוהט כעת"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="22013"/>
+        </include>
+    </include>
+</includes>

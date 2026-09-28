@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="Custom3Widgets">
+        <include content="WidgetListBigPoster">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=tmdb_movies_popular&amp;iconImage=popular&amp;mode=build_movie_list&amp;name=32459"/>
+            <param name="widget_header" value="סרטים מדובבים"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="25011"/>
+        </include>
+        <include content="WidgetListBigPoster">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=trakt_tv_trending&amp;iconImage=trending&amp;mode=build_tvshow_list&amp;name=32458"/>
+            <param name="widget_header" value="סדרות מדובבות"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="25012"/>
+        </include>
+    </include>
+</includes>

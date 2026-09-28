@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Foundation -->
+<window id="2104">
+	<defaultcontrol always="true">9501</defaultcontrol>
+    <controls>
+		<include>FullScreenDimensions</include>
+		<control type="multiimage">
+			<depth>DepthBackground</depth>
+			
+			<aspectratio>scale</aspectratio>
+			<fadetime>600</fadetime>
+			<imagepath background="true" colordiffuse="bg_overlay">$VAR[HomeFanartVarNox]</imagepath>
+			<visible>!Player.HasMedia</visible>
+		</control>
+		<include>TopBar</include>
+		<include>logo_icon</include>
+		<include>MainWindowMouseButtons</include>
+<!--         <include>Furniture_TopBar4</include>
+		<include>FullscreenBack</include>
+        <include>Furniture_RSS</include>        
+        <include>Furniture_Hub_Flags</include>
+		<include>MainWindowMouseButtons</include>
+		<include>VideoControl_hub</include> -->
+		
+        <control type="group">
+            <control type="group">
+                <top>230</top>
+                <left>side</left>
+                <right>side</right>
+                <height>800</height>
+                <control type="group">
+                    <left>0</left>
+                    <top>-50</top>
+                    <width>1310</width>
+                    <height>100%</height>
+					<control type="label">
+						<right>-555</right>
+						<top>-170</top>
+						<font>font_hub</font>
+						<align>center</align>
+						<bottom>pad</bottom>
+						<label>טלויזיה</label>
+					</control>
+				<control type="image">
+					<include>FocusBounce</include>
+					<left>10</left>
+					<top>-20</top>
+                      <width>1900</width>
+                      <height>840</height>
+					<texture colordiffuse="blue">masks/hub_background.png</texture>
+				</control>
+                    <control type="multiimage" id="9499">
+                      <width>1290</width>
+                      <height>800</height>
+                      <left>20</left>
+                      <top>pad</top>
+                      <bottom>pad</bottom>
+                      <aspectratio>scale</aspectratio>
+                      <timeperimage>5000</timeperimage>
+					  <visible>!Player.HasMedia</visible>
+                      <imagepath>special://skin/extras/hub-images/tvshub2.jpg</imagepath>
+                    </control>
+					<control type="videowindow">
+					<posx>20</posx>
+					<posy>-30</posy>
+					<width>1290</width>
+					<height>860</height>
+					</control>
+                </control>
+                <control type="group" description="hub side">
+                    <right>30</right>
+                    <top>-50</top>
+                    <width>560</width>
+                    <height>100%</height>
+					<control type="group">
+						<width>100%</width>
+						<height>100%</height>
+						<top>0</top>
+						<bottom>pad</bottom>
+						<visible>!Skin.HasSetting(darkoverlay) + !Skin.HasSetting(hubbars)</visible>
+					</control>	
+                    <control type="panel" id="9501">  
+						<onright>ReplaceWindow(2105)</onright>
+						<onleft>ReplaceWindow(2103)</onleft>
+                        <onup>9501</onup>
+                        <ondown>9501</ondown>
+                        <height>800</height>
+						<onfocus>ClearProperty(menulist)</onfocus>
+						<!-- <onright>800</onright> -->
+                        <pagecontrol>60</pagecontrol>
+                        <preloaditems>2</preloaditems>
+                        <orientation>vertical</orientation>
+                        <scrolltime tween="quadratic">400</scrolltime>
+                        <itemlayout width="560" height="100">
+                            <control type="image">
+                                <left>10</left>
+                                <top>0</top>
+                                <align>left</align>
+                                <bottom>pad</bottom>
+                                <width>125</width>
+                                <aspectratio>keep</aspectratio>
+                                <texture colordiffuse="ListLabel">$INFO[ListItem.Icon]</texture>
+                            </control>
+                            <control type="label">
+                                <right>25</right>
+                                <top>20</top>
+								<font>font36_title</font>
+                                <align>right</align>
+                                <bottom>pad</bottom>
+                                <label>$INFO[ListItem.Label]</label>
+                            </control>
+                        </itemlayout>
+                        <focusedlayout width="560" height="100">
+                            <control type="image">
+                                <width>100%</width>
+                                <top>0</top>
+                                <bottom>pad</bottom>
+								 <texture colordiffuse="ff00b7eb" border="4">nox/listselect_fo.png</texture>
+                            </control>
+                            <control type="image">
+                                <left>10</left>
+                                <top>0</top>
+                                <align>left</align>
+                                <bottom>pad</bottom>
+                                 <width>125</width>
+                                <aspectratio>keep</aspectratio>
+                                <texture colordiffuse="fff0f0f0">$INFO[ListItem.Icon]</texture>
+                            </control>
+                            <control type="label">
+                                <right>25</right>
+                                <align>right</align>
+								<font>font36_title</font>
+                                <top>20</top>
+                                <bottom>pad</bottom>
+                                <textcolor>fff0f0f0</textcolor>
+                                <label>$INFO[ListItem.Label]</label>
+                            </control>
+                        </focusedlayout>
+				<content>
+					<item>
+						<label>ערוצים עידן פלוס</label>
+						<icon>special://skin/extras/icons/idanplus22.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.idanplus/?iconimage=C%253A%255CUsers%255CHome%255CAppData%255CRoaming%255CKodi%255Caddons%255Cplugin.video.idanplus%255Cicon.png&amp;mode=1&amp;module&amp;moredata&amp;name=%5bB%5d%d7%a9%d7%99%d7%93%d7%95%d7%a8%d7%99%d7%9d%20%d7%97%d7%99%d7%99%d7%9d%5b%2fB%5d&amp;url",return)</onclick>
+					</item>
+					<item>
+						<label>רדיו ומוסיקה</label>
+						<icon>special://skin/extras/icons/allmovie.png</icon>
+						 <onclick>ActivateWindow(2106)</onclick>
+						<visible>false</visible>
+					</item>
+					<item>
+						<label>לויין 1</label>
+						<icon>special://skin/extras/icons/top.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=TV&amp;url=&amp;mode=1&amp;iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;module=&amp;moredata= &amp;data= &amp;original_title= &amp;id= &amp;season= &amp;episode= &amp;tmdbid= &amp;eng_name= &amp;show_original_year= &amp;isr=0&amp;fav_status=false&amp;groups_id=0&amp;next_page=0&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D",return)</onclick>
+						<visible>Skin.HasSetting(live_tv)</visible>
+					</item>
+					<item>
+						<label>לויין 2</label>
+						<icon>special://skin/extras/icons/idanplus22.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=TV&amp;url=&amp;mode=1&amp;iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;module=&amp;moredata= &amp;data= &amp;original_title= &amp;id= &amp;season= &amp;episode= &amp;tmdbid= &amp;eng_name= &amp;show_original_year= &amp;isr=0&amp;fav_status=false&amp;groups_id=0&amp;next_page=0&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D",return)</onclick>
+						<visible>Skin.HasSetting(live_tv)</visible>
+					</item>
+					<item>
+						<label>ישראל</label>
+						<icon>special://skin/extras/icons/israel.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=TV&amp;url=&amp;mode=1&amp;iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;module=&amp;moredata= &amp;data= &amp;original_title= &amp;id= &amp;season= &amp;episode= &amp;tmdbid= &amp;eng_name= &amp;show_original_year= &amp;isr=0&amp;fav_status=false&amp;groups_id=0&amp;next_page=0&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D",return)</onclick>
+						<visible>false</visible>
+					</item>
+					<item>
+						<label>ישראל</label>
+						<icon>special://skin/extras/icons/supertv.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.pov/?action=tmdb_movies_popular&amp;iconImage=popular&amp;mode=build_movie_list&amp;name=32459",return)</onclick>
+						<visible>false</visible>
+					</item>
+					<item>
+						<label>ערוצים VIP (לא תמיד זמין)</label>
+						<icon>special://skin/extras/icons/supertv.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=TV&amp;url=&amp;mode=1&amp;iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;module=&amp;moredata= &amp;data= &amp;original_title= &amp;id= &amp;season= &amp;episode= &amp;tmdbid= &amp;eng_name= &amp;show_original_year= &amp;isr=0&amp;fav_status=false&amp;groups_id=0&amp;next_page=0&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D",return)</onclick>
+						<!-- <visible>false</visible> -->
+					</item>
+					<item>
+						<label>ערוצים לפי מדינות</label>
+						<icon>special://skin/extras/icons/supertv.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.pov/?action=tmdb_movies_popular&amp;iconImage=popular&amp;mode=build_movie_list&amp;name=32459",return))</onclick>
+						<visible>false</visible>
+					</item>
+					<item>
+						<label>ערוצים מהעולם</label>
+						<icon>special://skin/extras/icons/vip2.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=TV&amp;url=&amp;mode=1&amp;iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;module=&amp;moredata= &amp;data= &amp;original_title= &amp;id= &amp;season= &amp;episode= &amp;tmdbid= &amp;eng_name= &amp;show_original_year= &amp;isr=0&amp;fav_status=false&amp;groups_id=0&amp;next_page=0&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D",return)</onclick>
+					</item>
+					<item>
+						<label>ערוצים מהעולם</label>
+						<icon>special://skin/extras/icons/tvlang.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=VOD&amp;url=&amp;mode=2&amp;iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;module=&amp;moredata= &amp;data= &amp;original_title= &amp;id= &amp;season= &amp;episode= &amp;tmdbid= &amp;eng_name= &amp;show_original_year= &amp;isr=0&amp;fav_status=false&amp;groups_id=0&amp;next_page=0&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D",return)</onclick>
+						<visible>false</visible>
+					</item>
+					<item>
+						<label>שידורי משחקים וספורט</label>
+						<icon>special://skin/extras/icons/sport.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=VOD&amp;url=&amp;mode=2&amp;iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;module=&amp;moredata= &amp;data= &amp;original_title= &amp;id= &amp;season= &amp;episode= &amp;tmdbid= &amp;eng_name= &amp;show_original_year= &amp;isr=0&amp;fav_status=false&amp;groups_id=0&amp;next_page=0&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D",return)</onclick>
+						<visible>false</visible>
+					</item>
+
+					<item>
+						<label>ערוצים לפי נושאים</label>
+						<icon>special://skin/extras/icons/vip2.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=TV&amp;url=&amp;mode=1&amp;iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;module=&amp;moredata= &amp;data= &amp;original_title= &amp;id= &amp;season= &amp;episode= &amp;tmdbid= &amp;eng_name= &amp;show_original_year= &amp;isr=0&amp;fav_status=false&amp;groups_id=0&amp;next_page=0&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D&amp;video_data=%7B%22title%22%3A+%22%5Cu05e2%5Cu05d9%5Cu05d3%5Cu05df+%5Cu05e4%5Cu05dc%5Cu05d5%5Cu05e1%22%2C+%22label%22%3A+%22+%22%2C+%22OriginalTitle%22%3A+%22+%22%2C+%22imdbnumber%22%3A+%22+%22%2C+%22imdbid%22%3A+%22+%22%2C+%22year%22%3A+%22+%22%2C+%22mediatype%22%3A+%22movie%22%2C+%22TVshowtitle%22%3A+%22%22%2C+%22rating%22%3A+%220%22%2C+%22plot%22%3A+%22Movies%22%2C+%22dateadded%22%3A+%22+00%3A00%3A00%22%7D",return)</onclick>
+					</item>
+<!-- 					<item>
+						<label>ערוצים IPTV</label>
+						<icon>special://skin/extras/icons/iptv.png</icon>
+						 <onclick>ActivateWindow(2123)</onclick>
+
+					</item> -->
+					<item>
+						<label>ספורט 1 - VOD</label>
+						<icon>special://skin/extras/icons/sporttv.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.idanplus/?iconimage=C%253A%255CUsers%255CHome%255CAppData%255CRoaming%255CKodi%255Caddons%255Cplugin.video.idanplus%255Cresources%255Cimages%255Csport1.jpg&amp;mode=0&amp;module=sport1&amp;moredata&amp;name=%5bB%5d%d7%9b%d7%9c%20%d7%94%d7%aa%d7%9b%d7%a0%d7%99%d7%95%d7%aa%5b%2fB%5d&amp;url",return)</onclick>
+					</item>
+					<item>
+						<label>רדיו</label>
+						<icon>special://skin/extras/icons/radioidan.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?moredata=&amp;name=%5BB%5D%D7%A8%D7%93%D7%99%D7%95%5B%2FB%5D&amp;url=&amp;iconimage=C%253A%255CUsers%255CHome%255CAppData%255CRoaming%255CKodi%255Caddons%255Cplugin.video.idanplus%255Cicon.png&amp;module=&amp;mode=3",return)</onclick>
+					</item>
+					<item>
+						<label>שרים קריוקי</label>
+						<icon>special://skin/extras/icons/karaoke.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.pov/?action=tmdb_movies_popular&amp;iconImage=popular&amp;mode=build_movie_list&amp;name=32459",return)</onclick>
+					</item>
+
+					<item>
+						<label>הופעות חיות</label>
+						<icon>special://skin/extras/icons/live_show.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.pov/?action=tmdb_movies_popular&amp;iconImage=popular&amp;mode=build_movie_list&amp;name=32459",return)</onclick>
+					</item>
+					<item>
+						<label>מוסיקה - Eco99</label>
+						<icon>special://skin/extras/icons/eco99.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?moredata=&amp;name=%5BB%5D%D7%9E%D7%95%D7%96%D7%99%D7%A7%D7%94+-+eco99fm%5B%2FB%5D&amp;url=&amp;iconimage=C%253A%255CUsers%255CHome%255CAppData%255CRoaming%255CKodi%255Caddons%255Cplugin.video.idanplus%255Cresources%255Cimages%255C99fm.png&amp;module=99fm&amp;mode=0",return)</onclick>
+					</item>
+					<item>
+						<label>מוסיקה - 100FM</label>
+						<icon>special://skin/extras/icons/100fm.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?moredata=&amp;name=%5BB%5D%D7%9E%D7%95%D7%96%D7%99%D7%A7%D7%94+-+100fm%5B%2FB%5D&amp;url=&amp;iconimage=C%253A%255CUsers%255CHome%255CAppData%255CRoaming%255CKodi%255Caddons%255Cplugin.video.idanplus%255Cresources%255Cimages%255C100fm.jpg&amp;module=100fm&amp;mode=0",return)</onclick>
+					</item>
+					<item>
+						<label>ספורט 5 - VOD</label>
+						<icon>special://skin/extras/icons/Genres.png</icon>
+						<onclick>ActivateWindow(10025,"plugin://plugin.video.idanplus/?iconimage=C%253A%255CUsers%255CHome%255CAppData%255CRoaming%255CKodi%255Caddons%255Cplugin.video.idanplus%255Cresources%255Cimages%255CSport5.png&amp;mode=0&amp;module=sport5&amp;moredata&amp;name=%5bB%5d%d7%9b%d7%9c%20%d7%94%d7%aa%d7%9b%d7%a0%d7%99%d7%95%d7%aa%5b%2fB%5d&amp;url",return)</onclick>
+						<visible>false</visible>
+					</item>
+					<item>
+						<label>קרבות - UFC</label>
+						<icon>special://skin/extras/icons/ufc.png</icon>
+						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.idanplus/?name=VOD&amp;url=&amp;mode=2&amp;iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;module=&amp;moredata=)</onclick>
+						<visible>false</visible>
+					</item>
+					<item>
+						<label>Wrestling On Demand</label>
+						<icon>special://skin/extras/icons/torrent2.png</icon>
+						<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?name=32028&amp;iconImage=movies&amp;mode=navigator.main&amp;action=MovieList",return)</onclick>
+						<visible>false</visible>
+					</item>
+					<item>
+						<label>טלוייזיה חיה</label>
+						<icon>special://skin/extras/icons/livetv3.png</icon>
+						<onclick>ActivateWindow(TVChannels)</onclick>
+						<visible>System.HasAddon(pvr.iptvsimple)</visible>
+					</item>
+				</content>
+                    </control>
+                </control>
+            </control>
+        </control>
+    </controls>
+</window>

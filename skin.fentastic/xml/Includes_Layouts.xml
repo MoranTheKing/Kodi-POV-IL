@@ -1,0 +1,998 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+
+<include name="BasedMenuLayout">
+	<itemlayout width="410" height="85">
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="65FFFFFF">masks/categorywidget-unfocused.png</texture>
+	</control>
+	<control type="image">
+		<left>25</left>
+		<top>32</top>
+		<width>25</width>
+		<height>25</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Icon]</texture>
+	</control>
+	<control type="label">
+		<left>100</left>
+		<top>20</top>
+		<label>$INFO[ListItem.Label]</label>
+	</control>
+	</itemlayout>
+	<focusedlayout width="410" height="85">
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="65FFFFFF">masks/categorywidget-unfocused.png</texture>
+	</control>
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="button_focus">masks/categorywidget.png</texture>
+	</control>
+	<control type="image">
+		<left>25</left>
+		<top>32</top>
+		<width>25</width>
+		<height>25</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Icon]</texture>
+	</control>
+	<control type="label">
+		<left>100</left>
+		<top>20</top>
+		<label>$INFO[ListItem.Label]</label>
+	</control>
+	</focusedlayout>
+</include>
+
+
+<include name="PlayerLockedLayout">
+	<itemlayout width="410" height="65">
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="65000000">colors/white.png</texture>
+	</control>
+	<control type="image">
+		<left>355</left>
+		<top>18</top>
+		<width>35</width>
+		<height>35</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock1)]</texture>
+		<visible>$EXP[__SimplePlayerVisiblity]</visible>
+	</control>
+	<control type="image">
+		<left>355</left>
+		<top>18</top>
+		<width>35</width>
+		<height>35</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock2)]</texture>
+		<visible>$EXP[__AdvancedPlayerVisiblity]</visible>
+	</control>
+	<control type="image">
+		<left>355</left>
+		<top>18</top>
+		<width>35</width>
+		<height>35</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock3)]</texture>
+		<visible>$EXP[__NetflixPlayerVisiblity]</visible>
+	</control>
+	<control type="image">
+		<left>355</left>
+		<top>18</top>
+		<width>35</width>
+		<height>35</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock4)]</texture>
+		<visible>$EXP[__PrettyplayerPlayerVisiblity]</visible>
+	</control>
+	<control type="label">
+		<left>10</left>
+		<top>0</top>
+		<font>font32_title</font>
+		<aligny>center</aligny>
+		<label>$INFO[ListItem.Label]</label>
+	</control>
+	</itemlayout>
+	<focusedlayout width="410" height="65">
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="65000000">colors/white.png</texture>
+	</control>
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="button_focus">colors/white.png</texture>
+	</control>
+	<control type="image">
+		<left>355</left>
+		<top>18</top>
+		<width>35</width>
+		<height>35</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock1)]</texture>
+		<visible>$EXP[__SimplePlayerVisiblity]</visible>
+	</control>
+	<control type="image">
+		<left>355</left>
+		<top>18</top>
+		<width>35</width>
+		<height>35</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock2)]</texture>
+		<visible>$EXP[__AdvancedPlayerVisiblity]</visible>
+	</control>
+	<control type="image">
+		<left>355</left>
+		<top>18</top>
+		<width>35</width>
+		<height>35</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock3)]</texture>
+		<visible>$EXP[__NetflixPlayerVisiblity]</visible>
+	</control>
+	<control type="image">
+		<left>355</left>
+		<top>18</top>
+		<width>35</width>
+		<height>35</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock4)]</texture>
+		<visible>$EXP[__PrettyplayerPlayerVisiblity]</visible>
+	</control>
+	<control type="label">
+		<left>10</left>
+		<top>0</top>
+		<font>font32_title</font>
+		<aligny>center</aligny>
+		<label>$INFO[ListItem.Label]</label>
+	</control>
+	</focusedlayout>
+</include>
+
+
+<include name="ViewTypeLockLayout">
+	<itemlayout width="410" height="75">
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="65000000">colors/white.png</texture>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock1)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),posterviewtype)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock2)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),shitposterviewtype)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock3)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),panelviewtype)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock4)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),widelistviewtype)</visible>
+	</control>	
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock5)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),widepanelviewtype)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock6)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),widepanelpostersviewtype)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock7)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),widepanelfanartsviewtype)</visible>
+	</control>	
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock8)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),listviewtype)</visible>
+	</control>	
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock9)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),smallviewtype)</visible>
+	</control>	
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock10)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),AdvancedViewList)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[ListItem.Property(lock11)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),AdvancedWideViewList)</visible>
+	</control>
+	<control type="label">
+		<left>10</left>
+		<top>0</top>
+		<aligny>center</aligny>
+		<label>$INFO[ListItem.Label]</label>
+	</control>
+	</itemlayout>
+	<focusedlayout width="410" height="75">
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="65000000">colors/white.png</texture>
+	</control>
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="$VAR[LockViewLayoutSetFocusColor]">colors/white.png</texture>
+		<!-- <animation condition="true" effect="fade" start="100" end="50">Conditional</animation> -->
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture colordiffuse="black">$INFO[ListItem.Property(lock1)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),posterviewtype)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture colordiffuse="black">$INFO[ListItem.Property(lock2)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),shitposterviewtype)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture colordiffuse="black">$INFO[ListItem.Property(lock3)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),panelviewtype)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture colordiffuse="black">$INFO[ListItem.Property(lock4)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),widelistviewtype)</visible>
+	</control>	
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture colordiffuse="black">$INFO[ListItem.Property(lock5)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),widepanelviewtype)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture colordiffuse="black">$INFO[ListItem.Property(lock6)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),widepanelpostersviewtype)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture colordiffuse="black">$INFO[ListItem.Property(lock7)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),widepanelfanartsviewtype)</visible>
+	</control>	
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture colordiffuse="black">$INFO[ListItem.Property(lock8)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),listviewtype)</visible>
+	</control>	
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture colordiffuse="black">$INFO[ListItem.Property(lock9)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),smallviewtype)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture colordiffuse="black">$INFO[ListItem.Property(lock10)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),AdvancedViewList)</visible>
+	</control>
+	<control type="image">
+		<left>370</left>
+		<top>22</top>
+		<width>30</width>
+		<height>30</height>
+		<aspectratio>keep</aspectratio>
+		<texture colordiffuse="black">$INFO[ListItem.Property(lock11)]</texture>
+		<visible>String.IsEqual(Skin.String(lock.view.type),AdvancedWideViewList)</visible>
+	</control>
+	<control type="label">
+		<left>10</left>
+		<top>0</top>
+		<aligny>center</aligny>
+		<textcolor>black</textcolor>
+		<label>$INFO[ListItem.Label]</label>
+	</control>
+	</focusedlayout>
+</include>
+
+
+<include name="SecondOsdSettingBasedMenu">
+	<itemlayout width="415" height="85">
+	<control type="group">
+	<height>85</height>
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="65FFFFFF">masks/categorywidget-unfocused.png</texture>
+	</control>
+	<control type="label">
+		<left>20</left>
+		<right>10</right>
+		<top>5</top>
+		<align>left</align>
+		<font>font12</font>
+		<label>[B]$INFO[ListItem.Label][/B]</label>
+	</control>
+	<control type="label">
+		<left>20</left>
+		<top>45</top>
+		<align>left</align>
+		<font>font10</font>
+		<label>$INFO[ListItem.Label2]</label>
+	</control>
+	</control>
+	</itemlayout>
+	<focusedlayout width="415" height="85">
+	<control type="group">
+	<height>85</height>
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="65FFFFFF">masks/categorywidget-unfocused.png</texture>
+	</control>
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture colordiffuse="button_focus">masks/categorywidget.png</texture>
+	</control>
+	<control type="label">
+		<left>20</left>
+		<top>5</top>
+		<right>10</right>
+		<align>left</align>
+		<font>font12</font>
+		<label>[B]$INFO[ListItem.Label][/B]</label>
+		<scroll>true</scroll>
+		<scrolltime>40</scrolltime>
+	</control>
+	<control type="label">
+		<left>20</left>
+		<top>45</top>
+		<align>left</align>
+		<font>font10</font>
+		<label>$INFO[ListItem.Label2]</label>
+	</control>
+	</control>
+	</focusedlayout>
+</include>
+
+<include name="OsdNetflixEpisodesInSeasonsLayout">
+<param name="layoutwidth">640</param>
+<param name="layoutheight">350</param>
+<param name="groupwidth">600</param>
+<param name="id">200323</param>
+<param name="plotbottom">20</param>
+<param name="falseplottop">100</param>
+<definition>
+<itemlayout width="$PARAM[layoutwidth]" height="$PARAM[layoutheight]">
+<control type="group">
+<width>$PARAM[groupwidth]</width>
+<include content="BasedResizedWidgetFrame">
+	<include content="BasedResizedWidgetImage">
+		<param name="resize">0</param>
+		<param name="bottom">0</param>
+	</include>
+</include>
+<include content="BasedResizedWidgetFrameBox">
+	<param name="boxcolordiffuse">98181818</param>
+	<include content="BasedResizedWidgetImage">
+		<param name="resize">2</param>
+		<param name="bottom">2</param>
+	</include>
+</include>
+<include content="BasedResizedWidgetTexture">
+	<param name="texture">$INFO[Player.Icon]</param>
+<include content="BasedResizedWidgetImage">
+	<param name="resize">5</param>
+	<param name="bottom">5</param>
+</include>
+</include>
+<control type="group">
+<height>25</height>
+<bottom>20</bottom>
+<control type="label">
+	<left>10</left>
+	<align>left</align>
+	<width>350</width>
+	<shadowcolor>black</shadowcolor>
+	<label>$INFO[ListItem.Label]</label>
+</control>
+<control type="label">
+	<right>10</right>
+	<align>right</align>
+	<top>-35</top>
+	<font>font32_title</font>
+	<shadowcolor>black</shadowcolor>
+	<label>$INFO[ListItem.TvShowTitle]</label>
+</control>
+<control type="label">
+	<right>10</right>
+	<align>right</align>
+	<shadowcolor>black</shadowcolor>
+	<label>עונה $INFO[ListItem.Season,(,)] פרק $INFO[ListItem.Episode,(,)]</label>
+</control>
+</control>
+</control>
+</itemlayout>
+<focusedlayout width="$PARAM[layoutwidth]" height="$PARAM[layoutheight]">
+<control type="group">
+<width>$PARAM[groupwidth]</width>
+<include content="BasedResizedWidgetFrame">
+	<include content="BasedResizedWidgetImage">
+		<param name="resize">0</param>
+		<param name="bottom">0</param>
+	</include>
+</include>
+<include content="BasedResizedWidgetFrameBox">
+	<param name="boxcolordiffuse">98181818</param>
+	<include content="BasedResizedWidgetImage">
+		<param name="resize">2</param>
+		<param name="bottom">2</param>
+	</include>
+</include>
+<include content="BasedResizedWidgetTexture">
+	<param name="texture">$INFO[Player.Icon]</param>
+<include content="BasedResizedWidgetImage">
+	<param name="resize">5</param>
+	<param name="bottom">5</param>
+</include>
+</include>
+<control type="image">
+	<left>2</left>
+	<right>2</right>
+	<top>2</top>
+	<bottom>2</bottom>
+	<animation condition="true" effect="fade" start="100" end="88" time="0">Conditional</animation>
+	<texture border="16">icons/box.png</texture>
+	<colordiffuse>black</colordiffuse>
+	<visible>control.hasfocus($PARAM[id])</visible>
+</control>
+<control type="group">
+<height>25</height>
+<bottom>20</bottom>
+<visible>!Control.HasFocus($PARAM[id])</visible>
+<control type="label">
+	<left>10</left>
+	<align>left</align>
+	<width>350</width>
+	<shadowcolor>black</shadowcolor>
+	<label>$INFO[ListItem.Label]</label>
+</control>
+<control type="label">
+	<right>10</right>
+	<align>right</align>
+	<top>-35</top>
+	<font>font32_title</font>
+	<shadowcolor>black</shadowcolor>
+	<label>$INFO[ListItem.TvShowTitle]</label>
+</control>
+<control type="label">
+	<right>10</right>
+	<align>right</align>
+	<shadowcolor>black</shadowcolor>
+	<label>עונה $INFO[ListItem.Season,(,)] פרק $INFO[ListItem.Episode,(,)]</label>
+</control>
+</control>
+<control type="group">
+<visible>control.hasfocus($PARAM[id])</visible>
+<width>$PARAM[groupwidth]</width>
+<left>$PARAM[infoleft]</left>
+<centerleft>50%</centerleft>
+<visible>!String.IsEmpty(ListItem.Plot)</visible>
+<control type="label">
+	<right>40</right>
+	<top>10</top>
+	<align>center</align>
+	<font>font45_title</font>
+	<label>$INFO[ListItem.TvShowTitle]</label>
+</control>
+<control type="label">
+	<right>40</right>
+	<top>70</top>
+	<align>center</align>
+	<textcolor>deeppink</textcolor>
+	<label>$INFO[ListItem.Genre]</label>
+</control>
+<control type="label">
+	<right>40</right>
+	<top>110</top>
+	<align>center</align>
+	<textcolor>yellow</textcolor>
+	<label>עונה [COLOR yellow]$INFO[ListItem.Season,(,)][/COLOR] פרק [COLOR yellow]$INFO[ListItem.Episode,(,)][/COLOR]</label>
+</control>
+<control type="textbox">
+	<right>40</right>
+	<bottom>$PARAM[plotbottom]</bottom>
+	<top>155</top>
+	<align>center</align>
+	<label>$INFO[ListItem.Plot]</label>
+	<autoscroll fade="3500" time="3500" repeat="3500">control.hasfocus($PARAM[id])</autoscroll>
+</control>
+</control>
+<control type="group">
+<visible>control.hasfocus($PARAM[id])</visible>
+<width>$PARAM[groupwidth]</width>
+<left>$PARAM[infoleft]</left>
+<centerleft>50%</centerleft>
+<top>$PARAM[falseplottop]</top>
+<visible>String.IsEmpty(ListItem.Plot)</visible>
+<control type="label">
+	<right>40</right>
+	<top>10</top>
+	<align>center</align>
+	<font>font45_title</font>
+	<label>$INFO[ListItem.TvShowTitle]</label>
+</control>
+<control type="label">
+	<right>40</right>
+	<top>70</top>
+	<align>center</align>
+	<textcolor>deeppink</textcolor>
+	<label>$INFO[ListItem.Genre]</label>
+</control>
+<control type="label">
+	<right>40</right>
+	<top>110</top>
+	<align>center</align>
+	<textcolor>yellow</textcolor>
+	<label>עונה [COLOR yellow]$INFO[ListItem.Season,(,)][/COLOR] פרק [COLOR yellow]$INFO[ListItem.Episode,(,)][/COLOR]</label>
+</control>
+</control>
+</control>
+</focusedlayout>
+</definition>
+</include>
+
+<include name="__OsdEpisodeslayout">
+<itemlayout width="380" height="280">
+<control type="group">
+<width>350</width>
+	<control type="image">
+		<width>350</width>
+		<texture colordiffuse="black">colors/white.png</texture>
+	</control>
+	<control type="image">
+		<height>70%</height>
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture>$INFO[ListItem.Icon]</texture>
+	</control>
+	<control type="label">
+		<top>200</top>
+		<height>25</height>
+		<align>left</align>
+		<left>8</left>
+		<font>font10</font>
+		<label>[B]$INFO[ListItem.TvShowTitle][/B]</label>
+	</control>
+	<control type="label">
+		<top>245</top>
+		<height>25</height>
+		<align>right</align>
+		<right>8</right>
+		<font>font10</font>
+		<label>עונה [COLOR red]$INFO[ListItem.Season,(,)][/COLOR] פרק [COLOR red]$INFO[ListItem.Episode,(,)][/COLOR]</label>
+	</control>
+	<control type="label">
+		<top>245</top>
+		<height>25</height>
+		<align>left</align>
+		<left>8</left>
+		<font>font10</font>
+		<label>$INFO[ListItem.Premiered]</label>
+	</control>
+</control>
+</itemlayout>
+<focusedlayout width="380" height="280">
+<control type="group">
+<width>350</width>
+	<control type="image">
+		<width>350</width>
+		<texture colordiffuse="black">colors/white.png</texture>
+		<visible>!Control.HasFocus(500323)</visible>
+	</control>
+	<control type="image">
+		<width>350</width>
+		<texture colordiffuse="black">colors/white.png</texture>
+		<bordertexture colordiffuse="white">colors/white.png</bordertexture>
+		<bordersize>4</bordersize>
+		<visible>Control.HasFocus(500323)</visible>
+	</control>
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<height>70%</height>
+		<texture>$INFO[ListItem.Icon]</texture>
+	</control>
+	<control type="label">
+		<top>200</top>
+		<height>25</height>
+		<align>left</align>
+		<left>8</left>
+		<font>font10</font>
+		<label>[B]$INFO[ListItem.TvShowTitle][/B]</label>
+	</control>
+	<control type="label">
+		<top>245</top>
+		<height>25</height>
+		<align>right</align>
+		<right>8</right>
+		<font>font10</font>
+		<label>עונה [COLOR red]$INFO[ListItem.Season,(,)][/COLOR] פרק [COLOR red]$INFO[ListItem.Episode,(,)][/COLOR]</label>
+	</control>
+	<control type="label">
+		<top>245</top>
+		<height>25</height>
+		<align>left</align>
+		<left>8</left>
+		<font>font10</font>
+		<label>$INFO[ListItem.Premiered]</label>
+	</control>
+</control>
+</focusedlayout>
+</include>
+
+
+<include name="__OsdEpisodesAdvancedPlayerlayout__">
+<itemlayout width="380" height="280">
+<control type="group">
+<width>350</width>
+	<control type="image">
+		<width>350</width>
+		<animation condition="true" effect="fade" start="100" end="68" time="0">Conditional</animation>
+		<texture colordiffuse="FF181818">colors/white.png</texture>
+	</control>
+	<control type="image">
+		<height>70%</height>
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<texture>$INFO[ListItem.Icon]</texture>
+	</control>
+	<control type="label">
+		<top>200</top>
+		<height>25</height>
+		<align>left</align>
+		<left>8</left>
+		<font>font10</font>
+		<label>[B]$INFO[ListItem.TvShowTitle][/B]</label>
+	</control>
+	<control type="label">
+		<top>245</top>
+		<height>25</height>
+		<align>right</align>
+		<right>8</right>
+		<font>font10</font>
+		<label>עונה [COLOR red]$INFO[ListItem.Season,(,)][/COLOR] פרק [COLOR red]$INFO[ListItem.Episode,(,)][/COLOR]</label>
+	</control>
+	<control type="label">
+		<top>245</top>
+		<height>25</height>
+		<align>left</align>
+		<left>8</left>
+		<font>font10</font>
+		<label>$INFO[ListItem.Premiered]</label>
+	</control>
+</control>
+</itemlayout>
+<focusedlayout width="380" height="280">
+<control type="group">
+<width>350</width>
+	<control type="image">
+		<width>350</width>
+		<texture colordiffuse="FF181818">colors/white.png</texture>
+		<visible>!Control.HasFocus(200323)</visible>
+	</control>
+	<control type="image">
+		<width>350</width>
+		<texture colordiffuse="FF181818">colors/white.png</texture>
+		<bordertexture colordiffuse="white">colors/white.png</bordertexture>
+		<bordersize>4</bordersize>
+		<visible>Control.HasFocus(200323)</visible>
+	</control>
+	<control type="image">
+		<left>5</left>
+		<right>5</right>
+		<top>5</top>
+		<height>70%</height>
+		<texture>$INFO[ListItem.Icon]</texture>
+	</control>
+	<control type="label">
+		<top>200</top>
+		<height>25</height>
+		<align>left</align>
+		<left>8</left>
+		<font>font10</font>
+		<label>[B]$INFO[ListItem.TvShowTitle][/B]</label>
+	</control>
+	<control type="label">
+		<top>245</top>
+		<height>25</height>
+		<align>right</align>
+		<right>8</right>
+		<font>font10</font>
+		<label>עונה [COLOR red]$INFO[ListItem.Season,(,)][/COLOR] פרק [COLOR red]$INFO[ListItem.Episode,(,)][/COLOR]</label>
+	</control>
+	<control type="label">
+		<top>245</top>
+		<height>25</height>
+		<align>left</align>
+		<left>8</left>
+		<font>font10</font>
+		<label>$INFO[ListItem.Premiered]</label>
+	</control>
+</control>
+</focusedlayout>
+</include>
+
+
+<include name="prettybottomenu_osd">
+<itemlayout width="350" height="80" condition="Integer.IsEqual(Container(202).NumItems,4)">
+<control type="group">
+<height>170</height>
+	<control type="image">
+		<texture colordiffuse="25FFFFFF" border="5">masks/menumain.png</texture>
+	</control>
+	<control type="label">
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font36_title</font>
+		<label>$INFO[ListItem.Label]</label>
+	</control>
+</control>
+</itemlayout>
+<focusedlayout width="350" height="80" condition="Integer.IsEqual(Container(202).NumItems,4)">
+<control type="group">
+<height>170</height>
+<control type="image">
+	<texture colordiffuse="25FFFFFF" border="5">masks/menumain.png</texture>
+</control>
+<control type="image">
+	<texture border="5">masks/menumain.png</texture>
+	<animation condition="!Control.HasFocus(202)" effect="fade" start="100" end="50" time="250">Conditional</animation>
+</control>
+<control type="label">
+	<align>center</align>
+	<aligny>center</aligny>
+	<font>font36_title</font>
+	<label>$INFO[ListItem.Label]</label>
+	<textcolor>black</textcolor>
+</control>
+</control>
+</focusedlayout>
+<itemlayout width="350" height="70" condition="Integer.IsEqual(Container(202).NumItems,5)">
+<control type="group">
+<height>170</height>
+<control type="image">
+	<texture colordiffuse="25FFFFFF" border="5">masks/menumain.png</texture>
+</control>
+<control type="label">
+	<align>center</align>
+	<aligny>center</aligny>
+	<font>font36_title</font>
+	<label>$INFO[ListItem.Label]</label>
+</control>
+</control>
+</itemlayout>
+<focusedlayout width="350" height="70" condition="Integer.IsEqual(Container(202).NumItems,5)">
+<control type="group">
+<height>170</height>
+<control type="image">
+	<texture colordiffuse="25FFFFFF" border="5">masks/menumain.png</texture>
+</control>
+<control type="image">
+	<texture border="5">masks/menumain.png</texture>
+	<animation condition="!Control.HasFocus(202)" effect="fade" start="100" end="50" time="250">Conditional</animation>
+</control>
+<control type="label">
+	<align>center</align>
+	<aligny>center</aligny>
+	<font>font36_title</font>
+	<label>$INFO[ListItem.Label]</label>
+	<textcolor>black</textcolor>
+</control>
+</control>
+</focusedlayout>
+</include>
+
+<include name="ViewTypeBaseLayout_">
+				<param name="layouheight">105</param>
+				<param name="groupheight">100</param>
+				<definition>
+				<itemlayout height="$PARAM[layouheight]">
+                    <control type="group">
+                        <height>$PARAM[groupheight]</height>
+                        <control type="image">
+                            <left>5</left>
+                            <height>55</height>
+                            <width>55</width>
+                            <centertop>50%</centertop>
+                            <texture diffuse="masks/circle.png">$INFO[ListItem.Icon]</texture>
+                            <bordertexture colordiffuse="black">masks/circle.png</bordertexture>
+                            <bordersize>2</bordersize>
+                        </control>
+                        <control type="label">
+                            <centertop>50%</centertop>
+                            <left>80</left>
+                            <align>left</align>
+                            <aligny>center</aligny>
+                            <label>$INFO[ListItem.Label]</label>
+                        </control>
+                        <control type="label">
+                            <centertop>50%</centertop>
+                            <right>50</right>
+                            <align>right</align>
+                            <aligny>center</aligny>
+                            <label>$VAR[RightViewTypeInfoLanbel]</label>
+                        </control>
+                        <control type="image">
+                            <right>10</right>
+                            <height>32</height>
+                            <width>32</width>
+                            <centertop>50%</centertop>
+                            <texture>$VAR[ListPVRRecordingsIconVar]</texture>
+                        </control>
+                    </control>
+                </itemlayout>
+                
+                <focusedlayout height="$PARAM[layouheight]">
+                    <control type="group">
+                       <height>$PARAM[groupheight]</height>
+                        <control type="image">
+                            <texture border="16">masks/categorywidget.png</texture>
+                        </control>
+                        <control type="image">
+                            <left>5</left>
+                            <height>55</height>
+                            <width>55</width>
+                            <centertop>50%</centertop>
+                            <texture diffuse="masks/circle.png">$INFO[ListItem.Icon]</texture>
+                            <bordertexture colordiffuse="black">masks/circle.png</bordertexture>
+                            <bordersize>2</bordersize>
+                        </control>
+                        <control type="label">
+                            <centertop>50%</centertop>
+                            <left>80</left>
+                            <align>left</align>
+                            <aligny>center</aligny>
+                            <font>font32_title</font>
+                            <textcolor>black</textcolor>
+							<scroll>true</scroll>
+                            <label>$INFO[ListItem.Label]</label>
+                        </control>
+                        <control type="label">
+                            <centertop>50%</centertop>
+                            <right>50</right>
+                            <align>right</align>
+                            <aligny>center</aligny>
+                            <font>font32_title</font>
+                            <textcolor>black</textcolor>
+                            <label>$VAR[RightViewTypeInfoLanbel]</label>
+                        </control>
+                        <control type="image">
+                            <right>10</right>
+                            <height>32</height>
+                            <width>32</width>
+                            <centertop>50%</centertop>
+                            <texture colordiffuse="black">$VAR[ListPVRRecordingsIconVar]</texture>
+                        </control>
+                    </control>
+                    <include>__ExtenedInfoButton__</include>
+                </focusedlayout>
+				</definition>
+			</include>
+			
+</includes>

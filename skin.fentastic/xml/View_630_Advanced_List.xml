@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+
+<include name="View_630_AdvancedList">
+    <control type="image">
+        <height>1080</height>
+        <width>1920</width>
+        <texture colordiffuse="FF181818">colors/white.png</texture>
+        <visible>Skin.HasSetting(BasedBackGround) + Control.IsVisible(630)</visible>
+    </control>
+    <control type="group">
+        <visible>Control.IsVisible(630) + !Container(630).IsUpdating + Integer.IsGreater(Container(630).NumItems,0)</visible>
+        <width>1850</width>
+        <height>750</height>
+        <centertop>55%</centertop>
+        <centerleft>60%</centerleft>
+        
+        <control type="group">
+            <include>GlobaLeft2RightAnimation</include>
+            <include content="IconSizedBackGround">
+                <param name="width">500</param>
+                <param name="height">750</param>
+                <param name="animation"></param>
+                <param name="icon">$INFO[ListItem.Icon]</param>
+                <param name="visible">!$EXP[__episode]</param>
+            </include>
+            <include content="IconSizedBackGround">
+                <param name="width">500</param>
+                <param name="height">750</param>
+                <param name="animation"></param>
+                <param name="icon">$INFO[ListItem.Icon]</param>
+				<param name="aspectratio">keep</param>
+                <param name="visible">$EXP[__episode]</param>
+            </include>
+        </control>
+        
+        <control type="group">
+            <include>GlobalTop2DownAnimation</include>
+            <control type="image">
+				<top>-140</top>
+				<centerleft>50%</centerleft>
+                <width>380</width>
+                <height>120</height>
+                <fadetime>350</fadetime>
+                <aspectratio align="center" aligny="bottom">strech</aspectratio>
+                <texture>$INFO[ListItem.Art(clearlogo)]</texture>
+                <aspectratio>keep</aspectratio>
+                <animation effect="fade" start="0" end="100" time="350">VisibleChange</animation>
+            </control>
+        </control>
+        
+		<control type="group">
+		<visible>$EXP[__tvshow] | $EXP[__Movies] | $EXP[__season] | $EXP[__episode]</visible>
+		<include>GlobaRight2LeftAnimation</include>
+        <control type="image">
+            <width>40</width>
+            <height>40</height>
+            <top>765</top>
+            <right>320</right>
+            <texture colordiffuse="15FFFFFF">https://www.iconsdb.com/icons/preview/white/arrow-xxl.png</texture>
+			<include>GlobaRight2LeftAnimation</include>
+        </control>
+        <control type="label">
+		<include>GlobaRight2LeftAnimation</include>
+			<right>400</right>
+			<width>500</width>
+            <height>25</height>
+            <bottom>-40</bottom>
+            <align>right</align>
+            <font>font10</font>
+            <textcolor>98FFFFFF</textcolor>
+            <label>בין השנים $INFO[Control.GetLabel(55005)]</label>
+			<visible>$EXP[__tvshow]</visible>
+        </control>
+        </control>
+		
+        <control type="grouplist">
+            <left>0</left>
+            <orientation>horizontal</orientation>
+            <top>765</top>
+            <width>850</width>
+            <height>140</height>
+            <align>left</align>
+            <itemgap>5</itemgap>
+            <include>GlobaRight2LeftAnimation</include>
+            <control type="label">
+                <height>25</height>
+                <align>left</align>
+                <font>font10</font>
+                <textcolor>98FFFFFF</textcolor>
+                <scroll>true</scroll>
+                <label>[B]$VAR[SetGlobalItemsForViewTypes]$VAR[globalviewtimegenre] $INFO[ListItem.Premiered] | [COLOR red]קדימון:[/COLOR] $VAR[TrailerTrueOrFalse][/B]</label>
+            </control>
+        </control>
+        
+		<control type="group">
+        <include>GlobaRight2LeftAnimation</include>
+		<visible>String.IsEqual(Skin.String(lock.view.type),AdvancedViewList) | String.IsEmpty(Skin.String(lock.view.type))</visible>
+            <control type="fixedlist" id="630">
+               <width>1000</width>
+			    <centerleft>55%</centerleft>
+                <visible>String.IsEqual(Skin.String(lock.view.type),AdvancedViewList) | String.IsEmpty(Skin.String(lock.view.type))</visible>
+                <orientation>vertical</orientation>
+                <scrolltime tween="cubic">550</scrolltime>
+                <focusposition>3</focusposition>
+                <movement>3</movement>
+                <width>1200</width>
+                <onright>ActivateWindow(1132)</onright>
+                <onleft>9000</onleft>
+				<include>GlobaRight2LeftAnimation</include>
+				<include content="ViewTypeBaseLayout_">
+					<param name="layoutheight">100</param>
+					<param name="groupheight">115</param>
+				</include>                  
+            </control>
+        </control>
+    </control>
+</include>
+
+
+
+<include name="View_631_AdvancedWideList">
+    <control type="image">
+        <height>1080</height>
+        <width>1920</width>
+        <texture colordiffuse="FF181818">colors/white.png</texture>
+        <visible>Skin.HasSetting(BasedBackGround) + Control.IsVisible(631)</visible>
+    </control>
+    <control type="group">
+        <visible>Control.IsVisible(631) + !Container(631).IsUpdating + Integer.IsGreater(Container(631).NumItems,0)</visible>
+        <width>1850</width>
+        <height>750</height>
+        <centertop>55%</centertop>
+        <centerleft>50%</centerleft>
+        
+        <control type="group">
+            <include>GlobaLeft2RightAnimation</include>
+            <include content="IconSizedBackGround">
+                <param name="width">1200</param>
+                <param name="height">750</param>
+                <param name="animation"></param>
+                <param name="icon">$VAR[viewtypefanartview]</param>
+                <param name="visible">true</param>
+            </include>
+        </control>
+        
+        <control type="group">
+            <include>GlobaLeft2RightAnimation</include>
+            <control type="image">
+               <centerleft>50%</centerleft>
+                <top>-150</top>
+                <width>320</width>
+                <height>140</height>
+                <fadetime>350</fadetime>
+                <aspectratio align="center" aligny="bottom">strech</aspectratio>
+                <texture>$INFO[ListItem.Art(clearlogo)]</texture>
+                <aspectratio>keep</aspectratio>
+                <animation effect="fade" start="0" end="100" time="350">VisibleChange</animation>
+            </control>
+        </control>
+        
+		<control type="group">
+		<visible>$EXP[__tvshow] | $EXP[__Movies] | $EXP[__season] | $EXP[__episode]</visible>
+		<include>GlobaRight2LeftAnimation</include>
+        <control type="image">
+            <width>40</width>
+            <height>40</height>
+            <top>765</top>
+            <right>20</right>
+            <texture colordiffuse="15FFFFFF">https://www.iconsdb.com/icons/preview/white/arrow-xxl.png</texture>
+			<include>GlobaRight2LeftAnimation</include>
+        </control>
+        <control type="label">
+		<include>GlobaRight2LeftAnimation</include>
+			<right>80</right>
+			<width>500</width>
+            <height>25</height>
+            <bottom>-42</bottom>
+            <align>right</align>
+            <font>font10</font>
+            <textcolor>98FFFFFF</textcolor>
+            <label>בין השנים $INFO[Control.GetLabel(55005)]</label>
+			<visible>$EXP[__tvshow]</visible>
+        </control>
+        </control>
+		
+        <control type="grouplist">
+            <left>0</left>
+            <orientation>horizontal</orientation>
+            <top>765</top>
+            <width>850</width>
+            <height>140</height>
+            <align>left</align>
+            <itemgap>5</itemgap>
+            <include>GlobaRight2LeftAnimation</include>
+            <control type="label">
+                <height>25</height>
+                <align>left</align>
+                <font>font10</font>
+                <textcolor>98FFFFFF</textcolor>
+                <scroll>true</scroll>
+                <label>[B]$VAR[SetGlobalItemsForViewTypes]$VAR[globalviewtimegenre] $INFO[ListItem.Premiered] | [COLOR red]קדימון:[/COLOR] $VAR[TrailerTrueOrFalse][/B]</label>
+            </control>
+        </control>
+        
+		<control type="group">
+        <include>GlobaRight2LeftAnimation</include>
+		<visible>String.IsEqual(Skin.String(lock.view.type),AdvancedWideViewList)</visible>
+            <control type="fixedlist" id="631">
+               <width>650</width>
+			    <centerleft>83%</centerleft>
+				<visible>String.IsEqual(Skin.String(lock.view.type),AdvancedWideViewList)</visible>
+                <orientation>vertical</orientation>
+                <scrolltime tween="cubic">550</scrolltime>
+                <focusposition>3</focusposition>
+                <movement>3</movement>
+                <onright>ActivateWindow(1132)</onright>
+                <onleft>9000</onleft>
+				<include>GlobaRight2LeftAnimation</include>
+				<include content="ViewTypeBaseLayout_">
+					<param name="layoutheight">105</param>
+					<param name="groupheight">100</param>
+				</include>                  
+            </control>
+        </control>
+    </control>
+</include>
+
+<variable name="RightViewTypeInfoLanbel">
+<value condition="!String.IsEmpty(ListItem.Rating) + !String.IsEmpty(ListItem.Year) + !$EXP[__episode]">$INFO[ListItem.Year] • $INFO[ListItem.Rating]</value>
+<value condition="String.IsEmpty(ListItem.Rating) + !String.IsEmpty(ListItem.Year) + !$EXP[__episode]">$INFO[ListItem.Year]</value>
+<value condition="!String.IsEmpty(ListItem.Rating) + String.IsEmpty(ListItem.Year) + !$EXP[__episode]">$INFO[ListItem.Rating]</value>
+<value condition="$EXP[__episode] + Control.IsVisible(630)">ע$INFO[ListItem.Season]פ$INFO[ListItem.Episode] • $INFO[ListItem.Rating]</value>
+<value condition="$EXP[__episode] + Control.IsVisible(631)">ע$INFO[ListItem.Season]פ$INFO[ListItem.Episode]</value>
+</variable>
+
+<variable name="SetGlobalItemsForViewTypes">
+<value>$VAR[GetDurationTime]</value>
+</variable>
+
+</includes>

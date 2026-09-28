@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+	
+	<constant name="DepthDialog">0.50</constant>
+	<constant name="DepthDialog+">0.52</constant>
+	<constant name="DepthDialog-">0.48</constant>
+	<constant name="DepthMax">0.54</constant>
+	<constant name="DepthOSD">0.40</constant>
+	<constant name="DepthOSD+">0.44</constant>
+	<constant name="DepthContentPopout">0.10</constant>
+	<constant name="DepthContentPanel">0.05</constant>
+	<constant name="DepthBars">0.12</constant>
+	<constant name="DepthBackground">-0.80</constant>
+	<constant name="DepthSideBlade">0.10</constant>
+	<constant name="bg_alpha">79</constant>
+	<constant name="dialogbuttons_itemgap">20</constant>
+	<constant name="list_bottom">0</constant>
+	<constant name="list_bottom_offset">70</constant>
+	<constant name="list_top_offset">110</constant>
+	<constant name="list_item_height">68</constant>
+	<constant name="posxyicon">5</constant>
+	<constant name="Padxy0">0</constant>
+	<constant name="Padxy10">10</constant>
+	<constant name="Padxy20">20</constant>
+	<constant name="Pad01">1</constant>
+	<constant name="Pad02">2</constant>
+	<constant name="Pad05">5</constant>
+	<constant name="Pad10">10</constant>
+	<constant name="Pad18">18</constant>
+	<constant name="Pad60">60</constant>
+	<constant name="Pad99">99</constant>
+	<constant name="Pad25">25</constant>
+	<constant name="Pad35">35</constant>
+	<constant name="Pad41">41</constant>
+	<constant name="Pad75">75</constant>
+	<constant name="Pad85">85</constant>
+	<constant name="Pad125">125</constant>
+	<constant name="Pad215">215</constant>
+	<constant name="Pad500">500</constant>
+	<constant name="Padxy5">5</constant>
+	<constant name="fullwidth">1920</constant>
+	<constant name="osdtextureheight">400</constant>
+	<constant name="Pad400">400</constant>
+	<constant name="osdbottom">195</constant>
+	<constant name="osdzerobottom">0</constant>
+	<constant name="bottom125">125</constant>
+	<constant name="bottom100">100</constant>
+	<constant name="width5percent">200</constant>
+	<constant name="width90percent">1800</constant>
+	<constant name="width85percent">1750</constant>
+	<constant name="width80percent">1700</constant>
+	<constant name="width75percent">1650</constant>
+	
+	<!-- KODI-RD-IL ADDITION -->
+	<constant name="PadLeft">650</constant>
+	<constant name="PadfixLeft">550</constant>
+	<constant name="GlobalPadfixLeft">535</constant>
+	<!-- ##################### -->
+	
+</includes>

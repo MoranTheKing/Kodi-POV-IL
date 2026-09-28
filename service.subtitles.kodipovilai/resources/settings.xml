@@ -1,0 +1,1279 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings version="1">
+  <!-- HIDDEN MARKERS: the shape to copy is
+           <setting id="_something" type="string" label="30000">
+             <level>4</level>
+             <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+       Level 4 is SettingLevel::Internal and there is NO <control>. Both parts
+       are load-bearing, and both were previously wrong in every marker here.
+
+       * <control type="label" .../> does not exist for ADD-ON settings.
+         AddonSettings.cpp registers exactly nine control types (toggle,
+         spinner, edit, button, list, slider, range, title, colorbutton)
+         and "label" is not among them; it is only registered for Kodi's own
+         settings. CreateControl("label") therefore returned nullptr and
+         Setting.cpp logged `error reading <control> tag of "<id>"` and
+         DROPPED THE SETTING, 43 times, on every single startup.
+
+       * visible="false" is read only by the version-0 parser
+         (InitializeFromOldSettingDefinitions). This file is version="1", so
+         the attribute was silently ignored and never hid anything.
+
+       What actually hides them is level 4: Setting.cpp only demands a
+       <control> when level < Internal, and GUIDialogSettingsBase::CreateControl
+       returns NULL for a setting that has none, so no row is ever built. The
+       values stay fully readable and writable through getSetting/setSetting,
+       which is all these markers are for. -->
+  <section id="kodipovilai">
+    <category id="api" label="32100"> <!-- Gemini API -->
+      <group id="key">
+        <setting id="info_key" type="action" label="32101"> <!-- Get a free Gemini API key -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32101</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=open_aistudio)</data>
+        </setting>
+        <setting id="qr_pair" type="action" label="32106"> <!-- Pair via QR or typed, same flow as Connect Services -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32106</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=connect_gemini)</data>
+        </setting>
+        <setting id="api_key" type="string" label="32102" help="32104"> <!-- Gemini API Key + leak-warning help -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="edit" format="string">
+            <heading>32102</heading>
+          </control>
+        </setting>
+        <setting id="test_connection" type="action" label="32105"> <!-- Test connection -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32105</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=test_connection)</data>
+        </setting>
+        <setting id="force_ai_when_auto_translate_off" type="boolean" label="32108"> <!-- Translate via AI even when DarkSubs auto_translate is OFF -->
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+      </group>
+    </category>
+
+    <category id="translation" label="32200"> <!-- Translation -->
+      <group id="model">
+        <setting id="model" type="string" label="32201"> <!-- Model -->
+          <level>0</level>
+          <default>gemini-3.5-flash-lite</default>
+          <constraints>
+            <options>
+              <!-- IMPORTANT: the `label` attribute MUST be a string
+                   ID, not literal text. Two separate gotchas:
+                   1. Kodi parses non-numeric labels by taking the
+                      leading integer, so label="3.1 Flash Lite" ->
+                      ID 3 -> Kodi built-in #3 "Videos".
+                   2. The ID MUST be in 30000-32999 (addon range).
+                      Anything 33000+ is reserved for Kodi's own
+                      strings, so even a valid po entry there gets
+                      ignored and Kodi falls back to the built-in
+                      lookup (giving us the same Videos/Music bug). -->
+              <option label="32230">gemini-3.5-flash-lite</option>
+              <option label="32231">gemini-3.1-flash</option>
+              <option label="32234">gemini-3.8-flash</option>
+              <option label="32232">gemini-2.5-flash-lite</option>
+              <option label="32233">gemini-2.5-flash</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32201</heading>
+          </control>
+        </setting>
+        <!-- Paid-tier fast mode: the built-in pacing (RPM cap + limited parallel
+             chunks) exists to keep FREE keys under Gemini's ~15 req/min limit.
+             A user on a paid Gemini plan has thousands of RPM, so this toggle
+             lifts those speed limits (no pacing + more parallel chunks) for much
+             faster translation. Default OFF. Quality (model/thinking) is separate
+             and unchanged. -->
+        <setting id="ai_paid_mode" type="boolean" label="32550" help="32551">
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+      </group>
+
+      <!-- Legacy "source language priority" for the old local-file flow. The
+           built-in engine translates from ANY language, so these are hidden
+           when the engine is on (they'd be misleading). -->
+      <group id="sources" label="32210"> <!-- Source language priority -->
+        <setting id="src_english" type="boolean" label="32211" help="32212"> <!-- English -->
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">false</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="src_spanish" type="boolean" label="32213">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">false</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="src_german" type="boolean" label="32214">
+          <level>0</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">false</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="src_french" type="boolean" label="32215">
+          <level>0</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">false</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="src_portuguese" type="boolean" label="32216">
+          <level>0</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">false</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+      </group>
+
+      <group id="policy" label="32220"> <!-- Behavior -->
+        <!-- Three explicit translation modes (Phase B unified design):
+             ai     = Gemini AI (default, recommended; gender-aware)
+             google = basic Google Translate (no key, NO gender, NOT the AI)
+             none   = no translation, show subtitles in their source language
+             Consumed by the unified path; a hard AI error offers a one-time
+             Google fallback rather than silently downgrading. -->
+        <setting id="translation_mode" type="string" label="32520" help="32521">
+          <level>0</level>
+          <default>ai</default>
+          <constraints>
+            <options>
+              <option label="32522">ai</option>
+              <option label="32523">google</option>
+              <option label="32524">none</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32520</heading>
+          </control>
+        </setting>
+        <setting id="skip_if_hebrew" type="boolean" label="32221"> <!-- Skip translation if real Hebrew subs exist -->
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="gender_ref_arabic" type="boolean" label="32546" help="32547"> <!-- Arabic gender reference -->
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="subs_notifications" type="boolean" label="32542" help="32543"> <!-- Show subtitle/translation notifications -->
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="rtl_punct_mode" type="string" label="32222" help="32223"> <!-- RTL punctuation fix direction -->
+          <level>0</level>
+          <default>rtl_base</default>
+          <constraints>
+            <options>
+              <option label="32225">reverse</option>
+              <option label="32227">rtl_base</option>
+              <option label="32224">legacy</option>
+              <option label="32226">off</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32222</heading>
+          </control>
+        </setting>
+      </group>
+
+      <group id="tmdb_notice" label="32260"> <!-- TMDB (for gender-aware translation) -->
+        <setting id="info_tmdb_notice" type="action" label="32261"> <!-- Static notice text + open services screen -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32261</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=open_tmdb_notice)</data>
+        </setting>
+      </group>
+    </category>
+
+    <category id="cache" label="32300"> <!-- Cache -->
+      <group id="limits">
+        <setting id="cache_size_mb" type="integer" label="32301"> <!-- Max cache size (MB) -->
+          <level>0</level>
+          <default>200</default>
+          <constraints>
+            <minimum>10</minimum>
+            <maximum>2000</maximum>
+            <step>10</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+            <formatlabel>32302</formatlabel> <!-- {} MB -->
+          </control>
+        </setting>
+        <setting id="cache_ttl_days" type="integer" label="32303"> <!-- Auto-delete after N days no access -->
+          <level>0</level>
+          <default>180</default>
+          <constraints>
+            <minimum>7</minimum>
+            <maximum>730</maximum>
+            <step>1</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+            <formatlabel>32304</formatlabel> <!-- {} days -->
+          </control>
+        </setting>
+        <!-- Both action buttons need an explicit <control type="button"
+             format="action"> block. Without it some Kodi 21 builds
+             silently drop action settings even when label + data are
+             present. The other action buttons in this file (info_key
+             etc.) also get this treatment for consistency. -->
+        <setting id="clear_cache" type="action" label="32305"> <!-- Clear cache now -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32305</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=clear_cache)</data>
+        </setting>
+        <setting id="purge_temp" type="action" label="32306"> <!-- Clear Kodi temp subtitle files -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32306</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=purge_temp)</data>
+        </setting>
+        <!-- Hidden marker: which TEMP_PURGE_VERSION has run on this profile. -->
+        <setting id="_temp_purge_done" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: which CACHE_RTL_FIX_VERSION has run. -->
+        <setting id="_rtl_fix_done" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: community pool default-on migration has run. -->
+        <setting id="_pool_default_on_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: Arabic gender-reference force-on migration has run. -->
+        <setting id="_gender_ref_on_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: POV personal-list sort -> recently-added migration has run. -->
+        <setting id="_lists_sort_recent_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: Gemini model bump (3.1->3.5 flash-lite, 3.5->3.6 flash) has run. -->
+        <setting id="_gemini_model_bump_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: Gemini model bump (3.1->3.5 flash-lite, 3.5/3.6->3.7 flash) has run. -->
+        <setting id="_gemini_model_bump_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: Gemini model bump (3.7 flash -> 3.8 flash) has run.
+             A NEW id per bump, never a reused one: v2 is already '1' on every
+             device that took the previous bump, so reusing it would no-op this
+             migration for exactly the users who need it. -->
+        <setting id="_gemini_model_bump_v3" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: Gemini 3 temp/thinking tuning migration has run. -->
+        <setting id="_gemini3_tune_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: FENtastic OSD auto-close enabled (migration). Still
+             read: it is the only record that a FENtastic user was seeded by
+             the old add-on-side migration, and it is carried over to the
+             skin-side mark so an opt-out made back then is not undone. -->
+        <setting id="_fen_osd_autoclose_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden: skins scanned and found to have no OSD auto-close, as
+             "<skin id>=<version>" entries. A skin without the feature never
+             gets a skin-side mark, so without this it is re-scanned on every
+             boot; keying on the version means a skin update that ADDS the
+             feature is still noticed. -->
+        <setting id="_osd_autoclose_nofeature" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden: anonymous per-install id for usage telemetry. -->
+        <setting id="_telemetry_id" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: POV always-resume default migration. -->
+        <setting id="_pov_autoplay_default_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: one-shot revert of the 0.2.158 Auto Play mistake. -->
+        <setting id="_pov_autoplay_revert_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: one-shot revert of the forced POV always-resume,
+             so "Play from start" starts at 0. -->
+        <setting id="_pov_resume_revert_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker for DarkSubs hook bookkeeping (reserved: the
+             patcher itself is idempotent and doesn't need a flag, but
+             we may use this for telemetry / migrations later). -->
+        <setting id="_darksubs_takeover_done" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_darksubs_hook_last_fire" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_darksubs_hook_last_outcome" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden: daily Gemini Flash Lite request counter. Reset
+             at UTC midnight by gemini_quota.note_request. -->
+        <setting id="_usage_count" type="string" label="30000">
+          <level>4</level>
+          <default>0</default>
+        </setting>
+        <!-- Hidden: UTC date (YYYY-MM-DD) of the counter above. -->
+        <setting id="_usage_date_utc" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden: model id the counter above belongs to, so the
+             daily count is scoped per-model (Flash-Lite 500/day vs
+             regular Flash 20/day) and resets on a model switch.
+             MUST be declared or set_setting silently no-ops. -->
+        <setting id="_usage_model" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden: which tile-refresh generation this install has already
+             applied (build_icons_patcher.TILE_REFRESH_GEN). Gates the one-time
+             texture-cache drop when the branding tiles change. MUST be declared
+             or set_setting silently no-ops. -->
+        <setting id="_tiles_refresh_gen" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden legacy compatibility flag. The user-facing control is now
+             embedded_translation_mode in Advanced. Keep this declared so an
+             older settings profile remains readable during fallback. -->
+        <setting id="embedded_translate" type="boolean" label="30000">
+          <level>4</level>
+          <visible>false</visible>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <!-- Hidden legacy compatibility flag. See embedded_translation_mode. -->
+        <setting id="embedded_http_extract" type="boolean" label="30000">
+          <level>4</level>
+          <visible>false</visible>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <!-- Which add-on the home SEARCH button searches: 'pov' (default) or
+             'umbrella'. Not a marker but a user choice, made from the
+             "מנוע החיפוש" tile / RunScript action=search_provider, and read
+             by search_provider.py when it wires up every skin. Hidden here
+             because the tile is the place to change it; a second copy in
+             the settings dialog could disagree with the skins until the
+             next startup. -->
+        <setting id="search_provider" type="string" label="30000">
+          <level>4</level>
+          <default>pov</default>
+        </setting>
+        <!-- Hidden marker: one-time restore of the NOX "series by
+             networks" home row has been applied. Read/written by
+             pov_series_networks_reseed_patcher.py. -->
+        <setting id="_pov_series_networks_reseed" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: one-time tune of POV scraper settings
+             (pre-release/3D on, piratebay off) has been applied. The value is
+             a fingerprint of what the tune intends to write, so editing that
+             list re-runs it once on every device.
+             Read/written by pov_scraper_settings_patcher.py. -->
+        <setting id="_pov_scraper_tune" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Escape hatch: stop this add-on rewriting plugin.video.pov's
+             own source files. POV updates itself whenever its author
+             publishes, and every one of those rewrites assumes POV's
+             internals still look the way they did when it was written.
+             Turning this on leaves POV exactly as shipped, so anyone can
+             tell in one step whether a POV problem came from here. -->
+        <setting id="_pov_patching_off" type="boolean" label="32552" help="32553">
+          <level>3</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+        <!-- Hidden marker: AF3 first-launch dialog has been shown
+             (and the user picked something other than 'remind me
+             later' / ESC). Read by af3_first_launch.py. -->
+        <setting id="af3_first_launch_dialog_done" type="boolean" label="30000">
+          <level>4</level>
+          <visible>false</visible>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+        <!-- Hidden one-shot migration marker for embedded_translation_mode. -->
+        <setting id="_embedded_mode_v1" type="string" label="30000">
+          <level>4</level>
+          <visible>false</visible>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden, retry-safe one-shot migration: subtitle box -> outline. -->
+        <setting id="_subtitle_outline_migration_v1" type="string" label="30000">
+          <level>4</level>
+          <visible>false</visible>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden one-shot marker: the add-on update mode was put back to
+             "install automatically" once on this device. After that the
+             setting is the user's, and addon_autoupdate_repair only reports
+             it. -->
+        <setting id="_addon_update_mode_seeded" type="string" label="30000">
+          <level>4</level>
+          <visible>false</visible>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+      </group>
+    </category>
+
+    <category id="pool" label="32500"> <!-- Community pool -->
+      <group id="1">
+        <setting id="pool_use" type="boolean" label="32501"> <!-- Use community pool -->
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="pool_share" type="boolean" label="32502"> <!-- Share my AI translations -->
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="pool_share_cache" type="action" label="32503"> <!-- Share my cached translations now -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32503</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=pool_share_cache)</data>
+        </setting>
+      </group>
+    </category>
+
+    <category id="engine" label="32507"> <!-- Built-in sources engine (DarkSubs, experimental) -->
+      <group id="master">
+        <!-- Master gate for Phase B. DEFAULT OFF: when off, behavior is
+             exactly as before (DarkSubs runs as its own addon). When on,
+             MoranSubs searches the human subtitle sources itself via the
+             vendored engine in resources/lib/subs_engine. Experimental
+             until Phase C. -->
+        <setting id="use_builtin_engine" type="boolean" label="32508" help="32509">
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="engine_test" type="action" label="32525"> <!-- Test the built-in engine (diagnostic) -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="button" format="action">
+            <heading>32525</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=engine_test)</data>
+        </setting>
+        <setting id="engine_autosub" type="boolean" label="32526" help="32527">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="autosub_excluded_addons" type="string" label="32548" help="32549"> <!-- Addons excluded from autosub -->
+          <level>0</level>
+          <default>plugin.video.idanplus</default>
+          <dependencies>
+            <dependency type="visible" setting="engine_autosub" operator="is">true</dependency>
+          </dependencies>
+          <control type="edit" format="string">
+            <heading>32548</heading>
+          </control>
+        </setting>
+        <setting id="engine_force_translate" type="boolean" label="32531" help="32532">
+          <level>0</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="max_search_time" type="integer" label="32540" help="32541">
+          <level>0</level>
+          <default>10</default>
+          <constraints>
+            <minimum>2</minimum>
+            <step>1</step>
+            <maximum>60</maximum>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="slider" format="integer"/>
+        </setting>
+        <setting id="keep_darksubs" type="boolean" label="32544" help="32545">
+          <level>0</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="connect_telegram" type="action" label="32528" help="32530">
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="button" format="action">
+            <heading>32528</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=connect_telegram)</data>
+        </setting>
+        <setting id="logout_telegram" type="action" label="32529">
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="button" format="action">
+            <heading>32529</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=logout_telegram)</data>
+        </setting>
+        <setting id="telegram_test" type="action" label="32533">
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="button" format="action">
+            <heading>32533</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=telegram_test)</data>
+        </setting>
+      </group>
+      <group id="engine_sources" label="32510"> <!-- Search sources -->
+        <setting id="ktuvit" type="boolean" label="32511">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="wizdom" type="boolean" label="32512">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="telegram" type="boolean" label="32513" help="32519">
+          <level>0</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="opensubtitles" type="boolean" label="32514">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="yify" type="boolean" label="32515">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="subsource" type="boolean" label="32516">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="subscene" type="boolean" label="32517">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="bsplayer" type="boolean" label="32518">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+      </group>
+      <!-- Hidden engine settings. The vendored engine reads these by name
+           (Addon.getSetting). They MUST exist with safe defaults or the
+           engine crashes on int('') / empty reads at import time. Not
+           surfaced to users; MoranSubs controls translation centrally via
+           translation_mode, so DarkSubs's own MT (auto_translate) stays
+           OFF and our bridge does the translating. -->
+      <!-- All of these use the hidden-marker pattern documented at the top of
+           this file: type="string" + <level>4</level> + NO <control>.
+           Booleans are stored as the strings "true"/"false" (the engine
+           reads them with getSetting(...)=='true', which works either way).
+
+           This comment previously described the pattern as "a label control +
+           visible='false'", and every marker added since copied it. Both
+           halves were wrong; see the note at the top of the file. -->
+      <group id="engine_internal">
+        <setting id="language_hebrew" type="string" label="30000">
+          <level>4</level><default>true</default>
+        </setting>
+        <setting id="language_english" type="string" label="30000">
+          <level>4</level><default>true</default>
+        </setting>
+        <setting id="language_russian" type="string" label="30000">
+          <level>4</level><default>false</default>
+        </setting>
+        <setting id="language_arab" type="string" label="30000">
+          <level>4</level><default>false</default>
+        </setting>
+        <setting id="all_lang" type="string" label="30000">
+          <level>4</level><default>false</default>
+        </setting>
+        <setting id="retry_search_with_all_langs" type="string" label="30000">
+          <level>4</level><default>false</default>
+        </setting>
+        <setting id="other_lang" type="string" label="30000">
+          <level>4</level><default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="auto_translate" type="string" label="30000">
+          <level>4</level><default>false</default>
+        </setting>
+        <setting id="translate_p" type="string" label="30000">
+          <level>4</level><default>0</default>
+        </setting>
+        <setting id="subtitle_trans_cache" type="string" label="30000">
+          <level>4</level><default>15</default>
+        </setting>
+        <setting id="enable_autosub_notifications" type="string" label="30000">
+          <level>4</level><default>true</default>
+        </setting>
+        <setting id="auto_fix_sub_punctuation" type="string" label="30000">
+          <level>4</level><default>true</default>
+        </setting>
+        <setting id="auto_remove_hi_tags" type="string" label="30000">
+          <level>4</level><default>false</default>
+        </setting>
+        <setting id="show_debug" type="string" label="30000">
+          <level>4</level><default>false</default>
+        </setting>
+        <setting id="OS_USER_API_KEY_VALUE" type="string" label="30000">
+          <level>4</level><default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="OSuser" type="string" label="30000">
+          <level>4</level><default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="OSpass" type="string" label="30000">
+          <level>4</level><default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_engine_defaults_v" type="string" label="30000">
+          <level>4</level><default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+      </group>
+    </category>
+
+    <category id="advanced" label="32400"> <!-- Advanced -->
+      <group id="experimental">
+        <setting id="embedded_translation_mode" type="string"
+                 label="32423" help="32424">
+          <level>0</level>
+          <default>auto</default>
+          <constraints>
+            <options>
+              <option label="32425">auto</option>
+              <option label="32426">align_only</option>
+              <option label="32427">direct</option>
+              <option label="32428">local_only</option>
+              <option label="32429">off</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32423</heading>
+          </control>
+        </setting>
+        <setting id="show_subtitle_match" type="boolean" label="32506"> <!-- Show Hebrew-subtitle match % on sources -->
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <!-- POV's reused Python interpreter: speed against stability.
+             OFF is the safe side and the default, and it is what every
+             device has been running since 2026 08 14.
+             Measured on a reporter's device 2026 08 23: with it OFF, five
+             unrelated POV routes all cost between 1.72s and 1.89s at their
+             floor, and revisiting a category is no faster than opening it the
+             first time. POV defers most of its import work into the call
+             itself (about 210KB and twenty of its own modules on top of what
+             starting up already loaded, plus requests and
+             concurrent.futures), so a fresh interpreter repays all of it on
+             every press. ON pays it once per session instead.
+             What ON costs: concurrent POV invocations then share one
+             interpreter, and that is the native crash that takes all of Kodi
+             down. See pov_language_invoker_guard.py, which enforces whichever
+             side this names, in both places POV keeps the flag.
+             Level 3 on purpose: this is an informed choice, not a
+             preference. It lives under Advanced rather than beside
+             _pov_patching_off, which is the other POV escape hatch but
+             sits under Cache for historical reasons; three shipped
+             documents already told users to look under Advanced, and
+             Advanced is also where it belongs. -->
+        <setting id="pov_fast_navigation" type="boolean" label="32554" help="32555">
+          <level>3</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+        <!-- Hidden marker: which Umbrella watch-source keys we have had
+             our one say about, and what we wrote. See umbrella_watch_source.py.
+             v2 on purpose: the new id spends one more claim on every device,
+             for the people left on Local by a revoke-and-reconnect. An
+             UNDECLARED setting is silently dropped by Kodi, so renaming the
+             constant without renaming this would make the marker a no-op and
+             the claim would repeat on every pass.
+             (No double hyphen anywhere in here: XML forbids it inside a
+             comment, and it took a parse error to remember that.) -->
+        <setting id="_umb_watch_source_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: which add-ons' self update check we have already
+             settled, so the decision is taken once and never taken again.
+             Declared for consistency and so the next reader can find it.
+             CORRECTION, kept because I got this wrong here first: an earlier
+             version of this comment claimed an undeclared id never reaches
+             disk and that the marker would therefore read empty on every
+             start. That is false, and HANDOFF.md already said so. Kodi's
+             CAddon::UpdateSetting creates a hidden CSettingString through
+             AddSettingWithoutDefinition for an id this file does not declare,
+             SaveSettings serialises it with no "was this declared" filter, and
+             CAddonSettings::Load recreates it on the way back in. Undeclared
+             markers persist. What does NOT persist is a setSetting into
+             ANOTHER add-on for an id that add-on has not declared, which is a
+             different code path.
+             See update_nag_patcher.py. -->
+        <setting id="_update_nag_quiet_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- THE REST OF THE ONE SHOT MARKERS, declared for the same reason:
+             consistency, and so the next reader finds them all in one place.
+             They were NOT broken. An earlier version of this comment said
+             they had never reached disk and that their one shots had been
+             running on every start; that was wrong, and nothing in this block
+             changes behaviour for anyone. Kept as house style, which is what
+             HANDOFF.md concluded about these same markers by name.
+             Every one holds a short string ('1', or a comma separated list of
+             the keys it has settled), which is why they are all plain strings
+             with an empty default.
+             (No double hyphen anywhere in here: XML forbids it inside a
+             comment, and it took a second parse error to relearn that.) -->
+        <setting id="_builtin_engine_rollout_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_chunk_lines_50_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_fast_first_chunk_default_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_ktuvit_on_v4" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_nox_poster_rating_default_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_pool_share_force_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_api_language_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_coco_providers_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_coco_providers_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_coco_wired_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_defaults_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_lang_filters_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Three more of the same, from the DarkSubs side of the audit.
+             Also not broken: I claimed these were the live case, with the
+             offer being made again on every start. They persisted like the
+             rest. Declared here for the same reason as the rest. -->
+        <setting id="_darksubs_autoenable_done" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_force_ai_autoenable_done" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_darksubs_nag_done" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: the POV seasons view id WE last wrote, so ours can
+             be replaced when the skin changes and the user's never is.
+             See pov_seasons_view_seed.py. -->
+        <!-- Hidden marker: whether we have already offered to restore
+             Umbrella's watched state, and what the user answered. Asked once
+             per device, never again. See umbrella_watch_prompt.py. -->
+        <setting id="_umb_watch_prompt_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: the one-shot MDBList watched-cursor clear has run.
+             Tracked apart from the file patch on purpose: the patch succeeds
+             on the first start and every later start short-circuits before the
+             reset, so a reset that lost a lock race would never be retried.
+             The generation lives in the VALUE, not the key, so a later bump
+             overwrites instead of leaving the old key behind.
+             See umbrella_mdblist_sync_patcher.py. -->
+        <setting id="_umb_mdbl_cursor_reset" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_pov_seasons_view_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+      </group>
+      <group id="debug">
+        <setting id="log_level" type="string" label="32401"> <!-- Log level -->
+          <level>1</level>
+          <default>INFO</default>
+          <constraints>
+            <options>
+              <option>DEBUG</option>
+              <option>INFO</option>
+              <option>WARNING</option>
+              <option>ERROR</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32401</heading>
+          </control>
+        </setting>
+        <setting id="whole_subtitle_request" type="boolean"
+                 label="32411" help="32412"> <!-- Send whole subtitle in one Gemini request -->
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="chunk_lines" type="integer" label="32402"> <!-- Lines per translation request -->
+          <level>0</level>
+          <dependencies>
+            <dependency type="enable" setting="whole_subtitle_request" operator="is">false</dependency>
+          </dependencies>
+          <default>50</default>
+          <constraints>
+            <minimum>30</minimum>
+            <maximum>250</maximum>
+            <step>10</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+          </control>
+        </setting>
+        <setting id="parallel_chunks" type="integer" label="32404"> <!-- Concurrent translation requests -->
+          <level>0</level>
+          <dependencies>
+            <dependency type="enable" setting="whole_subtitle_request" operator="is">false</dependency>
+          </dependencies>
+          <default>3</default>
+          <!-- max 16 so paid-tier "fast mode" (ai_paid_mode) can tune 8..16; the
+               free path still caps itself at 8 in translate.py regardless. -->
+          <constraints>
+            <minimum>1</minimum>
+            <maximum>16</maximum>
+            <step>1</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+          </control>
+        </setting>
+        <setting id="fast_first_chunk" type="boolean"
+                 label="32405" help="32406"> <!-- Fast subtitles -->
+          <level>0</level>
+          <dependencies>
+            <dependency type="enable" setting="whole_subtitle_request" operator="is">false</dependency>
+          </dependencies>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="temperature" type="number" label="32403" help="32235"> <!-- Model temperature -->
+          <level>0</level>
+          <!-- SAMPLING KNOBS: SHOWN ONLY WHERE THEY DO SOMETHING.
+               Google's Gemini docs: "temperature, top_p, and top_k are
+               deprecated and ignored. In future model generations, supplying
+               these parameters returns an HTTP 400 error." So from 3.5 up the
+               add-on stops sending them (gemini.sampling_params_supported)
+               and a slider here would be a control that changes nothing.
+               This is a WHITELIST of the models that still honour them, not a
+               blacklist of the ones that do not: add a newer model to the
+               picker above and forget this list, and the slider correctly
+               stays hidden, which is the way round that cannot mislead.
+               tools/test_gemini_sampling_params.py fails if this list and the
+               code's rule ever disagree, so they cannot drift apart. -->
+          <dependencies>
+            <dependency type="visible">
+              <or>
+                <condition setting="model" operator="is">gemini-3.1-flash</condition>
+                <condition setting="model" operator="is">gemini-2.5-flash-lite</condition>
+                <condition setting="model" operator="is">gemini-2.5-flash</condition>
+              </or>
+            </dependency>
+          </dependencies>
+          <default>1.0</default>
+          <constraints>
+            <minimum>0.0</minimum>
+            <maximum>1.0</maximum>
+            <step>0.01</step>
+          </constraints>
+          <control type="slider" format="number">
+            <popup>true</popup>
+          </control>
+        </setting>
+        <setting id="top_p" type="number" label="32407" help="32408"> <!-- Model Top-P -->
+          <level>0</level>
+          <!-- SAMPLING KNOBS: SHOWN ONLY WHERE THEY DO SOMETHING.
+               Google's Gemini docs: "temperature, top_p, and top_k are
+               deprecated and ignored. In future model generations, supplying
+               these parameters returns an HTTP 400 error." So from 3.5 up the
+               add-on stops sending them (gemini.sampling_params_supported)
+               and a slider here would be a control that changes nothing.
+               This is a WHITELIST of the models that still honour them, not a
+               blacklist of the ones that do not: add a newer model to the
+               picker above and forget this list, and the slider correctly
+               stays hidden, which is the way round that cannot mislead.
+               tools/test_gemini_sampling_params.py fails if this list and the
+               code's rule ever disagree, so they cannot drift apart. -->
+          <dependencies>
+            <dependency type="visible">
+              <or>
+                <condition setting="model" operator="is">gemini-3.1-flash</condition>
+                <condition setting="model" operator="is">gemini-2.5-flash-lite</condition>
+                <condition setting="model" operator="is">gemini-2.5-flash</condition>
+              </or>
+            </dependency>
+          </dependencies>
+          <default>0.95</default>
+          <constraints>
+            <minimum>0.0</minimum>
+            <maximum>1.0</maximum>
+            <step>0.01</step>
+          </constraints>
+          <control type="slider" format="number">
+            <popup>true</popup>
+          </control>
+        </setting>
+        <setting id="thinking_budget" type="string" label="32409" help="32410"> <!-- Gemini thinking level / budget -->
+          <level>0</level>
+          <default>medium</default>
+          <constraints>
+            <options>
+              <option label="32414">0</option>
+              <option label="32415">minimal</option>
+              <option label="32416">low</option>
+              <option label="32417">medium</option>
+              <option label="32418">high</option>
+              <option label="32419">512</option>
+              <option label="32420">768</option>
+              <option label="32421">1024</option>
+              <option label="32422">2048</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32409</heading>
+          </control>
+        </setting>
+      </group>
+    </category>
+  </section>
+</settings>

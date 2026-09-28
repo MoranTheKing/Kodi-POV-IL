@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="Custom1Widgets">
+        <include content="WidgetListBigPoster">
+            <param name="content_path" value="plugin://plugin.video.idanplus/?name=%5BB%5D%D7%9B%D7%9C+%D7%94%D7%AA%D7%9B%D7%A0%D7%99%D7%95%D7%AA%5B%2FB%5D&amp;url=https%253A%252F%252Fwww.mako.co.il%252Fmako-vod-index&amp;mode=1&amp;iconimage=mako.png&amp;module=keshet&amp;moredata="/>
+            <param name="widget_header" value="VOD 12"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="23011"/>
+        </include>
+        <include content="WidgetListBigPoster">
+            <param name="content_path" value="plugin://plugin.video.idanplus/?iconimage=255C13.jpg&amp;mode=0&amp;module=reshet&amp;moredata&amp;name=%5bB%5d%d7%9b%d7%9c%20%d7%94%d7%aa%d7%9b%d7%a0%d7%99%d7%95%d7%aa%5b%2fB%5d&amp;url=https%253A%252F%252F13tv.co.il%252Fallshows%252Fscreen%252F1170108%252F"/>
+            <param name="widget_header" value="VOD 13"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="23012"/>
+        </include>
+    </include>
+</includes>

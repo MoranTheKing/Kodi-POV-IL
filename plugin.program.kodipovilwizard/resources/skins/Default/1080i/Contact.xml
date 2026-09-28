@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window>
+    <coordinates>
+        <left>485</left>
+        <top>345</top>
+    </coordinates>
+    <controls>
+        <control type="group">
+            <control type="image">
+                <left>0</left>
+                <top>0</top>
+                <width>950</width>
+                <height>590</height>
+                <texture border="2">Background/ContentPanel.png</texture>
+            </control>
+
+            <control type="image" id="101">
+                <left>10</left>
+                <top>10</top>
+                <width>930</width>
+                <height>570</height>
+            </control>
+
+            <control type="label" id="102">
+                <description>Header Label</description>
+                <left>360</left>
+                <top>55</top>
+                <width>530</width>
+                <height>50</height>
+                <font>font15</font>
+                <label></label>
+                <textcolor>FFFFD700</textcolor> <align>center</align> <aligny>center</aligny>
+            </control>
+
+            <control type="image" id="103">
+                <description>QR Code Image</description>
+                <left>30</left>
+                <top>120</top>
+                <width>310</width>
+                <height>310</height>
+                <aspectratio aligny="center" align="center">keep</aspectratio>
+            </control>
+
+            <control type="textbox" id="104">
+                <description>Main Description Text</description>
+                <left>360</left>
+                <top>105</top>
+                <width>510</width>
+                <height>400</height>
+                <font>font12</font>
+                <textcolor>FFFFFFFF</textcolor> <align>right</align> <aligny>top</aligny>
+                <pagecontrol>105</pagecontrol>
+                <onup>104</onup>
+                <ondown>106</ondown> <onleft>103</onleft>
+                <onright>105</onright>
+            </control>
+
+            <control type="scrollbar" id="105">
+                <description>Text Scrollbar</description>
+                <left>880</left>
+                <top>105</top>
+                <width>15</width>
+                <height>500</height>
+                <subtype>text</subtype>
+                <visible>true</visible>
+                <texturesliderbackground>Button/scrollbar-V-background.png</texturesliderbackground>
+                <texturesliderbar>Button/scrollbar-V.png</texturesliderbar>
+                <texturesliderbarfocus colordiffuse="FF12B2E7">Button/scrollbar-V-focus.png</texturesliderbarfocus>
+                <orientation>vertical</orientation>
+                <showonepage>false</showonepage>
+                <onup>104</onup>
+                <ondown>106</ondown>
+                <onleft>104</onleft>
+                <onright>104</onright>
+            </control>
+
+            <control type="button" id="106">
+                <description>Close Button</description>
+                <left>710</left>
+                <top>522</top>
+                <width>190</width>
+                <height>45</height>
+                <font>font13</font>
+                <label>סגירה</label>
+                <textcolor>FFCCCCCC</textcolor> <focusedcolor>FFFFFFFF</focusedcolor> <align>center</align>
+                <aligny>center</aligny>
+                <texturefocus border="5" colordiffuse="FF12B2E7">Button/scrollbar-V-focus.png</texturefocus>
+                <texturenofocus></texturenofocus>
+                <onup>104</onup>
+                <ondown>106</ondown>
+                <onleft>103</onleft>
+                <onright>106</onright>
+            </control>
+        </control>
+    </controls>
+</window>

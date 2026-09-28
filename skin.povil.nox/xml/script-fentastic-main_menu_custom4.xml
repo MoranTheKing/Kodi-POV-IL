@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="Custom4MainMenu">
+        <item>
+            <label>טורקיות</label>
+            <onclick>ActivateWindow(2110)</onclick>
+            <property name="menu_id">$NUMBER[26000]</property>
+            <thumb>icons/sidemenu/tv.png</thumb>
+            <property name="id">custom4</property>
+            <visible>!Skin.HasSetting(HomeMenuNoCustom4Button)</visible>
+        </item>
+    </include>
+</includes>
