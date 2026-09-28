@@ -6578,4 +6578,10 @@ def main():
 # spawning them as `python service.py`, so __name__ is the module name
 # here -- the `if __name__ == '__main__':` guard would skip main()
 # entirely. Call it directly.
-main()
+try:
+    from resources.lib import modular_service_handoff
+    _modular_service_yield = modular_service_handoff.maybe_yield()
+except Exception:
+    _modular_service_yield = False
+if not _modular_service_yield:
+    main()
