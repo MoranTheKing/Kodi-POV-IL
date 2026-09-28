@@ -28,6 +28,16 @@ def build(source, output):
     output = Path(output).resolve()
     if output.is_relative_to(source):
         raise ValueError('bridge ZIP cannot be inside an addon source tree')
+    # Legacy Wizard extract(ignore=True) can skip its own files. Replacing the
+    # subtitle service in that same quickfix would remove its existing
+    # wizard_self_healer before the new Wizard is known to be installed. The
+    # bridge must therefore carry an independently tested bootstrap inside
+    # the replacement service. The current modular candidate has none.
+    bootstrap = (source / 'service.subtitles.kodipovilai' / 'resources'
+                 / 'lib' / 'modular_legacy_bridge.py')
+    if not bootstrap.is_file():
+        raise ValueError('legacy Wizard bootstrap is unverified; refusing '
+                         'to package a quickfix bridge')
     files = []
     versions = {}
     for addon_id in ADDON_IDS:
