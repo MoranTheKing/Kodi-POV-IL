@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="dialog" id="1124">
+	<defaultcontrol>9000</defaultcontrol>
+	<backgroundcolor>background</backgroundcolor>
+	<controls>
+	
+	<include>BaseMainMenu</include>
+	<include content="BaseMainMenu">
+		<param name="id" value="9001"/>
+		<param name="basedmenuleft">500</param>
+		<param name="movement">Padxy5</param>
+		<param name="headlinebackgroundheight">10%</param>
+		<param name="top_list">85</param>
+		<param name="list_left">Padxy10</param>
+		<param name="basedmenuwidth">435</param>
+		<param name="list_height">520</param>
+		<param name="onback">9000</param>
+		<param name="TopHeadLineBaseMenu">BasedSettingLabel</param>
+		<param name="animation" value="SecondBasedMenuAnimationOsdSettings"/>
+		<param name="visible" value="Control.HasFocus(9001)"/>
+		<param name="items" value="BasedMenuOsdSecondMenu"/>
+		<param name="layout" value="SecondOsdSettingBasedMenu"/>
+	</include>
+	
+	</controls>
+</window>

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="dialog" id="12209">
+		<visible>Window.IsActive(fullscreenvideo) + ![Window.IsActive(videoosd) | Window.IsActive(1125)] + Player.Paused + !String.IsEmpty(VideoPlayer.Plot)</visible>
+		<visible>![Window.IsActive(sliderdialog) | Window.IsActive(subtitlesearch)] + !System.HasActiveModalDialog + String.IsEmpty(Window(home).Property(MoranSubsChooserOpen))</visible>
+		<include>top2bottomslideanimation</include>
+	<controls>
+
+	
+	<control type="group">
+	<top>100</top>
+	<height>320</height>
+		<control type="image">
+			<top>-200</top>
+			<height>520</height>
+			<texture>colors/white.png</texture>
+			<colordiffuse>black</colordiffuse>
+		</control>
+	<control type="group">
+	<height>300</height>
+	<width>550</width>
+		<control type="image">
+			<texture border="16">icons/box21.png</texture>
+			<colordiffuse>gray</colordiffuse>
+		</control>
+		<control type="image">
+			<top>5</top>
+			<left>5</left>
+			<right>5</right>
+			<bottom>5</bottom>
+			<texture>$VAR[PausedTendIconOSD]</texture>
+		</control>
+	</control>
+	<control type="grouplist">
+		<left>570</left>
+		<height>300</height>
+		<bottom>20</bottom>
+		<align>bottom</align>
+		<control type="label">
+			<font>font45_title</font>
+			<height max="55">auto</height>
+			<label>$VAR[PausedInfoViewOSDTitle]</label>
+		</control>
+		<control type="label">
+			<height max="45">auto</height>
+			<font>font32_title</font>
+			<label>$INFO[VideoPlayer.Genre]</label>
+			<visible>!String.IsEmpty(VideoPlayer.Genre)</visible>
+		</control>
+		<!-- <control type="label"> -->
+			<!-- <height max="45">auto</height> -->
+			<!-- <label>עונה $INFO[VideoPlayer.Season,[COLOR button_focus](,)[/COLOR]] פרק $INFO[VideoPlayer.Episode,[COLOR button_focus](,)[/COLOR]]</label> -->
+			<!-- <visible>$EXP[__episode_OSD] + !String.IsEmpty(VideoPlayer.Season)</visible> -->
+		<!-- </control> -->
+		<control type="label">
+			<height max="45">auto</height>
+			<label>$VAR[BuildDataOSd]</label>
+		</control>
+		<control type="textbox">
+			<height max="245">auto</height>
+			<label>$VAR[__Osdprettyplayerlabeltime][CR]$INFO[VideoPlayer.Plot]</label>
+			<autoscroll>true</autoscroll>
+		</control>
+	</control>
+	</control>
+	<include>SeekBarEnabled</include>
+	
+	<control type="image">
+		<top>100</top>
+		<right>100</right>
+		<width>320</width>
+		<height>120</height>
+		<aspectratio>keep</aspectratio>
+		<texture>$INFO[Player.Art(clearlogo)]</texture>
+	</control>
+	<control type="label">
+		<align>center</align>
+		<aligny>center</aligny>
+		<centertop>50%</centertop>
+		<centerleft>50%</centerleft>
+		<label>בהשהייה</label>
+		<font>WeatherTemp</font>
+		<animation condition="Player.Paused" effect="fade" start="50" end="100" time="1500" pulse="true">Conditional</animation>
+	</control>
+	</controls>
+</window>

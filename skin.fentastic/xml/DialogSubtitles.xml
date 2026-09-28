@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AI_SUBS_DIALOG_ROW_HEIGHT_v1 -->
+<window>
+	<include>Animation_DialogPopupOpenClose</include>
+	<controls>
+
+		<control type="image">
+		<animation condition="true" effect="fade" end="95" time="0">Conditional</animation>
+			<texture colordiffuse="black">colors/white.png</texture>
+		</control>
+		<include content="AdvancedGlobalViewBackGround">
+		<param name="fanart">$VAR[NowPlayingFanartVar]</param>
+		</include>
+		<control type="image">
+		<height>2000</height>
+		<width>800</width>
+		<left>1250</left>
+		<texture colordiffuse="black">shadows/shadow_mask_v.png</texture>
+		</control>
+		<include content="IconSizedBackGround">
+			<param name="icon">$INFO[Container(150).ListItem.Icon]</param>
+			<param name="top">50</param>
+			<param name="id">110</param>
+			<param name="width">80</param>
+			<param name="height">80</param>
+			<param name="left">1720</param>
+		</include>
+		<include content="IconSizedBackGround">
+			<param name="icon">$INFO[Player.Art(poster)]</param>
+			<param name="top">400</param>
+			<param name="id">110</param>
+			<param name="width">250</param>
+			<param name="height">380</param>
+			<param name="left">1640</param>
+		</include>
+		<!-- <control type="image"> -->
+			<!-- <height>1</height> -->
+			<!-- <width>120</width> -->
+			<!-- <left>1700</left> -->
+			<!-- <top>350</top> -->
+			<!-- <texture>colors/white.png</texture> -->
+			<!-- <colordiffuse>gray</colordiffuse> -->
+		<!-- </control> -->
+		<control type="textbox">
+			<right>40</right>
+			<font>font10</font>
+			<align>center</align>
+			<height>165</height>
+			<width>220</width>
+			<top>810</top>
+			<label>$INFO[VideoPlayer.Plot]</label>
+			<autoscroll fade="5000" time="5000" repeat="5000">true</autoscroll>
+		</control>
+		
+		
+			<control type="grouplist" id="130">
+				<top>10</top>
+				<left>10</left>
+				<height>50</height>
+				<width>1720</width>
+				<orientation>horizontal</orientation>
+				<itemgap>15</itemgap>
+				<control type="label">
+					<width max="1200">auto</width>
+					<height>40</height>
+					<font>font25_title</font>
+					<label>$INFO[Window(10000).Property(subs.player_filename)]</label>
+					<align>left</align>
+					<aligny>center</aligny>
+					<textcolor>98FFFFFF</textcolor>
+					<shadowcolor>black</shadowcolor>
+					<scroll>true</scroll>
+					<visible>!String.IsEmpty(Window(10000).Property(subs.player_filename))</visible>
+				</control>
+				<control type="label">
+					<description>Video label</description>
+					<top>0</top>
+					<height>40</height>
+					<width max="1000">auto</width>
+					<font>font25_title</font>
+					<label>$INFO[Player.Filename]</label>
+					<align>left</align>
+					<textcolor>98FFFFFF</textcolor>
+					<shadowcolor>black</shadowcolor>
+					<scroll>true</scroll>
+					<visible>String.IsEmpty(Window(10000).Property(subs.player_filename))</visible>
+				</control>
+				<control type="label" id="140">
+					<font>font25_title</font>
+					<description>textarea</description>
+					<width max="500">auto</width>
+					<height max="40">auto</height>
+					<wrapmultiline>true</wrapmultiline>
+				</control>
+				<control type="textbox">
+					<font>font25_title</font>
+					<description>notification</description>
+					<height max="40">auto</height>
+					<width max="500">auto</width>
+					<label>$LOCALIZE[31096]</label>
+				</control>
+			</control>
+			
+		<control type="group">
+			<left>0</left>
+			<top>10</top>
+			<bottom>10</bottom>
+			<right>10</right>
+			<!-- AI_SUBS_DIALOG_HEADER_v2 -->
+			<control type="list" id="120">
+				<top>50</top>
+				<onup>false</onup>
+				<ondown>false</ondown>
+				<onright>150</onright>
+				<onback>150</onback>
+				<pagecontrol>73</pagecontrol>
+				<scrolltime tween="cubic">550</scrolltime>
+				<itemlayout width="1600" height="75">
+				<control type="group">
+				<control type="image">
+					<height>1</height>
+					<texture>colors/white.png</texture>
+					<colordiffuse>gray</colordiffuse>
+				</control>
+				<control type="image">
+					<left>8</left>
+					<centertop>50%</centertop>
+					<width>50</width>
+					<height>50</height>
+					<texture>$INFO[ListItem.Thumb,windows/subtitles/flags/,.png]</texture>
+				</control>
+				<control type="label">
+					<left>75</left>
+					<height>50</height>
+					<width>150</width>
+					<centertop>50%</centertop>
+					<textcolor>99FFFFFF</textcolor>
+					<shadowcolor>black</shadowcolor>
+					<align>center</align>
+					<aligny>center</aligny>
+					<label>[B]$INFO[ListItem.Label][/B]</label>
+				</control>
+				<control type="label">
+					<left>245</left>
+					<height>50</height>
+					<right>220</right>
+					<centertop>50%</centertop>
+					<aligny>center</aligny>
+					<font>font12</font>
+					<label>$INFO[ListItem.Label2]</label>
+				</control>
+				<control type="image">
+					<right>10</right>
+					<align>right</align>
+					<centertop>50%</centertop>
+					<width>35</width>
+					<height>35</height>
+					<aspectratio>keep</aspectratio>
+					<texture>windows/subtitles/icon_close_caption.png</texture>
+					<visible>ListItem.property(hearing_imp)</visible>
+				</control>
+				<control type="image">
+					<right>10</right>
+					<centertop>50%</centertop>
+					<width>50</width>
+					<height>20</height>
+					<texture>windows/subtitles/icon_sync.png</texture>
+					<visible>ListItem.property(sync)</visible>
+				</control>
+				<control type="image">
+					<right>80</right>
+					<centertop>50%</centertop>
+					<height>25</height>
+					<width>100</width>
+					<texture colordiffuse="95FFFFFF" fallback="flags/starrating/rating0.png">$INFO[ListItem.ActualIcon,flags/starrating/rating,.png]</texture>
+					<aspectratio>keep</aspectratio>
+					<visible>!String.IsEmpty(ListItem.property(sync)</visible>
+				</control>
+				</control>
+				</itemlayout>
+				<focusedlayout width="1600" height="75">
+				<control type="group">
+				<control type="image">
+					<height>1</height>
+					<texture>colors/white.png</texture>
+					<colordiffuse>gray</colordiffuse>
+				</control>
+				<control type="image">
+					<top>2</top>
+					<left>2</left>
+					<right>2</right>
+					<bottom>2</bottom>
+					<texture>colors/white.png</texture>
+					<colordiffuse>20FFFFFF</colordiffuse>
+					<visible>Control.HasFocus(120)</visible>
+				</control>
+				<control type="image">
+					<left>8</left>
+					<centertop>50%</centertop>
+					<width>50</width>
+					<height>50</height>
+					<texture>$INFO[ListItem.Thumb,windows/subtitles/flags/,.png]</texture>
+				</control>
+					<control type="label">
+					<left>75</left>
+					<height>50</height>
+					<width>150</width>
+					<centertop>50%</centertop>
+					<textcolor>99FFFFFF</textcolor>
+					<shadowcolor>black</shadowcolor>
+					<align>center</align>
+					<aligny>center</aligny>
+					<label>[B]$INFO[ListItem.Label][/B]</label>
+				</control>
+				<control type="label">
+					<left>245</left>
+					<height>50</height>
+					<right>220</right>
+					<centertop>50%</centertop>
+					<aligny>center</aligny>
+					<font>font12</font>
+					<scroll>true</scroll>
+					<label>$INFO[ListItem.Label2]</label>
+				</control>
+				<control type="image">
+					<right>10</right>
+					<align>right</align>
+					<centertop>50%</centertop>
+					<width>35</width>
+					<height>35</height>
+					<aspectratio>keep</aspectratio>
+					<texture>windows/subtitles/icon_close_caption.png</texture>
+					<visible>ListItem.property(hearing_imp)</visible>
+				</control>
+				<control type="image">
+					<right>10</right>
+					<centertop>50%</centertop>
+					<width>50</width>
+					<height>20</height>
+					<texture>windows/subtitles/icon_sync.png</texture>
+					<visible>ListItem.property(sync)</visible>
+				</control>
+				<control type="image">
+					<right>80</right>
+					<centertop>50%</centertop>
+					<height>25</height>
+					<width>100</width>
+					<texture colordiffuse="95FFFFFF" fallback="flags/starrating/rating0.png">$INFO[ListItem.ActualIcon,flags/starrating/rating,.png]</texture>
+					<aspectratio>keep</aspectratio>
+					<visible>!String.IsEmpty(ListItem.property(sync)</visible>
+				</control>
+				</control>
+				</focusedlayout>
+				</control>
+		</control>
+		
+			<control type="group">
+				<right>0</right>
+				<left>1600</left>
+				<top>5</top>
+				<!-- <control type="label"> -->
+					<!-- <top>50</top> -->
+					<!-- <width>320</width> -->
+					<!-- <height>26</height> -->
+					<!-- <label>$LOCALIZE[24018]</label> -->
+					<!-- <align>center</align> -->
+					<!-- <font>font30_title</font> -->
+					<!-- <aligny>top</aligny> -->
+					<!-- <textcolor>button_focus</textcolor> -->
+					<!-- <shadowcolor>black</shadowcolor> -->
+					<!-- <wrapmultiline>true</wrapmultiline> -->
+				<!-- </control> -->
+				<control type="list" id="150">
+					<left>20</left>
+					<top>200</top>
+					<width>280</width>
+					<height>200</height>
+					<onup>150</onup>
+					<onleft>120</onleft>
+					<ondown>130</ondown>
+					<scrolltime>200</scrolltime>
+					<include content="DefaultSimpleListLayout">
+						<param name="width" value="280" />
+						<param name="height" value="60" />
+						<param name="list_id" value="150" />
+						<param name="align" value="center" />
+						<param name="diffuse" value="stroke/stroke.png" />
+					</include>
+				</control>
+			</control>
+			
+			<control type="label">
+				<width>300</width>
+				<right>0</right>
+				<bottom>40</bottom>
+				<align>center</align>
+				<height>25</height>
+				<label>[COLOR button_focus]אחוזי צפייה[/COLOR] $INFO[Player.Progress]%</label>
+			</control>
+			
+	</controls>
+</window>

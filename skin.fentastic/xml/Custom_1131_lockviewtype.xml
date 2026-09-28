@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="dsdsdialog" id="1131">
+	<defaultcontrol>9001</defaultcontrol>
+	<zorder>4</zorder>
+	<controls>
+	
+	<include content="AdvancedGlobalViewBackGround">
+		<param name="fanart">https://i.ibb.co/1tnVhYvG/vecteezy-nature-background-high-resolution-wallpaper-for-a-serene-49855695.jpg</param>
+	</include>
+	
+	<!-- LOCK PLAYERS -->
+	<include content="BaseMainMenu">
+		<param name="id" value="9001"/>
+		<param name="basedmenuleft">150</param>
+		<param name="basedmenuheight">800</param>
+		<param name="movement">8</param>
+		<param name="centertop">50%</param>
+		<param name="headlinebackgroundheight">10%</param>
+		<param name="top_list">105</param>
+		<param name="list_left">12</param>
+		<param name="basedmenuwidth">1635</param>
+		<param name="list_height">680</param>
+		<param name="onback">9000</param>
+		<param name="topimage">false</param>
+		<param name="TopHeadLineBaseMenu">LockedViewTypesLabel</param>
+		<param name="animation" value="bottom2topslideanimation"/>
+		<param name="visible" value="Control.HasFocus(9001)"/>
+		<param name="backgroundimage">lockviewbackground</param>
+		<param name="items" value="viewtypelock"/>
+		<param name="layout" value="ViewTypeLockLayout"/>
+		<param name="list_type">list</param>
+		<param name="onup">false</param>
+		<param name="ondown">false</param>
+	</include>
+	<!-- #############-->
+	<include>headerLockedViewTypesLabel</include>
+	<!-- #############-->
+	<control type="image">
+		<left>570</left>
+		<top>225</top>
+		<width>1200</width>
+		<height>715</height>
+		<fadetime>500</fadetime>
+		<texture>$VAR[__viewtypelockimage__]</texture>
+		<bordertexture border="24" background="true" infill="true" colordiffuse="black">shadows/shadow-24.png</bordertexture>
+		<bordersize>24</bordersize>
+		<include>bottom2topslideanimation</include>
+	</control>
+	</controls>
+</window>

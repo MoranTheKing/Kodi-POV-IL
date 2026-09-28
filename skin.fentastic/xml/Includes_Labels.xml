@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+
+
+<include name="TopHeadLineDateAndtimeOSdSettings">
+	<control type="label">
+		<top>5</top>
+		<align>center</align>
+		<height>65</height>
+		<font>font_clock</font>
+		<label>$INFO[System.Time]</label>
+		<shadowcolor>black</shadowcolor>	
+	</control>
+	<control type="label">
+		<top>80</top>
+		<align>center</align>
+		<height>45</height>
+		<font>font32</font>
+		<label>$INFO[System.Date]</label>
+		<shadowcolor>black</shadowcolor>	
+	</control>
+</include>
+	
+<include name="BasedSettingLabel">
+	<control type="label">
+		<centerleft>50%</centerleft>
+		<centertop>6%</centertop>
+		<aligny>center</aligny>
+		<align>center</align>
+		<height>45</height>
+		<font>font45</font>
+		<shadowcolor>black</shadowcolor>	
+		
+		<label>הגדרות נגן</label>
+	</control>
+</include>
+
+
+<include name="LockedPlayerLabel">
+	<control type="label">
+		<centerleft>50%</centerleft>
+		<centertop>6%</centertop>
+		<aligny>center</aligny>
+		<align>center</align>
+		<height>45</height>
+		<font>font13</font>
+		<shadowcolor>black</shadowcolor>	
+		<label>$VAR[LockedPlayerLabelOSd]</label>
+	</control>
+</include>
+
+<include name="LockedViewTypesLabel">
+	<control type="label">
+		<centerleft>50%</centerleft>
+		<centertop>6%</centertop>
+		<aligny>center</aligny>
+		<align>center</align>
+		<height>45</height>
+		<font>font45_title</font>
+		<shadowcolor>black</shadowcolor>	
+		<label>$VAR[LockedViewTypeLabel]</label>
+	</control>
+</include>
+
+<include name="headerLockedViewTypesLabel">
+	<control type="label">
+		<centerleft>50%</centerleft>
+		<centertop>4%</centertop>
+		<aligny>center</aligny>
+		<align>center</align>
+		<height>45</height>
+		<font>font45_title</font>
+		<textcolor>98FFFFFF</textcolor>
+		<label>מערכת לנעילת תצוגות</label>
+	</control>
+</include>
+	
+</includes>

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+	
+	<expression name="infodialog_active">Window.IsActive(musicinformation) | Window.IsActive(songinformation) | Window.IsActive(movieinformation) | Window.IsActive(addoninformation) | Window.IsActive(pvrguideinfo) | Window.IsActive(pvrrecordinginfo) | Window.IsActive(pictureinfo) | Window.IsVisible(script-embuary-video.xml) | Window.IsVisible(script-embuary-person.xml) | Window.IsVisible(script-embuary-image.xml)</expression>
+	<expression name="sidebar_visible">ControlGroup(9000).HasFocus | Control.HasFocus(6130) | Control.HasFocus(6131)</expression>
+	<expression name="ProgessBarMovie">String.IsEqual(ListItem.DBtype,movie) + !String.IsEmpty(Container($PARAM[id]).ListItem.Property(WatchedProgress)) + !Integer.IsEqual(Container($PARAM[id]).ListItem.Property(WatchedProgress),0)</expression>
+	
+	<!-- KODI-RD-IL ADDITION -->
+	<expression name="HomeScreenOff">![Window.IsActive(home) | Control.IsVisible(50) | Control.IsVisible(54) | Control.IsVisible(56) | Control.IsVisible(500) | Control.IsVisible(501) | Control.IsVisible(504)]</expression>
+	<expression name="SkinZoomToggle">Skin.HasSetting(ZoomToggle)</expression>
+	<expression name="LiveTvCondition">!VideoPlayer.Content(livetv)</expression>
+	<expression name="PausedTended_Prefix">Skin.HasSetting(ShowPlayerPauseWindow) + Player.Paused + !String.IsEmpty(VideoPlayer.Plot) + !Window.IsActive(1123)</expression>
+	<expression name="Label_Visible_Prefix">VideoPlayer.Content(movies) | VideoPlayer.Content(tvshows) | VideoPlayer.Content(seasons) | VideoPlayer.Content(episodes) + ![String.IsEmpty(VideoPlayer.Genre) | String.IsEmpty(VideoPlayer.Year)]</expression>
+	<expression name="fakebuttonsync">Control.HasFocus(700450)</expression>
+	<expression name="sliderdialogfalseortrue">!Window.IsActive(sliderdialog)</expression>
+	<!-- ##################### -->
+	<expression name="osdmoviestvshowvisible">VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)</expression>
+	<expression name="OsdFlagsVisible">Container(201).HasFocus(101) | Container(201).HasFocus(102) | Container(201).HasFocus(103) | Container(201).HasFocus(104) | Container(201).HasFocus(105) | Container(201).HasFocus(106) | Container(201).HasFocus(107) | Container(201).HasFocus(108) | Container(201).HasFocus(110) | Container(201).HasFocus(111) | $EXP[PreviousNextItemCheck]</expression>
+	<expression name="PauseTendOsd">Container(201).HasFocus(100) | Container(201).HasFocus(101) | Container(201).HasFocus(102) | Container(201).HasFocus(103) | Container(201).HasFocus(104) | Container(201).HasFocus(105) | Container(201).HasFocus(106) | Container(201).HasFocus(107) | Container(201).HasFocus(108) | Container(201).HasFocus(109) | Container(201).HasFocus(110) | Container(201).HasFocus(111) | Container(201).HasFocus(250) | Container(201).HasFocus(251)</expression>
+	<expression name="MoviesTvShowsExpression_OSD">VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)</expression>
+	<expression name="LivetvExpressionEPG_OSD">VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg</expression>
+	<expression name="Visibilty_Plot_OSd">String.IsEmpty(VideoPlayer.Plot)</expression>
+	<expression name="IDANPlusCheck_OSd">String.Contains(Player.FolderPath,idanplus)</expression>
+	<expression name="NextItemExist_OSd">!String.IsEmpty(VideoPlayer.offset(1).Title)</expression>
+	<expression name="PreviousItemExist_OSd">!String.IsEmpty(VideoPlayer.offset(-1).Title)</expression>
+	<expression name="PreviousNextItemCheck">[Container(201).HasFocus(100) + String.IsEmpty(VideoPlayer.offset(-1).Title)] | [Container(201).HasFocus(109) + String.IsEmpty(VideoPlayer.offset(1).Title)]</expression>
+	<expression name="__Movies">String.IsEqual(ListItem.DBTYPE,movie)</expression>
+	<expression name="__tvshow">String.IsEqual(ListItem.DBTYPE,tvshow)</expression>
+	<expression name="__season">String.IsEqual(ListItem.DBTYPE,season)</expression>
+	<expression name="__episode">String.IsEqual(ListItem.DBTYPE,episode)</expression>
+	<expression name="__livetv">String.IsEqual(ListItem.DBTYPE,livetv)</expression>
+	<expression name="__Movies_OSD">VideoPlayer.Content(movies)</expression>
+	<expression name="__episode_OSD">VideoPlayer.Content(episodes)</expression>
+	<expression name="__CheckIdanplus_OSD">String.Contains(Player.FolderPath,idanplus)</expression>
+	<expression name="__livetv_OSD">VideoPlayer.Content(LiveTv)</expression>
+	<expression name="__SubtitleCheckTrueOrFalse">VideoPlayer.HasSubtitles + VideoPlayer.SubtitlesEnabled</expression>
+	<expression name="__SimplePlayerVisiblity">String.IsEqual(Skin.String(__chooseplayer),__simpleplayer)</expression>
+	<expression name="__NetflixPlayerVisiblity">String.IsEqual(Skin.String(__chooseplayer),__netflixplayer)</expression>
+	<expression name="__AdvancedPlayerVisiblity">String.IsEqual(Skin.String(__chooseplayer),__advancedplayer)</expression>
+	<expression name="__PrettyplayerPlayerVisiblity">String.IsEqual(Skin.String(__chooseplayer),__prettyplayer)</expression>
+	<expression name="__LiveTvTrueOrFalse">$EXP[__Movies_OSD] | $EXP[__episode_OSD]</expression>
+	<expression name="__seekvisibilty">[Player.Seeking | Player.Forwarding | Player.Rewinding | Player.Caching | Player.HasPerformedSeek(3)]</expression>
+	<!-- osd 4 exp -->
+	<expression name="groupcontrol1">Control.HasFocus(202) | Control.HasFocus(15000) | Control.HasFocus(500323)</expression>
+	<expression name="groupcontrol2">ControlGroup(201).HasFocus() | Control.HasFocus(203) | Control.HasFocus(204) | Control.HasFocus(40022) | Control.HasFocus(40023)</expression>
+	<expression name="groupcontrol3">Control.HasFocus(204) | Control.HasFocus(203) | Control.HasFocus(40022) | Control.HasFocus(40023)</expression>
+	<expression name="groupcontrol4">String.IsEqual(Container(203).ListItem.Property(id),rewind) | String.IsEqual(Container(203).ListItem.Property(id),forward)</expression>
+	<expression name="groupcontrol5">ControlGroup(201).HasFocus(</expression>
+	<expression name="groupcontrol6">[Container(202).HasFocus(120) | Container(202).HasFocus(121) | Container(202).HasFocus(122) | Container(202).HasFocus(123)] + Control.HasFocus(202)</expression>
+	<expression name="groupcontrol7">![ControlGroup(201).HasFocus() | Control.HasFocus(202) | Control.HasFocus(15000) | Control.HasFocus(500323)]</expression>
+	<expression name="groupcontrol8">![ControlGroup(201).HasFocus() | Control.HasFocus(202) | Control.HasFocus(15000) | Control.HasFocus(500323)]</expression>
+	<expression name="groupcontrol9">Control.HasFocus(202) + Container(202).HasFocus(470) + Container(500323).IsUpdating</expression>
+	<expression name="groupcontrol10">[Container(202).HasFocus(120) | Container(202).HasFocus(121) | Container(202).HasFocus(122) | Container(202).HasFocus(123)]</expression>
+</includes>

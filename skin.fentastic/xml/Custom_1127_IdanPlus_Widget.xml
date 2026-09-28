@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="dialog" id="1127">
+	<defaultcontrol always="true">5000</defaultcontrol>
+	<backgroundcolor>background</backgroundcolor>
+	<animation type="WindowOpen">
+	<effect type="fade" start="0" end="100" time="350" delay="100"/>
+	</animation>
+	<animation type="WindowClose">
+	<effect type="fade" start="100" end="0" time="250" delay="100"/>
+	</animation>
+	<onunload>Control.SetFocus(202)</onunload>
+	<controls>
+	
+	<control type="list" id="5000">
+	<left>10</left>
+	<right>10</right>
+	<height>260</height>
+	<bottom>20</bottom>
+	<orientation>horizontal</orientation>
+	<scrolltime tween="cubic">550</scrolltime>
+	<itemlayout width="212" height="260">
+	<control type="group">
+	<width>200</width>
+		<include content="__BaseImageIcon__">
+			<param name="bgposxy">0</param>
+			<param name="bgtexture">buttons/button-focus.png</param>
+			<param name="iconposxy">Pad05</param>
+			<param name="iconheight">70%</param>
+			<param name="icon">Icon</param>
+		</include>
+		<control type="textbox">
+			<bottom>5</bottom>
+			<left>5</left>
+			<right>5</right>
+			<height>29%</height>
+			<align>center</align>
+			<aligny>center</aligny>
+			<font>font20</font>
+			<label>$INFO[ListItem.Label]</label>
+		</control>
+	</control>
+	</itemlayout>
+	<focusedlayout width="212" height="260">
+	<control type="group">
+	<width>200</width>
+		<animation effect="zoom" start="100,100" center="100,120" end="110,110" time="200">Focus</animation>
+		<include content="__BaseImageIcon__">
+			<param name="bgposxy">0</param>
+			<param name="bgtexture">buttons/button-focus.png</param>
+			<param name="iconposxy">Pad05</param>
+			<param name="iconheight">70%</param>
+			<param name="icon">Icon</param>
+		</include>
+		<control type="textbox">
+			<bottom>5</bottom>
+			<left>5</left>
+			<right>5</right>
+			<height>29%</height>
+			<align>center</align>
+			<aligny>center</aligny>
+			<font>font20</font>
+			<label>$INFO[ListItem.Label]</label>
+			<autoscroll fade="3000" time="3000" repeat="3000">true</autoscroll>
+		</control>
+	</control>
+	</focusedlayout>
+	<content target="videos">$VAR[FixIdanPlusContent__OSD]</content>
+	</control>
+	
+	<control type="label">
+		<height>50</height>
+		<font>font45_title</font>
+		<aligny>center</aligny>
+		<align>center</align>
+		<width>fullwidth</width>
+		<bottom>150</bottom>
+		<label>המתן....</label>
+		<visible>Container(5000).IsUpdating</visible>
+	</control>
+		
+	</controls>
+</window>

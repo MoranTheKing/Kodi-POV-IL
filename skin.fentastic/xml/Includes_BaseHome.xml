@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+<include name="Home_">
+<control type="group">
+	
+	<include content="AdvancedGlobalViewBackGround">
+		<param name="fanart">$VAR[__homeIcon__]</param>
+	</include>
+
+	<include content="BasedHomeWidget">
+		<param name="list_type">wraplist</param>
+		<param name="list_id">9003</param>
+		<param name="height">380</param>
+		<param name="width">95%</param>
+		<param name="centertop">92%</param>
+		<param name="onclick">homewidgetextendedinfo</param>
+		<param name="orientation">horizontal</param>
+		<param name="visible">String.IsEqual(Window(home).Property(movies),true)</param>
+		<param name="BasedHomeLayout">HomeMediaCenterWidget</param>
+		<param name="content">plugin://plugin.video.pov/?action=trakt_movies_trending&amp;iconImage=trending.png&amp;mode=build_movie_list&amp;name=32458</param>
+	</include>
+	<include content="BasedHomeWidget">
+		<param name="list_type">wraplist</param>
+		<param name="list_id">9004</param>
+		<param name="height">380</param>
+		<param name="width">95%</param>
+		<param name="centertop">92%</param>
+		<param name="onclick">homewidgetextendedinfo</param>
+		<param name="orientation">horizontal</param>
+		<param name="visible">String.IsEqual(Window(home).Property(tvshows),true)</param>
+		<param name="BasedHomeLayout">HomeMediaCenterWidget</param>
+		<param name="content">plugin://plugin.video.pov/?action=trakt_tv_trending&amp;iconImage=trending.png&amp;mode=build_tvshow_list&amp;name=32458</param>
+	</include>	
+	<include content="BasedHomeWidget">
+		<param name="list_type">wraplist</param>
+		<param name="list_id">9005</param>
+		<param name="height">380</param>
+		<param name="width">95%</param>
+		<param name="centertop">92%</param>
+		<param name="onclick">homewidgetextendedinfo</param>
+		<param name="orientation">horizontal</param>
+		<param name="visible">String.IsEqual(Window(home).Property(progressepisodes),true)</param>
+		<param name="BasedHomeLayout">HomeMediaCenterWidget</param>
+		<param name="content">plugin://plugin.video.pov/?iconImage=player.png&amp;mode=build_in_progress_episode&amp;name=32482</param>
+	</include>
+	
+</control>
+		
+	<control type="group">
+	<width>95%</width>
+	<centerleft>50%</centerleft>
+	<control type="grouplist">
+	<align>center</align>
+	<aligny>center</aligny>
+	<height>555</height>
+	<centertop>45%</centertop>
+	<orientation>vertical</orientation>
+	<itemgap>15</itemgap>
+	<aligny>center</aligny>
+	<include>GlobalTop2DownAnimation</include>
+	<control type="group">
+	<width>650</width>
+	<height>120</height>
+	<control type="image">
+		<left>700</left>
+		<width max="420">auto</width>
+		<height>120</height>
+		<aspectratio align="center">stretch</aspectratio>
+		<texture background="true">$INFO[Window(home).Property(extendedinfoclearlogo)]</texture>
+		<animation effect="zoom" start="0,100" end="90" time="1000" delay="350" center="auto" tween="back" easing="out" reversible="true">Visible</animation>
+		<animation effect="zoom" start="0,100" end="90" time="1000" delay="350" center="auto" tween="back" easing="out" reversible="true">WindowOpen</animation>
+	</control>
+	</control>
+	<control type="label">
+		<align>center</align>
+		<font>font45_title</font>
+		<height max="55">auto</height>
+		<label>$VAR[__homewidgtlabel__]</label>
+	</control>
+	<control type="label">
+		<align>center</align>
+		<font>font32_title</font>
+		<height max="45">auto</height>
+		<label>$VAR[__homewidgtgenre__]</label>
+	</control>
+	<control type="textbox">
+		<align>center</align>
+		<height max="155">auto</height>
+		<label>$VAR[__homewidgtplot__]</label>
+	</control>
+	</control>
+	</control>
+				
+				
+</include>
+	
+	
+</includes>

@@ -131,7 +131,9 @@ def _install_genre_pngs(base):
     that are missing (e.g. genre_tv.png) and refreshing to our cleaner
     set. Best-effort; never raises."""
     here = os.path.dirname(os.path.abspath(__file__))
-    src_dir = os.path.join(here, 'media_assets', 'pov_genres')
+    # The same art also populates special://home/media/build_icons/Genres.
+    # Keep one bundled copy; both installers read this directory.
+    src_dir = os.path.join(here, 'media_assets', 'build_icons', 'Genres')
     if not os.path.isdir(src_dir):
         return 0
     dst_dir = os.path.join(base, *POV_GENRE_MEDIA_REL.split('/'))
@@ -147,6 +149,10 @@ def _install_genre_pngs(base):
         src = os.path.join(src_dir, fn)
         dst = os.path.join(dst_dir, fn)
         try:
+            if os.path.isfile(dst) and os.path.getsize(src) == os.path.getsize(dst):
+                with open(src, 'rb') as source_file, open(dst, 'rb') as target_file:
+                    if source_file.read() == target_file.read():
+                        continue
             tmp = dst + '.aitmp'
             shutil.copyfile(src, tmp)
             os.replace(tmp, dst)
