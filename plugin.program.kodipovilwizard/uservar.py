@@ -137,9 +137,10 @@ REPOZIPURL = 'https://'
 #        Notification Window                            #
 #########################################################
 # Enable Notification screen Yes or No
-ENABLE = 'No'
+ENABLE = 'Yes'
 # Url to notification file
-NOTIFICATION = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/notification_files/build_first_launch.txt'
+NOTIFICATION = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/notification_files/quick_update.txt'
+RECENT_UPDATES_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/notification_files/recent_updates.txt'
 # Use either 'Text' or 'Image'
 HEADERTYPE = 'Image'
 # Font size of header

@@ -45,14 +45,20 @@ from resources.libs import update
 
 def show_notification():
     note_id, msg = window.split_notify(CONFIG.NOTIFICATION)
-    
     if note_id:
-        if note_id == CONFIG.NOTEID:
+        try:
+            remote_id = int(note_id)
+            current_id = int(CONFIG.NOTEID or 0)
+        except (TypeError, ValueError):
+            logging.log('[Notifications] Invalid note ID: {0}'.format(note_id),
+                        level=xbmc.LOGINFO)
+            return
+        if remote_id == current_id:
             if CONFIG.NOTEDISMISS == 'false':
                 window.show_notification(msg)
             else:
                 logging.log('[Notifications] No new notifications.', level=xbmc.LOGINFO)
-        elif int(note_id) > int(CONFIG.NOTEID):
+        elif remote_id > current_id:
             logging.log('[Notifications] Showing notification {0}'
                         .format(note_id))
             CONFIG.set_setting('noteid', note_id)
@@ -621,7 +627,8 @@ wait_for_gui_ready()
 first_boot_stabilize_if_needed()
 
 # SHOW NOTIFICATIONS
-if CONFIG.ENABLE_NOTIFICATION == 'Yes' and CONFIG.get_setting('buildname'):
+if CONFIG.ENABLE_NOTIFICATION == 'Yes' and (CONFIG.get_setting('buildname') or
+        os.path.isfile(os.path.join(CONFIG.ADDONS, 'plugin.video.pov', 'addon.xml'))):
     show_notification()
 else:
     logging.log('[Notifications] Not Enabled', level=xbmc.LOGINFO)
