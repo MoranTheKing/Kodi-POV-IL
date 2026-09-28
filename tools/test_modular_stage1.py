@@ -37,18 +37,29 @@ def candidate_zip(path, version='0.4.3', extra=None):
 
 
 class ModularStage1Tests(unittest.TestCase):
-    def test_pov_addon_window_respects_clean_host_switch(self):
+    def test_legacy_pov_source_mutators_respect_clean_host_switch(self):
         source = (ROOT / 'addons/service.subtitles.kodipovilai/service.py').read_text(
             encoding='utf-8')
         tree = ast.parse(source)
-        function = next(node for node in tree.body
-                        if isinstance(node, ast.FunctionDef)
-                        and node.name == '_maybe_patch_pov_addon_window')
-        namespace = {'_skip_pov_patchers': lambda: True}
-        exec(compile(ast.Module(body=[function], type_ignores=[]),
-                     '<pov-addon-window-guard>', 'exec'), namespace)
+        names = (
+            '_maybe_patch_pov_addon_window',
+            '_maybe_patch_pov_navigator_read',
+            '_maybe_patch_pov_widget_budget',
+            '_maybe_patch_pov_watched_lazy_imports',
+            '_maybe_patch_pov_http_lazy_imports',
+            '_maybe_fix_pov_alldebrid_status',
+            '_maybe_shim_pov_internal_scrapers',
+            '_maybe_fix_pov_container_refresh_crash',
+        )
+        functions = {node.name: node for node in tree.body
+                     if isinstance(node, ast.FunctionDef)}
+        self.assertTrue(set(names).issubset(functions))
         with mock.patch.dict(sys.modules, {'resources': None}):
-            self.assertIsNone(namespace['_maybe_patch_pov_addon_window']())
+            for name in names:
+                namespace = {'_skip_pov_patchers': lambda: True}
+                exec(compile(ast.Module(body=[functions[name]], type_ignores=[]),
+                             '<pov-clean-host-guard>', 'exec'), namespace)
+                self.assertIsNone(namespace[name](), name)
 
     def test_path_scope_rejects_parent_escape(self):
         with tempfile.TemporaryDirectory() as raw:
