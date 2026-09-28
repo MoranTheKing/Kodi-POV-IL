@@ -1,0 +1,62 @@
+[
+    {
+        "label": "POV",
+        "icon": "special://home/media/povil_icons/Logo_POV_IL.png",
+        "path": "RunAddon(\"plugin.video.pov\")",
+        "target": ""
+    },
+    {
+        "label": "חיבור שירותים",
+        "icon": "special://home/media/povil_icons/Connect_Services.png",
+        "path": "RunPlugin(\"plugin://plugin.video.pov/?mode=myservices\")",
+        "target": ""
+    },
+    {
+        "label": "הגדרת התראות מנוי",
+        "icon": "special://home/media/povil_icons/Connect_Services.png",
+        "path": "RunScript(service.subtitles.kodipovilai,action=debrid_notice_settings)",
+        "target": ""
+    },
+    {
+        "label": "תרגום AI",
+        "icon": "special://home/media/povil_icons/icon.png",
+        "path": "Addon.OpenSettings(service.subtitles.kodipovilai)",
+        "target": ""
+    },
+    {
+        "label": "שליחת לוג",
+        "icon": "special://home/media/povil_icons/twilight_send_log.png",
+        "path": "ActivateWindow(10025,\"plugin://plugin.video.pov/?mode=navigator.log_utils&name=Changelog%20%26%20Log%20Utils\",return)",
+        "target": ""
+    },
+    {
+        "label": "החלף סקין",
+        "icon": "special://home/media/povil_icons/wizard_pov_il.png",
+        "path": "RunPlugin(\"plugin://plugin.program.kodipovilwizard/?mode=install&action=build_switch_skin\")",
+        "target": ""
+    },
+    {
+        "label": "עדכון מהיר",
+        "icon": "special://home/media/povil_icons/fast_update_pov_il.png",
+        "path": "PlayMedia(\"plugin://plugin.program.kodipovilwizard/?mode=install&action=quick_update&name=Kodi+POV+IL+-+FENtastic&auto_quick_update=false\")",
+        "target": ""
+    },
+    {
+        "label": "הגדרות",
+        "icon": "special://home/media/povil_icons/settings.png",
+        "path": "ActivateWindow(settings)",
+        "target": ""
+    },
+    {
+        "label": "טעינת סקין מחדש",
+        "icon": "special://home/media/povil_icons/refresh.png",
+        "path": "ReloadSkin()",
+        "target": ""
+    },
+    {
+        "label": "יציאה",
+        "icon": "special://home/media/povil_icons/power.png",
+        "path": "Quit()",
+        "target": ""
+    }
+]

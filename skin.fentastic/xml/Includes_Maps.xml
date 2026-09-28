@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+
+
+<map name="DefaultStatusTvShow">
+	<entry key="returning series">חוזרת</entry>
+	<entry key="in production">בהפקה</entry>
+	<entry key="planned">בתכנון</entry>
+	<entry key="cancelled">בוטלה</entry>
+	<entry key="ended">הסתיימה</entry>
+</map>
+
+<map name="DefaultDBTYPEMap">
+  <entry key="movie">סרט</entry>
+  <entry key="tvshow">סדרה</entry>
+  <entry key="season">עונה</entry>
+  <entry key="episode">פרק</entry>
+  <entry key="set">סט</entry>
+</map>
+
+	
+</includes>

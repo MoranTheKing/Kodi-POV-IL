@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="MoviesMainMenu">
+        <item>
+            <label>סרטים</label>
+            <onclick>ActivateWindow(2101)</onclick>
+            <property name="menu_id">$NUMBER[19000]</property>
+            <thumb>icons/sidemenu/movies.png</thumb>
+            <property name="id">movies</property>
+            <visible>!Skin.HasSetting(HomeMenuNoMovieButton)</visible>
+        </item>
+    </include>
+</includes>

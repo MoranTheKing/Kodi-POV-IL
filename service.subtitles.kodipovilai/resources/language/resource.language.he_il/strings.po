@@ -1,0 +1,559 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Kodi POV IL AI Subtitles\n"
+"Language: he\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgctxt "#32100"
+msgid "Gemini API"
+msgstr "חיבור Gemini"
+
+msgctxt "#32101"
+msgid "Get a free Gemini API key (opens browser)"
+msgstr "צור API key חינמי ב-Google AI Studio"
+
+msgctxt "#32102"
+msgid "Gemini API Key"
+msgstr "Gemini API Key"
+
+msgctxt "#32103"
+msgid "Stored in plain text"
+msgstr "אזהרה: ה-key נשמר בלי הצפנה"
+
+msgctxt "#32104"
+msgid "Do not share your Kodi backup with anyone. Revoke and re-create the key in AI Studio if you suspect it was leaked."
+msgstr "אל תשתף את ה-Kodi backup שלך. אם חששת שה-key נחשף - בטל ויצור חדש ב-AI Studio."
+
+msgctxt "#32105"
+msgid "Test connection"
+msgstr "בדיקת חיבור"
+
+msgctxt "#32106"
+msgid "Pair with QR (scan from another device)"
+msgstr "התאם מטלפון / מכשיר אחר (QR + URL)"
+
+msgctxt "#32107"
+msgid "Test DarkSubs integration"
+msgstr "בדוק חיבור DarkSubs"
+
+msgctxt "#32108"
+msgid "Translate via AI even when DarkSubs auto_translate is OFF"
+msgstr "תרגם דרך AI גם כש-auto_translate של DarkSubs כבוי (אחרת — כתוביות לא-עבריות יישארו בשפת המקור)"
+
+msgctxt "#32200"
+msgid "Translation"
+msgstr "תרגום"
+
+msgctxt "#32201"
+msgid "Model"
+msgstr "מודל"
+
+msgctxt "#32210"
+msgid "Source language priority"
+msgstr "שפות מקור (סדר עדיפות)"
+
+msgctxt "#32211"
+msgid "English"
+msgstr "אנגלית"
+
+msgctxt "#32212"
+msgid "Recommended primary source - best quality after translation"
+msgstr "מקור מומלץ - איכות תרגום הכי גבוהה"
+
+msgctxt "#32213"
+msgid "Spanish"
+msgstr "ספרדית"
+
+msgctxt "#32214"
+msgid "German"
+msgstr "גרמנית"
+
+msgctxt "#32215"
+msgid "French"
+msgstr "צרפתית"
+
+msgctxt "#32216"
+msgid "Portuguese"
+msgstr "פורטוגזית"
+
+msgctxt "#32220"
+msgid "Behavior"
+msgstr "התנהגות"
+
+msgctxt "#32221"
+msgid "Skip translation if Hebrew subs already exist"
+msgstr "דלג אם יש כתוביות עברית קיימות"
+
+msgctxt "#32300"
+msgid "Cache"
+msgstr "Cache"
+
+msgctxt "#32301"
+msgid "Maximum cache size (MB)"
+msgstr "גודל cache מקסימלי (MB)"
+
+msgctxt "#32302"
+msgid "{} MB"
+msgstr "{} MB"
+
+msgctxt "#32303"
+msgid "Delete entries not accessed for N days"
+msgstr "מחק קבצים שלא נגעו בהם N ימים"
+
+msgctxt "#32304"
+msgid "{} days"
+msgstr "{} ימים"
+
+msgctxt "#32305"
+msgid "Clear cache now"
+msgstr "נקה cache עכשיו"
+
+msgctxt "#32306"
+msgid "Clear Kodi temp subtitle files now"
+msgstr "נקה קבצי כתוביות temp של Kodi עכשיו"
+
+msgctxt "#32400"
+msgid "Advanced"
+msgstr "מתקדם"
+
+msgctxt "#32401"
+msgid "Log level"
+msgstr "רמת לוג"
+
+msgctxt "#32402"
+msgid "SRT lines per chunk"
+msgstr "שורות SRT לבקשה"
+
+msgctxt "#32403"
+msgid "Model temperature"
+msgstr "Temperature של המודל"
+
+msgctxt "#32404"
+msgid "Concurrent translation requests"
+msgstr "תרגומים במקביל (chunks)"
+
+msgctxt "#32405"
+msgid "Fast subtitles"
+msgstr "כתוביות מהירות"
+
+msgctxt "#32406"
+msgid "English appears in seconds, swaps to Hebrew gradually as translation progresses."
+msgstr "אנגלית מופיעה תוך שניות, מתחלפת לעברית בהדרגה ככל שהתרגום מתקדם."
+
+msgctxt "#32407"
+msgid "Model Top-P"
+msgstr "Top-P של המודל"
+
+msgctxt "#32408"
+msgid "Controls nucleus sampling. Higher values are more varied; lower values are more focused. Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."
+msgstr "שולט בדגימת התוצאה: ערך גבוה יותר מגוון, ערך נמוך יותר ממוקד. משפיע רק על Gemini 2.5 ו-3.1. גוגל ביטלה את הפרמטר הזה מ-Gemini 3.5 והלאה, ולכן במודלים חדשים יותר הוא מוסתר ולא נשלח."
+
+msgctxt "#32409"
+msgid "Thinking"
+msgstr "Thinking"
+
+msgctxt "#32410"
+msgid "Optional Gemini reasoning. Gemini 3.x uses levels; Gemini 2.5 can use numeric budgets."
+msgstr "Reasoning אופציונלי של Gemini. מודלי Gemini 3.x משתמשים ברמות; Gemini 2.5 יכול להשתמש בתקציב מספרי."
+
+msgctxt "#32411"
+msgid "Translate whole subtitle in one request"
+msgstr "תרגם את כל הכתוביות בבקשה אחת"
+
+msgctxt "#32412"
+msgid "Sends the full SRT as one Gemini request, raises max output tokens, and disables fast subtitles."
+msgstr "שולח את כל קובץ ה-SRT ל-Gemini בבקשה אחת, מגדיל max output tokens ומכבה כתוביות מהירות. מומלץ בעיקר למשתמשי Gemini/API בתשלום; בחשבונות חינמיים זה עלול להיכשל או להיתקע במכסות, במיוחד בקבצי כתוביות ארוכים."
+
+msgctxt "#32414"
+msgid "Disabled"
+msgstr "מבוטל"
+
+msgctxt "#32415"
+msgid "Minimal"
+msgstr "מינימלי"
+
+msgctxt "#32416"
+msgid "Low"
+msgstr "נמוך"
+
+msgctxt "#32417"
+msgid "Medium"
+msgstr "בינוני"
+
+msgctxt "#32418"
+msgid "High"
+msgstr "גבוה"
+
+msgctxt "#32419"
+msgid "Budget 512"
+msgstr "תקציב 512"
+
+msgctxt "#32420"
+msgid "Budget 768"
+msgstr "תקציב 768"
+
+msgctxt "#32421"
+msgid "Budget 1024"
+msgstr "תקציב 1024"
+
+msgctxt "#32422"
+msgid "Budget 2048"
+msgstr "תקציב 2048"
+
+msgctxt "#32423"
+msgid "Embedded-subtitle translation method"
+msgstr "שיטת תרגום כתובית מובנית"
+
+msgctxt "#32424"
+msgid "Choose how a foreign subtitle embedded in the video becomes Hebrew. Automatic first aligns an external subtitle to the embedded timings, then extracts the embedded text only if needed. Alignment only is gentler for debrid streams. Direct extraction uses the exact embedded text but can be slower or heavier while streaming. Local files only disables every embedded read over debrid/HTTP. Every failure falls back to the normal subtitle path."
+msgstr "בחרו כיצד כתובית זרה המובנית בווידאו תהפוך לעברית. אוטומטי מסנכרן תחילה כתובית חיצונית לפי זמני המובנית, ומחלץ את הטקסט המובנה רק אם צריך. סנכרון בלבד עדין יותר לזרמי debrid. חילוץ ישיר משתמש בטקסט המובנה המדויק, אך עלול להיות איטי או כבד יותר בזמן סטרימינג. קבצים מקומיים בלבד מבטל כל קריאה מובנית דרך debrid/HTTP. בכל כשל התוסף חוזר למסלול הכתוביות הרגיל."
+
+msgctxt "#32425"
+msgid "Automatic (recommended)"
+msgstr "אוטומטי (מומלץ)"
+
+msgctxt "#32426"
+msgid "Timing alignment only (safer for streaming)"
+msgstr "סנכרון זמנים בלבד (בטוח יותר לסטרימינג)"
+
+msgctxt "#32427"
+msgid "Direct embedded-text extraction only"
+msgstr "חילוץ ישיר של הטקסט המובנה בלבד"
+
+msgctxt "#32428"
+msgid "Local files only (no debrid/HTTP reads)"
+msgstr "קבצים מקומיים בלבד (ללא קריאות debrid/HTTP)"
+
+msgctxt "#32429"
+msgid "Disabled"
+msgstr "כבוי"
+
+msgctxt "#33000"
+msgid "AI Hebrew (translated from {0})"
+msgstr "עברית AI (מתורגם מ-{0})"
+
+msgctxt "#33001"
+msgid "Translating chunk {0}/{1}..."
+msgstr "מתרגם chunk {0}/{1}..."
+
+msgctxt "#33002"
+msgid "No API key configured. Open Settings to add one."
+msgstr "אין מפתח Gemini — חבר מפתח חינמי בהגדרות התוסף (חיבור Gemini) לתרגום AI איכותי באמת בעברית."
+
+msgctxt "#33003"
+msgid "Connection successful. Model: {0}"
+msgstr "החיבור הצליח. מודל: {0}"
+
+msgctxt "#33004"
+msgid "Connection failed: {0}"
+msgstr "החיבור נכשל: {0}"
+
+msgctxt "#33005"
+msgid "Daily quota exceeded. Try again after midnight UTC."
+msgstr "הקווטה היומית מוצתה. נסה שוב אחרי חצות UTC."
+
+msgctxt "#33006"
+msgid "No source subtitles found in supported languages."
+msgstr "לא נמצאו כתוביות בשפות הנתמכות."
+
+msgctxt "#33007"
+msgid "Cache cleared. {0} files removed."
+msgstr "ה-cache נוקה. {0} קבצים נמחקו."
+
+msgctxt "#33008"
+msgid "Translation failed: {0}"
+msgstr "התרגום נכשל: {0}"
+
+msgctxt "#32250"
+msgid "Wyzie Subs (optional - skip if you have DarkSubs)"
+msgstr "Wyzie Subs (אופציונלי - לא חובה אם יש DarkSubs)"
+
+msgctxt "#32251"
+msgid "Claim a free Wyzie API key (opens browser)"
+msgstr "צור API key חינמי ב-Wyzie (פותח דפדפן)"
+
+msgctxt "#32252"
+msgid "Wyzie API Key (optional)"
+msgstr "Wyzie API Key (אופציונלי)"
+
+msgctxt "#32253"
+msgid "Optional. If you have DarkSubs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in DarkSubs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
+msgstr "אופציונלי - לא חובה. אם יש לך תוסף DarkSubs מותקן, אתה לא צריך את Wyzie בכלל. לחיצה על כל כתובית שאינה עברית מ-DarkSubs תפעיל אוטומטית את התרגום AI שלי. Wyzie נחוץ רק אם אין לך תוסף כתוביות אחר ואתה רוצה מקור אונליין בלחיצה אחת מתוך התוסף הזה. 1000 בקשות ליום חינמיות ב-store.wyzie.io/redeem."
+
+msgctxt "#32230"
+msgid "3.5 Flash Lite (recommended, 500/day)"
+msgstr "3.5 Flash Lite (מומלץ, 500 ביום)"
+
+msgctxt "#32231"
+msgid "3.1 Flash (premium, 20/day free)"
+msgstr "3.1 Flash (פרימיום, 20 ביום בחינם)"
+
+msgctxt "#32232"
+msgid "2.5 Flash Lite (fallback)"
+msgstr "2.5 Flash Lite (fallback)"
+
+msgctxt "#32233"
+msgid "2.5 Flash (fallback)"
+msgstr "2.5 Flash (fallback)"
+
+msgctxt "#32234"
+msgid "3.8 Flash (newest, 20/day free)"
+msgstr "3.8 Flash (החדש ביותר, 20 ביום בחינם)"
+
+msgctxt "#32235"
+msgid "Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."
+msgstr "משפיע רק על Gemini 2.5 ו-3.1. גוגל ביטלה את הפרמטר הזה מ-Gemini 3.5 והלאה, ולכן במודלים חדשים יותר הוא מוסתר ולא נשלח."
+
+msgctxt "#32254"
+msgid "Test Wyzie connection"
+msgstr "בדיקת חיבור ל-Wyzie"
+
+msgctxt "#32260"
+msgid "TMDB (for gender-aware translation)"
+msgstr "TMDB (לתרגום מודע למגדר)"
+
+msgctxt "#32261"
+msgid "How to connect TMDB (required for gender-aware translation)"
+msgstr "איך מחברים TMDB (נדרש לתרגום מודע למגדר)"
+
+msgctxt "#32222"
+msgid "RTL punctuation fix direction"
+msgstr "כיוון תיקון ניקוד RTL"
+
+msgctxt "#32223"
+msgid "How to handle Hebrew right-to-left rendering. Default 'RTL base' wraps each Hebrew line in an explicit right-to-left embedding so the player's own BiDi places punctuation, numbers, English names and parentheses on the correct side -- the root-cause fix. If your player does not honour the marks, switch to 'Reverse', which only moves the end-of-sentence punctuation (the previous default). 'legacy' moves leading punct to the end. 'off' disables the post-processor entirely."
+msgstr "איך לטפל ברינדור ימין-לשמאל בעברית. 'RTL base' (ברירת מחדל) עוטף כל שורה עברית בכיוון RTL מפורש, כך שה-BiDi של הנגן ממקם ניקוד, מספרים, שמות באנגלית וסוגריים בצד הנכון - תיקון-שורש. אם הנגן שלך לא מכבד את הסימנים, עבור ל-'Reverse' שמזיז רק את נקודת סוף-המשפט (ברירת המחדל הקודמת). 'legacy' מזיז ניקוד מוביל לסוף. 'off' מבטל לגמרי."
+
+msgctxt "#32224"
+msgid "Legacy (move punct to end - old default, usually wrong)"
+msgstr "Legacy (להזיז לסוף - ברירת מחדל ישנה, לרוב לא נכון)"
+
+msgctxt "#32225"
+msgid "Reverse (move only end punctuation - use if RTL base looks wrong)"
+msgstr "Reverse (מזיז רק ניקוד סוף - השתמש אם RTL base נראה שגוי)"
+
+msgctxt "#32226"
+msgid "Off (no punctuation processing)"
+msgstr "Off (בלי תיקון ניקוד)"
+
+msgctxt "#32227"
+msgid "RTL base (default - fixes numbers/English/parentheses/period)"
+msgstr "RTL base (ברירת מחדל - מתקן מספרים/אנגלית/סוגריים/נקודה)"
+
+msgctxt "#32500"
+msgid "Community pool"
+msgstr "מאגר קהילתי"
+
+msgctxt "#32501"
+msgid "Use community pool (pull shared Hebrew AI subtitles)"
+msgstr "השתמש במאגר הקהילתי (משיכת כתוביות עברית משותפות)"
+
+msgctxt "#32502"
+msgid "Share my AI translations to the community pool"
+msgstr "שתף את תרגומי ה-AI שלי למאגר הקהילתי"
+
+msgctxt "#32503"
+msgid "Share my cached translations now (one-time)"
+msgstr "שתף עכשיו את כל התרגומים שבמטמון (חד-פעמי)"
+
+msgctxt "#32504"
+msgid "Remember picked source (auto-play it next time)"
+msgstr "זכור את המקור שנבחר (נגן אותו אוטומטית בפעם הבאה)"
+
+msgctxt "#32505"
+msgid "Check remembered sources (diagnostic)"
+msgstr "בדוק מקורות שנשמרו (אבחון)"
+
+msgctxt "#32506"
+msgid "Show Hebrew-subtitle match % on each source"
+msgstr "הצג אחוז התאמת כתוביות עברית לכל מקור"
+
+msgctxt "#32507"
+msgid "Built-in sources engine (DarkSubs)"
+msgstr "מנוע מקורות מובנה (DarkSubs)"
+
+msgctxt "#32508"
+msgid "Use the built-in sources engine (experimental)"
+msgstr "השתמש במנוע המקורות המובנה (ניסיוני)"
+
+msgctxt "#32509"
+msgid "When on, MoranSubs searches the human subtitle sources itself (Ktuvit, Wizdom, etc.) instead of relying on the separate DarkSubs add-on. Still in testing."
+msgstr "כשמופעל, MoranSubs מחפש בעצמו את מקורות הכתוביות האנושיות (Ktuvit, Wizdom וכו') במקום להסתמך על תוסף DarkSubs נפרד. עדיין בבדיקות."
+
+msgctxt "#32510"
+msgid "Search sources"
+msgstr "מקורות חיפוש"
+
+msgctxt "#32511"
+msgid "Ktuvit"
+msgstr "Ktuvit"
+
+msgctxt "#32512"
+msgid "Wizdom"
+msgstr "Wizdom"
+
+msgctxt "#32513"
+msgid "Telegram"
+msgstr "Telegram"
+
+msgctxt "#32514"
+msgid "OpenSubtitles"
+msgstr "OpenSubtitles"
+
+msgctxt "#32515"
+msgid "YIFY"
+msgstr "YIFY"
+
+msgctxt "#32516"
+msgid "SubSource"
+msgstr "SubSource"
+
+msgctxt "#32517"
+msgid "Subscene"
+msgstr "Subscene"
+
+msgctxt "#32518"
+msgid "BSPlayer"
+msgstr "BSPlayer"
+
+msgctxt "#32519"
+msgid "Telegram channels (coming in a later update)"
+msgstr "ערוצי טלגרם (יגיע בעדכון הבא)"
+
+msgctxt "#32520"
+msgid "Translation mode"
+msgstr "אופן התרגום"
+
+msgctxt "#32521"
+msgid "AI (Gemini) is strongly recommended - it is gender-aware and far more accurate. Google Translate is a basic fallback with no gender. 'No translation' shows subtitles in their original language."
+msgstr "מומלץ מאוד להשתמש ב-AI (Gemini) - הוא מודע למגדר ומדויק בהרבה. Google Translate הוא גיבוי בסיסי ללא מגדר. 'ללא תרגום' מציג את הכתוביות בשפת המקור."
+
+msgctxt "#32522"
+msgid "AI - Gemini (recommended)"
+msgstr "AI - Gemini (מומלץ)"
+
+msgctxt "#32523"
+msgid "Google Translate (basic, no gender)"
+msgstr "Google Translate (בסיסי, ללא מגדר)"
+
+msgctxt "#32524"
+msgid "No translation (source language only)"
+msgstr "ללא תרגום (שפת המקור בלבד)"
+
+msgctxt "#32525"
+msgid "Test the built-in engine (diagnostic)"
+msgstr "בדיקת מנוע המקורות המובנה (אבחון)"
+
+msgctxt "#32526"
+msgid "Auto-search and apply Hebrew on play"
+msgstr "חיפוש והחלה אוטומטית של עברית בהפעלה"
+
+msgctxt "#32527"
+msgid "When a video starts, automatically search and apply the best Hebrew subtitle (like DarkSubs). Requires the built-in engine."
+msgstr "כשסרט/פרק מתחיל, לחפש ולהחיל אוטומטית את הכתובית העברית הטובה ביותר (כמו DarkSubs). דורש את המנוע המובנה."
+
+msgctxt "#32528"
+msgid "Connect Telegram (more Hebrew subtitles)"
+msgstr "התחבר לטלגרם (עוד כתוביות עברית)"
+
+msgctxt "#32529"
+msgid "Disconnect Telegram"
+msgstr "התנתק מטלגרם"
+
+msgctxt "#32530"
+msgid "Log in to Telegram once (phone + code) to search the community subtitle channel for Hebrew subs. Requires the built-in engine."
+msgstr "התחברות חד-פעמית לטלגרם (טלפון + קוד) כדי לחפש כתוביות עברית בערוץ הקהילתי. דורש את המנוע המובנה."
+
+msgctxt "#32531"
+msgid "Force AI translation when no Hebrew exists (on play)"
+msgstr "כפיית תרגום AI כשאין עברית (בהפעלה)"
+
+msgctxt "#32532"
+msgid "When a video starts and no ready Hebrew subtitle is found (human or community pool), automatically AI-translate the best foreign subtitle to Hebrew. Off by default to save API requests."
+msgstr "כשסרט/פרק מתחיל ולא נמצאה כתובית עברית מוכנה (אנושית או מהמאגר), לתרגם אוטומטית ב-AI את הכתובית הזרה הטובה ביותר לעברית. כבוי כברירת מחדל כדי לחסוך בקשות API."
+
+msgctxt "#32533"
+msgid "Test Telegram connection (diagnostic)"
+msgstr "בדיקת חיבור טלגרם (אבחון)"
+
+msgctxt "#32534"
+msgid "Use my own Ktuvit account"
+msgstr "השתמש בחשבון Ktuvit אישי"
+
+msgctxt "#32535"
+msgid "Avoids the shared account rate limit"
+msgstr "עוקף את מגבלת-הקצב של החשבון המשותף. הזן את האימייל והסיסמה שלך מ-ktuvit.me למטה."
+
+msgctxt "#32536"
+msgid "Ktuvit email"
+msgstr "אימייל Ktuvit"
+
+msgctxt "#32537"
+msgid "Ktuvit password"
+msgstr "סיסמת Ktuvit"
+
+msgctxt "#32540"
+msgid "Subtitle search time (seconds)"
+msgstr "משך חיפוש כתוביות (שניות)"
+
+msgctxt "#32541"
+msgid "How long to search subtitle sources"
+msgstr "כמה זמן לחפש במקורות הכתוביות לפני עצירה. גבוה יותר = יותר תוצאות ממקורות איטיים, אבל המתנה ארוכה יותר."
+
+msgctxt "#32542"
+msgid "Show subtitle / translation notifications"
+msgstr "הצג התראות כתוביות / תרגום"
+
+msgctxt "#32543"
+msgid "Hide translation toasts"
+msgstr "הודעות קופצות כמו \"מתרגם עם AI\", \"מהקאש\" וכו'. כבה כדי להסתיר את כולן."
+
+msgctxt "#32544"
+msgid "Keep DarkSubs enabled"
+msgstr "השאר את DarkSubs (חיפוש כתוביות עברית רגיל) מופעל"
+
+msgctxt "#32545"
+msgid "Keep DarkSubs enabled help"
+msgstr "כברירת מחדל רק MoranSubs פעיל כשהמנוע דולק. הפעל כדי להשאיר גם את DarkSubs/All Subs מופעל — הוא יישאר דלוק גם אחרי אתחול ועדכון."
+
+msgctxt "#32546"
+msgid "שיפור דיוק מגדר בעזרת כתובית ייחוס (ניסיוני)"
+msgstr "שיפור דיוק מגדר בעזרת כתובית ייחוס (ניסיוני)"
+
+msgctxt "#32548"
+msgid "Addons without automatic subtitle search"
+msgstr "תוספים ללא חיפוש כתוביות אוטומטי"
+
+msgctxt "#32549"
+msgid "Comma-separated addon IDs (e.g. plugin.video.idanplus). Playback started from these addons never triggers the automatic Hebrew subtitle search. Live TV (PVR channels / streams with no duration) is always skipped automatically."
+msgstr "מזהי תוספים מופרדים בפסיק (למשל plugin.video.idanplus). ניגון שהתחיל מהתוספים האלה לא יפעיל חיפוש כתוביות אוטומטי. שידורים חיים (ערוצי PVR / זרמים ללא משך) מדולגים תמיד אוטומטית."
+
+msgctxt "#32547"
+msgid "כשמופעל, תרגומי ה-AI מורידים כתובית אנושית של אותו כותר בשפה שמסמנת מגדר ומשתמשים בה רק כדי לקבוע מגדר נכון בעברית בכל שורה (הוא/היא, התאמת פועל/תואר). מנסה קודם כתובית עברית לא מסונכרנת, אחר כך ערבית (מסמנת מגדר כמעט זהה לעברית), ואז ספרדית/צרפתית/רוסית ועוד. אם שום כתובית לא מתיישרת, חוזר אוטומטית לתרגום הרגיל. עובד מכל שפת מקור."
+msgstr "כשמופעל, תרגומי ה-AI מורידים כתובית אנושית של אותו כותר בשפה שמסמנת מגדר ומשתמשים בה רק כדי לקבוע מגדר נכון בעברית בכל שורה (הוא/היא, התאמת פועל/תואר). מנסה קודם כתובית עברית לא מסונכרנת, אחר כך ערבית (מסמנת מגדר כמעט זהה לעברית), ואז ספרדית/צרפתית/רוסית ועוד. אם שום כתובית לא מתיישרת, חוזר אוטומטית לתרגום הרגיל. עובד מכל שפת מקור."
+
+msgctxt "#32550"
+msgid "Fast mode (paid Gemini API tier)"
+msgstr "מצב מהיר (למשתמשי Gemini API בתשלום)"
+
+msgctxt "#32551"
+msgid "Turn ON only if you are on a PAID Gemini plan (billing enabled on your API key). The add-on normally paces requests and limits parallel chunks to stay under the free tier's ~15 requests/minute limit; a paid key has thousands, so this lifts those limits for much faster translation. Leave OFF for a free key (ON would just cause rate-limit errors and retries). Does not change translation quality -- that is set by the Model option."
+msgstr "הפעילו רק אם אתם על תוכנית Gemini בתשלום (חיוב מופעל על מפתח ה-API). התוסף בדרך כלל מווסת את קצב הבקשות ומגביל את מספר המקטעים המקבילים כדי להישאר מתחת למגבלת ~15 בקשות לדקה של התוכנית החינמית; למפתח בתשלום יש אלפים, כך שאפשרות זו מסירה את ההגבלות לתרגום מהיר בהרבה. השאירו כבוי עם מפתח חינמי (הפעלה רק תגרום לשגיאות מגבלת-קצב ולניסיונות חוזרים). לא משנה את איכות התרגום — היא נקבעת באפשרות 'מודל'."
+
+msgctxt "#32552"
+msgid "Leave POV exactly as its author shipped it"
+msgstr "להשאיר את POV בדיוק כפי שהיוצר שלו פרסם"
+
+msgctxt "#32553"
+msgid "Turn ON to stop this add-on making any change to plugin.video.pov. It normally adjusts about twenty of POV's own files on every start (Hebrew menus, genre icons, source-quality labels, and more), and POV updates itself whenever its author publishes -- so if POV ever starts behaving oddly, turning this ON and reinstalling POV from its repository tells you in one step whether the cause was here. Leave OFF for normal use."
+msgstr "הפעילו כדי שהתוסף הזה לא יבצע שום שינוי ב-plugin.video.pov. בדרך כלל הוא מתאים כעשרים מהקבצים של POV בכל הפעלה (תפריטים בעברית, אייקוני ז'אנרים, תוויות איכות למקורות ועוד), ו-POV מתעדכן בעצמו בכל פעם שהיוצר שלו מפרסם - כך שאם POV מתחיל להתנהג מוזר, הפעלה של האפשרות הזו והתקנה מחדש של POV מהמאגר שלו מראה בצעד אחד אם המקור לתקלה כאן. לשימוש רגיל השאירו כבוי."
+
+msgctxt "#32554"
+msgid "POV: fast navigation (reuse Python interpreter)"
+msgstr "POV: ניווט מהיר (שימוש חוזר במפרש פייתון)"
+
+msgctxt "#32555"
+msgid "OFF (default, safe): POV gets a fresh Python interpreter for every menu press, so it reloads its own code each time -- measured at about 1.75 seconds of spinner on every category, on every press, and a repeat visit is no faster. ON: POV keeps one interpreter, so it loads its code once per Kodi session instead of once per press -- the first press after a start still pays it, and the presses after that should be much faster, though exactly how much has not been measured yet. But if several POV requests ever run at the same moment (home widgets refreshing together, or you pressing again before the previous list finished) they share that interpreter, and that is a native crash that closes Kodi completely. This add-on turned it OFF on 14 Aug 2026 after exactly such a crash. Turn ON only if you would rather have the speed and accept that risk. Takes effect after ONE Kodi restart. On that restart POV notices the change and asks to reload your profile -- say OK and it is active immediately; say Cancel and it is active at the next start instead. It only asks once."
+msgstr "כבוי (ברירת מחדל, בטוח): POV מקבל מפרש פייתון חדש בכל לחיצה בתפריט, ולכן טוען מחדש את הקוד שלו בכל פעם — נמדד כ-1.75 שניות של גלגל מסתובב בכל קטגוריה, בכל לחיצה, וגם ביקור חוזר אינו מהיר יותר. מופעל: POV שומר מפרש אחד, ולכן טוען את הקוד שלו פעם אחת בכל הפעלת Kodi במקום בכל לחיצה — הלחיצה הראשונה אחרי ההפעלה עדיין משלמת את זה, והלחיצות שאחריה אמורות להיות מהירות בהרבה, אם כי עדיין לא נמדד בכמה בדיוק. אבל אם כמה בקשות של POV רצות באותו רגע (אריחי מסך הבית מתרעננים יחד, או לחיצה נוספת לפני שהרשימה הקודמת הסתיימה) הן חולקות את אותו מפרש, וזו קריסה שסוגרת את Kodi לגמרי. התוסף הזה כיבה את האפשרות ב-14 באוגוסט 2026 בעקבות קריסה כזו בדיוק. הפעילו רק אם אתם מעדיפים את המהירות ומקבלים את הסיכון. נכנס לתוקף אחרי הפעלה מחדש אחת של Kodi. באותה הפעלה POV שם לב לשינוי ושואל אם לטעון מחדש את הפרופיל — אשרו ב-OK וזה פעיל מיד; תבחרו ביטול וזה יהיה פעיל בהפעלה הבאה. הוא שואל פעם אחת בלבד."

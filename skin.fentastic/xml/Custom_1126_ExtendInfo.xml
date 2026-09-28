@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="dialog" id="1126">
+	<defaultcontrol always="true">5000</defaultcontrol>
+	<backgroundcolor>background</backgroundcolor>
+	<include>OpenCloseWindowFadeAnimation</include>
+	<onunload condition="ControlGroup(202).HasFocus()">Control.SetFocus(202)</onunload>
+	<onunload condition="Control.HasFocus(201)">Control.SetFocus(201)</onunload>
+	<controls>
+	
+	<!-- FAKE BUTTON -->
+	<control type="button" id="5000">
+	<height>1</height>
+	<width>1</width>
+	<label />
+	<onback>Dialog.Close(1126)</onback>
+	<onup>Dialog.Close(1126)</onup>
+	<ondown>Dialog.Close(1126)</ondown>
+	</control>
+	
+	
+	<include content="__OsdFixedFlags">
+	<param name="visible">true</param>
+	<param name="animation">false</param>
+	<param name="bottom">-20</param>
+	<param name="groupalign">left</param>
+	</include>
+		
+	</controls>
+</window>

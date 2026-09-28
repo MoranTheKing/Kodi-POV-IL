@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="TvShowWidgetsWatch">
+	<control type="group">
+	<top>-370</top>
+        <include content="WidgetListBigEpisodesEMINENCE">
+            <param name="content_path" value="plugin://plugin.video.pov/?name=32483&amp;iconImage=next_episodes&amp;mode=build_next_episode"/>
+            <param name="widget_header" value="הפרק הבא..."/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="190121"/>
+        </include>
+		</control>
+    </include>
+</includes>

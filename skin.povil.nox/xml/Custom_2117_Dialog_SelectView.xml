@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Foundation -->
+<window type="dialog" id="2117">
+    <defaultcontrol always="true">9000</defaultcontrol>
+    <controls>
+        <control type="group">
+
+            <centerleft>50%</centerleft>
+            <width>1792</width>
+            <bottom>100</bottom>
+            <height>676</height>
+				<control type="image">
+					<texture colordiffuse="black">colors/black.png</texture>
+				</control>
+        <control type="image">
+            <top>0</top>
+            <left>10</left>
+            <width>80</width>
+            <height>80</height>
+            <texture colordiffuse="ListLabel">special://skin/extras/icons/paintbrush.png</texture>
+        </control>
+        <control type="label">
+            <left>90</left>
+            <right>bigpad</right>
+            <top>10</top>
+            <height>60</height>
+            <aligny>center</aligny>
+            <align>left</align>
+            <!-- <label>$LOCALIZE[70005]</label> -->
+			<label>$LOCALIZE[70005]$INFO[Container.Content, ","]</label>
+        </control>
+            <control type="group">
+                <right>20</right>
+                <bottom>20</bottom>
+                <width>1024</width>
+                <height>576</height>
+                <control type="image">
+                    <aspectratio>stretch</aspectratio>
+                    <texture background="true" fallback="DefaultAddon.png">$INFO[Container(9000).ListItem.Icon]</texture>
+                </control>
+            </control>
+            <control type="list" id="9000">
+                <bottom>20</bottom>
+                <onleft>8000</onleft>
+                <onright>8000</onright>
+                <left>pad</left>
+                <width>728</width>
+                <height>576</height>
+                <orientation>vertical</orientation>
+                <itemlayout height="96" width="728">
+                    <control type="group">
+                        <left>10</left>
+                        <right>10</right>
+                        <control type="image">
+                            <top>10</top>
+                            <bottom>10</bottom>
+                            <left>10</left>
+                            <width>300</width>
+                            <aspectratio align="left">keep</aspectratio>
+                            <texture>$INFO[ListItem.Icon]</texture>
+                        </control>
+                        <control type="label">
+                            <height>100%</height>
+                            <left>170</left>
+                            <align>left</align>
+                            <aligny>center</aligny>
+							  <textcolor>gray</textcolor>
+                            <!-- <font>Font14</font> -->
+                            <label>$INFO[ListItem.Label]</label>
+                        </control>
+                    </control>
+                </itemlayout>
+                <focusedlayout height="96" width="728">
+                    <control type="group">
+                        <left>10</left>
+                        <right>10</right>
+                        <control type="image">
+                            <visible>!Control.HasFocus(9000)</visible>
+                            <texture colordiffuse="ffe52b50">colors/white.png</texture>
+                        </control>
+                        <control type="image">
+                            <visible>!Control.HasFocus(9000)</visible>
+                            <aspectratio>center</aspectratio>
+                            <texture colordiffuse="ffe52b50">colors/selected.png</texture>
+                        </control>
+                        <control type="image">
+                            <visible>Control.HasFocus(9000)</visible>
+                            <texture colordiffuse="ffe52b50">colors/white.png</texture>
+                        </control>
+
+                        <control type="image">
+                            <top>10</top>
+                            <bottom>10</bottom>
+                            <left>10</left>
+                            <width>300</width>
+                            <aspectratio align="left">keep</aspectratio>
+                            <texture>$INFO[ListItem.Icon]</texture>
+                        </control>
+                        <control type="label">
+                            <height>100%</height>
+                            <left>170</left>
+                            <align>left</align>
+                            <aligny>center</aligny>
+                            <textcolor>white</textcolor>
+                            <label>$INFO[ListItem.Label]</label>
+                        </control>
+                    </control>
+                </focusedlayout>
+                <content>
+					<!-- nox1 -->
+                    <item>
+                        <label>654331</label>
+                        <icon>special://skin/extras/viewthumbs/nox1.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(567)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(movies) | Container.Content(sets) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(episodes) | Container.Content(games) | Window.IsActive(videoplaylist) | Window.IsActive(musicplaylist) | Container.Content(favourites) | Container.Content() | Container.Content(studios) | Container.Content(songs)</visible>
+                    </item>
+					<!-- nox2 -->
+                    <item>
+                        <label>65433</label>
+                        <icon>special://skin/extras/viewthumbs/nox2.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(568)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(movies) | Container.Content(sets) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(episodes) | Container.Content(games) | Window.IsActive(videoplaylist) | Window.IsActive(musicplaylist) | Container.Content() | Container.Content(studios)</visible>
+
+                    </item>
+					<!-- nox3 -->
+                    <item>
+                        <label>654332</label>
+                        <icon>special://skin/extras/viewthumbs/nox3.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(569)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(movies) | Container.Content(sets) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(episodes) | Container.Content(games) | Window.IsActive(videoplaylist) | Window.IsActive(musicplaylist) | Container.Content() | Container.Content(studios)</visible>
+                    </item>
+
+                    <!-- רשימה -->
+                    <item>
+                        <label>535</label>
+                        <icon>special://skin/extras/viewthumbs/50.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(movies) | Container.Content(sets) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(games) | Window.IsActive(videoplaylist) | Window.IsActive(musicplaylist)</visible>
+                    </item>
+                    <!-- כרזה -->
+                    <item>
+                        <label>20021</label>
+                        <icon>special://skin/extras/viewthumbs/51.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(51)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(movies) | Container.Content(seasons) | Container.Content(sets) | Container.Content(tvshows) | Container.Content(games)</visible>
+                    </item>
+                    <!-- קיר סמלילים -->
+                    <item>
+                        <label>31099</label>
+                        <icon>special://skin/extras/viewthumbs/52.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(52)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content() | Container.Content(files) | Container.Content(tags) | Container.Content(years) | Container.Content(roles) | Container.Content(sources) | Container.Content(genres) | Container.Content(countries) | Container.Content(studios) | Container.Content(playlists) | Container.Content(favourites) | Container.Content(unknown)</visible>
+                    </item>
+                    <!-- הזזה -->
+                    <item>
+                        <label>31100</label>
+                        <icon>special://skin/extras/viewthumbs/53.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(53)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(movies) | Container.Content(sets) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(musicvideos) | Container.Content(artists) | Container.Content(albums) | Container.Content(mixed) | Container.Content(images) | Container.Content(videos) | Container.Content(games) | Container.Content(favourites)</visible>
+                    </item>
+                    <!-- קיר מידע -->
+                    <item>
+                        <label>31101</label>
+                        <icon>special://skin/extras/viewthumbs/54.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(54)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(artists) | Container.Content(albums) | Container.Content(sets) | Container.Content(movies) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(musicvideos) | Container.Content(images) | Container.Content(videos) | Container.Content(games)</visible>
+                    </item>
+                    <!-- רשימה רחבה -->
+                    <item>
+                        <label>31107</label>
+                        <icon>special://skin/extras/viewthumbs/55.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(55)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(tvshows) | Container.Content(seasons) | Container.Content(episodes) | Container.Content(movies) | Container.Content(musicvideos) | Container.Content(videos) | Container.Content(games) | Window.IsActive(videoplaylist) | Window.IsActive(musicplaylist)</visible>
+                    </item>
+                    <!-- WideInfoWall -->
+                    <item>
+                        <label>$LOCALIZE[70008]</label>
+                        <icon>special://skin/extras/viewthumbs/56.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(56)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(artists) | Container.Content(albums) | Container.Content(sets) | Container.Content(movies) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(episodes) | Container.Content(musicvideos) | Container.Content(images) | Container.Content(videos) | Container.Content(games)</visible>
+                    </item>
+                    <!-- קיר -->
+                    <item>
+                        <label>31102</label>
+                        <icon>special://skin/extras/viewthumbs/500.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(500)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(movies) | Container.Content(sets) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(artists) | Container.Content(albums) | Container.Content(musicvideos) | Container.Content(addons) | Container.Content(images) | Container.Content(videos) | Container.Content(games) | Container.Content(favourites) | Container.Content(studios)</visible>
+                    </item>
+                    <!-- סגנון -->
+                    <item>
+                        <label>20020</label>
+                        <icon>special://skin/extras/viewthumbs/501.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(501)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(tvshows)</visible>
+                    </item>
+					
+					
+                    <!-- פאנארט -->
+                    <item>
+                        <label>20445</label>
+                        <icon>special://skin/extras/viewthumbs/502.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(502)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(movies) | Container.Content(sets) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(games) | Window.IsActive(videoplaylist) | Window.IsActive(musicplaylist)</visible>
+                    </item>
+                    <!-- WideWall -->
+                    <item>
+                        <label>$LOCALIZE[70007]</label>
+                        <icon>special://skin/extras/viewthumbs/504.jpg</icon>
+                        <onclick>Close</onclick>
+                        <onclick>Container.SetViewMode(50)</onclick>
+                        <onclick>Container.SetViewMode(504)</onclick>
+						<include>SetLock</include>
+						<visible>Container.Content(movies) | Container.Content(sets) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(artists) | Container.Content(albums) | Container.Content(musicvideos) | Container.Content(addons) | Container.Content(images) | Container.Content(videos) | Container.Content(games) | Container.Content(favourites)</visible>
+                    </item>
+
+
+
+                </content>
+            </control>
+            <!-- Button grouplist -->
+            <control type="grouplist" id="8000">
+                <animation effect="slide" start="0" end="-586" time="0" condition="Control.IsVisible(3)">Conditional</animation>
+                <right>0</right>
+                <top>pad</top>
+                <align>right</align>
+                <height>150</height>
+                <onleft>9000</onleft>
+                <onright>9000</onright>
+                <onup>9000</onup>
+                <ondown>9000</ondown>
+                <orientation>horizontal</orientation>
+                <itemgap>pad</itemgap>
+                <!-- Lock to View -->
+                <control type="button" id="8003">
+					 <visible>false</visible>
+						<width>auto</width>
+						<align>center</align>
+						<include>DialogSettingButton</include>
+                    <align>right</align>
+                    <label>[CAPITALIZE]$LOCALIZE[70002] $INFO[Container.Content,(,)][/CAPITALIZE]</label>
+                    <texturenofocus />
+                    <texturefocus />
+
+                    <include>Defs_OptionButton</include>
+                    <onclick>SetFocus(9000)</onclick>
+                    <onclick>Action(Select)</onclick>
+                    <onclick condition="[Container.Content() + String.IsEmpty(Skin.String(Skin.ForcedView.))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(tags) + String.IsEmpty(Skin.String(Skin.ForcedView.tags))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(years) + String.IsEmpty(Skin.String(Skin.ForcedView.years))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(genres) + String.IsEmpty(Skin.String(Skin.ForcedView.genres))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(countries) + String.IsEmpty(Skin.String(Skin.ForcedView.countries))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(studios) + String.IsEmpty(Skin.String(Skin.ForcedView.studios))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(playlists) + String.IsEmpty(Skin.String(Skin.ForcedView.playlists))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(movies) + String.IsEmpty(Skin.String(Skin.ForcedView.movies))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(sets) + String.IsEmpty(Skin.String(Skin.ForcedView.sets))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(tvshows) + String.IsEmpty(Skin.String(Skin.ForcedView.tvshows))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(seasons) + String.IsEmpty(Skin.String(Skin.ForcedView.seasons))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(episodes) + String.IsEmpty(Skin.String(Skin.ForcedView.episodes))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(artists) + String.IsEmpty(Skin.String(Skin.ForcedView.artists))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(albums) + String.IsEmpty(Skin.String(Skin.ForcedView.albums))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(songs) + String.IsEmpty(Skin.String(Skin.ForcedView.songs))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(musicvideos) + String.IsEmpty(Skin.String(Skin.ForcedView.musicvideos))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(addons) + String.IsEmpty(Skin.String(Skin.ForcedView.addons))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(actors) + String.IsEmpty(Skin.String(Skin.ForcedView.actors))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(directors) + String.IsEmpty(Skin.String(Skin.ForcedView.directors))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(files) + String.IsEmpty(Skin.String(Skin.ForcedView.files))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(mixed) + String.IsEmpty(Skin.String(Skin.ForcedView.mixed))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(images) + String.IsEmpty(Skin.String(Skin.ForcedView.images))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(games) + String.IsEmpty(Skin.String(Skin.ForcedView.games))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(unknown) + String.IsEmpty(Skin.String(Skin.ForcedView.unknown))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                    <onclick condition="[Container.Content(videos) + String.IsEmpty(Skin.String(Skin.ForcedView.videos))]">AlarmClock(setviewlock,Skin.SetString(Skin.ForcedView.$INFO[Container.Content],$INFO[Container.Viewmode]),00:01,silent)</onclick>
+                </control>
+                <!-- Disable / Enable Views -->
+                <!-- TODO: ADD SUPPORT FOR SKINVIEWTYPES ADDON -->
+                <!-- <control type="button" id="8002">
+                    <width>auto</width>
+                    <height>100%</height>
+                    <align>right</align>
+                    <label>[CAPITALIZE]$LOCALIZE[31222][/CAPITALIZE]</label>
+                    <texturenofocus />
+                    <texturefocus />
+                    <focusedcolor>$VAR[ffe52b50]</focusedcolor>
+                    <include>Defs_OptionButton</include>
+                </control> -->
+                <!-- Cancel -->
+                <control type="button" id="8001">
+						<width>auto</width>
+						<align>center</align>
+						<include>DialogSettingButton</include>
+                    <label>222</label>
+                    <onclick>Close</onclick>
+
+                </control>
+                
+            </control>
+        </control>
+    </controls>
+</window>

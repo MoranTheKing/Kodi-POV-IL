@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+<include name="BasedMenuOsdItems">
+	<content>
+	<item>
+		<label>הגדרות אודיו</label>
+		<icon>https://www.iconsdb.com/icons/preview/white/speaker-xxl.png</icon>
+		<onclick>ActivateWindow(osdaudiosettings)</onclick>
+	</item>
+	<item>
+		<label>הגדרות וידאו</label>
+		<icon>https://www.iconsdb.com/icons/preview/white/video-play-2-xxl.png</icon>
+		<onclick>ActivateWindow(osdvideosettings)</onclick>
+	</item>
+	<item>
+		<label>הגדרות כתוביות</label>
+		<icon>osd/fullscreen/buttons/subs3.png</icon>
+		<onclick>ActivateWindow(osdsubtitlesettings)</onclick>
+	</item>
+	<item>
+		<label>הגדרות נגן</label>
+		<icon>https://www.iconsdb.com/icons/preview/white/play-3-xxl.png</icon>
+		<onclick>Control.SetFocus(9001)</onclick>
+	</item>
+	</content>
+</include>
+
+<include name="BasedMenuOsdSecondMenu">
+	<content>
+	<item>
+		<label>הצג חלון כתובית דארקסאבס</label>
+		<label2>$VAR[_ReplaceSubtitle]</label2>
+		<onclick condition="String.IsEmpty(Skin.String(subtitlesearch,darksubs)">Skin.SetString(subtitlesearch,darksubs)</onclick>
+		<onclick condition="Skin.String(subtitlesearch,darksubs)">Skin.SetString(subtitlesearch,kodisubtitle)</onclick>
+		<onclick condition="Skin.String(subtitlesearch,kodisubtitle)">Skin.SetString(subtitlesearch,darksubs)</onclick>
+	</item>	
+	<item>
+		<label>שנה צבע פוקוס בכתפורי הנגן</label>
+		<label2>$INFO[Skin.String(osdbuttonfocuscolor)]</label2>
+		<colorbox>$INFO[Skin.String(osdbuttonfocuscolor)]</colorbox>
+		<onclick>Skin.SetColor(osdbuttonfocuscolor, player)</onclick>
+	</item>
+	<item>
+		<label>שנה צבע מסגרת פוקוס כפתורים</label>
+		<label2>$INFO[Skin.String(osdframebuttoncolor)]</label2>
+		<colorbox>$INFO[Skin.String(osdframebuttoncolor)]</colorbox>
+		<onclick>Skin.SetColor(osdframebuttoncolor, player)</onclick>
+	</item>
+	<item>
+		<label>הגדר עוצמת רקע ב INFO</label>
+		<label2>שקיפות הרקע שונתה ל $INFO[Skin.String(backwindowopecitychange)]</label2>
+		<include>InfoBackWindowOpecityChange</include>
+	</item>	
+	<item>
+		<label>הוסף או הסר כפתור וידג'ט עידן פלוס</label>
+		<label2>$VAR[idanplusdisablebutton_OSD]</label2>
+		<onclick>Skin.ToggleSetting(disableidan)</onclick>
+	</item>
+	<item>
+		<label>הוסף או הסר כפתור השהיית הנגן</label>
+		<label2>$VAR[OsdPlayerClose]</label2>
+		<onclick>Skin.ToggleSetting(playerclosedelay)</onclick>
+	</item>
+	<item>
+		<label>הצג כפתור פלייליסט</label>
+		<label2>$VAR[OsdPlayerPlaylist]</label2>
+		<onclick>Skin.ToggleSetting(playerplaylist_osd)</onclick>
+	</item>
+	<include>changeplayer_osd</include>
+</content>
+</include>
+
+<include name="left_netflix_menu">
+	<content>
+	<item>
+		<icon>osd/fullscreen/buttons/play.png</icon>
+		<onclick>PlayerControl(play)</onclick>
+		<visible>Player.Paused</visible>
+		<property name="id">$NUMBER[52000]</property>
+	</item>
+	<item>
+		<icon>osd/fullscreen/buttons/pause.png</icon>
+		<onclick>PlayerControl(play)</onclick>
+		<visible>!Player.Paused</visible>
+		<property name="id">$NUMBER[52000]</property>
+	</item>
+	<item>
+		<icon>osd/fullscreen/buttons/stop.png</icon>
+		<onclick>PlayerControl(stop)</onclick>
+		<property name="id">$NUMBER[52000]</property>
+	</item>
+	<item>
+	<icon>osd/fullscreen/buttons/subs3.png</icon>
+	<onclick>ActivateWindow(subtitlesearch)</onclick>
+	</item>
+	<item>
+		<icon>osd/fullscreen/buttons/previous.png</icon>
+		<onclick></onclick>
+		<property name="id">$NUMBER[52000]</property>
+		</item>
+	</content>
+</include>
+
+<include name="changeplayer_osd">
+<item>
+	<label>[B][COLOR blue]שנה נגן[/COLOR][/B]</label>
+	<label2>$VAR[__PlayerChoose]</label2>
+	<onclick condition="String.IsEmpty(Skin.String(__chooseplayer,__simpleplayer)">Skin.SetString(__chooseplayer,__simpleplayer)</onclick>
+	<onclick condition="Skin.String(__chooseplayer,__simpleplayer)">Skin.SetString(__chooseplayer,__advancedplayer)</onclick>
+	<onclick condition="Skin.String(__chooseplayer,__advancedplayer)">Skin.SetString(__chooseplayer,__netflixplayer)</onclick>
+	<onclick condition="Skin.String(__chooseplayer,__netflixplayer)">Skin.SetString(__chooseplayer,__simpleplayer)</onclick>
+</item>
+</include>
+
+<include name="seek_forward_osd_item">
+<content>
+<item>
+	<label>הרצה</label>
+	<onclick>PlayerControl(forward)</onclick>
+	<visible>!Player.Forwarding</visible>
+</item>
+<item>
+	<label>עצור</label>
+	<onclick>PlayerControl(play)</onclick>
+	<visible>Player.Forwarding</visible>
+</item>
+<item>
+	<label>1 דקה</label>
+	<onclick>seek(120)</onclick>
+</item>
+<item>
+	<label>5 דקות</label>
+	<onclick>seek(300)</onclick>
+</item>
+<item>
+	<label>10 דקות</label>
+	<onclick>seek(600)</onclick>
+</item>
+<item>
+	<label>20 דקות</label>
+	<onclick>seek(1200)</onclick>
+</item>
+<item>
+	<label>40 דקות</label>
+	<onclick>seek(2400)</onclick>
+</item>
+<item>
+	<label>60 דקות</label>
+	<onclick>seek(4800)</onclick>
+</item>
+<item>
+	<label>80 דקות</label>
+	<onclick>sseek(6000)</onclick>
+</item>
+</content>
+</include>
+
+
+<include name="seek_rewind_osd_item">
+<content>
+<item>
+	<label>הרצה</label>
+	<onclick>PlayerControl(forward)</onclick>
+	<visible>!Player.Forwarding</visible>
+</item>
+<item>
+	<label>עצור</label>
+	<onclick>PlayerControl(play)</onclick>
+	<visible>Player.Forwarding</visible>
+</item>
+<item>
+	<label>1 דקה</label>
+	<onclick>seek(-120)</onclick>
+</item>
+<item>
+	<label>5 דקות</label>
+	<onclick>seek(-300)</onclick>
+</item>
+<item>
+	<label>10 דקות</label>
+	<onclick>seek(-600)</onclick>
+</item>
+<item>
+	<label>20 דקות</label>
+	<onclick>seek(-1200)</onclick>
+</item>
+	<item>
+	<label>40 דקות</label>
+	<onclick>seek(-2400)</onclick>
+</item>
+<item>
+	<label>60 דקות</label>
+	<onclick>seek(-4800)</onclick>
+</item>
+<item>
+	<label>80 דקות</label>
+	<onclick>sseek(-6000)</onclick>
+</item>
+</content>
+</include>
+
+<include name="__osdtopmenu__">
+<content>
+<item>
+<icon>$VAR[stripoutosdbuttons]/previous.png</icon>
+<property name="id">previuos</property>
+<onclick>SkipPrevious</onclick>
+</item>
+<item id="500">
+<icon>$VAR[stripoutosdbuttons]/rewind.png</icon>
+<property name="id">rewind</property>
+<property name="onup">$NUMBER[40022]</property>
+<onclick>Control.SetFocus(40022)</onclick>
+</item>
+
+
+<item id="501">
+<icon>$VAR[stripoutosdbuttons]/forward.png</icon>
+<property name="id">forward</property>
+<property name="onup">$NUMBER[40023]</property>
+<onclick>Control.SetFocus(40023)</onclick>
+</item>
+<item>
+<icon>$VAR[stripoutosdbuttons]/next.png</icon>
+<property name="id">next</property>
+<onclick>SkipNext</onclick>
+</item>
+</content>
+</include>
+
+<include name="osdprettybottomnenu">
+<item id="120">
+<label>הגדרות הנגן</label>
+<property name="onright">$NUMBER[15000]</property>
+<onclick>ActivateWindow(1129)</onclick>
+</item>
+<item id="470">
+<label>פרקי העונה</label>
+<property name="onright">$NUMBER[500323]</property>
+<property name="menu_id">episodes</property>
+<onclick>Control.SetFocus(500323)</onclick>
+<visible>$EXP[__episode_OSD]</visible>
+</item>
+<item id="121">
+<label>הגדרות וידאו</label>
+<property name="onright">$NUMBER[15000]</property>
+<onclick>ActivateWindow(osdvideosettings)</onclick>
+</item>
+<item id="122">
+<label>הגדרות אודיו</label>
+<property name="onright">$NUMBER[15000]</property>
+<onclick>ActivateWindow(osdaudiosettings)</onclick>
+</item>
+<item id="123">
+<label>החלף נגן</label>
+<property name="onright">$NUMBER[15000]</property>
+<onclick>ActivateWindow(1130)</onclick>
+</item>
+</include>
+
+
+<include name="PlayerLockItems">
+<content>
+<item>
+<label>נגן פשוט</label>
+<property name="lock1">$VAR[LockedPlayerOSd]</property>
+<onclick>Skin.SetString(__chooseplayer,__simpleplayer)</onclick>
+</item>
+<item>
+<label>נגן מתקדם</label>
+<property name="lock2">$VAR[LockedPlayerOSd]</property>
+<onclick>Skin.SetString(__chooseplayer,__advancedplayer)</onclick>
+</item>
+<item>
+<label>נגן נטפליקס</label>
+<property name="lock3">$VAR[LockedPlayerOSd]</property>
+<onclick>Skin.SetString(__chooseplayer,__netflixplayer)</onclick>
+</item>
+<item>
+<label>נגן למבוגרים</label>
+<property name="lock4">$VAR[LockedPlayerOSd]</property>
+<onclick>Skin.SetString(__chooseplayer,__prettyplayer)</onclick>
+</item>
+<item>
+<label>רענן תצוגה</label>
+<!-- <property name="lock4">$VAR[LockedPlayerOSd]</property> -->
+<onclick>ReloadSkin()</onclick>
+</item>
+</content>
+</include>
+
+<include name="viewtypelock">
+<content>
+<item id="100">
+<label>תצוגת פוסטרים</label> <!-- 51 -->
+<property name="lock1">$VAR[LockViewTypes_VAR]</property> 
+<onclick>Skin.SetString(lock.view.type,posterviewtype)</onclick>
+</item>
+<item id="101">
+<label>תצוגת פוסטרים shift</label> <!-- 53 -->
+<property name="lock2">$VAR[LockViewTypes_VAR]</property>
+<onclick>Skin.SetString(lock.view.type,shitposterviewtype)</onclick>
+</item>
+<item id="102">
+<label>קיר פוסטרים</label> <!-- 54 -->
+<property name="lock3">$VAR[LockViewTypes_VAR]</property>
+<onclick>Skin.SetString(lock.view.type,panelviewtype)</onclick>
+</item>
+<item id="103">
+<label>רשימה פשוטה</label> <!-- 55 -->
+<property name="lock4">$VAR[LockViewTypes_VAR]</property>
+<onclick>Skin.SetString(lock.view.type,widelistviewtype)</onclick>
+</item>
+<item id="104">
+<label>קיר פנארט</label> <!-- 56 -->
+<property name="lock5">$VAR[LockViewTypes_VAR]</property>
+<onclick>Skin.SetString(lock.view.type,widepanelviewtype)</onclick>
+</item>
+<item id="105">
+<label>קיר פוסטרים ללא מידע</label> <!-- 500 -->
+<property name="lock6">$VAR[LockViewTypes_VAR]</property>
+<onclick>Skin.SetString(lock.view.type,widepanelpostersviewtype)</onclick>
+</item>
+<item id="106">
+<label>קיר פנארט ללא מידע</label> <!-- 504 -->
+<property name="lock7">$VAR[LockViewTypes_VAR]</property>
+<onclick>Skin.SetString(lock.view.type,widepanelfanartsviewtype)</onclick>
+</item>
+<item id="107">
+<label>תצוגת רשימה</label> <!-- 50 -->
+<property name="lock8">$VAR[LockViewTypes_VAR]</property>
+<onclick>Skin.SetString(lock.view.type,listviewtype)</onclick>
+</item>
+<item id="108">
+<label>רשימה עם פנארט</label> <!-- 502 -->
+<property name="lock9">$VAR[LockViewTypes_VAR]</property>
+<onclick>Skin.SetString(lock.view.type,smallviewtype)</onclick>
+</item>
+
+<item id="109">
+<label>רשימה תצוגה מתקדמת</label> <!-- 630 -->
+<property name="lock10">$VAR[LockViewTypes_VAR]</property>
+<onclick>Skin.SetString(lock.view.type,AdvancedViewList)</onclick>
+</item>
+
+<item id="110">
+<label>רשימה רחבה תצוגה מתקדמת</label> <!-- 631 -->
+<property name="lock11">$VAR[LockViewTypes_VAR]</property>
+<onclick>Skin.SetString(lock.view.type,AdvancedWideViewList)</onclick>
+</item>
+
+<item id="111">
+<label>שחרור נעילה (חזרה לתצוגות רגילות)</label>
+<property name="lock12">$VAR[LockViewTypes_VAR]</property>
+<onclick>Skin.Reset(lock.view.type)</onclick>
+</item>
+
+</content>
+</include>
+
+</includes>

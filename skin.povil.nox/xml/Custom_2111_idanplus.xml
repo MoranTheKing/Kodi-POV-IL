@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Foundation -->
+<window type="dialog" id="2111">
+	<defaultcontrol always="true">11</defaultcontrol>
+
+    <controls>
+        <control type="group">
+            <visible>!Window.IsActive(DialogPVRGuideInfo.xml)</visible>
+            <animation effect="slide" start="-668" end="0" time="150" tween="quadratic">Visible</animation>
+            <animation effect="slide" start="-668" end="0" time="150" tween="quadratic">WindowOpen</animation>
+            <animation effect="slide" end="-668" start="0" time="150" tween="quadratic">Hidden</animation>
+            <animation effect="slide" end="-668" start="0" time="150" tween="quadratic">WindowClose</animation>
+            <control type="image">
+                <left>-24</left>
+                <top>-24</top>
+                <bottom>-24</bottom>
+                <width>605</width>
+                <bordersize>24</bordersize>
+                <bordertexture border="24">nox/24-shadow.png</bordertexture>
+				<texture>nox/osd-dim2.png</texture>
+            </control>
+            <control type="image">
+                <left>330</left>
+                <top>-4</top>  
+                <width>128</width>
+                <height>128</height>
+                <texture colordiffuse="ListLabel">special://skin/extras/icons/tv.png</texture>
+            </control>
+            <control type="label">
+                <left>30</left>
+                <top>pad</top>
+                <width>400</width>
+                <height>70</height>
+                <align>left</align>
+                <font>Font-WidgetInfoTitle</font>
+                <label>$INFO[VideoPlayer.ChannelGroup]</label>
+            </control>
+            <control type="label">
+                <left>30</left>
+                <top>50</top>
+                <height>70</height>
+                <width>400</width>
+                <align>left</align>
+                <font>Font-ListInfo-Bold</font>
+                <label>$INFO[Container(11).NumItems,,  ערוצי עידן פלוס]</label>
+            </control>
+
+            <control type="list" id="11">
+                <left>0</left>
+                <top>120</top>
+                <height>980</height>
+                <width>670</width>
+                <onleft>PreviousChannelGroup</onleft>
+				<onright>Close</onright>
+                <onright>ReplaceWindow(2122)</onright>
+                <orientation>vertical</orientation>
+                <itemlayout height="130" width="670">
+                    <control type="image">
+                        <width>500</width>
+                        <height>100%</height>
+                        <texture colordiffuse="0fffffff">nox/selected.png</texture>
+                        <aspectratio>scale</aspectratio>
+                        <visible>ListItem.IsPlaying</visible>
+                    </control>
+                    <control type="image">
+                        <left>22</left>
+                        <top>12</top>  
+                        <width>90</width>
+                        <height>90</height>
+                        <texture>$INFO[ListItem.Thumb]</texture>
+                        <aspectratio>keep</aspectratio>
+                    </control>
+
+
+                    <control type="textbox">
+                        <left>130</left>
+                        <!-- <top>40</top> -->
+                        <width>400</width>
+                        <height>150</height>
+                        <align>right</align>
+                        <font>Font-ListInfo</font>
+                        <textcolor>ListLabel</textcolor>
+                        <label>$INFO[ListItem.Title]</label>
+                        <selectedcolor>ListLabel</selectedcolor>
+                    </control>
+                </itemlayout>
+                <focusedlayout height="130" width="670">
+                    <control type="image">
+                        <width>558</width>
+                        <height>130</height>
+                       <texture colordiffuse="$VAR[HighlightBarColor]" border="4">nox/listselect_fo.png</texture>
+                    </control>
+                    <control type="image">
+                        <width>500</width>
+                        <height>100%</height>
+                        <texture colordiffuse="1fffffff">nox/selected.png</texture>
+                        <aspectratio>scale</aspectratio>
+                        <visible>ListItem.IsPlaying</visible>
+                    </control>
+                    <control type="image">
+                        <left>22</left>
+                        <top>12</top>  
+                        <width>90</width>
+                        <height>90</height>
+                        <texture>$INFO[ListItem.Thumb]</texture>
+                        <aspectratio>keep</aspectratio>
+                    </control>
+
+                    <control type="textbox">
+                        <left>130</left>
+                        <!-- <top>40</top> -->
+                        <width>400</width>
+                        <height>150</height>
+                        <align>right</align>
+                        <font>Font-ListInfo</font>
+                        <textcolor>ListLabel</textcolor>
+                        <label>$INFO[ListItem.Title]</label>
+                        <selectedcolor>ListLabel</selectedcolor>
+                    </control>
+                </focusedlayout>
+				<!-- <include>skinshortcuts-group-quicknav</include> -->
+<content>plugin://plugin.video.idanplus/?iconimage=C%253A%255CUsers%255Cddd%255CAppData%255CRoaming%255CKodi%255Caddons%255Cplugin.video.idanplus%255Cicon.png&amp;mode=1&amp;module&amp;moredata&amp;name=%5bB%5d%d7%98%d7%9c%d7%95%d7%99%d7%96%d7%99%d7%94%5b%2fB%5d&amp;url&quot</content>
+
+            </control>
+			
+        </control>
+		
+    </controls>
+
+</window>

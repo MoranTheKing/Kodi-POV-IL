@@ -1,0 +1,539 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+<include name="skin_home_eminence">
+	<defaultcontrol>9000</defaultcontrol>
+	<backgroundcolor>background</backgroundcolor>
+	<!-- <onload condition="!Skin.HasSetting(firsttimerun)">ActivateWindow(1112)</onload> -->
+  <!-- <onload condition="Skin.HasSetting(firsttimerun)">RunScript(script.fentastic.helper,mode=check_for_update&amp;skin_id=skin.povil.nox)</onload> -->
+	<!-- <onload>RunScript(script.fentastic.helper,mode=check_for_profile_change&amp;skin_id=skin.povil.nox)</onload> -->
+  <!-- <onload condition="String.IsEmpty(Window(Home).Property(fentastic.starting_widgets))">RunScript(script.fentastic.helper,mode=starting_widgets)</onload> -->
+  <onload condition="String.IsEmpty(Window(Home).Property(fentastic.starting_widgets))">SetProperty(fentastic.starting_widgets,true)</onload>
+	<!-- <onload>RunScript(script.fentastic.helper,mode=modify_keymap)</onload> -->
+	<!-- <onload>RunScript(script.fentastic.helper,mode=fix_black_screen)</onload> -->
+	<onload condition="String.IsEmpty(Skin.String(DefaultBackgroundBrightness))">Skin.SetString(DefaultBackgroundBrightness,Medium)</onload>
+	<onload condition="String.IsEmpty(Skin.String(DefaultFanartBrightness))">Skin.SetString(DefaultFanartBrightness,Medium)</onload>
+	<controls>
+		<include>DefaultBackground</include>
+		<control type="multiimage">
+			<depth>DepthBackground</depth>
+			<include>FullScreenDimensions</include>
+			<aspectratio>scale</aspectratio>
+			<fadetime>600</fadetime>
+			<imagepath background="true" colordiffuse="bg_overlay">$VAR[HomeFanartVarNox]</imagepath>
+			<visible>!Player.HasMedia</visible>
+		</control>
+		
+			<include content="TopBar">
+				<param name="breadcrumbs_label" value="" />
+			</include>
+		
+
+		<control type="group">
+			<visible>!Control.HasFocus(64)</visible>
+			<animation effect="fade" start="100" end="0" time="200" tween="sine" condition="$EXP[infodialog_active]">Conditional</animation><!-- מסתיר את מסך הבית בלחיצה על תקציר של תוכן-->
+			<!-- <include>VisibleFadeAnimation</include> -->
+				<control type="group" id="27000">
+					<visible>false</visible>
+					<include content="Visible_Right_Delayed">
+						<param name="id" value="addons"/>
+					</include>
+					<control type="grouplist" id="27001">
+						<include>WidgetGroupListCommon</include>
+						<pagecontrol>27010</pagecontrol>
+						<include content="WidgetListSquare">
+							<param name="content_path" value="addons://sources/video/"/>
+							<param name="widget_header" value="$LOCALIZE[1037]"/>
+							<param name="widget_target" value="videos"/>
+							<param name="sortby" value="lastused"/>
+							<param name="sortorder" value="descending"/>
+							<param name="list_id" value="27100"/>
+							<param name="fallback_icon" value="DefaultAddon.png"/>
+						</include>
+						<include content="WidgetListSquare">
+							<param name="content_path" value="addons://sources/executable/"/>
+							<param name="widget_header" value="$LOCALIZE[1043]"/>
+							<param name="widget_target" value="programs"/>
+							<param name="sortby" value="lastused"/>
+							<param name="sortorder" value="descending"/>
+							<param name="list_id" value="27300"/>
+							<param name="fallback_icon" value="DefaultAddon.png"/>
+						</include>
+					</control>
+				</control>
+				
+				<!-- MOVIES -->
+				<control type="group" id="19000">
+					<top>270</top>
+					<visible>String.IsEqual(Container(9000).ListItem.Property(id),movies)</visible>
+					<include content="MovieWidgetsNox" condition="!Skin.HasSetting(HomeMenuNoMoviesButton)" />
+				</control>
+				
+				<!-- TV SHOWS -->
+				<control type="group" id="22000">
+					<top>270</top>
+					<visible>String.IsEqual(Container(9000).ListItem.Property(id),tvshows)</visible>
+					<include content="TVShowWidgetsNox" condition="!Skin.HasSetting(HomeMenuNoTVShowsButton)" />
+				</control>
+				
+				<!-- VOD12  VOD13 -->
+				<control type="group" id="23000">
+					<top>-50</top>
+					<visible>String.IsEqual(Container(9000).ListItem.Property(id),custom1)</visible>
+					<include content="Custom1WidgetsNoxVOD12" condition="!Skin.HasSetting(HomeMenuNoCustom1Button)" />
+					<include content="Custom1WidgetsNoxVOD13" condition="!Skin.HasSetting(HomeMenuNoCustom1Button)" />
+				</control>
+				
+				
+				<!-- TV AND RADIO -->
+				<control type="group" id="24000">
+					<top>270</top>
+					<visible>String.IsEqual(Container(9000).ListItem.Property(id),custom2)</visible>
+					<include content="Custom2WidgetsNox" condition="!Skin.HasSetting(HomeMenuNoCustom2Button)" />
+				</control>
+				
+				<!-- KIDS -->
+				<control type="group" id="25000">
+					<top>270</top>
+					<visible>String.IsEqual(Container(9000).ListItem.Property(id),custom3)</visible>
+					<include content="Custom3WidgetsNox" condition="!Skin.HasSetting(HomeMenuNoCustom3Button)" />
+				</control>
+				
+				<!-- DRAGON -->
+				<control type="group" id="26000">
+					<top>-50</top>
+					<visible>String.IsEqual(Container(9000).ListItem.Property(id),custom4)</visible>
+					<include content="Custom4WidgetsDragon1" condition="!Skin.HasSetting(HomeMenuNoCustom4Button)" />
+					<include content="Custom4WidgetsDragon2" condition="!Skin.HasSetting(HomeMenuNoCustom4Button)" />
+				</control>
+				
+				<!-- Continue watching -->
+				<control type="group" id="27000">
+					<top>350</top>
+					<visible>String.IsEqual(Container(9000).ListItem.Property(id),moviesWatch)</visible>
+					<include content="MovieWidgetsWatch" condition="!Skin.HasSetting(HomeMenuNoMoviesButton)" />
+					<include content="TvShowWidgetsWatch" condition="!Skin.HasSetting(HomeMenuNoMoviesButton)" />
+				</control>
+				
+				
+				<!-- favorites -->
+				<control type="group" id="14000">
+					<visible>String.IsEqual(Container(9000).ListItem.Property(id),favorites)</visible>
+					<control type="panel" id="14100">
+						<left>123</left>
+						<top>-40</top>
+						<right>0</right>
+						<height>820</height>
+						<bottom>0</bottom>
+						<onleft>9000</onleft>
+						<onright>9000</onright>
+						<onup>14100</onup>
+						<ondown>9000</ondown>
+						<preloaditems>2</preloaditems>
+						<scrolltime tween="cubic" easing="out">500</scrolltime>
+						<orientation>horizontal</orientation>
+						<pagecontrol>14010</pagecontrol>
+						<visible>Integer.IsGreater(Container(14100).NumItems,0) | Container(14100).IsUpdating</visible>
+						<itemlayout width="280" height="365">
+							<control type="group">
+								<top>130</top>
+								<include content="InfoWallMusicLayout">
+									<param name="fallback_image" value="DefaultFavourites.png" />
+									<param name="list_id" value="$PARAM[list_id]" />
+									<param name="focused" value="false" />
+								</include>
+							</control>
+						</itemlayout>
+						<focusedlayout width="280" height="365">
+							<control type="group">
+								<depth>DepthContentPopout</depth>
+								<top>130</top>
+								<include content="InfoWallMusicLayout">
+									<param name="fallback_image" value="DefaultFavourites.png" />
+									<param name="list_id" value="$PARAM[list_id]" />
+									<param name="focused" value="true" />
+								</include>
+							</control>
+						</focusedlayout>
+						<content>favourites://</content>
+					</control>
+					<include content="ImageWidget">
+						<param name="text_label" value="$LOCALIZE[31025]" />
+						<param name="button_label" value="$LOCALIZE[31116]" />
+						<param name="left">50</param>
+						<param name="button_onclick" value=""/>
+						<param name="button_id" value="5500"/>
+						<param name="visible" value="!Integer.IsGreater(Container(14100).NumItems,0) + !Container(14100).IsUpdating"/>
+						<param name="visible_1" value="false"/>
+						<!-- <param name="button2_onclick" value="Skin.SetBool(HomeMenuNoFavButton)"/> -->
+					</include>
+					<include content="WidgetScrollbar" condition="Skin.HasSetting(touchmode)">
+						<param name="scrollbar_id" value="14010"/>
+					</include>
+				</control>
+				
+
+				<!-- Widgets Info -->
+				<control type="group">
+					<width>550</width>
+					<visible>String.IsEqual(ListItem.DBtype,movie) | String.IsEqual(ListItem.DBtype,tvshow) | String.IsEqual(ListItem.DBtype,season) | String.IsEqual(ListItem.DBtype,episode)</visible>
+					<visible>!String.IsEqual(Container(9000).ListItem.Property(id),custom1)</visible>
+					<visible>!String.IsEqual(Container(9000).ListItem.Property(id),moviesWatch)</visible>
+					<visible>!String.IsEqual(Container(9000).ListItem.Property(id),custom4)</visible>
+					<!-- <include>OpenClose_Left</include> -->
+					<control type="image">
+						<left>800</left>
+						<top>0</top>
+						<width>295</width>
+						<height>140</height>
+						<texture background="true">$VAR[ClearlogoVar]</texture>
+						<aspectratio align="center">keep</aspectratio>
+					</control>
+					<control type="textbox">
+						<left>450</left>
+						<top>0</top>
+						<width>1000</width>
+						<aligny>center</aligny>
+						<align>center</align>
+						<height>105</height>
+						<font>font_MainMenu</font>
+						
+						<label>$INFO[ListItem.Label]</label>
+						<visible>String.IsEmpty(ListItem.Art(clearlogo))</visible>
+					</control>
+					<control type="group">
+						<visible>Skin.HasSetting(Disable.RatingsINF) | String.IsEmpty(Skin.String(mdblist_api_key))</visible>
+						<control type="textbox">
+							<left>100</left>
+							<height>200</height>
+							<top>140</top>
+							<width>1700</width>
+							<bottom>60</bottom>
+							<font>font30_title</font>
+							<label>$VAR[myInfoPanel]</label>
+							<align>right</align>
+							<textcolor>unfocused_text</textcolor>
+							<autoscroll delay="10000" time="3000" repeat="10000">Skin.HasSetting(autoscroll)</autoscroll>
+						</control>
+						<control type="textbox">
+							<left>30</left>
+							<top>323</top>
+							<width>1300</width>
+							<bottom>60</bottom>
+							<label>$VAR[InfoPanelEpisode]</label>
+							
+							<textcolor>unfocused_text</textcolor>
+							<autoscroll delay="10000" time="3000" repeat="10000">Skin.HasSetting(autoscroll)</autoscroll>
+						</control>
+						<control type="textbox">
+							<left>30</left>
+							<top>213</top>
+							<width>1300</width>
+							<aligny>center</aligny>
+							<height>110</height>
+							<bottom>60</bottom>
+							<font>font36_title</font>
+							<label>Season $INFO[ListItem.Season], Episode $INFO[ListItem.Episode]</label>
+							<visible>String.IsEqual(ListItem.DbType,episode)</visible>
+						</control>
+					</control>
+<!-- 					<include condition="![Skin.HasSetting(Disable.RatingsINF) | String.IsEmpty(Skin.String(mdblist_api_key))]" content="RatingsInfoPanel">
+						<param name="left" value="30" />
+						<param name="width" value="1800" />
+						<param name="top" value="140" />
+						<param name="ratings_spacing" value="7" />
+						<param name="height_noalt" value="130" />
+						<param name="height_alt_movie" value="30" />
+						<param name="height_alt_tvshow" value="90" />
+						<param name="ratings_spacing2" value="0" />
+					</include> -->
+					<include condition="![String.IsEmpty(Skin.String(mdblist_api_key))]" content="MyRatingsInfoPanel">
+						<param name="left" value="1525" />
+						<param name="width" value="1800" />
+						<param name="top" value="350" />
+						<param name="ratings_spacing" value="7" />
+						<param name="height_noalt" value="130" />
+						<param name="height_alt_movie" value="30" />
+						<param name="height_alt_tvshow" value="90" />
+						<param name="ratings_spacing2" value="0" />
+					</include>
+				</control>
+
+
+										<!-- תפריט ראשי -->
+										
+
+        <control type="group">
+			<control type="group">
+				<bottom>0</bottom>
+				<height>250</height>
+				<control type="image">
+					<aspectratio>scale</aspectratio>
+					<texture colordiffuse="ff181818">eminence/white.png</texture>
+				</control>
+			</control>
+            <control type="panel" id="9000">
+                <animation effect="slide" end="0,160" condition="String.IsEqual(Skin.String(home.style),$LOCALIZE[31182])">Conditional</animation>
+                <animation effect="slide" end="94" condition="!Integer.IsGreater(Container(9000).NumItems,0)">Conditional</animation>
+                <animation effect="slide" end="94" condition="!Integer.IsGreater(Container(9000).NumItems,1)">Conditional</animation>
+                <animation effect="slide" end="94" condition="!Integer.IsGreater(Container(9000).NumItems,2)">Conditional</animation>
+                <animation effect="slide" end="94" condition="!Integer.IsGreater(Container(9000).NumItems,3)">Conditional</animation>
+                <animation effect="slide" end="94" condition="!Integer.IsGreater(Container(9000).NumItems,4)">Conditional</animation>
+                <animation effect="slide" end="94" condition="!Integer.IsGreater(Container(9000).NumItems,5)">Conditional</animation>
+                <animation effect="slide" end="94" condition="!Integer.IsGreater(Container(9000).NumItems,6)">Conditional</animation>
+                <animation effect="slide" end="94" condition="!Integer.IsGreater(Container(9000).NumItems,7)">Conditional</animation>
+                <animation effect="slide" end="94" condition="!Integer.IsGreater(Container(9000).NumItems,8)">Conditional</animation>
+                <animation effect="slide" end="94" condition="!Integer.IsGreater(Container(9000).NumItems,9)">Conditional</animation>
+                <left>16</left>
+                <right>0</right>
+                <bottom>150</bottom>
+                <height>266</height>
+				<onup>SetFocus($INFO[Container(9000).ListItem.Property(menu_id)])</onup>
+                <animation type="Visible">
+                    <effect type="slide" start="0,266" end="0" time="150" />
+                </animation>
+                <orientation>horizontal</orientation>
+                <scrolltime tween="sine" easing="out">240</scrolltime>
+                <!-- Default Home -->
+                <itemlayout width="188" height="266">
+                    <control type="image">
+                        <top>16</top>
+                        <width>196</width>
+                        <height>170</height>
+                        <texture colordiffuse="3e555555">eminence/tile.png</texture>
+                        <aspectratio>stretch</aspectratio>
+                    </control>
+                    <control type="image">
+                        <top>16</top>
+                        <width>196</width>
+                        <height>170</height>
+                        <texture colordiffuse="ffededed" diffuse="eminence/tile.png">$INFO[ListItem.Icon]</texture>
+                        <aspectratio scalediffuse="false">center</aspectratio>
+                        <animation effect="fade" start="50" end="50" condition="true">Conditional</animation>
+                    </control>
+                    <control type="label">
+                        <top>188</top>
+                        <height>78</height>
+                        <width>170</width>
+                        <align>center</align>
+                        <aligny>center</aligny>
+                        <font>Font-HomeMenu</font>
+                        <textcolor>ffededed</textcolor>
+                        <label>$INFO[ListItem.Label]</label>
+                        <animation effect="fade" start="50" end="50" condition="true">Conditional</animation>
+                    </control>
+                </itemlayout>
+                <focusedlayout width="188" height="266">
+                    <control type="image">
+                        <top>16</top>
+                        <width>196</width>
+                        <height>170</height>
+                        <texture colordiffuse="ff287ba8">eminence/tile.png</texture>
+                        <aspectratio>stretch</aspectratio>
+                    </control>
+                    <control type="image">
+                        <top>16</top>
+                        <width>196</width>
+                        <height>170</height>
+                        <texture colordiffuse="fff0f0f0" diffuse="eminence/tile.png">$INFO[ListItem.Icon]</texture>
+                        <aspectratio scalediffuse="false">center</aspectratio>
+                    </control>
+                    <control type="label">
+                        <top>188</top>
+                        <height>78</height>
+                        <width>170</width>
+                        <align>center</align>
+                        <aligny>center</aligny>
+                        <font>Font-HomeMenu</font>
+                        <textcolor>ffededed</textcolor>
+                        <label>$INFO[ListItem.Label]</label>
+                        <animation effect="slide" start="0" end="0,-12" time="100" reversible="false">Focus</animation>
+                    </control>
+                    <control type="image">
+                        <centerleft>85</centerleft>
+                        <bottom>0</bottom>
+                        <width>16</width>
+                        <height>16</height>
+                        <aspectratio>stretch</aspectratio>
+                        <texture colordiffuse="ff287ba8">eminence/16-arrow-down.png</texture>
+                        <visible>Integer.IsGreater(Container(9002).NumItems,0)</visible>
+                        <animation effect="fade" start="0" end="100" time="300" delay="300" reversible="false">Focus</animation>
+                    </control>
+                    <control type="image">
+                        <bottom>16</bottom>
+                        <width>170</width>
+                        <height>6</height>
+                        <texture colordiffuse="ff287ba8">eminence/white.png</texture>
+                        <aspectratio>scale</aspectratio>
+                    </control>
+                </focusedlayout>
+                <content>
+					<item>
+						<label>סרטים</label>
+						<onclick>ActivateWindow(2101)</onclick>
+						<property name="menu_id">$NUMBER[19000]</property>
+						<thumb>special://skin/extras/icons/movie.png</thumb>
+						<property name="id">movies</property>
+						<visible>!Skin.HasSetting(HomeMenuNoMovieButton)</visible>
+					</item>
+					<item>
+						<label>סדרות</label>
+						<onclick>ActivateWindow(2102)</onclick>
+						<property name="menu_id">$NUMBER[22000]</property>
+						<thumb>special://skin/extras/icons/tvshow.png</thumb>
+						<property name="id">tvshows</property>
+						<visible>!Skin.HasSetting(HomeMenuNoTVShowButton)</visible>
+
+					</item>
+					<item>
+						<label>טורקיות</label>
+						<onclick>ActivateWindow(2110)</onclick>
+						<property name="menu_id">$NUMBER[26000]</property>
+						<thumb>icons/sidemenu/tv.png</thumb>
+						<property name="id">custom4</property>
+						<visible>!Skin.HasSetting(HomeMenuNoCustom4Button)</visible>
+					</item>
+					<item>
+						<label>תוכן ישראלי</label>
+						<onclick>ActivateWindow(2103)</onclick>
+						<property name="menu_id">$NUMBER[23000]</property>
+						<thumb>special://skin/extras/icons/israeltv.png</thumb>
+						<property name="id">custom1</property>
+						<visible>!Skin.HasSetting(HomeMenuNoCustom1Button)</visible>
+					</item>
+					<item>
+						<label>טלויזיה ורדיו</label>
+						<onclick>ActivateWindow(2104)</onclick>
+						<property name="menu_id">$NUMBER[24000]</property>
+						<thumb>icons/settings/livetv.png</thumb>
+						<property name="id">custom2</property>
+						<visible>!Skin.HasSetting(HomeMenuNoCustom2Button)</visible>
+					</item>
+					<item>
+						<label>ילדים</label>
+						<onclick>ActivateWindow(2105)</onclick>
+						<property name="menu_id">$NUMBER[25000]</property>
+						<thumb>special://skin/extras/icons/kids.png</thumb>
+						<property name="id">custom3</property>
+						<visible>!Skin.HasSetting(HomeMenuNoCustom3Button)</visible>
+					</item>
+					<item>
+						<label>המשך צפייה</label>
+						<onclick>ActivateWindow(2115)</onclick>
+						<thumb>icons/now-playing/play.png</thumb>
+						<property name="menu_id">$NUMBER[27000]</property>
+						<property name="id">moviesWatch</property>
+					</item>
+					<item>
+						<label>$LOCALIZE[10134]</label>
+						<onclick>ActivateWindow(favouritesbrowser)</onclick>
+						<property name="menu_id">$NUMBER[14000]</property>
+						<thumb>special://skin/extras/icons/favourite.png</thumb>
+						<property name="id">favorites</property>
+						<visible>!Skin.HasSetting(HomeMenuNoFavButton)</visible>
+					</item>
+					<item>
+						<label>$LOCALIZE[137]</label>
+						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.idanplus/?name=VOD&amp;url=&amp;mode=2&amp;iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;module=&amp;moredata=)</onclick>
+						<thumb>icons/search.png</thumb>
+					</item>
+					<item>
+						<label>$LOCALIZE[21417]</label>
+						<onclick>ActivateWindow(2107)</onclick>
+						<thumb>icons/settings.png</thumb>
+					</item>
+					<item>
+						<label>$LOCALIZE[33060]</label>
+						<onclick>ActivateWindow(shutdownmenu)</onclick>
+						<thumb>icons/power.png</thumb>
+					</item>
+                </content>
+            </control>
+        </control>
+		
+		   </control>
+
+
+													<!-- RSS -->	
+            <control type="group">
+                <bottom>240</bottom>
+				<control type="image">
+					<left>0</left>
+					<posy>96r</posy>
+					<width>1132</width>
+					<height>86</height>
+					<texture border="48">eminence/rss-tile-shadow.png</texture>
+				</control>
+				<control type="image">
+					<left>0</left>
+					<posy>64r</posy>
+					<width>1100</width>
+					<height>54</height>
+					<texture border="32" colordiffuse="ff181818">eminence/rss-tile.png</texture>
+					<animation effect="fade" start="100" end="90" time="200" condition="Skin.HasSetting(home.transparent)">Conditional</animation>
+				</control>
+			</control>
+			<control type="group">
+				<animation effect="slide" end="0,90" time="300" tween="sine" easing="inout" condition="$EXP[infodialog_active]">conditional</animation>
+				<depth>DepthBars</depth>
+			 <bottom>240</bottom>
+				<height>70</height>
+                    <control type="image">
+                        <left>16</left>
+                        <posy>48r</posy>
+                        <width>32</width>
+                        <height>32</height>
+                        <texture colordiffuse="LineLabel">eminence/rss.png</texture>
+                    </control>
+				<control type="rss">
+					<left>80</left>
+					<bottom>15</bottom>
+					<height>39</height>
+					<width>1000</width>
+					<font>font12</font>
+					<urlset>1</urlset>
+					<hitrect x="-100" y="0" w="1" h="1" />
+					<titlecolor>button_focus</titlecolor>
+					<textcolor>button_focus</textcolor>
+					<shadowcolor>text_shadow</shadowcolor>
+					<headlinecolor>FFC0C0C0</headlinecolor>
+					<visible>Skin.HasSetting(hide_mediaflags) | !ControlGroup(2000).HasFocus</visible>
+					<animation effect="fade" time="300">VisibleChange</animation>
+				</control>
+			</control>
+			<control type="group">
+					<animation effect="slide" time="300" start="-792,0" end="0,0" tween="sine" easing="inout">VisibleChange</animation>
+					<visible>![String.IsEqual(ListItem.DBtype,movie) | String.IsEqual(ListItem.DBtype,tvshow) | String.IsEqual(ListItem.DBtype,season) | String.IsEqual(ListItem.DBtype,episode)] + !Skin.HasSetting(TrailerPlaying)</visible>
+							<depth>DepthBars</depth>
+							<top>20</top>
+							<left>15</left>
+					<control type="image">
+					<visible>!Skin.HasSetting(HomeMenuNoCustom4Button)</visible>
+					  <left>10</left>
+					  <top>0</top>
+					  <aspectratio>keep</aspectratio>
+					  <width>170</width>
+					  <height>50</height>
+					  <texture>special://skin/media/logos/dragon_letters.png</texture>
+					</control>
+					<control type="image">
+					<visible>Skin.HasSetting(HomeMenuNoCustom4Button)</visible>
+					  <left>19</left>
+					  <top>0</top>
+					  <aspectratio>keep</aspectratio>
+					  <width>130</width>
+					  <height>56</height>
+					  <texture>special://skin/media/logos/K-logo.png</texture>
+					</control>
+					<control type="image">
+					<visible>Skin.HasSetting(HomeMenuNoCustom4Button)</visible>
+					  <left>120</left>
+					  <top>0</top>
+					  <aspectratio>keep</aspectratio>
+					  <width>230</width>
+					  <height>50</height>
+					  <texture>special://skin/media/logos/letters.png</texture>
+					</control>
+			</control>
+</controls>
+	</include>
+</includes>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="dialog" id="1128">
+	<zorder>4</zorder>
+	<include>modalDialogInOutVerticalVisible</include>
+	<visible>Player.Seeking | Player.Forwarding | Player.Rewinding | Player.Caching | Player.HasPerformedSeek(3) | [Window.IsActive(videoosd) + Player.Paused]</visible>
+	<visible>![Window.IsActive(subtitlesearch) | Window.IsActive(1133) | Window.IsActive(1132)]</visible>
+	<controls>
+	
+	<include>SeekBarEnabled</include>
+		
+	</controls>
+</window>

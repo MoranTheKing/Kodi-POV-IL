@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Foundation -->
+<window type="dialog" id="2119">
+	<onload>ReplaceWindow(2107)</onload>
+</window>

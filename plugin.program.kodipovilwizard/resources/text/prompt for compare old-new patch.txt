@@ -1,0 +1,63 @@
+
+Act as a Senior Kodi Addon Code Auditor, Reverse Engineer, and Engine v2 Patch Architect.
+
+Perform a concise audit on a newly refactored patch for Kodi Wizard Addon (`plugin.program.kodipovilwizard`) based on three inputs:
+1. **LATEST UPSTREAM CODE**
+2. **LEGACY (OLD) PATCH**
+3. **NEW ENGINE V2 PATCH** (`patches_config.py` + decoupled module)
+
+---
+
+### ENGINE v2 STRICT RULES:
+- **Action**: Additive-only (`prepend_before` or `append_after`). `replace` is FORBIDDEN.
+- **Placement**: Decoupled modules must go inside `plugin.program.kodipovilwizard/resources/libs/patches/`.
+- **Lean Hook**: `sys.path` update, single import, and execution only.
+- **Markers**: Must follow `# WIZARD_...` convention.
+- **Scope**: No dynamic closures/lambdas capturing loop variables.
+- **Simple & Clean**: Avoid over-engineering or overcomplicating; keep the patch maintainable and straightforward.
+
+---
+
+### INPUT CODE SNIPPETS:
+
+#### [INPUT 1: LATEST UPSTREAM CODE]
+```python
+# Paste latest pristine upstream code here
+
+```
+
+#### [INPUT 2: LEGACY / OLD PATCH]
+
+```python
+# Paste legacy/old patch code here
+
+```
+
+#### [INPUT 3: NEW ENGINE V2 PATCH]
+
+```python
+# Paste new metadata config dictionary and decoupled module code here
+
+```
+
+---
+
+### OUTPUT FORMAT, in Hebrew:
+
+Keep the analysis concise and focused ONLY on the following sections:
+0. Status badge (e.g., ✅, ⚠️, ❌) indicating overall patch health.
+1. **Upstream Necessity Analysis**
+* Check if the upstream code fixed, refactored, or removed the issue. State clearly if the patch is still needed.
+
+
+2. **Feature Parity & Coverage**
+* Compare Legacy vs. New Engine v2 patch. Ensure all edge cases, variables, and side-effects are preserved without logic drops.
+
+
+3. **Engine v2 Compliance Checklist**
+* Pass/Fail verification against Engine v2 rules (Additive-only, correct path, lean hooks, marker naming, unique anchor match).
+
+
+4. **Corrected / Refined Patch Code (ONLY IF NEEDED)**
+* **Important:** Provide code here ONLY if critical bugs, compliance failures, or logic gaps were found above. If the new patch is fully approved, omit this section entirely.
+

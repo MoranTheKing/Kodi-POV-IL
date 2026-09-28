@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="Custom1WidgetsNoxVOD11">
+		<control type="group">
+		<top>760</top>
+        <include content="WidgetVOD">
+            <param name="content_path" value="plugin://plugin.video.idanplus/?moredata=&amp;name=%D7%9B%D7%90%D7%9F+11&amp;url=&amp;iconimage=kan.jpg&amp;module=kan&amp;mode=0"/>
+            <param name="widget_header" value="כאן 11"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="23013"/>
+        </include>
+		</control>
+    </include>
+</includes>

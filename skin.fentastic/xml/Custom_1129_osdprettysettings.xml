@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="dialog" id="1129">
+	<defaultcontrol always="true">9000</defaultcontrol>
+	<zorder>4</zorder>
+	<controls>
+	
+	<control type="group">
+	<width>700</width>
+	<height>150</height>
+	<centertop>50%</centertop>
+	<centerleft>50%</centerleft>
+	<visible>!Window.IsActive(dialogcolorpicker)</visible>
+	<control type="image">
+	<visible>Integer.IsEqual(Container(9000).NumItems,1)</visible>
+	<height>50</height>
+	<texture>colors/white.png</texture>
+	<colordiffuse>FF181818</colordiffuse>
+	</control>
+	<control type="image">
+	<visible>Integer.IsEqual(Container(9000).NumItems,2)</visible>
+	<height>100</height>
+	<texture>colors/white.png</texture>
+	<colordiffuse>FF181818</colordiffuse>
+	</control>
+	<control type="grouplist" id="9000">
+	<orientation>vertical</orientation>
+	<include>prettyosdbuttonssettingsosd</include>
+	</control>
+	</control>
+	</controls>
+</window>

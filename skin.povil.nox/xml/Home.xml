@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window>
+<defaultcontrol always="true">9000</defaultcontrol>
+
+	<!-- <onload condition="!Skin.HasSetting(firsttimerun)">Skin.SetString(HomeS, Home_default)</onload> -->
+	<onload condition="String.IsEmpty(Skin.String(HomeS))">Skin.SetString(HomeS,Home_nox)</onload>
+	<onload condition="!Skin.HasSetting(firsttimerun)">Skin.SetBool(firsttimerun)</onload>
+	<onload condition="Skin.HasSetting(username)">ActivateWindow(2114)</onload>
+ 		<include condition="Skin.String(HomeS, Home_default)" content="skin_home_default">
+            <param name="HomeS" value="home" />
+        </include>
+ 		<include condition="Skin.String(HomeS, Home_nox)" content="skin_home_nox">
+            <param name="HomeS" value="home" />
+        </include>
+ 		<include condition="Skin.String(HomeS, Home_aura)" content="skin_home_aura">
+            <param name="HomeS" value="home" />
+        </include>
+ 		<include condition="Skin.String(HomeS, Home_pellucid)" content="skin_home_pellucid">
+            <param name="HomeS" value="home" />
+        </include>
+ 		<include condition="Skin.String(HomeS, Home_eminence)" content="skin_home_eminence">
+            <param name="HomeS" value="home" />
+        </include>
+</window>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="TVShowWidgetsNox">
+        <include content="WidgetListBigPosterNox">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=trakt_tv_trending&amp;iconImage=trending&amp;mode=build_tvshow_list&amp;name=32458"/>
+            <param name="widget_header" value="סדרות פופולריות"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="22013"/>
+        </include>
+    </include>
+</includes>

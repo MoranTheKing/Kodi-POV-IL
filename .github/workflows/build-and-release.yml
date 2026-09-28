@@ -1,0 +1,263 @@
+name: Build addon zips and release
+
+# Runs only after the modular branch is merged into the existing public repo.
+#
+# What it does:
+#   1. Detects which addon folder(s) changed in the push (or all, on a
+#      manual / seed run).
+#   2. Packages each changed addon into a valid, deterministic Kodi zip
+#      (<id>-<version>.zip).
+#   3. Publishes versioned assets without deleting previous versions.
+#   4. Verifies remote assets before switching manifest.json.
+
+on:
+  push:
+    branches: [main]
+    # Trigger only when an actual addon folder changes. Kodi addon ids are
+    # always prefixed by their kind, so these globs cover all 8 addons (and
+    # any future one) while ignoring manifest.json, README, .github, etc.
+    paths:
+      - "plugin.*/**"
+      - "repository.*/**"
+      - "script.*/**"
+      - "service.*/**"
+      - "skin.*/**"
+      - "userdata/**"
+      - ".github/pov-host-migration.json"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+# Never run two releases at once: they share one rolling release + manifest.
+concurrency:
+  group: build-and-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: addons-latest
+  REPO: MoranTheKing/Kodi-POV-IL
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  build-and-release:
+    if: github.repository == 'MoranTheKing/Kodi-POV-IL'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Carry verified community-pool credential from last public quickfix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, os, zipfile
+          archive = Path('dist/Kodi-POV-IL-FENtastic-quickfix-0.1.611.zip')
+          expected = 'f3fe7e5516178f252205f231e614be59d2d0ddb18f20ad0fad2ec5b9768390fe'
+          if not archive.is_file() or hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
+              raise SystemExit('last public quickfix is missing or changed')
+          with zipfile.ZipFile(archive) as package:
+              if package.testzip():
+                  raise SystemExit('last public quickfix failed CRC')
+              payload = package.read('addons/service.subtitles.kodipovilai/resources/lib/pool.py')
+          target = Path(os.environ['RUNNER_TEMP']) / 'povil-pool-credential.py'
+          target.write_bytes(payload)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write('POVIL_POOL_CARRY_FILE=' + str(target) + '\n')
+          print('Verified previous pool credential for modular packaging')
+          PY
+
+      - name: Start with an empty packaging directory
+        run: |
+          # The existing public repository tracks historical archives in
+          # dist/. They are not modular release inputs. A fresh CI checkout
+          # must never publish or hash one as a newly built modular addon.
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          root = Path.cwd().resolve()
+          target = (root / 'dist').resolve()
+          if target.parent != root or target.is_symlink():
+              raise SystemExit('refusing unexpected packaging directory')
+          if target.exists():
+              shutil.rmtree(target)
+          target.mkdir()
+          PY
+
+      - name: Verify modular migration and update rules
+        run: python -m unittest discover -s tests
+
+      - name: Detect changed addons
+        id: detect
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            IDS=$(python .github/scripts/list_changed.py all)
+          else
+            IDS=$(python .github/scripts/list_changed.py diff "${{ github.event.before }}" "${{ github.sha }}")
+          fi
+          echo "Changed addons:"
+          echo "${IDS:-<none>}"
+          JOINED=$(printf '%s' "$IDS" | tr '\n' ' ' | sed -e 's/^ *//' -e 's/ *$//')
+          echo "ids=$JOINED" >> "$GITHUB_OUTPUT"
+          if [ -z "$JOINED" ]; then
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Detect a build-config (userdata/) change independently of addons.
+          # Manual runs always rebuild the config; pushes rebuild it only when
+          # a file under userdata/ actually changed.
+          CONFIG_CHANGED=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CONFIG_CHANGED=true
+          elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null \
+                 | grep -qE '^userdata/'; then
+            CONFIG_CHANGED=true
+          fi
+          echo "config=$CONFIG_CHANGED" >> "$GITHUB_OUTPUT"
+
+          HOST_CHANGED=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            HOST_CHANGED=true
+          elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null \
+               | grep -qFx '.github/pov-host-migration.json'; then
+            HOST_CHANGED=true
+          fi
+          echo "host=$HOST_CHANGED" >> "$GITHUB_OUTPUT"
+
+          if [ "$JOINED" != "" ] || [ "$CONFIG_CHANGED" = "true" ] || [ "$HOST_CHANGED" = "true" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build addon zips
+        if: steps.detect.outputs.any == 'true'
+        run: |
+          set -euo pipefail
+          python .github/scripts/build_addons.py ${{ steps.detect.outputs.ids }}
+          # Publish a STABLE-named copy of the wizard zip for the permanent
+          # install link (...-latest.zip). The versioned zip stays alongside it
+          # so the manifest can still drive update detection.
+          WIZ=$(ls dist/plugin.program.kodipovilwizard-*.zip 2>/dev/null \
+                  | grep -vE -- '-latest\.zip$' || true)
+          if [ -n "$WIZ" ]; then
+            cp "$WIZ" dist/plugin.program.kodipovilwizard-latest.zip
+            echo "Created stable wizard copy: plugin.program.kodipovilwizard-latest.zip"
+          fi
+          echo "--- dist ---"
+          ls -la dist/
+
+      - name: Build config zip
+        if: steps.detect.outputs.config == 'true'
+        run: |
+          set -euo pipefail
+          python .github/scripts/build_config.py
+          echo "--- dist ---"
+          ls -la dist/
+
+      - name: Publish to rolling release
+        if: steps.detect.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          TAG="$RELEASE_TAG"
+
+          # Ensure the rolling release exists.
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Creating release $TAG"
+            gh release create "$TAG" \
+              --title "POV IL Addons (latest)" \
+              --notes "Rolling release that always holds the current zip of every addon. Updated automatically by CI; consumed via manifest.json." \
+              --target main
+          fi
+
+          # A versioned filename is immutable. If code changed without a
+          # version bump, fail instead of silently replacing an asset that an
+          # existing manifest (or rollback) already references.
+          mkdir -p dist-verify
+          ASSETS=$(gh release view "$TAG" --json assets -q '.assets[].name')
+          for file in dist/*.zip; do
+            name=$(basename "$file")
+            case "$name" in *-latest.zip) continue ;; esac
+            if printf '%s\n' "$ASSETS" | grep -Fxq "$name"; then
+              gh release download "$TAG" -p "$name" -D dist-verify
+              if ! cmp -s "$file" "dist-verify/$name"; then
+                echo "ERROR: immutable release asset $name has different bytes; bump its version" >&2
+                exit 1
+              fi
+            else
+              gh release upload "$TAG" "$file"
+              gh release download "$TAG" -p "$name" -D dist-verify
+              cmp "$file" "dist-verify/$name"
+            fi
+          done
+
+      - name: Regenerate manifest.json
+        if: steps.detect.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          python .github/scripts/gen_manifest.py
+
+      - name: Verify pinned official POV migration package
+        if: steps.detect.outputs.proceed == 'true'
+        run: |
+          python - <<'PY'
+          import hashlib, json, urllib.request
+          entry = json.load(open('manifest.json', encoding='utf-8'))['pov_host_migration']
+          with urllib.request.urlopen(entry['zip'], timeout=30) as response:
+              payload = response.read(entry['size'] + 1)
+          if len(payload) != entry['size'] or hashlib.sha256(payload).hexdigest() != entry['sha256']:
+              raise SystemExit('official POV migration package hash/size changed')
+          print('Official POV migration package verified:', entry['version'])
+          PY
+
+      - name: Verify every manifest target exists on release
+        if: steps.detect.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          TAG="$RELEASE_TAG"
+          ASSETS=$(gh release view "$TAG" --json assets -q '.assets[].name' 2>/dev/null || true)
+          python - "$ASSETS" <<'PY'
+          import json, sys
+          assets = set(sys.argv[1].splitlines())
+          manifest = json.load(open('manifest.json'))
+          entries = list(manifest.get('addons', {}).values()) + [manifest.get('config') or {}]
+          missing = [e.get('filename') for e in entries
+                     if not e.get('filename') or not e.get('sha256')
+                     or e['filename'] not in assets]
+          if missing:
+              raise SystemExit('manifest assets missing or unverified: ' + repr(missing))
+          PY
+
+      - name: Refresh stable Wizard install link
+        if: steps.detect.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          if [ -f dist/plugin.program.kodipovilwizard-latest.zip ]; then
+            gh release upload "$RELEASE_TAG" dist/plugin.program.kodipovilwizard-latest.zip --clobber
+          fi
+
+      - name: Commit manifest.json
+        if: steps.detect.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          if git diff --cached --quiet; then
+            echo "manifest.json unchanged -- nothing to commit"
+            exit 0
+          fi
+          git commit -m "chore(manifest): update addon manifest [skip ci]"
+          BRANCH="${{ github.ref_name }}"
+          # A concurrent source change requires a fresh build and review.
+          git push origin "HEAD:${BRANCH}"

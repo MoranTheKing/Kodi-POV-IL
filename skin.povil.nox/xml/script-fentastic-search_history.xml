@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="SearchHistory">
+        <item>
+            <label>$NUMBER[שובר שורות]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[ השוטרים]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[ליאון]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[נמלטים]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[משחקי הכס]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[רובי נגד הזרים]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[משחקי הרעב]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[מהיר ועצבני]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[לאון]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[רובי נגד הזרם]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[מתילדה]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[סדרות מהלב]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[חדשות]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[אבודים]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+        <item>
+            <label>$NUMBER[בית הנייר]</label>
+            <onclick>RunScript(script.fentastic.helper,mode=re_search)</onclick>
+        </item>
+    </include>
+</includes>

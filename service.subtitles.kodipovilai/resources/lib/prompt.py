@@ -1,0 +1,369 @@
+# The translation prompt. Centralised here so we can iterate on it
+# without touching the orchestration code.
+#
+# The cast block is the secret sauce: Hebrew has heavy gendering on
+# verbs/adjectives and the AI needs to know who's speaking and who
+# they're addressing to pick the right form.
+
+LANG_NAME = {
+    'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
+    'pt': 'Portuguese', 'it': 'Italian', 'ru': 'Russian', 'ar': 'Arabic',
+    'tr': 'Turkish', 'pl': 'Polish', 'nl': 'Dutch', 'el': 'Greek',
+    'fa': 'Persian', 'hi': 'Hindi', 'ja': 'Japanese', 'ko': 'Korean',
+    'zh': 'Chinese', 'cs': 'Czech', 'ro': 'Romanian', 'sv': 'Swedish',
+    'da': 'Danish', 'fi': 'Finnish', 'no': 'Norwegian', 'hu': 'Hungarian',
+    'uk': 'Ukrainian', 'bg': 'Bulgarian', 'hr': 'Croatian', 'sr': 'Serbian',
+    'th': 'Thai', 'id': 'Indonesian', 'vi': 'Vietnamese', 'he': 'Hebrew',
+    'sk': 'Slovak', 'ur': 'Urdu',
+}
+
+
+def build(source_lang, title, year, cast, is_episode=False,
+          tvshow='', season='', episode=''):
+    """Return the system+user prompt as a single string."""
+
+    src_name = LANG_NAME.get(source_lang, source_lang or 'English')
+
+    if is_episode and tvshow:
+        context_line = '"{0}", Season {1} Episode {2}'.format(
+            tvshow, season or '?', episode or '?')
+        if title:
+            context_line += ' ("{0}")'.format(title)
+        if year:
+            context_line += ' ({0})'.format(year)
+    elif title:
+        context_line = '"{0}"'.format(title)
+        if year:
+            context_line += ' ({0})'.format(year)
+    else:
+        context_line = 'an unknown title'
+
+    if cast:
+        lines = []
+        for c in cast:
+            name = c.get('name') or ''
+            char = c.get('character') or ''
+            gender = c.get('gender') or 'unknown'
+            if not name and not char:
+                continue
+            if char and gender in ('male', 'female'):
+                lines.append('- {0} ({1}, played by {2})'.format(char, gender, name))
+            elif char:
+                lines.append('- {0} (gender unknown, played by {1})'.format(char, name))
+            elif gender in ('male', 'female'):
+                lines.append('- {0} ({1})'.format(name, gender))
+            else:
+                lines.append('- {0}'.format(name))
+        cast_block = (
+            'Cast (use these to choose correct Hebrew gender forms):\n'
+            + '\n'.join(lines)
+        )
+    else:
+        cast_block = (
+            'Cast information was not available. Infer character '
+            'gender from dialogue context (names, pronouns, replies). '
+            'When ambiguous, prefer the neutral or plural form.'
+        )
+
+    return (
+        'You are a professional subtitle translator for Hebrew. Translate '
+        'the following {src} subtitles to Hebrew.\n\n'
+        'Context: {ctx}\n\n'
+        '{cast}\n\n'
+        'CRITICAL OUTPUT INVARIANTS (read before anything else):\n'
+        '- The output MUST contain EXACTLY the same number of subtitle '
+        'entries as the input, in the SAME ORDER.\n'
+        '- Every input entry number must appear EXACTLY ONCE in the '
+        'output. No skipping, no duplicating, no merging.\n'
+        '- Every input timecode line ("HH:MM:SS,mmm --> HH:MM:SS,mmm") '
+        'must appear in the output EXACTLY as written. Do not change '
+        'them by a single character.\n'
+        '- The TEXT inside an entry is the only thing you change. If '
+        'an input entry has 1 text line, your output entry should have '
+        '1 text line; if 2 lines, 2 lines.\n'
+        '- Preserve the physical text-line order inside each entry: '
+        'line 1 stays line 1, line 2 stays line 2. Do not swap stacked '
+        'dialogue lines.\n'
+        '- Each output entry separated from the next by a single blank '
+        'line. Standard SRT shape.\n\n'
+        'GENDER AGREEMENT (most important translation rule -- Hebrew '
+        'is heavily gendered and getting this wrong is the #1 quality '
+        'complaint):\n'
+        '- Before translating each line, identify (a) who is speaking '
+        'and (b) who they are addressing. Use the cast block above, '
+        'the surrounding lines (reply patterns, named addressees, '
+        'scene continuity), and any name/pronoun cues to decide.\n'
+        '- Then pick the Hebrew form that matches:\n'
+        '    * 1st person ("I am tired", "I went") -> SPEAKER gender.\n'
+        '      Male speaker: "אני עייף", "אני הלכתי".\n'
+        '      Female speaker: "אני עייפה", "אני הלכתי" (same past '
+        'tense form, but adjectives differ -- "עייפה" not "עייף").\n'
+        '    * 2nd person ("you are", "you should") -> ADDRESSEE gender.\n'
+        '      Speaking to a man: "אתה צודק", "אתה רוצה".\n'
+        '      Speaking to a woman: "את צודקת", "את רוצה".\n'
+        '      Speaking to a group: "אתם" / "אתן".\n'
+        '    * 3rd person ("he/she/they", "him/her") -> REFERENT gender.\n'
+        '      About a man: "הוא הלך", "ראיתי אותו".\n'
+        '      About a woman: "היא הלכה", "ראיתי אותה".\n'
+        '- Possessives and adjectives describing a person also inflect '
+        'for that person\'s gender: "אבא שלך" / "אמא שלך" (your dad / '
+        'your mom). "החבר שלי" (male friend) vs "החברה שלי" (female '
+        'friend).\n'
+        '- DOUBLE-CHECK every verb, adjective, pronoun and possessive '
+        'before finalising the entry. If the same character continues '
+        'speaking across multiple entries, KEEP the gender consistent '
+        '-- don\'t switch mid-scene.\n'
+        '- Only when the speaker / addressee is genuinely unknowable '
+        'from context AND the cast block (very rare), prefer a neutral '
+        'or plural-form phrasing over guessing wrong. (Better still, '
+        'restructure the sentence to avoid the gendered form entirely '
+        'rather than guess.)\n'
+        '- SPEAKER-PREFIX HINT (use this -- do NOT just drop it as I '
+        'used to instruct): if a line starts with an ALL-CAPS speaker '
+        'tag like "MABEL:" or "JOHN-PAUL:" or "DR. SMITH:", that is '
+        'the explicit speaker. Match the name (case-insensitively) '
+        'against the cast block above; if you find them, use their '
+        'gender for first-person forms in that line AND for context '
+        'when the next reply addresses them. THEN drop the tag from '
+        'your Hebrew output (do not translate the prefix itself). If '
+        'the prefix names a character NOT in the cast block, still '
+        'use it as a consistent speaker identifier across the chunk -- '
+        'pick a gender from contextual cues on first encounter, then '
+        'keep it.\n'
+        '- REPLY HEURISTIC: in two-character dialogue, a short line '
+        '(typically 1-5 words, often a confirmation / denial / '
+        'rhetorical question like "Right.", "No way.", "You sure?", '
+        '"I told you.") that immediately follows another line is most '
+        'likely a REPLY from the OTHER person. Speakers ALTERNATE '
+        'unless context says otherwise. Apply the alternation rule '
+        'before falling back to "guess gender from cast".\n\n'
+        'PUNCTUATION POSITION (critical for RTL rendering):\n'
+        '- In the SOURCE TEXT you write, punctuation that belongs at '
+        'the end of a Hebrew sentence (period, question mark, '
+        'exclamation mark, comma, colon, semicolon, ellipsis) MUST be '
+        'placed AFTER the last Hebrew word, not before the first one.\n'
+        '- Correct:   "מה שלומך?"   Wrong: "?מה שלומך"\n'
+        '- Correct:   "אני בא, חכה."   Wrong: ".אני בא, חכה"\n'
+        '- Correct:   "באמת!"   Wrong: "!באמת"\n'
+        '- Even though Hebrew RENDERS right-to-left on screen, in the '
+        'plain-text representation you produce, the punctuation goes '
+        'AFTER the Hebrew word in the source-order sequence. Kodi\'s '
+        'subtitle renderer will then position it correctly on screen.\n'
+        '- This applies to every sentence and every sub-clause. A '
+        'common AI failure mode is to put the punctuation at the '
+        'logical start; do NOT do that.\n'
+        '- Quotation marks: wrap quoted speech with regular " on both '
+        'ends, opening before the quoted phrase and closing after it: '
+        '"אמרתי \\"שלום\\" וזזתי" (the inner content stays as-is).\n\n'
+        'OTHER TRANSLATION RULES:\n'
+        '1. Use natural conversational Hebrew. Idioms should sound '
+        'native, not literal.\n'
+        '2. Translate dialogue and meaningful song lyrics into Hebrew, '
+        'including dialogue in a different language from the file label. '
+        'The label names only the main language. A change of language or '
+        'music symbols is NOT a reason to leave understandable text '
+        'untranslated. In particular, translate English lines even when '
+        'surrounded by other-language lyrics. Preserve music symbols and '
+        'HTML tags like <i></i>. Do not invent meaning for genuinely '
+        'unintelligible words; preserve only those words and translate '
+        'the rest.\n'
+        '3. Do NOT add hearing-impaired annotations like [breathing], '
+        '(music playing), {{chuckles}}, or [BACKGROUND NOISE]. Drop '
+        'them in the Hebrew output. (NOTE: ALL-CAPS speaker prefixes '
+        '"NAME:" are handled by the SPEAKER-PREFIX HINT rule above -- '
+        'USE them for gender inference, then drop only the prefix '
+        'from the output.)\n'
+        '4. Output ONLY the SRT content. No commentary, no preface, no '
+        'closing remarks.\n\n'
+        '{{prev_context_block}}'
+        'SRT to translate ({entry_count} entries):\n\n'
+        '{{chunk}}\n'
+    ).format(src=src_name, ctx=context_line, cast=cast_block,
+             entry_count='{entry_count}')
+
+
+def build_prev_context_block(prev_context_lines):
+    """Format the cross-chunk continuity block. `prev_context_lines`
+    is a list of strings -- the dialogue text from the last few
+    entries of the PREVIOUS chunk. Returns the prompt section as a
+    string, or '' for the first chunk (no previous context).
+
+    Keeping this as a helper rather than building inline so the
+    string formatting stays out of the chunk-dispatch hot path in
+    translate.py.
+    """
+    if not prev_context_lines:
+        return ''
+    body = '\n'.join('   ' + ln for ln in prev_context_lines
+                     if ln and ln.strip())
+    if not body.strip():
+        return ''
+    return (
+        'PREVIOUS DIALOGUE CONTEXT (for continuity only -- ALREADY '
+        'translated in a previous chunk; DO NOT include these in '
+        'your output, just use them to remember who was just '
+        'speaking and which gender forms apply):\n'
+        + body + '\n\n'
+    )
+
+
+# How each reference-chain language marks gender -- one compact line injected
+# into the generic gender-reference block (see build_gender_block). Only the
+# non-Arabic, non-Hebrew languages need an entry; unknown codes get a safe
+# generic sentence.
+_GENDER_SIGNALS = {
+    'es': 'adjectives and participles end in -o (masc) / -a (fem); pronouns '
+          'and articles (el/ella, este/esta) mark referent gender',
+    'fr': 'adjectives and past participles agree in gender (fatigué/fatiguée, '
+          'il/elle); "tu es ...e" endings mark the ADDRESSEE as feminine',
+    'ru': 'past-tense verbs mark the SPEAKER/subject gender (сказал/сказала, '
+          'устал/устала); adjectives agree in gender',
+    'it': 'adjectives and participles end in -o (masc) / -a (fem) '
+          '(stanco/stanca, sei sicuro/sicura); lui/lei mark referents',
+    'pt': 'adjectives and participles end in -o (masc) / -a (fem) '
+          '(cansado/cansada, obrigado/obrigada); ele/ela mark referents',
+    'pl': 'past-tense verbs mark gender (zrobiłem/zrobiłam for the speaker, '
+          'zrobiłeś/zrobiłaś for the addressee); adjectives agree',
+    'uk': 'past-tense verbs mark the speaker/subject gender (сказав/сказала); '
+          'adjectives agree in gender',
+    'hi': 'verbs inflect for gender (karta/karti hoon marks the SPEAKER, '
+          'karte/karti ho the ADDRESSEE); adjectives in -a/-i agree',
+    'cs': 'past-tense verbs mark gender (řekl/řekla, byl jsi/byla jsi for '
+          'the addressee); adjectives agree',
+    'ro': 'adjectives and participles agree in gender (obosit/obosită, '
+          'sigur/sigură); el/ea mark referents',
+    'el': 'articles, adjectives and participles mark gender '
+          '(κουρασμένος/κουρασμένη, αυτός/αυτή)',
+    'bg': 'past-tense verbs mark gender (казал/казала, уморен/уморена); '
+          'adjectives agree',
+    'sr': 'past participles mark gender (rekao/rekla, umoran/umorna for '
+          'speaker and addressee); adjectives agree',
+    'hr': 'past participles mark gender (rekao/rekla, umoran/umorna for '
+          'speaker and addressee); adjectives agree',
+    'sk': 'past-tense verbs mark gender (povedal/povedala, bol si/bola si '
+          'for the addressee); adjectives agree',
+    'ur': 'verbs inflect for gender (karta/karti hoon marks the SPEAKER, '
+          'karte/karti ho the ADDRESSEE); adjectives agree',
+    'nl': 'pronouns (hij/zij, hem/haar) mark referent gender',
+}
+
+# Shared FIDELITY clause: the reference is ONLY a gender oracle; wording always
+# comes from the source text being translated.
+_FIDELITY_CLAUSE = (
+    'FIDELITY (critical -- read carefully): translate the SOURCE text '
+    'itself, completely and in natural Hebrew. The {ref} reference is ONLY a '
+    'gender oracle. Take from it the gender and NOTHING else -- not wording, '
+    'not phrasing, not length, not meaning. Specifically:\n'
+    '  * Translate EVERY source word and detail. Do not drop, shorten, '
+    'merge or summarise -- keep fillers ("uh", "well", "look"), repetitions '
+    '("I don\'t... I don\'t..."), intensifiers and profanity ("fucking"), '
+    'and small words like "out", "in there", "back", "just".\n'
+    '  * The {ref} human translation is often SHORTER or looser than the '
+    'source -- IGNORE that. Match the source, not the reference\'s brevity.\n'
+    '  * Proper nouns, place names, slang and idioms come from the SOURCE '
+    'meaning -- NEVER transliterate the reference. Render slang/idioms '
+    'naturally from the source.\n'
+    '  * If the reference paraphrases, omits, or differs from the source in '
+    'ANY way, follow the SOURCE and ignore the reference difference.\n'
+)
+
+
+def build_gender_block(entry_ref, lang='ar'):
+    """Build the gender-reference block for any chain language. `entry_ref` is
+    a list of (entry_number, reference_text) for THIS chunk -- the time-aligned
+    line from a HUMAN translation of the same scene in `lang`. Returns '' when
+    no entry has a usable reference line.
+
+    'ar' keeps the original, field-validated Arabic wording verbatim (lifts
+    gender accuracy ~27% -> ~90%+); 'he' gets a dedicated block (the reference
+    IS Hebrew -- read the gender straight off it); anything else gets a generic
+    block with a per-language description of the gender markers."""
+    rows = [(n, t) for (n, t) in entry_ref if t and t.strip()]
+    if not rows:
+        return ''
+    body = '\n'.join('{0}: {1}'.format(n, t) for (n, t) in rows)
+    if lang == 'ar':
+        return _arabic_block_text(body)
+    if lang == 'he':
+        return (
+            'HEBREW GENDER REFERENCE -- GENDER EVIDENCE, SUBJECT TO SOURCE FIDELITY.\n'
+            'For some entries below, the line from a PROFESSIONAL HUMAN Hebrew '
+            'translation of the SAME scene is given (it comes from a different '
+            'video cut, so its wording may be aligned imperfectly). Hebrew '
+            'marks gender everywhere; for each such entry when consistent with explicit source evidence, make your '
+            'Hebrew agree in SPEAKER / ADDRESSEE / REFERENT gender with the '
+            'reference line (אתה/את, masculine/feminine verbs and adjectives). '
+            'Do NOT default to masculine -- read the reference and match it.\n'
+            '- Entry not listed / reference gender-neutral -> use the cast '
+            'block + context instead.\n'
+            + _FIDELITY_CLAUSE.format(ref='Hebrew') +
+            'Per-entry Hebrew reference (entry_number: hebrew_line):\n'
+            + body + '\n\n'
+            + 'SOURCE PRIORITY: If the source explicitly establishes gender or relationship (for example daughter versus son), it overrides a contradictory reference. Never change daughter into son or another source fact to match the reference. Use reference gender when the source does not settle it. Apply this separately to speaker, listener and referent; do not guess a new speaker from adjacency.\n\n'
+        )
+    name = LANG_NAME.get(lang, lang.upper())
+    signals = _GENDER_SIGNALS.get(
+        lang, 'gendered forms (adjectives, verbs, pronouns) mark speaker / '
+              'addressee / referent gender')
+    return (
+        '{0} GENDER REFERENCE -- HARD CONSTRAINT, NOT A HINT.\n'
+        'For some entries below, the line from a PROFESSIONAL HUMAN {1} '
+        'translation of the SAME scene is given. In {1}, {2}. For each such '
+        'entry you MUST make the Hebrew agree in gender with the reference: '
+        'identify from the {1} line whether the SPEAKER, the ADDRESSEE or a '
+        'REFERENT is masculine or feminine, and pick the matching Hebrew '
+        'forms (אתה/את, masculine/feminine verbs and adjectives). Do NOT '
+        'default to masculine -- read the markers and match them.\n'
+        '- Entry not listed / reference gender-neutral -> use the cast '
+        'block + context instead.\n'.format(name.upper(), name, signals)
+        + _FIDELITY_CLAUSE.format(ref=name) +
+        'Per-entry {0} reference (entry_number: reference_line):\n'.format(name)
+        + body + '\n\n'
+    )
+
+
+def build_arabic_gender_block(entry_arabic):
+    """Back-compat wrapper: the original Arabic-only entry point."""
+    return build_gender_block(entry_arabic, 'ar')
+
+
+def _arabic_block_text(body):
+    """The original, field-validated Arabic gender block (verbatim).
+
+    Validated: lifts gender accuracy ~27% (cast-only) -> ~90%+, zero regressions,
+    while the FIDELITY clause keeps wording faithful to the English."""
+    return (
+        'ARABIC GENDER REFERENCE -- HARD CONSTRAINT, NOT A HINT.\n'
+        'For some entries below, the line from a PROFESSIONAL HUMAN Arabic '
+        'translation of the SAME scene is given. Arabic, like Hebrew, '
+        'explicitly marks the gender of the ADDRESSEE and the SPEAKER. For each '
+        'such entry you MUST make the Hebrew agree in gender with its Arabic. '
+        'Do NOT default to masculine -- read the markers and match them:\n'
+        '- ADDRESSEE FEMININE when the Arabic has أنتِ , a ـكِ ending, a present '
+        'verb ending ـين (تحاولين/تفعلين), or a feminine imperative ending ـي '
+        '(اسمعي، دعيني، أغلقي، ابتعدي) -> Hebrew feminine: את / תקשיבי / תני.\n'
+        '- ADDRESSEE MASCULINE when the Arabic has أنتَ , a ـكَ ending, a present '
+        'verb without ـين (تعرف/تحاول), or a masculine imperative (اسمع، دع، '
+        'أغلق، ابتعد) -> Hebrew masculine: אתה / תקשיב / תן.\n'
+        '- SPEAKER FEMININE when the Arabic 1st-person adjective is feminine '
+        '(محظوظة، ناضجة، متأكدة) -> Hebrew feminine 1st person (אני בטוחה).\n'
+        '- Entry not listed / Arabic gender-neutral -> use the cast block + '
+        'context instead.\n'
+        'FIDELITY (critical -- read carefully): translate the ENGLISH text '
+        'itself, completely and in natural Hebrew. The Arabic is ONLY a gender '
+        'oracle. Take from it the gender and NOTHING else -- not wording, not '
+        'phrasing, not length, not meaning. Specifically:\n'
+        '  * Translate EVERY English word and detail. Do not drop, shorten, '
+        'merge or summarise -- keep fillers ("uh", "well", "look"), repetitions '
+        '("I don\'t... I don\'t..."), intensifiers and profanity ("fucking"), '
+        'and small words like "out", "in there", "back", "just".\n'
+        '  * The Arabic human translation is often SHORTER or looser than the '
+        'English -- IGNORE that. Match the English, not the Arabic\'s brevity.\n'
+        '  * Proper nouns, place names, slang and idioms come from the ENGLISH '
+        'meaning -- e.g. "Colony House" -> "בית המושבה" (translate it; NEVER '
+        'transliterate the Arabic). Render slang/idioms naturally from English.\n'
+        '  * If the Arabic paraphrases, omits, or differs from the English in '
+        'ANY way, follow the ENGLISH and ignore the Arabic difference.\n'
+        'Per-entry Arabic (entry_number: arabic_line):\n'
+        + body + '\n\n'
+    )

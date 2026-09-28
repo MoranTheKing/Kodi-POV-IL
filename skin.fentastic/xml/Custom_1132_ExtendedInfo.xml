@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="extendedinfodialog" id="1132">
+	<defaultcontrol always="true">5000</defaultcontrol>
+	<controls>
+
+	<control type="button" id="5001">
+		<height>1</height>
+		<width>1</width>
+		<label />
+		<onfocus>Close</onfocus>
+	</control>
+	<control type="button" id="5002">
+		<height>1</height>
+		<width>1</width>
+		<label />
+		<onback>5000</onback>
+	</control>
+	<!--################ -->
+	<control type="group">
+	</control>
+	<control type="group">
+	<include content="AdvancedGlobalViewBackGround">
+		<param name="fanart">$INFO[Window(home).Property(bgimageinfo)]</param>
+	</include>
+	</control>
+	<include>__TopBasedExtndedinfo__</include>
+	<!--################ -->
+	<control type="group">
+	<width>95%</width>
+	<centerleft>50%</centerleft>
+	<control type="grouplist">
+	<align>center</align>
+	<aligny>center</aligny>
+	<height>555</height>
+	<centertop>50%</centertop>
+	<orientation>vertical</orientation>
+	<itemgap>15</itemgap>
+	<aligny>center</aligny>
+	<include>GlobalTop2DownAnimation</include>
+	<control type="group">
+	<width>650</width>
+	<height>120</height>
+	<control type="image">
+		<left>700</left>
+		<width max="420">auto</width>
+		<height>120</height>
+		<aspectratio align="center">stretch</aspectratio>
+		<texture background="true">$INFO[Window(home).Property(extendedinfoclearlogo)]</texture>
+		<animation effect="zoom" start="0,100" end="90" time="1000" delay="350" center="auto" tween="back" easing="out" reversible="true">Visible</animation>
+		<animation effect="zoom" start="0,100" end="90" time="1000" delay="350" center="auto" tween="back" easing="out" reversible="true">WindowOpen</animation>
+	</control>
+	</control>
+	<control type="label">
+		<align>center</align>
+		<font>font45_title</font>
+		<height max="55">auto</height>
+		<label>$INFO[Window(home).Property(extendedinfolabel)]</label>
+	</control>
+	<control type="label">
+		<align>center</align>
+		<font>font32_title</font>
+		<height max="45">auto</height>
+		<label>$INFO[Window(home).Property(extendedinfogenre)]</label>
+	</control>
+	<control type="label">
+		<align>center</align>
+		<height max="55">auto</height>
+		<label>$INFO[Window(home).Property(extendedinfoseasonepisode)]</label>
+		<visible>$EXP[__episode]</visible>
+	</control>	
+	<control type="textbox">
+		<align>center</align>
+		<font>font37</font>
+		<height max="160">auto</height>
+		<label>$INFO[Window(home).Property(extendedinfoplot)]</label>
+	</control>
+	<control type="grouplist" id="5000">
+	<orientation>horizontal</orientation>
+	<include>GlobalDown2TopAnimation</include>
+	<align>center</align>
+	<height>75</height>
+	<control type="button" id="300">
+		<width>172</width>
+		<height>65</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<onback>5001</onback>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>נגן Pov</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>Dialog.Close(1132)</onclick>
+		<onclick>$INFO[Window(home).Property(povplayeroffsetmovie)]</onclick>
+		<visible>String.IsEqual(Window(home).Property(extenedinfodbtype),movie)</visible>
+	</control>	
+	<control type="button" id="301">
+		<width>172</width>
+		<height>65</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>נגן אוט' Pov</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>Dialog.Close(1132)</onclick>
+		<onclick>$INFO[Window(home).Property(povplayeroffsetmovieauto)]</onclick>
+		<visible>String.IsEqual(Window(home).Property(extenedinfodbtype),movie)</visible>
+	</control>	
+	<control type="button" id="302">
+		<width>172</width>
+		<height>65</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>נגן Pov</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>Dialog.Close(1132)</onclick>
+		<onclick>$INFO[Window(home).Property(povplayeroffsetepisode)]</onclick>
+		<visible>String.IsEqual(Window(home).Property(extenedinfodbtype),episode)</visible>
+	</control>
+	<control type="button" id="304">
+		<width>172</width>
+		<height>65</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>נגן אוט' Pov</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>Dialog.Close(1132)</onclick>
+		<onclick>$INFO[Window(home).Property(povplayeroffsetepisodeauto)]</onclick>
+		<visible>String.IsEqual(Window(home).Property(extenedinfodbtype),episode)</visible>
+	</control>
+	<control type="button" id="305">
+		<width>172</width>
+		<height>65</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>נגן קדימון</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>$INFO[Window(home).Property(extendedinfotrailer)]</onclick>
+		<onclick>ReplaceWindow(1133)</onclick>
+		<visible>!String.IsEmpty(Window(home).Property(extendedinfotrailer)</visible>
+	</control>	
+	<control type="button" id="306">
+		<width>172</width>
+		<height>65</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>עונות</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>ReplaceWindow(1134)</onclick>
+		<visible>String.IsEqual(Window(home).Property(extenedinfodbtype),tvshow)</visible>
+	</control>	
+	<control type="button" id="307">
+		<width>172</width>
+		<height>65</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>אקסטרה</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>$INFO[Window(home).Property(extendedinfoextrachoicetvshow)]</onclick>
+		<visible>String.IsEqual(Window(home).Property(extenedinfodbtype),tvshow)</visible>
+	</control>
+	<control type="button" id="308">
+		<width>172</width>
+		<height>65</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>אקסטרה</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>$INFO[Window(home).Property(extendedinfoextrachoicemovie)]</onclick>
+		<visible>String.IsEqual(Window(home).Property(extenedinfodbtype),movie)</visible>
+	</control>
+	<control type="button" id="309">
+		<width>172</width>
+		<height>65</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>הרחב מידע</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>Control.SetFocus(5002)</onclick>
+	</control>
+	<control type="button" id="310">
+		<width>172</width>
+		<height>65</height>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font10</font>
+		<texturefocus>masks/menu.png</texturefocus>
+		<texturenofocus/>
+		<label>סגור חלון</label>
+		<focusedcolor>black</focusedcolor>
+		<onclick>Action(close)</onclick>
+	</control>
+	</control>
+	</control>
+	</control>
+<control type="group">
+	<visible>Control.HasFocus(5002)</visible>
+	<!-- הטריק: שומר את הקבוצה גלויה למשך 400 אלפיות שנייה כשהפוקוס עוזב, כדי שהרוורס יספיק לעבוד -->
+	<animation effect="fade" start="100" end="100" time="400">Hidden</animation>
+	<control type="image">
+		<width>1920</width>
+		<height>500</height>
+		<centertop>50%</centertop>
+		<texture>colors/white.png</texture>
+		<colordiffuse>black</colordiffuse>
+		<!-- החזרנו לאנימציית ה-Conditional המקורית שלך שנפתחת מושלם מהאמצע -->
+		<animation effect="zoom" start="100,0" end="100,100" center="auto" time="400" tween="sine" easing="out" condition="Control.HasFocus(5002)" reversible="true">Conditional</animation>
+	</control>
+	<control type="textbox">
+		<width>1920</width>
+		<height>500</height>
+		<centertop>50%</centertop>
+		<align>center</align>
+		<aligny>center</aligny>
+		<font>font45</font>
+		<visible>System.IdleTime(1)</visible>
+		<animation effect="fade" start="0" end="100" time="350">Visible</animation>
+		<!-- הוספנו פייד אאוט גם לטקסט כדי שייעלם באלגנטיות יחד עם הרקע -->
+		<animation effect="fade" start="100" end="0" time="300">Hidden</animation>
+		<label>$INFO[Window(home).Property(extendedinfoplot)]</label>
+	</control>
+</control>
+
+	<!--################ -->
+	</controls>
+</window>

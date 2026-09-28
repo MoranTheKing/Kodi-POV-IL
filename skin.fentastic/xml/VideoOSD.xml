@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<window>
+	<onload condition="!Player.PauseEnabled">SetFocus(603)</onload>
+	<defaultcontrol always="true">201</defaultcontrol>
+	<depth>DepthOSD</depth>
+	<include>OsdBackWindowInfo</include>
+	<include>bottom2topslideanimation</include>
+	<onload>SetProperty(episodesinseasons,$VAR[build_Episodes_Url_OSD],home)</onload>
+	<controls>
+	
+	<!-- <include content="FakedButton"> -->
+	<!-- <param name="id">494343</param> -->
+	<!-- <param name="onfocus">SetFocus(201)</param> -->
+	<!-- </include> -->
+	
+	<control type="group">
+	<include condition="String.IsEqual(Skin.String(__chooseplayer),__advancedplayer)">videosd1</include> <!--נגן מתקדם -->
+	<include condition="String.IsEqual(Skin.String(__chooseplayer),__netflixplayer)">videosd2</include> <!-- נגן נטפליקס -->
+	<include condition="String.IsEqual(Skin.String(__chooseplayer),__simpleplayer)">videosd3</include> <!-- נגן פשוט -->
+	<include condition="String.IsEqual(Skin.String(__chooseplayer),__prettyplayer)">videosd4</include> <!-- נגן למבוגרים -->
+	</control>
+	
+	</controls>
+</window>

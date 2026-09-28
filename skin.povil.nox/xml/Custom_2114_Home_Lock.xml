@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<window id="2114">
+	<defaultcontrol>5050</defaultcontrol>
+	<controls>
+		<include>FullScreenDimensions</include>
+		<control type="multiimage">
+			<depth>DepthBackground</depth>
+			
+			<aspectratio>scale</aspectratio>
+			<fadetime>600</fadetime>
+			<imagepath background="true" colordiffuse="bg_overlay">$VAR[HomeFanartVarNox]</imagepath>
+			<visible>!Player.HasMedia</visible>
+		</control>
+		<control type="grouplist" id="700">
+			<orientation>horizontal</orientation>
+			<itemgap>0</itemgap>
+			<centerleft>95%</centerleft>
+			<width>380</width>
+			<height>110</height>
+			<top>950</top>
+			<onleft>5051</onleft>
+			<align>justify</align>
+			<include content="IconButtonNox" condition="!Skin.HasSetting(OneClickClose)">
+				<param name="control_id" value="802" />
+				<param name="onclick" value="RunPlugin(plugin://plugin.program.kodipovilwizard/?action=force_close)" />
+				<param name="icon" value="icons/power.png" />
+				<param name="label" value="$LOCALIZE[33060]" />
+			</include>
+		</control>
+		<control type="image">
+		<visible>Skin.HasSetting(HomeMenuNoCustom4Button)</visible>
+			<top>280</top>
+			<centerleft>50%</centerleft> 
+			<width>500</width>
+			<height>500</height>
+			<aspectratio>keep</aspectratio>
+			<texture background="true">special://skin/media/logos/K-logo.png</texture>
+		</control>
+		<control type="image">
+		<visible>!Skin.HasSetting(HomeMenuNoCustom4Button)</visible>
+			<top>280</top>
+			<centerleft>50%</centerleft> 
+			<width>500</width>
+			<height>500</height>
+			<aspectratio>keep</aspectratio>
+		  <texture>special://skin/media/logos/dragon_letters.png</texture>
+		</control>
+	<control type="group" id="5050">
+		<top>900</top>
+			<control type="button" id="5051">
+				<include>DialogSettingButton</include>
+				<onright>802</onright>
+				<width>380</width>
+				<height>100</height>
+				<centerleft>50%</centerleft> 
+				<label>[CAPITALIZE][B]לחץ לפתיחה[/B][/CAPITALIZE]</label>
+				<align>center</align>
+				<onclick>RunPlugin(Skin.SetString(_povil_noop,1))</onclick>
+				<!-- <onclick>RunPlugin(Skin.SetString(_povil_noop,1))</onclick> -->
+			</control>
+			
+			
+			
+			
+  </control>
+ </controls>
+</window>

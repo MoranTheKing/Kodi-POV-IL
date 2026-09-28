@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window>
+	<defaultcontrol>9000</defaultcontrol>
+	<include>Animation_DialogPopupOpenClose</include>
+	<controls>
+		<control type="group">
+			<centerleft>50%</centerleft>
+			<width>600</width>
+			<centertop>50%</centertop>
+			<height>700</height>
+			<include content="DialogBackgroundCommons">
+				<param name="width" value="600" />
+				<param name="height" value="560" />
+				<param name="header_label" value="$LOCALIZE[31072]" />
+				<param name="header_id" value="2" />
+				<param name="diffusetexture" value="masks/dialog-bg-squareish.png" />
+			</include>
+			<control type="panel" id="9000">
+				<!-- KODI-POV-IL - Taller power menu list -->
+		<left>0</left>
+		<top>80</top>
+		<width>600</width>
+		<height>455</height>
+		<onleft>9000</onleft>
+		<onright>9000</onright>
+		<onup>9000</onup>
+		<ondown>9000</ondown>
+		<orientation>vertical</orientation>
+		<itemlayout height="70" width="600">
+			<control type="label">
+				<left>0</left>
+				<textoffsetx>20</textoffsetx>
+				<top>25</top>
+				<width>600</width>
+				<height>70</height>
+				<align>center</align>
+				<aligny>center</aligny>
+				<textcolor>unfocused_text</textcolor>
+				<label>$INFO[ListItem.Label]</label>
+			</control>
+			<control type="label">
+				<right>0</right>
+				<textoffsetx>20</textoffsetx>
+				<top>25</top>
+				<width>300</width>
+				<height>70</height>
+				<align>center</align>
+				<aligny>center</aligny>
+				<textcolor>unfocused_text</textcolor>
+				<label>$INFO[ListItem.Label2]</label>
+			</control>
+		</itemlayout>
+		<focusedlayout height="70" width="600">
+			<control type="image">
+				<left>25</left>
+				<top>25</top>
+				<width>550</width>
+				<height>70</height>
+				<texture colordiffuse="button_focus">masks/focus.png</texture>
+			</control>
+			<control type="label">
+				<left>0</left>
+				<textoffsetx>20</textoffsetx>
+				<top>25</top>
+				<width>600</width>
+				<height>70</height>
+				<align>center</align>
+				<aligny>center</aligny>
+				<!-- KODI-RD-IL CHANGES -->
+				<label>$INFO[ListItem.Label]</label>
+				<textcolor>focused_text</textcolor>
+			</control>
+			<control type="label">
+				<right>0</right>
+				<textoffsetx>20</textoffsetx>
+				<top>25</top>
+				<width>300</width>
+				<height>70</height>
+				<align>center</align>
+				<aligny>center</aligny>
+				<textcolor>unfocused_text</textcolor>
+				<label>$INFO[ListItem.Label2]</label>
+			</control>
+		</focusedlayout>
+				<content>
+					<!-- KODI-RD-IL CHANGES -->
+					<item>
+						<!-- CoreELEC only - Reboot to Android TV -->
+						<label>[B][COLOR blue]$LOCALIZE[700069][/COLOR][/B]</label>
+						<onclick>System.ExecWait("/usr/sbin/rebootfromnand")</onclick>
+						<onclick>Reset()</onclick>
+						<visible>System.PathExist("/usr/sbin/rebootfromnand")</visible>
+					</item>
+					<item>
+						<label>[B][COLOR blue]$LOCALIZE[13012][/COLOR][/B]</label>
+						<!-- Original - <onclick>Quit()</onclick> -->
+						<!-- Force Close Kodi Script:  -->
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?action=force_close)</onclick>
+						<visible>System.ShowExitButton</visible>
+					</item>
+					<item>
+						<!-- Open POV Settings  -->
+						<label>[B][COLOR blue]$LOCALIZE[700050][/COLOR][/B]</label>
+						<onclick>Addon.OpenSettings(plugin.video.pov)</onclick>
+					</item>
+					<item>
+						<!-- Clear POV Cache  -->
+						<label>[B][COLOR blue]$LOCALIZE[700052][/COLOR][/B]</label>
+						<onclick>PlayMedia(&quot;plugin://plugin.video.pov/?mode=clear_all_cache&amp;isFolder=false&amp;iconImage=https%3A%2F%2Fi.imgur.com%2FRDNxy36.png&quot;)</onclick>
+					</item>
+					<item>
+						<!-- Build Switch Skin  -->
+						<label>[B][COLOR blue]$LOCALIZE[700058][/COLOR][/B]</label>
+						<onclick>Dialog.Close(all)</onclick>
+						<onclick>PlayMedia(&quot;plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=build_switch_skin&quot;)</onclick>
+					</item>
+					<item>
+						<!-- KODI ANDORID/WINDOWS Update Check -->
+						<label>[B][COLOR blue]$LOCALIZE[700063][/COLOR][/B]</label>
+						<onclick>Dialog.Close(all)</onclick>
+						<onclick>PlayMedia(&quot;plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=kodi_version_update_check&amp;kodi_version_update_check_manual=true&quot;)</onclick>
+						<!-- Android/Windows only -->
+						<visible>false</visible>
+					</item>
+					<item>
+						<!-- Skin settings -->
+						<label>[B][COLOR blue]$LOCALIZE[700018][/COLOR][/B]</label>
+						<onclick>Dialog.Close(all)</onclick>
+						<onclick>ActivateWindow(SkinSettings.xml)</onclick>
+					</item>
+					<item>
+						<!-- Reload skin -->
+						<label>[B][COLOR blue]$LOCALIZE[700017][/COLOR][/B]</label>
+						<onclick>Dialog.Close(all)</onclick>
+						<onclick>ReloadSkin()</onclick>
+					</item>
+					<include>changeplayer_osd</include>
+					<!-- ##################### -->
+				</content>
+			</control>
+		<include content="UpDownArrows">
+			<param name="container_id" value="9000" />
+			<param name="posx" value="276" />
+			<param name="up_posy" value="-40" />
+			<param name="down_posy" value="500" />
+			</include>
+		</control>
+	</controls>
+</window>

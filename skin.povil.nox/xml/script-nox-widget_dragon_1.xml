@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+    <include name="Custom4WidgetsDragon1">
+		<control type="group">
+		<top>380</top>  <!-- 2 וידגטים  -->
+		<!-- <top>320</top>--> <!-- וידגט אחד  -->
+        <include content="WidgetVOD">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=trakt_tv_trending&amp;iconImage=trending&amp;mode=build_tvshow_list&amp;name=32458"/>
+            <param name="widget_header" value="סדרות מתקדמות"/>
+
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="26011"/>
+        </include>
+<!--         <include content="WidgetVOD">
+            <param name="content_path" value="plugin://plugin.video.pov/?action=trakt_tv_trending&amp;iconImage=trending&amp;mode=build_tvshow_list&amp;name=32458"/>
+            <param name="widget_header" value="סדרות מתקדמות"/>
+
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="26011"/>
+        </include> -->
+		</control>
+    </include>
+</includes>
