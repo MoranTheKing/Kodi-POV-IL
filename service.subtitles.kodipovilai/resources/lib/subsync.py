@@ -1494,13 +1494,16 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         selection = (_selection_snapshot()
                      if selection is None else selection)
         if not _selection_matches(selection):
+            _log('delivery skipped: selection no longer owns player')
             return path, None
         if sync_align is None or release_match is None or not enabled():
+            _log('delivery skipped: verifier unavailable or disabled')
             return path, None
         if not path or not os.path.isfile(path):
             return path, None
         playing = playing_release(info)
         if not playing:
+            _log('delivery unverified: playing release unavailable')
             kodi_utils.stage_subtitle_delivery(
                 path, selection=selection,
                 status='unverified', source='no-release')
@@ -1522,6 +1525,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         if rel:
             _pct, tier, _ = release_match.score(playing, rel)
             if tier in release_match.AUTO_OK_TIERS:
+                _log('delivery trusted by release tier: %s' % tier)
                 _record_delivery(info, playing, key, 1.0, 0.0,
                                  cut_signature=cut_signature,
                                  selection=selection)

@@ -641,14 +641,21 @@ def subtitle_candidate_identity(link):
         return _subtitle_link_hash(link)
 
 
+_SELECTION_TOKEN_LOCK = threading.Lock()
+_SELECTION_TOKEN_SEQ = [0]
+
+
 def _new_subtitle_selection_token(link):
+    with _SELECTION_TOKEN_LOCK:
+        _SELECTION_TOKEN_SEQ[0] += 1
+        sequence = _SELECTION_TOKEN_SEQ[0]
     try:
-        seed = '{0}\0{1}\0{2}'.format(
-            time.time_ns(), threading.get_ident(), link or '')
+        seed = '{0}\0{1}\0{2}\0{3}'.format(
+            time.time_ns(), threading.get_ident(), sequence, link or '')
         return hashlib.sha256(seed.encode('utf-8', 'replace')).hexdigest()[:24]
     except Exception:
         return hashlib.sha256(
-            ('{0}\0{1}'.format(time.time(), link or '')).encode(
+            ('{0}\0{1}\0{2}'.format(time.time(), sequence, link or '')).encode(
                 'utf-8', 'replace')).hexdigest()[:24]
 
 
@@ -669,10 +676,11 @@ def clear_subtitle_sync_status():
         pass
 
 
-def set_current_subtitle(link):
+def set_current_subtitle(link, renew=False):
     """Remember which subtitle (by its candidate link) is currently applied,
-    so the picker can mark it as '» נוכחית' next time it opens. Stored on the
-    home window so it's visible across the service / picker processes."""
+    so the picker can mark it as '» נוכחית' next time it opens. ``renew``
+    gives a verified replacement a fresh ownership token even if its row link
+    is unchanged. Stored on the home window across service/picker processes."""
     if not KODI_AVAILABLE:
         return
     try:
@@ -690,7 +698,7 @@ def set_current_subtitle(link):
             old_token = ''
         # A verdict belongs to one selected candidate. Re-selecting the same
         # one preserves its result; selecting anything else invalidates it.
-        if old_link != new_link:
+        if old_link != new_link or renew:
             clear_subtitle_sync_status()
             # Background and manual-delay records are token-scoped. Retire only
             # the selection being replaced, so a late process cannot erase the

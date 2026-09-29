@@ -2687,6 +2687,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         except Exception:
             return False
 
+    def _translation_cancelled():
+        """Stop an obsolete job without affecting callers without a selection."""
+        return (all(_timing_selection.get(k) for k in (
+                    'token', 'link_hash', 'stream_hash'))
+                and not _selection_current())
+
     # Progressive AI callbacks can replace the subtitle in the player. Guard
     # those too, not only the final SubSync result: a stale background process
     # may finish after the viewer chose a human/embedded subtitle.
@@ -4259,7 +4265,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     prev_context_lines = max(0, kodi_utils.get_int(
         'prev_context_lines', 5))
 
+    def _cancel_aware_wait(seconds):
+        deadline = time.monotonic() + max(0.0, float(seconds))
+        while time.monotonic() < deadline:
+            if _translation_cancelled():
+                raise _AbortTranslation('cancelled', '')
+            time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+
     def _call_gemini(idx, ch, ref_level=0):
+        if _translation_cancelled():
+            raise _AbortTranslation('cancelled', '')
         body = '\n\n'.join(ch)
         prev_ctx_block = prompt.build_prev_context_block(
             _source_context_for_subchunk(
@@ -4306,7 +4321,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         filtered_attempts = 0
         ratelimit_attempts = 0
         while True:
+            if _translation_cancelled():
+                raise _AbortTranslation('cancelled', '')
             _gemini_rate_gate(_rpm_interval)   # pace to stay under the RPM cap
+            if _translation_cancelled():
+                raise _AbortTranslation('cancelled', '')
             try:
                 response = gemini.generate(
                     api_key=api_key,
@@ -4363,7 +4382,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         _ratelimit_notified[0] = True
                         kodi_utils.notify(
                             'AI: קצב זמני מוגבל, ממתין רגע…', time_ms=4000)
-                    time.sleep(wait)
+                    _cancel_aware_wait(wait)
                     continue
                 # Still limited after the whole per-minute window -> fall back so
                 # the user still gets subtitles for the remainder. Distinct reason
@@ -4394,7 +4413,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         'in {5}s (same prompt)'.format(
                             idx, total, str(e)[:50], filtered_attempts,
                             len(FILTERED_BACKOFF), wait), level='WARNING')
-                    time.sleep(wait)
+                    _cancel_aware_wait(wait)
                     continue
                 raise
             except gemini.OverloadError as e:
@@ -4412,7 +4431,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         .format(overload_attempts,
                                 len(OVERLOAD_BACKOFF), wait),
                         time_ms=min(wait * 1000, 8000))
-                    time.sleep(wait)
+                    _cancel_aware_wait(wait)
                     continue
                 raise _AbortTranslation('overload',
                     'AI: Gemini עמוס מדי גם אחרי {0} ניסיונות. '
@@ -4426,7 +4445,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         'Gemini error chunk {0}/{1} attempt {2}: {3}'
                         .format(idx, total, generic_attempts, e),
                         level='WARNING')
-                    time.sleep(wait)
+                    _cancel_aware_wait(wait)
                     continue
                 raise _AbortTranslation('error',
                     kodi_utils.localised(33008, str(e)[:80]),
@@ -4602,7 +4621,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                           time_ms=5000)
         return None
 
-    if abort_msg:
+    if abort_reason:
+        if abort_reason == 'cancelled':
+            # The viewer changed film or subtitle. Do not spend another API
+            # request, show an error, publish telemetry or save partial output.
+            return None
         # Daily quota exhausted OR a per-minute rate limit that outlasted all the
         # retries -> fall back to Google Translate so the user still gets Hebrew
         # (machine quality; never pooled). Other aborts (invalid key, overload,
