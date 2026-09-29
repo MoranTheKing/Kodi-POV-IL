@@ -44,6 +44,10 @@ BUILD_WIZARD_ID = 'plugin.program.kodipovilwizard'
 BUILD_MARKER = 'build_mode.json'
 BUILD_MARKER_TEXT = 'Kodi POV IL'
 _BUILD_MODE_CACHE = None
+# The legacy tile-refresh callback remains in the startup pass, but its
+# producer moved to the Wizard. Keep the default explicit so the callback
+# cannot raise NameError on every boot.
+_TILE_REFRESH_NEEDED = [False]
 
 
 def _translate_path(path):
@@ -1895,8 +1899,13 @@ def _start_subsync_drainer(monitor):
                     pass
                 if monitor.waitForAbort(1.0):
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            try:
+                from resources.lib import kodi_utils
+                kodi_utils.log('subsync drainer stopped: {0}'.format(exc),
+                               level='WARNING')
+            except Exception:
+                pass
 
     try:
         threading.Thread(target=_loop, daemon=True).start()
