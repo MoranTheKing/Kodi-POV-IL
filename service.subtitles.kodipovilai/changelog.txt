@@ -1,3 +1,8 @@
+0.3.16
+- Keep automatic subtitle selection active when a previous film's AI translation is still running; cancel obsolete Gemini retries after playback or the selected subtitle changes.
+- Pass already-discovered Hebrew alternatives to the background timing verifier and restore verified fallback selection ownership.
+- Show when initial timing is still being checked, and log why verification is skipped.
+
 0.2.552
 - Expand background timing evidence beyond the picker languages only after the normal proof abstains, so a verified cross-cut correction can use an independent provider family without changing visible results or bypassing conflicts.
 
