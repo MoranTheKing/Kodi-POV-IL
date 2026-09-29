@@ -18,7 +18,9 @@ except ImportError:
     xbmc = None
 
 
-STATE = {'last_file': None, 'busy': False, 'player': None, 'snap_file': None}
+STATE = {'last_file': None, 'busy': False, 'player': None, 'snap_file': None,
+         'active_file': '', 'run_id': 0}
+_STATE_LOCK = threading.Lock()
 
 
 def autosub_on_play():
@@ -144,9 +146,19 @@ def autosub_on_play():
         pass
 
 
-    if STATE['busy']:
-        return
-    STATE['busy'] = True
+    try:
+        _playback_file = xbmc.Player().getPlayingFile() or ''
+    except Exception:
+        _playback_file = ''
+    with _STATE_LOCK:
+        # A previous film can spend minutes in Gemini retries. Its worker must
+        # not make the next film silently miss its one onAVStarted event.
+        if STATE['busy'] and STATE['active_file'] == _playback_file:
+            return
+        STATE['run_id'] += 1
+        _run_id = STATE['run_id']
+        STATE['active_file'] = _playback_file
+        STATE['busy'] = True
     _eng_general = None
     try:
         # Ownership starts as the selection token present when auto-on-play
@@ -162,6 +174,15 @@ def autosub_on_play():
         _run_owner = {'selection': None}
 
         def _autosub_owns_player():
+            with _STATE_LOCK:
+                if STATE['run_id'] != _run_id:
+                    return False
+            try:
+                if _playback_file and (
+                        xbmc.Player().getPlayingFile() or '') != _playback_file:
+                    return False
+            except Exception:
+                return False
             owned = _run_owner.get('selection')
             try:
                 if owned:
@@ -218,7 +239,7 @@ def autosub_on_play():
             """Show a final status line in the top overlay for ~hold seconds
             (DarkSubs shows its 'כתובית מוכנה' / 'אין כתוביות' line for ~5s
             before the overlay closes). No-op if the overlay isn't up."""
-            if _eng_general is None:
+            if _eng_general is None or not _autosub_owns_player():
                 return
             try:
                 _eng_general.show_msg = msg
@@ -226,6 +247,8 @@ def autosub_on_play():
                 return
             waited = 0.0
             while waited < hold:
+                if not _autosub_owns_player():
+                    break
                 try:
                     if not xbmc.Player().isPlayingVideo():
                         break
@@ -239,6 +262,8 @@ def autosub_on_play():
         # DarkSubs waits for the video before searching).
         info = {}
         for _ in range(40):  # up to ~8s
+            if not _autosub_owns_player():
+                return
             info = kodi_utils.current_video_info()
             have_id = (info.get('imdb_id') or info.get('tmdb_id')
                        or info.get('title'))
@@ -261,13 +286,19 @@ def autosub_on_play():
             xbmc.sleep(200)
 
         f = info.get('filepath') or info.get('title') or ''
-        # onAVStarted can fire more than once for the same file; act once.
-        if f and f == STATE['last_file']:
+        if not _autosub_owns_player():
             return
-        STATE['last_file'] = f
         if not (info.get('imdb_id') or info.get('tmdb_id')
                 or info.get('title')):
             return
+        # onAVStarted can fire more than once for the same file. Claim only a
+        # usable metadata snapshot, atomically with the playback generation.
+        with _STATE_LOCK:
+            if STATE['run_id'] != _run_id:
+                return
+            if f and f == STATE['last_file']:
+                return
+            STATE['last_file'] = f
 
         # Deferred live-stream check: a genuinely live stream (IPTV channel
         # played over plain http, so the protocol/plugin guards above can't
@@ -284,6 +315,8 @@ def autosub_on_play():
             _heb_idx = None
             _streams = []
             for _ in range(80):  # up to ~8s, but only while streams aren't listed yet
+                if not _autosub_owns_player():
+                    return
                 try:
                     _streams = _pl.getAvailableSubtitleStreams() or []
                 except Exception:
@@ -348,14 +381,17 @@ def autosub_on_play():
         # returns everything in priority order; the first 'he' row is the best
         # Hebrew (embedded > human > pool > MT).
         cands = translate.list_candidates(info, modal_progress=False)
+        if not _autosub_owns_player():
+            return
         # (list_candidates already queued every human Ktuvit release for the
         # background harvest; the service drainer downloads + uploads them
         # gently over time. Nothing to do here.)
         try:
             from resources.lib import subsync
             cands = subsync.rank_ready_candidates(info, cands)
+            _human_fallbacks = subsync.diverse_human_alternatives(cands)
         except Exception:
-            pass
+            _human_fallbacks = []
         # Try the ready Hebrew candidates in priority order until one actually
         # downloads. If a source fails (e.g. Ktuvit rate-limited / "refused"),
         # skip the rest from that SAME source (they fail identically) and move
@@ -400,7 +436,9 @@ def autosub_on_play():
                 if not selection:
                     return
                 path = translate.resolve(
-                    link2, info, selection=selection)
+                    link2, info, selection=selection,
+                    fallback_links=[link for link in _human_fallbacks
+                                    if link != link2])
             except Exception:
                 path = None
             if not _autosub_owns_player():
@@ -522,6 +560,15 @@ def autosub_on_play():
             _status_msg += '\n' + chosen_name
         if chosen_from_cache:
             _status_msg += '\n(נטענה מהקאש)'
+        try:
+            _timing_state = (kodi_utils.get_subtitle_sync_status(
+                chosen_link).get('state') or '')
+            if _timing_state == 'checking':
+                _status_msg += '\nהתזמון בבדיקה'
+            elif _timing_state == 'unverified':
+                _status_msg += '\nהתזמון טרם אומת'
+        except Exception:
+            pass
         _status_msg += '[/COLOR]'
         _final_overlay(_status_msg)
     except Exception as e:
@@ -531,13 +578,18 @@ def autosub_on_play():
         except Exception:
             pass
     finally:
-        STATE['busy'] = False
-        try:
-            translate.set_quiet(False)
-        except Exception:
-            pass
-        # Close the overlay (show_results exits on 'END').
-        if _eng_general is not None:
+        with _STATE_LOCK:
+            _still_active = STATE['run_id'] == _run_id
+            if _still_active:
+                STATE['busy'] = False
+                STATE['active_file'] = ''
+        if _still_active:
+            try:
+                translate.set_quiet(False)
+            except Exception:
+                pass
+        # A stale film must never close the next film's overlay.
+        if _still_active and _eng_general is not None:
             try:
                 _eng_general.show_msg = 'END'
             except Exception:
