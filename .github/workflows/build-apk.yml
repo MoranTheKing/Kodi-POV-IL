@@ -35,7 +35,7 @@ env:
   OLD_PACKAGE_ID: 'org.xbmc.kodi'
   PACKAGE_ID: 'org.xbmc.povi'
   APP_NAME: 'Kodi POV IL'
-  WIZARD_VERSION: '0.1.48'
+  WIZARD_VERSION: '0.1.49'
   # The full build this package hydrates from. It used to be the same
   # filename typed out three times below, and it went stale the moment a
   # release bumped the build: the unzip would fail on a name that no longer

@@ -71,6 +71,10 @@ jobs:
           # Everything Pages actually serves (repo/ addon channel, wizard/,
           # index.html, install.html, ...) is kept.
           cd src
+          # A legacy automatic updater fetches build_versions/<note>.txt,
+          # while a manual update reads build.txt. Keep both publication paths
+          # valid before deploying a note, including after modular releases.
+          python3 tools/check_legacy_update_publication.py .
           PUBLISH_PATHS="$(git ls-tree --name-only HEAD | grep -vxE 'dist|\.github|\.secrets')"
           # shellcheck disable=SC2086
           git archive HEAD -- $PUBLISH_PATHS | tar -x -C ../gh

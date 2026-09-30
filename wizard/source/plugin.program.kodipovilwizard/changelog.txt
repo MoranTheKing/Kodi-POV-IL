@@ -1,3 +1,12 @@
+v0.1.49
+- Application package 21.3-povil.49 carries build updates already delivered
+  through Quick Update. Manual Android/Windows checks now explain that the
+  installed app can continue to be used, without offering a reinstall.
+  Automatic checks remain silent for this package. Future application
+  releases still use the normal update check.
+- An unavailable quick-update download now reports a temporary download
+  failure rather than incorrectly claiming that no update exists.
+
 v0.1.48
 - A quick update no longer discards the settings you changed that evening.
   Kodi was being killed rather than closed, which skips the save it does on a
