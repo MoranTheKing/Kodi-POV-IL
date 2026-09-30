@@ -63,10 +63,10 @@ APK_PACKAGE_ID = 'org.xbmc.povi'
 # as "our app" so people on an old org.xbmc.kodirdil build (or the short-lived
 # org.moran.kodi / org.mora.kodi rename attempts) still get the update prompt.
 APK_PACKAGE_IDS = ['org.xbmc.povi', 'org.xbmc.kodi', 'org.xbmc.kodirdil', 'org.moran.kodi', 'org.mora.kodi']
-# APK/Windows releases that must NOT raise the automatic "there is a new
-# version of our app" dialog on start. Everything else about them is normal:
-# the download page serves them, and the manual check in the menu finds and
-# offers them.
+# Build-only APK/Windows releases that do not require an application reinstall.
+# Keep this legacy variable name for compatibility. Startup stays silent and
+# the manual menu explains that the installed app can continue to be used.
+# The download page still serves the package for new installations.
 #
 # WHY THIS EXISTS. That dialog fires from startup.py on EVERY start, and its
 # "later" button records nothing -- so a release nobody needs is a prompt at

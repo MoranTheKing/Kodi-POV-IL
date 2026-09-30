@@ -293,7 +293,7 @@ class Wizard:
             response = tools.open_url(guizip, check=True)
             if not response:
                 logging.log_notify(CONFIG.ADDONTITLE,
-                                   '[COLOR {0}]לא קיים עדכון מהיר![/COLOR]'.format(CONFIG.COLOR2))
+                                   '[COLOR {0}]לא ניתן להוריד את העדכון כרגע. נסו שוב מאוחר יותר.[/COLOR]'.format(CONFIG.COLOR2))
                 return False
 
             self.dialogProgress.create(CONFIG.ADDONTITLE, '[COLOR {0}][B]מוריד עדכון מהיר עבור:[/B][/COLOR] [COLOR {1}]{2}[/COLOR]'.format(CONFIG.COLOR2, CONFIG.COLOR1, name))
@@ -2592,18 +2592,14 @@ def _installed_platform_release():
     return _marked_platform_release() or _LEGACY_PLATFORM_RELEASE
 
 
-def _auto_prompt_suppressed(latest_release, manual):
-    """Should the automatic dialog for `latest_release` be held back?
+def _app_update_not_required(latest_release):
+    """A build-only package does not require replacing the application.
 
-    Only ever true for the AUTOMATIC check. A user who opens "עדכון גרסת קודי"
-    from the menu asked the question, and always gets the real answer.
-
-    The list is keyed by the release being offered, not by the release
-    installed, so it expires on its own: the next package that genuinely needs
-    installing is simply not in it, and everybody is prompted for that one.
+    The legacy CONFIG name is retained for installed configurations. This
+    policy applies to startup and manual checks alike: a manual check reports
+    that no app replacement is needed, rather than offering an unnecessary
+    reinstall. Future application releases remain eligible for update checks.
     """
-    if manual:
-        return False
     try:
         suppressed = [release_version.canonical_release_label(r)
                       for r in (CONFIG.NO_AUTO_APP_PROMPT_TARGETS or [])]
@@ -2616,16 +2612,17 @@ def _auto_prompt_suppressed(latest_release, manual):
         if release_version.canonical_release_label(latest_release) \
                 not in suppressed:
             return False
+    except Exception:
+        # An invalid release policy must not hide a real application update.
+        return False
+    try:
         logging.log(
             '[Application Update Check] {0} is marked as a package nobody '
-            'needs prompting for; skipping the automatic dialog.'
+            'needs reinstalling; skipping the application update offer.'
             .format(latest_release), level=xbmc.LOGINFO)
     except Exception:
-        # A malformed entry -- or a logger that fails -- must not be able to
-        # take the update prompt down with it. The safe direction is to ask:
-        # an unwanted prompt is a nuisance, an update nobody is ever told
-        # about is a device left behind.
-        return False
+        # A logging failure cannot change an already-established policy.
+        pass
     return True
 
 
@@ -2657,8 +2654,12 @@ def kodi_apk_update_check(kodi_version_update_check_manual, os_type_label):
         installed_release = _installed_platform_release()
         is_new_version_available = release_version.is_newer_release(
             latest_release, installed_release)
-        if is_new_version_available and _auto_prompt_suppressed(
-                latest_release, kodi_version_update_check_manual):
+        if is_new_version_available and _app_update_not_required(latest_release):
+            if kodi_version_update_check_manual:
+                dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})",
+                          '[B]אין צורך לעדכן את האפליקציה.[/B]\n'
+                          'עדכוני הבילד והתוספים מתקבלים דרך עדכון מהיר.\n'
+                          'אפשר להמשיך להשתמש באפליקציה המותקנת.')
             return
         
         if is_new_version_available:
@@ -2772,8 +2773,12 @@ def kodi_windows_update_check(kodi_version_update_check_manual, os_type_label):
         installed_release = _installed_platform_release()
         is_new_version_available = release_version.is_newer_release(
             latest_release, installed_release)
-        if is_new_version_available and _auto_prompt_suppressed(
-                latest_release, kodi_version_update_check_manual):
+        if is_new_version_available and _app_update_not_required(latest_release):
+            if kodi_version_update_check_manual:
+                dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})",
+                          '[B]אין צורך לעדכן את האפליקציה.[/B]\n'
+                          'עדכוני הבילד והתוספים מתקבלים דרך עדכון מהיר.\n'
+                          'אפשר להמשיך להשתמש באפליקציה המותקנת.')
             return
             
         if is_new_version_available:
