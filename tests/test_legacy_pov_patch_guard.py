@@ -84,6 +84,58 @@ class LegacyPovPatchGuardTests(unittest.TestCase):
             self.assertEqual(stats['applied'], 1)
             self.assertIn('NEW_V1', target.read_text(encoding='utf-8'))
 
+    def test_new_host_alternative_upgrades_and_then_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as raw:
+            module = self._engine(Path(raw))
+            entry=dict(id='sample',name='sample',target_file='sample.py',
+                       marker='HOOK_V2',anchor='OLD_ANCHOR',action='append_after',
+                       enabled=True,hook='old_call()',alternatives=[
+                           {'anchor':'NEW_ANCHOR','hook':'new_call()'}])
+            engine=module.PatchEngine([])
+            source='# NEW_ANCHOR\n'
+            changed,_,status=engine._apply_single_patch(source,entry,'\n')
+            self.assertEqual(status,'applied')
+            self.assertIn('new_call()',changed)
+            self.assertNotIn('old_call()',changed)
+            self.assertEqual(engine._apply_single_patch(changed,entry,'\n'),
+                             (changed,False,'skipped_current'))
+
+    def test_superseded_shape_removes_obsolete_hook_without_faking_application(self):
+        with tempfile.TemporaryDirectory() as raw:
+            module = self._engine(Path(raw))
+            engine=module.PatchEngine([])
+            entry=dict(id='sample',name='sample',target_file='sample.py',
+                       marker='HOOK_V1',anchor='# OLD',action='append_after',
+                       enabled=True,hook='legacy_call()')
+            source=engine._apply_single_patch('# OLD\n',entry,'\n')[0]
+            source=source.replace('# OLD','# NEW')
+            entry.update(marker='HOOK_V2',alternatives=[{'anchor':'# NEW','superseded':True}])
+            changed,_,status=engine._apply_single_patch(source,entry,'\n')
+            self.assertEqual((changed,status),('# NEW\n','superseded'))
+
+    def test_hook_cannot_supply_its_own_upgraded_anchor(self):
+        with tempfile.TemporaryDirectory() as raw:
+            module=self._engine(Path(raw)); engine=module.PatchEngine([])
+            entry=dict(id='sample',name='sample',target_file='sample.py',marker='HOOK_V1',
+                       anchor='# OLD',action='append_after',enabled=True,hook='# NEW\npass')
+            source=engine._apply_single_patch('# OLD\n',entry,'\n')[0]
+            entry.update(marker='HOOK_V2',anchor='# NEW')
+            self.assertEqual(engine._apply_single_patch(source,entry,'\n'),
+                             (source,False,'anchor_missing'))
+
+    def test_invalid_python_is_not_written(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root=Path(raw);target=root/'host.py';target.write_text('anchor = 1\n')
+            module=self._engine(root)
+            class Engine(module.PatchEngine):
+                @staticmethod
+                def _resolve_paths(addon_id,relative):return str(root),str(root/relative)
+            entry=dict(id='sample',name='sample',target_file='host.py',marker='HOOK_V1',
+                       anchor='anchor = 1',action='append_after',enabled=True,hook='if :',addon_id='plugin.video.pov')
+            stats=Engine([entry]).run()
+            self.assertGreater(stats['failed'],0)
+            self.assertEqual(target.read_text(),'anchor = 1\n')
+
     def test_aiostreams_hook_survives_directsync_settings_variant(self):
         config_tree = ast.parse(CONFIG.read_text(encoding='utf-8'))
         assignment = next(node for node in config_tree.body
