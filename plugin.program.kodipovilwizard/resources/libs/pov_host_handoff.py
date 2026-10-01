@@ -70,7 +70,7 @@ def _patched_stage(stage):
     if (any(stats.get(key) for key in ('legacy_host_deferred', 'anchor_missing',
                                       'missing', 'failed', 'malformed')) or
             sum(stats.get(key, 0) for key in ('applied', 'upgraded',
-                                             'skipped_current')) != enabled):
+                                             'skipped_current', 'superseded')) != enabled):
         raise migration.MigrationError('staged POV patch validation failed: {}'.format(stats))
     for path in stage.rglob('*.py'):
         ast.parse(path.read_text(encoding='utf-8-sig'), filename=str(path))

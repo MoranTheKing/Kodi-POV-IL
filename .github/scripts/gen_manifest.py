@@ -118,8 +118,8 @@ def _pov_host_migration() -> dict:
     if (set(entry) != set(expected) or entry['id'] != 'plugin.video.pov' or
             not re.fullmatch(r'[0-9]+(?:\.[0-9]+)+', str(entry['version'])) or
             entry['filename'] != 'plugin.video.pov-{}.zip'.format(entry['version']) or
-            entry['zip'] != ('https://kodiyashimaru.github.io/repo/'
-                             'plugin.video.pov/' + entry['filename']) or
+            entry['zip'] not in tuple('https://{}.github.io/repo/plugin.video.pov/'.format(host)
+                                     + entry['filename'] for host in ('kodifitzwell', 'kodiyashimaru')) or
             not isinstance(entry['size'], int) or not 0 < entry['size'] <= 25 * 1024 * 1024 or
             not re.fullmatch(r'[0-9a-f]{64}', str(entry['sha256']))):
         raise ValueError('invalid pinned official POV migration package')

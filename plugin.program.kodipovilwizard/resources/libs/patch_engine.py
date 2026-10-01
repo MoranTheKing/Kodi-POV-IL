@@ -250,6 +250,7 @@ class PatchEngine(object):
                 'action': action,
                 'hook': entry['hook'],
                 'enabled': is_enabled,
+                'alternatives': entry.get('alternatives', []),
             }
         except Exception as err:
             logging.log('[PatchEngine] Error normalizing patch entry #{0}: {1}'.format(idx, err),
@@ -352,11 +353,14 @@ class PatchEngine(object):
 
         if content != original_content:
             try:
+                if target_path.endswith('.py'):
+                    compile(content, target_path, 'exec')
                 self._write_file(target_path, content)
                 logging.log(
                     "[PatchEngine] Saved patched {0}/{1}.".format(addon_id, target_file),
                     level=xbmc.LOGINFO)
             except Exception as err:
+                self._stats['failed'] += len(patch_list)
                 logging.log(
                     "[PatchEngine] Failed writing {0}: {1}".format(target_path, err),
                     level=xbmc.LOGERROR)
@@ -392,6 +396,19 @@ class PatchEngine(object):
         # UP TO DATE: exact marker already present in the existing block.
         if existing_match and patch['marker'] in existing_match.group(0):
             return content, False, 'skipped_current'
+
+        # Compare host shapes outside our previous block. Otherwise an old
+        # hook can supply its own anchor and manufacture a healthy result.
+        clean = block_regex.sub('', content, count=1) if existing_match else content
+        choices = [patch] + list(patch.get('alternatives') or [])
+        selected = next((choice for choice in choices
+                         if choice.get('anchor') and choice['anchor'] in clean), None)
+        if selected is None:
+            return content, False, 'anchor_missing'
+        if selected.get('superseded'):
+            return clean, clean != content, 'superseded'
+        patch = dict(patch, **{key: selected.get(key, patch[key])
+                              for key in ('anchor', 'hook', 'action')})
 
         # Locate the anchor BEFORE mutating anything, so a missing anchor
         # (upstream addon changed that line, typo in config, etc.) is a
