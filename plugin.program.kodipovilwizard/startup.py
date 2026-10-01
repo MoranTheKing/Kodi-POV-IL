@@ -786,3 +786,12 @@ try:
 except Exception as _skin_upd_err:
     logging.log("[Skin Auto Update] startup hook failed: {0}".format(_skin_upd_err),
                 level=xbmc.LOGERROR)
+
+# The normal startup patch pass is not enough if Kodi updates POV later in
+# this same session. A separate small interpreter watches host identities.
+try:
+    xbmc.executebuiltin('RunScript({})'.format(os.path.join(
+        CONFIG.ADDON_PATH, 'host_patch_service.py')))
+except Exception as _host_watch_error:
+    logging.log('[Host patch watch] start failed: {}'.format(_host_watch_error),
+                level=xbmc.LOGWARNING)

@@ -14,7 +14,7 @@ def run(manager, threads_set, torrent_sources):
 
     for name, hashes in replies:
         if not isinstance(hashes, list):
-            hashes, unconfirmed = (), True
+            hashes, unconfirmed = (hashes if isinstance(hashes, tuple) else ()), True
         else:
             unconfirmed = name in ('realdebrid', 'alldebrid')
 

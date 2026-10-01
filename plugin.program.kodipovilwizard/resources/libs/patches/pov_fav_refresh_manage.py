@@ -14,7 +14,7 @@ def run(local_vars):
         action_add = local_vars.get('action_add')
 
         # Pull kodi_utils safely from the upstream locals
-        kodi_utils = local_vars.get('kodi_utils')
+        from modules import kodi_utils
 
         # 1. Execute the original upstream toggle logic safely
         toggle_result = self_obj.execute_toggle(choice, action_add)

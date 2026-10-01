@@ -315,7 +315,7 @@ class ModularUpdater:
                 'legacy_host_deferred', 'anchor_missing', 'missing',
                 'failed', 'malformed'))
                 and sum(stats.get(key, 0) for key in (
-                    'applied', 'upgraded', 'skipped_current')) > 0)
+                    'applied', 'upgraded', 'skipped_current', 'superseded')) > 0)
         except Exception as exc:
             logging.log('[ModularUpdater] Could not verify POV host: {0}'
                         .format(exc), level=xbmc.LOGWARNING)
