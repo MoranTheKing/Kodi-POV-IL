@@ -4,11 +4,17 @@
 _AI_MDBL_REFRESH_LOCK = 'pov_ai_mdbl_refreshing'
 _ai_liked_ids_cache = [False]
 
+def _call_mdblist(path, **kwargs):
+    from indexers.mdblist_api import call_mdblist, base_url
+    if '%s' not in base_url: path = '/' + path.lstrip('/')
+    return call_mdblist(path, **kwargs)
+
+
 def handle_401_reauth(e, path, params, json_data, method):
     """Intercepts a 401 error, attempts to acquire a GUI lock, refreshes the token, and recurses safely."""
     status = getattr(getattr(e, 'response', None), 'status_code', 0)
     if status != 401: return None
-    from resources.lib.modules import kodi_utils
+    from modules import kodi_utils
     if not kodi_utils.get_setting('mdblist.refresh', ''): return None
 
     try:
@@ -19,7 +25,7 @@ def handle_401_reauth(e, path, params, json_data, method):
 
     before = kodi_utils.get_setting('mdblist.token')
     if window is not None:
-        from resources.lib.modules.kodi_utils import sleep
+        from modules.kodi_utils import sleep
         for _ in range(60):
             if window.getProperty(_AI_MDBL_REFRESH_LOCK) != 'true': break
             sleep(250)
@@ -30,7 +36,7 @@ def handle_401_reauth(e, path, params, json_data, method):
             return _retry_call(path, params, json_data, method)
 
     try:
-        from resources.lib.indexers.mdblist_api import mdbl_refresh
+        from indexers.mdblist_api import mdbl_refresh
         mdbl_refresh()
     finally:
         if window is not None: window.clearProperty(_AI_MDBL_REFRESH_LOCK)
@@ -40,8 +46,8 @@ def handle_401_reauth(e, path, params, json_data, method):
     return None
 
 def _retry_call(path, params, json_data, method):
-    from resources.lib.indexers.mdblist_api import session, base_url, timeout
-    from resources.lib.modules import kodi_utils
+    from indexers.mdblist_api import session, base_url, timeout
+    from modules import kodi_utils
     headers = None
     params = params or {}
     if not bool(kodi_utils.get_setting('mdblist.refresh')):
@@ -51,7 +57,7 @@ def _retry_call(path, params, json_data, method):
     try:
         response = session.request(
             method or 'get',
-            base_url % path,
+            (base_url % path if '%s' in base_url else base_url + '/' + path.lstrip('/')),
             params=params,
             json=json_data,
             headers=headers,
@@ -70,18 +76,18 @@ def scrobble_stop_if_watched(action, key, media, media_id, season, episode):
     """Automatically fires the stop scrobble command purely as an additive operation."""
     if action == 'mark_as_watched' and key == 'tmdb' and media in ('movies', 'episode'):
         try:
-            from resources.lib.indexers.mdblist_api import call_mdblist
+            from indexers.mdblist_api import call_mdblist
             if media == 'movies':
                 sd = {'movie': {'ids': {'tmdb': media_id}}, 'progress': 100.0}
             else:
                 sd = {'show': {'ids': {'tmdb': media_id}, 'season': {'number': int(season), 'episode': {'number': int(episode)}}}, 'progress': 100.0}
-            call_mdblist('scrobble/stop', json=sd, method='post')
+            _call_mdblist('scrobble/stop', json=sd, method='post')
         except Exception: pass
 
 def merge_collection_to_watchlist(original_list, mediatype):
     """Mutates original_list directly by reference to attach unified collection outputs."""
     try:
-        from resources.lib.indexers.mdblist_api import mdbl_collection_watchlist_items
+        from indexers.mdblist_api import mdbl_collection_watchlist_items
         mk = 'movie' if mediatype in ('movie', 'movies') else 'show'
         seen = set(i.get('id') for i in original_list)
         coll = mdbl_collection_watchlist_items('mdbl_collection', 'sync/collection')[mediatype]
@@ -107,14 +113,14 @@ def pre_search_check(params):
         _mdbl_search_screen(params)
         return None
     if params.get('ai_prompt') and not params.get('search_title'):
-        from resources.lib.modules import kodi_utils
+        from modules import kodi_utils
         query = kodi_utils.dialog.input('POV')
         if not query:
             import sys, xbmcplugin
             xbmcplugin.endOfDirectory(int(sys.argv[1]), succeeded=False)
             return None
         try:
-            from resources.lib.menus.history import add_to_search_history
+            from menus.history import add_to_search_history
             add_to_search_history(query, 'mdbl_list_queries')
         except Exception: pass
         return {'search_title': query}
@@ -122,7 +128,7 @@ def pre_search_check(params):
 
 def _mdbl_search_screen(params):
     import sys
-    from resources.lib.modules import kodi_utils
+    from modules import kodi_utils
     handle = int(sys.argv[1])
     default_icon = kodi_utils.media_path('mdblist.png')
     fanart = kodi_utils.get_addoninfo('fanart')
@@ -130,7 +136,7 @@ def _mdbl_search_screen(params):
     kodi_utils.add_dir(handle, {'mode': 'build_mdbl_list.search_mdbl_lists', 'ai_prompt': '1'}, '[B]New Search...[/B]', iconImage=default_icon)
 
     try:
-        from resources.lib.caches.main_cache import MainCache
+        from caches.main_cache import MainCache
         rows = MainCache().get('mdbl_list_queries') or []
     except Exception:
         rows = []
@@ -158,7 +164,7 @@ def append_like_menu(cm_append, list_type, list_id):
     """Intelligently appends Context menu Like/Unlike logic matching native POV traits."""
     if list_type in ('my_lists', 'external'):
         return
-    from resources.lib.modules import kodi_utils
+    from modules import kodi_utils
     like_str = kodi_utils.local_string(32776)
     unlike_str = kodi_utils.local_string(32783)
 
@@ -175,7 +181,7 @@ def _get_liked_ids():
     if _ai_liked_ids_cache[0] is False:
         try:
             import json
-            from resources.lib.caches import mdbl_cache
+            from caches import mdbl_cache
             cur = mdbl_cache.MDBLCache().dbcur
             cur.execute(mdbl_cache.MC_BASE_GET, ('mdbl_liked_lists',))
             row = cur.fetchone()
@@ -189,7 +195,7 @@ def _get_liked_ids():
 def _ai_refresh_after_like():
     import xbmc
     from urllib.parse import quote_plus
-    from resources.lib.modules import kodi_utils
+    from modules import kodi_utils
     path = xbmc.getInfoLabel('Container.FolderPath') or ''
     unsafe = False
     target = None
@@ -205,11 +211,11 @@ def _ai_refresh_after_like():
     except Exception: pass
 
 def like_a_list(params):
-    from resources.lib.indexers.mdblist_api import call_mdblist
-    from resources.lib.caches import mdbl_cache
-    from resources.lib.modules import kodi_utils
+    from indexers.mdblist_api import call_mdblist
+    from caches import mdbl_cache
+    from modules import kodi_utils
     list_id = params['list_id']
-    result = call_mdblist('lists/%s/like' % list_id, method='put')
+    result = _call_mdblist('lists/%s/like' % list_id, method='put')
     if result is None: return kodi_utils.notification(32574)
     mdbl_cache.clear_mdbl_list_data('liked_lists')
     _ai_liked_ids_cache[0] = False
@@ -217,11 +223,11 @@ def like_a_list(params):
     _ai_refresh_after_like()
 
 def unlike_a_list(params):
-    from resources.lib.indexers.mdblist_api import call_mdblist
-    from resources.lib.caches import mdbl_cache
-    from resources.lib.modules import kodi_utils
+    from indexers.mdblist_api import call_mdblist
+    from caches import mdbl_cache
+    from modules import kodi_utils
     list_id = params['list_id']
-    result = call_mdblist('lists/%s/like' % list_id, method='delete')
+    result = _call_mdblist('lists/%s/like' % list_id, method='delete')
     if result is None: return kodi_utils.notification(32574)
     mdbl_cache.clear_mdbl_list_data('liked_lists')
     _ai_liked_ids_cache[0] = False
@@ -252,7 +258,7 @@ def heal_mdblist_account_if_needed():
     If the API token exists but the username is missing, it dynamically fetches
     the username from MDBList and populates the local Kodi settings.
     """
-    from resources.lib.modules import kodi_utils
+    from modules import kodi_utils
 
     token = (kodi_utils.get_setting('mdblist.token') or '').strip()
     user = (kodi_utils.get_setting('mdblist_user') or '').strip()

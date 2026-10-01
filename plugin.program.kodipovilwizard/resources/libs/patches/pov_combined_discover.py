@@ -1,21 +1,27 @@
 # File: plugin.program.kodipovilwizard/resources/libs/patches/pov_combined_discover.py
 
 import xbmc
-from resources.lib.indexers.tmdb_api import base_url, get_tmdb, EXPIRES_4_HOURS
-from resources.lib.caches.main_cache import cache_object
+from urllib.parse import quote_plus
+from indexers.tmdb_api import base_url, get_tmdb, EXPIRES_4_HOURS
+from caches.main_cache import cache_object
 
 def _build_url(endpoint):
     """
     Safely builds the TMDB API URL.
     Handles POV >= 6.08 updates where '/3' was removed from the core base_url.
     """
+    # The new shared-session client accepts paths; the previous client
+    # accepted full URLs. Use its loaded module, never a second namespace.
+    import indexers.tmdb_api as tmdb
+    if hasattr(tmdb, 'get_tmdb') and 'requests' not in tmdb.__dict__:
+        return '/3' + endpoint
     api_base = base_url if base_url.endswith('/3') else f"{base_url}/3"
     return f"{api_base}{endpoint}"
 
 def tmdb_search_multi(query, page_no=1):
     """Fetches combined search results (Movies & TV), utilizing POV's native cache."""
     string = f'tmdb_search_multi_{query}_{page_no}'
-    url = _build_url(f'/search/multi?language=en-US&query={query}&page={page_no}')
+    url = _build_url(f'/search/multi?language=en-US&query={quote_plus(query)}&page={page_no}')
     
     data = cache_object(get_tmdb, string, url, expiration=EXPIRES_4_HOURS)
     try:

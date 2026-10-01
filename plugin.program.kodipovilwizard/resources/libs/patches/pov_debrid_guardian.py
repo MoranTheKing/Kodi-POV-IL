@@ -29,8 +29,8 @@ def log_debrid_error(provider, response, path=""):
 
         elif provider == 'premiumize':
             # Premiumize returns HTTP 200 with {"status":"error","message":...}
-            if isinstance(response, dict) and 'response' not in response:
-                msg = response.get('message', str(response))
+            if isinstance(response, dict) and response.get('status') == 'error':
+                msg = response.get('message', 'API error')
 
         if msg:
             xbmc.log(f"KODI_POV_IL {provider} refused {path} -- {msg}", xbmc.LOGINFO)

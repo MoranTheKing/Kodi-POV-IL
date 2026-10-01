@@ -28,7 +28,7 @@ SERVICES = (
         'enabled': 'rd.enabled',
         'connected': ('rd.username', 'rd.token', 'rd.refresh'),
         'expires': 'rd.expires',
-        'module': 'real_debrid_api',
+        'module': 'realdebrid_api',
         'class': 'RealDebridAPI',
         'icon': 'realdebrid.png',
     },
@@ -65,6 +65,12 @@ SERVICES = (
         'module': 'alldebrid_api',
         'class': 'AllDebridAPI',
         'icon': 'alldebrid.png',
+    },
+    {
+        'name': 'Offcloud', 'title': 'Offcloud', 'prefix': 'oc',
+        'enabled': 'oc.enabled', 'connected': ('oc.account_id', 'oc.token'),
+        'expires': 'oc.expires', 'module': 'offcloud_api',
+        'class': 'OffcloudAPI', 'icon': 'offcloud.png',
     },
 )
 
