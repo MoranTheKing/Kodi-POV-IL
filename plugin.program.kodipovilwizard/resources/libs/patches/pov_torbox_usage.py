@@ -89,7 +89,9 @@ def show_textviewer_and_exit(api_instance, account_info):
             'Username: {0}'.format(username),
             'Status: {0}'.format(status),
             'Downloaded: {0}'.format(downloaded),
-            '30 Day Usage: {0}'.format(usage_30_str),
+            # The API may return an unbounded history or a lifetime fallback.
+            # Do not label that value as a verified 30-day total.
+            'Reported Usage: {0}'.format(usage_30_str),
         ]
 
         text = '\n\n'.join(body)

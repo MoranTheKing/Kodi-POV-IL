@@ -186,8 +186,9 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/tmdb_api.py",
-        "marker": "# WIZARD_POV_TMDB_TIMEOUT_v2",
+        "marker": "# WIZARD_POV_TMDB_TIMEOUT_v3",
         "anchor": "timeout = 3.05",
+        "alternatives": [{"anchor": "timeout = 5"}],
         "action": "append_after",
         "hook": (
             "timeout = 15.05  # WIZARD: Widened for mobile per-item fetch reliability\n"
@@ -288,18 +289,20 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/torbox_api.py",
-        "marker": "# WIZARD_POV_TORBOX_API_STATS_v2",
+        "marker": "# WIZARD_POV_TORBOX_API_STATS_v3",
         "anchor": "\tdef torrent_info(self, request_id, path='torrents'):",
         "action": "prepend_before",
         "hook": (
             "\tdef user_stats(self):\n"
+            "\t\tparams = {'general': 'true', 'bandwidth': 'true', 'bandwidth_grouping': 'day'}\n"
+            "\t\tif hasattr(self, 'api'): return self.api('get', '/v1/api/user/stats', params=params)\n"
             "\t\turl = 'user/stats'\n"
-            "\t\treturn self._get(url, params={'general': 'true', 'bandwidth': 'true', 'bandwidth_grouping': 'day'})\n\n"
+            "\t\treturn self._get(url, params=params)\n\n"
         )
     },
     {
         "id": "pov_torbox_usage_ui",
-        "name": "TorBox 30-Day Usage UI",
+        "name": "TorBox Usage UI",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/debrids/tb_cloud.py",
@@ -704,22 +707,14 @@ PATCH_CONFIG = [
         )
     },
     {
-       "id": "pov_torbox_url_fix_indexers",
-       "name": "POV TorBox Malformed URL Fix (Indexers)",
-       "description": "Fixes libcurl error 3 by percent-encoding raw TorBox download links (POV 6.08.14+).",
-       "addon_id": "plugin.video.pov",
-       "enabled": True,
-       "target_file": "resources/lib/indexers/torbox_api.py",
-       "marker": "# WIZARD_POV_TORBOX_URL_FIX_v2",
-       "anchor": "return self._get(path, params=params)",
-       "action": "prepend_before",
-       "hook": (
-           "\t\timport sys, xbmcvfs\n"
-           "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-           "\t\tsys.path.append(p) if p not in sys.path else None\n"
-           "\t\timport pov_torbox_url_fix\n"
-           "\t\treturn pov_torbox_url_fix.safe_url(self._get(path, params=params))\n"
-       )
+        "id": "pov_torbox_url_fix_indexers",
+        "name": "POV TorBox Malformed URL Fix (Indexers)",
+        "addon_id": "plugin.video.pov", "enabled": True,
+        "target_file": "resources/lib/indexers/torbox_api.py",
+        "marker": "# WIZARD_POV_TORBOX_URL_FIX_v4",
+        "anchor": "if user_ip: params['user_ip'] = user_ip",
+        "action": "append_after",
+        "hook": "import sys, xbmcvfs\np = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\nif p not in sys.path: sys.path.append(p)\nimport pov_torbox_url_fix\nraw = self.api('get', path, params=params) if hasattr(self, 'api') else self._get(path, params=params)\nreturn pov_torbox_url_fix.safe_url(raw)"
     },
     {
         "id": "pov_ad_error_log",
@@ -728,8 +723,9 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/alldebrid_api.py",
-        "marker": "# WIZARD_POV_AD_ERROR_LOG_v2",
+        "marker": "# WIZARD_POV_AD_ERROR_LOG_v3",
         "anchor": "response = response.json() if 'json' in response.headers.get('Content-Type', '') else response",
+        "alternatives": [{"anchor": "response = response.json()"}],
         "action": "append_after",
         "hook": (
             "import sys, xbmcvfs\n"
@@ -746,8 +742,9 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/torbox_api.py",
-        "marker": "# WIZARD_POV_TB_ERROR_LOG_v2",
+        "marker": "# WIZARD_POV_TB_ERROR_LOG_v3",
         "anchor": "response = response.json() if 'json' in response.headers.get('Content-Type', '') else response",
+        "alternatives": [{"anchor": "response = response.json()"}],
         "action": "append_after",
         "hook": (
             "\t\timport sys, xbmcvfs\n"
@@ -764,8 +761,10 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/premiumize_api.py",
-        "marker": "# WIZARD_POV_PM_ERROR_LOG_v2",
+        "marker": "# WIZARD_POV_PM_ERROR_LOG_v3",
         "anchor": "result = self._post(url, data)",
+        "alternatives": [{"anchor": "return response.json()", "action": "prepend_before",
+                         "hook": "import sys, xbmcvfs\np = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\nif p not in sys.path: sys.path.append(p)\nimport pov_debrid_guardian\npov_debrid_guardian.log_debrid_error('premiumize', response.json(), path)"}],
         "action": "append_after",
         "hook": (
             "import sys, xbmcvfs\n"
@@ -830,8 +829,9 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/sources.py",
-        "marker": "# WIZARD_POV_PLAYBACK_CAPTURE_v3",
+        "marker": "# WIZARD_POV_PLAYBACK_CAPTURE_v4",
         "anchor": "return POVPlayer().run(link, self.meta, progress_media)",
+        "alternatives": [{"anchor": "return POVPlayer().run(link, item.get('name'), self.meta, progress_media)"}],
         "action": "prepend_before",
         "hook": (
             "\timport sys, xbmcvfs;\n"
@@ -864,9 +864,9 @@ PATCH_CONFIG = [
         "name": "Legacy Internal Scrapers Support",
         "description": "Restores loading of 3rd-party scrapers from the old resources/lib/scrapers/ directory without import failures.",
         "addon_id": "plugin.video.pov",
-        "enabled": False,
+        "enabled": True,
         "target_file": "resources/lib/modules/sources.py",
-        "marker": "# WIZARD_POV_LEGACY_SCRAPERS_v2",
+        "marker": "# WIZARD_POV_LEGACY_SCRAPERS_v3",
         "anchor": "for loader, module_name, is_pkg in pkgutil.iter_modules([source_path]):",
         "action": "prepend_before",
         "hook": (
@@ -939,8 +939,9 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/tmdb_api.py",
-        "marker": "# WIZARD_POV_HTTP_LAZY_TMDB_v2",
+        "marker": "# WIZARD_POV_HTTP_LAZY_TMDB_v3",
         "anchor": "import requests",
+        "alternatives": [{"anchor": "from session import session, HTTPAdapter, Retry", "superseded": True}],
         "action": "prepend_before",
         "hook": (
             "import sys, xbmcvfs\n"
@@ -957,8 +958,9 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/trakt_api.py",
-        "marker": "# WIZARD_POV_HTTP_LAZY_TRAKT_v2",
+        "marker": "# WIZARD_POV_HTTP_LAZY_TRAKT_v3",
         "anchor": "import requests",
+        "alternatives": [{"anchor": "from session import session, HTTPAdapter, Retry", "superseded": True}],
         "action": "prepend_before",
         "hook": (
             "import sys, xbmcvfs\n"
@@ -1005,6 +1007,16 @@ PATCH_CONFIG = [
         )
     },
     {
+        "id": "pov_subtitle_match_refresh",
+        "name": "POV Late Subtitle Badges",
+        "addon_id": "plugin.video.pov", "enabled": True,
+        "target_file": "resources/lib/windows/sources.py",
+        "marker": "# WIZARD_POV_SUB_MATCH_REFRESH_v1",
+        "anchor": "self.win.addItems(self.item_list)",
+        "action": "append_after",
+        "hook": "import sys, xbmcvfs\np = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\nif p not in sys.path: sys.path.append(p)\nimport pov_sub_match_v2\npov_sub_match_v2.refresh_when_ready(self)"
+    },
+    {
         "id": "pov_navigator_read_fix",
         "name": "POV Navigator DB Parse Interceptor",
         "description": "Intercepts jsloads on navigator cache to fallback to AST literal evaluation for legacy repr-formatted DB rows.",
@@ -1029,7 +1041,7 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/settings.py",
-        "marker": "# WIZARD_POV_AIOSTREAMS_FIX_v3",
+        "marker": "# WIZARD_POV_AIOSTREAMS_FIX_v4",
         "anchor": "\tsettings.extend(item[1] for item in (",
         "action": "prepend_before",
         "hook": (
@@ -1037,7 +1049,9 @@ PATCH_CONFIG = [
             "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
             "\tif p not in sys.path: sys.path.append(p)\n"
             "\timport pov_aiostreams_fix\n"
-            "\tsettings = pov_aiostreams_fix.enforce_credentials(settings)"
+            "\tsettings = pov_aiostreams_fix.enforce_credentials(settings)\n"
+            "\timport pov_legacy_scrapers\n"
+            "\tsettings = pov_legacy_scrapers.enabled_settings(settings)"
         )
     },
     {

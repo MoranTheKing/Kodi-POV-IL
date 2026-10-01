@@ -2,12 +2,29 @@ import os
 import pkgutil
 import importlib.util
 
+def enabled_settings(settings):
+    """Preserve explicitly enabled installed providers across host whitelists."""
+    result = list(settings)
+    if result == ['provider.aiostreams']:
+        return result
+    try:
+        from modules import kodi_utils
+        base = kodi_utils.translate_path('special://home/addons/plugin.video.pov/resources/lib/')
+        for folder in ('debrids', 'scrapers'):
+            for _, name, is_pkg in pkgutil.iter_modules([os.path.join(base, folder)]):
+                key = 'provider.' + name
+                if not is_pkg and key not in result and kodi_utils.get_setting(key) == 'true':
+                    result.append(key)
+    except Exception:
+        pass
+    return result
+
 def run(scraper_proc, native_source_path, append_func, prescrape):
     """
     Safely pre-loads legacy scrapers into POV's active pool prior to native execution.
     """
     try:
-        from resources.lib import kodi_utils
+        from modules import kodi_utils
         
         pov_addon_id = 'plugin.video.pov'
         legacy_rel = 'resources/lib/scrapers'
@@ -61,7 +78,7 @@ def run(scraper_proc, native_source_path, append_func, prescrape):
     except Exception as e:
         # Failsafe: Catch all exceptions to guarantee the native loop executes uninterrupted
         try:
-            from resources.lib import kodi_utils
+            from modules import kodi_utils
             kodi_utils.logger('POV_WIZARD', f'Critical failure in legacy scraper run: {e}')
         except Exception:
             pass
