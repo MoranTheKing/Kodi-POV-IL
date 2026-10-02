@@ -1,0 +1,3793 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adapted GPL FENtastic player layouts, isolated for Nox. -->
+<includes>
+	<constant name="POVIL_Player_Pad01">1</constant>
+	<constant name="POVIL_Player_Pad125">125</constant>
+	<constant name="POVIL_Player_Pad215">215</constant>
+	<constant name="POVIL_Player_Pad25">25</constant>
+	<constant name="POVIL_Player_Pad35">35</constant>
+	<constant name="POVIL_Player_Pad41">41</constant>
+	<constant name="POVIL_Player_Pad60">60</constant>
+	<constant name="POVIL_Player_Padxy0">0</constant>
+	<constant name="POVIL_Player_Padxy10">10</constant>
+	<constant name="POVIL_Player_Padxy5">5</constant>
+	<constant name="POVIL_Player_fullwidth">1920</constant>
+	<constant name="POVIL_Player_osdbottom">195</constant>
+	<constant name="POVIL_Player_width5percent">200</constant>
+	<constant name="POVIL_Player_width75percent">1650</constant>
+	<expression name="POVIL_Player_IDANPlusCheck_OSd">String.Contains(Player.FolderPath,idanplus)</expression>
+	<expression name="POVIL_Player_LiveTvCondition">!VideoPlayer.Content(livetv)</expression>
+	<expression name="POVIL_Player_LivetvExpressionEPG_OSD">VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg</expression>
+	<expression name="POVIL_Player_MoviesTvShowsExpression_OSD">VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)</expression>
+	<expression name="POVIL_Player_NextItemExist_OSd">!String.IsEmpty(VideoPlayer.offset(1).Title)</expression>
+	<expression name="POVIL_Player_OsdFlagsVisible">Container(201).HasFocus(101) | Container(201).HasFocus(102) | Container(201).HasFocus(103) | Container(201).HasFocus(104) | Container(201).HasFocus(105) | Container(201).HasFocus(106) | Container(201).HasFocus(107) | Container(201).HasFocus(108) | Container(201).HasFocus(110) | Container(201).HasFocus(111) | $EXP[POVIL_Player_PreviousNextItemCheck]</expression>
+	<expression name="POVIL_Player_PreviousItemExist_OSd">!String.IsEmpty(VideoPlayer.offset(-1).Title)</expression>
+	<expression name="POVIL_Player_PreviousNextItemCheck">[Container(201).HasFocus(100) + String.IsEmpty(VideoPlayer.offset(-1).Title)] | [Container(201).HasFocus(109) + String.IsEmpty(VideoPlayer.offset(1).Title)]</expression>
+	<expression name="POVIL_Player_SkinZoomToggle">Skin.HasSetting(ZoomToggle)</expression>
+	<expression name="POVIL_Player___CheckIdanplus_OSD">String.Contains(Player.FolderPath,idanplus)</expression>
+	<expression name="POVIL_Player___Movies_OSD">VideoPlayer.Content(movies)</expression>
+	<expression name="POVIL_Player___SubtitleCheckTrueOrFalse">VideoPlayer.HasSubtitles + VideoPlayer.SubtitlesEnabled</expression>
+	<expression name="POVIL_Player___episode_OSD">VideoPlayer.Content(episodes)</expression>
+	<expression name="POVIL_Player___livetv_OSD">VideoPlayer.Content(LiveTv)</expression>
+	<expression name="POVIL_Player_fakebuttonsync">Control.HasFocus(700450)</expression>
+	<expression name="POVIL_Player_groupcontrol1">Control.HasFocus(202) | Control.HasFocus(15000) | Control.HasFocus(500323)</expression>
+	<expression name="POVIL_Player_groupcontrol10">[Container(202).HasFocus(120) | Container(202).HasFocus(121) | Container(202).HasFocus(122) | Container(202).HasFocus(123)]</expression>
+	<expression name="POVIL_Player_groupcontrol2">ControlGroup(201).HasFocus() | Control.HasFocus(203) | Control.HasFocus(204) | Control.HasFocus(40022) | Control.HasFocus(40023)</expression>
+	<expression name="POVIL_Player_groupcontrol3">Control.HasFocus(204) | Control.HasFocus(203) | Control.HasFocus(40022) | Control.HasFocus(40023)</expression>
+	<expression name="POVIL_Player_groupcontrol5">ControlGroup(201).HasFocus</expression>
+	<expression name="POVIL_Player_groupcontrol6">[Container(202).HasFocus(120) | Container(202).HasFocus(121) | Container(202).HasFocus(122) | Container(202).HasFocus(123)] + Control.HasFocus(202)</expression>
+	<expression name="POVIL_Player_groupcontrol7">![ControlGroup(201).HasFocus() | Control.HasFocus(202) | Control.HasFocus(15000) | Control.HasFocus(500323)]</expression>
+	<expression name="POVIL_Player_groupcontrol8">![ControlGroup(201).HasFocus() | Control.HasFocus(202) | Control.HasFocus(15000) | Control.HasFocus(500323)]</expression>
+	<expression name="POVIL_Player_groupcontrol9">Control.HasFocus(202) + Container(202).HasFocus(470) + Container(500323).IsUpdating</expression>
+	<expression name="POVIL_Player_sliderdialogfalseortrue">!Window.IsActive(sliderdialog)</expression>
+	<include name="POVIL_Player_Animation_BottomSlide">
+		<animation type="WindowOpen" reversible="False">
+			<effect type="fade" start="0" end="100" time="300" />
+			<effect type="slide" start="0,200" end="0,0" time="300" tween="cubic" easing="out" />
+		</animation>
+		<animation type="WindowClose" reversible="False">
+			<effect type="fade" start="100" end="0" time="300" />
+			<effect type="slide" start="0,0" end="0,200" time="300" tween="cubic" easing="out" />
+		</animation>
+	</include>
+	<include name="POVIL_Player_Animation_TopSlide">
+		<animation type="WindowOpen" reversible="False">
+			<effect type="fade" start="0" end="100" time="300" />
+			<effect type="slide" start="0,-200" end="0,0" time="300" tween="cubic" easing="out" />
+		</animation>
+		<animation type="WindowClose" reversible="False">
+			<effect type="fade" start="100" end="0" time="300" />
+			<effect type="slide" start="0,0" end="0,-200" time="300" tween="cubic" easing="out" />
+		</animation>
+	</include>
+	<include name="POVIL_Player_BasedResizedWidgetFrame">
+		<param name="texture">icons/box21.png</param>
+		<param name="colordiffuse">FF181818</param>
+		<definition>
+			<control type="image">
+				<nested />
+				<texture border="16">$PARAM[texture]</texture>
+				<colordiffuse>$PARAM[colordiffuse]</colordiffuse>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player_BasedResizedWidgetFrameBox">
+		<param name="boxcolordiffuse">98181818</param>
+		<definition>
+			<control type="image">
+				<nested />
+				<texture border="16">icons/box.png</texture>
+				<colordiffuse>$PARAM[boxcolordiffuse]</colordiffuse>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player_BasedResizedWidgetImage">
+		<param name="resize">5</param>
+		<param name="bottom">5</param>
+		<param name="centerleft">$PARAM[centerleft]</param>
+		<param name="centertop">$PARAM[centertop]</param>
+		<definition>
+			<centertop>$PARAM[centertop]</centertop>
+			<centerleft>$PARAM[centerleft]</centerleft>
+			<left>$PARAM[resize]</left>
+			<right>$PARAM[resize]</right>
+			<top>$PARAM[resize]</top>
+			<bottom>$PARAM[bottom]</bottom>
+		</definition>
+	</include>
+	<include name="POVIL_Player_BasedResizedWidgetTexture">
+		<control type="image">
+			<nested />
+			<texture>$PARAM[texture]</texture>
+		</control>
+	</include>
+	<include name="POVIL_Player_In">
+		<onclick>ZoomIn</onclick>
+	</include>
+	<include name="POVIL_Player_MediaFlag">
+		<param name="width">115</param>
+		<param name="height">60</param>
+		<param name="visible">true</param>
+		<definition>
+			<control type="image">
+				<width>$PARAM[width]</width>
+				<height>$PARAM[height]</height>
+				<fadetime>0</fadetime>
+				<aspectratio align="center" aligny="center">keep</aspectratio>
+				<texture>$PARAM[texture]</texture>
+				<visible>$PARAM[visible]</visible>
+				<visible>![Skin.HasSetting(TrailerPlaying) | Window.IsVisible(12003)]</visible>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player_MediaLabelFlag">
+		<param name="labelflag">$INFO[Player.Process(VideoFPS)]</param>
+		<param name="freelabel">fps</param>
+		<definition>
+			<visible>!String.IsEmpty($PARAM[flagvisible])</visible>
+			<control type="image">
+				<top>4</top>
+				<left>0</left>
+				<width>120</width>
+				<height>53</height>
+				<texture border="1.1.1.1">flags/flag.png</texture>
+			</control>
+			<control type="label">
+				<top>20</top>
+				<left>0</left>
+				<width>120</width>
+				<height>24</height>
+				<align>center</align>
+				<aligny>center</aligny>
+				<font>font_flag</font>
+				<label fallback="$LOCALIZE[700041]">$PARAM[labelflag]$PARAM[freelabel]</label>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player_NetFlix_Based_Image">
+		<param name="flipy">false</param>
+		<definition>
+			<control type="image">
+				<nested />
+				<texture flipy="$PARAM[flipy]" colordiffuse="$PARAM[colordiffuse]">$PARAM[texture]</texture>
+				<visible>$PARAM[visible]</visible>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player_NetFlix_Based_Label">
+		<param name="textcolor">white</param>
+		<definition>
+			<control type="label">
+				<nested />
+				<align>$PARAM[align]</align>
+				<font>$PARAM[font]</font>
+				<label>$PARAM[label]</label>
+				<textcolor>$PARAM[textcolor]</textcolor>
+				<visible>$PARAM[visible]</visible>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player_NetFlix_ReSize">
+		<right>$PARAM[right]</right>
+		<width>$PARAM[width]</width>
+		<height>$PARAM[height]</height>
+		<bottom>$PARAM[bottom]</bottom>
+		<centerleft>$PARAM[centerleft]</centerleft>
+	</include>
+	<include name="POVIL_Player_OSDButton">
+		<param name="radiowidth">74</param>
+		<param name="radioheight">74</param>
+		<param name="radioposx">1</param>
+		<param name="radioposy">0</param>
+		<definition>
+			<textureradioonfocus colordiffuse="focused_text">$PARAM[texture]</textureradioonfocus>
+			<textureradioonnofocus colordiffuse="unfocused_text">$PARAM[texture]</textureradioonnofocus>
+			<textureradioofffocus colordiffuse="focused_text">$PARAM[texture]</textureradioofffocus>
+			<textureradiooffnofocus colordiffuse="unfocused_text">$PARAM[texture]</textureradiooffnofocus>
+			<textureradioondisabled colordiffuse="disabled">$PARAM[texture]</textureradioondisabled>
+			<textureradiooffdisabled colordiffuse="disabled">$PARAM[texture]</textureradiooffdisabled>
+			<texturefocus colordiffuse="button_focus">osd/fullscreen/buttons/button-fo.png</texturefocus>
+			<width>76</width>
+			<animation center="38,38" effect="zoom" end="100" reversible="false" start="95" time="480" tween="back">Focus</animation>
+			<height>76</height>
+			<radiowidth>$PARAM[radiowidth]</radiowidth>
+			<radioheight>$PARAM[radioheight]</radioheight>
+			<textoffsetx>84</textoffsetx>
+			<texturenofocus />
+			<radioposx>$PARAM[radioposx]</radioposx>
+			<radioposy>$PARAM[radioposy]</radioposy>
+		</definition>
+	</include>
+	<include name="POVIL_Player_OSDButtonAdvanced">
+		<textureradioonfocus colordiffuse="white">$PARAM[texture]</textureradioonfocus>
+		<textureradioonnofocus>$PARAM[texture]</textureradioonnofocus>
+		<textureradioofffocus colordiffuse="white">$PARAM[texture]</textureradioofffocus>
+		<textureradiooffnofocus>$PARAM[texture]</textureradiooffnofocus>
+		<textureradioondisabled colordiffuse="disabled">$PARAM[texture]</textureradioondisabled>
+		<textureradiooffdisabled colordiffuse="disabled">$PARAM[texture]</textureradiooffdisabled>
+		<texturefocus colordiffuse="button_focus">osd/fullscreen/buttons/button-fo.png</texturefocus>
+		<width>$PARAM[width]</width>
+		<animation center="38,38" effect="zoom" end="100" reversible="false" start="95" time="120" tween="back">Focus</animation>
+		<height>$PARAM[height]</height>
+		<radioposx>6</radioposx>
+		<radioposy>0</radioposy>
+		<radiowidth>$PARAM[radiowidth]</radiowidth>
+		<radioheight>$PARAM[radioheight]</radioheight>
+		<textcolor>white</textcolor>
+		<textwidth>140</textwidth>
+		<aligny>top</aligny>
+		<textoffsetx>$PARAM[textoffsetx]</textoffsetx>
+		<textoffsety>$PARAM[textoffsety]</textoffsety>
+		<label>$PARAM[label]</label>
+		<font>font_flag</font>
+		<texturenofocus />
+	</include>
+	<include name="POVIL_Player_Out">
+		<onclick>ZoomOut</onclick>
+	</include>
+	<include name="POVIL_Player_PVRProgress">
+		<control type="group">
+			<animation effect="fade" time="400">VisibleChange</animation>
+			<visible>!Player.ChannelPreviewActive</visible>
+			<control type="group">
+				<visible>Player.SeekEnabled | VideoPlayer.HasEPG</visible>
+				<visible>Player.ShowInfo | Window.IsActive(fullscreeninfo) | Player.ShowTime | Window.IsActive(videoosd) | Window.IsActive(musicosd) | Window.IsActive(playerprocessinfo) | !String.IsEmpty(Player.SeekNumeric) | Window.IsActive(pvrosdchannels) | Window.IsActive(pvrchannelguide) | !String.IsEmpty(PVR.ChannelNumberInput)</visible>
+				<control type="label">
+					<top>22</top>
+					<right>20</right>
+					<width>400</width>
+					<height>50</height>
+					<align>right</align>
+					<aligny>center</aligny>
+					<font>font13</font>
+					<label>$INFO[PVR.TimeshiftProgressEndTime]</label>
+				</control>
+				<control type="label">
+					<top>22</top>
+					<left>20</left>
+					<width>400</width>
+					<height>50</height>
+					<align>left</align>
+					<aligny>center</aligny>
+					<font>font13</font>
+					<label>$INFO[PVR.TimeshiftProgressStartTime]</label>
+				</control>
+				<control type="label">
+					<top>22</top>
+					<left>20</left>
+					<right>20</right>
+					<height>50</height>
+					<align>center</align>
+					<aligny>center</aligny>
+					<font>font13</font>
+					<label>[B]$LOCALIZE[31026][/B] $INFO[PVR.TimeshiftCur] (-$INFO[PVR.TimeshiftOffset])</label>
+					<visible>PVR.IsTimeShift</visible>
+				</control>
+			</control>
+			<control type="group">
+				<visible>VideoPlayer.HasEPG</visible>
+				<control type="progress">
+					<left>0</left>
+					<top>$PARAM[epg_bar_top]</top>
+					<width>100%</width>
+					<height>$PARAM[epg_bar_height]</height>
+					<info2>PVR.TimeshiftProgressEpgStart</info2>
+					<info>PVR.TimeshiftProgressPlayPos</info>
+					<texturebg border="3" colordiffuse="60FFFFFF">colors/white50.png</texturebg>
+					<midtexture colordiffuse="accent_color">colors/white.png</midtexture>
+				</control>
+				<control type="progress">
+					<left>0</left>
+					<top>$PARAM[epg_bar_top]</top>
+					<width>100%</width>
+					<height>$PARAM[epg_bar_height]</height>
+					<info2>PVR.TimeshiftProgressPlayPos</info2>
+					<info>PVR.TimeshiftProgressEpgEnd</info>
+					<texturebg border="3" colordiffuse="60FFFFFF">colors/white50.png</texturebg>
+					<midtexture colordiffuse="60FFFFFF">colors/white50.png</midtexture>
+				</control>
+			</control>
+			<control type="progress">
+				<left>0</left>
+				<top>$PARAM[ts_bar_top]</top>
+				<width>100%</width>
+				<height>$PARAM[ts_bar_height]</height>
+				<info2>PVR.TimeshiftProgressBufferStart</info2>
+				<info>PVR.TimeshiftProgressBufferEnd</info>
+				<texturebg border="3" colordiffuse="60FFFFFF">colors/white50.png</texturebg>
+				<midtexture>colors/white70.png</midtexture>
+				<visible>Player.SeekEnabled</visible>
+			</control>
+		</control>
+		<control type="group">
+			<animation effect="fade" time="400">VisibleChange</animation>
+			<visible>Player.ChannelPreviewActive</visible>
+			<control type="label">
+				<top>22</top>
+				<right>20</right>
+				<width>400</width>
+				<height>50</height>
+				<align>right</align>
+				<aligny>center</aligny>
+				<font>font13</font>
+				<label>$INFO[VideoPlayer.EndTime]</label>
+			</control>
+			<control type="label">
+				<top>22</top>
+				<left>20</left>
+				<width>400</width>
+				<height>50</height>
+				<align>left</align>
+				<aligny>center</aligny>
+				<font>font13</font>
+				<label>$INFO[VideoPlayer.StartTime]</label>
+			</control>
+			<control type="progress">
+				<left>0</left>
+				<top>70</top>
+				<width>100%</width>
+				<height>16</height>
+				<info>PVR.EpgEventProgress</info>
+				<texturebg border="3" colordiffuse="60FFFFFF">colors/white50.png</texturebg>
+				<midtexture colordiffuse="button_focus">colors/white.png</midtexture>
+			</control>
+		</control>
+	</include>
+	<include name="POVIL_Player_PoweredOsdInfo">
+		<param name="visible">String.IsEqual(Container(201).ListItem.Property(info),info)</param>
+		<param name="groupheight">600</param>
+		<param name="texture">$VAR[POVIL_Player__FixOsdIcon]</param>
+		<param name="grouplistheight">600</param>
+		<param name="label">$INFO[VideoPlayer.Title] $INFO[VideoPlayer.Year,(,)]</param>
+		<definition>
+			<control type="group">
+				<left>10</left>
+				<right>10</right>
+				<visible>$PARAM[visible]</visible>
+				<height>$PARAM[groupheight]</height>
+				<bottom>POVIL_Player_osdbottom</bottom>
+				<include>POVIL_Player_bottom2topslideanimation</include>
+				<control type="group">
+					<width>380</width>
+					<bottom>0</bottom>
+					<include content="POVIL_Player_basedframeimage">
+						<param name="texture">$PARAM[texture]</param>
+					</include>
+				</control>
+				<control type="grouplist">
+					<left>400</left>
+					<itemgap>$PARAM[itemgap]</itemgap>
+					<orientation>vertical</orientation>
+					<height>$PARAM[grouplistheight]</height>
+					<align>bottom</align>
+					<bottom>0</bottom>
+					<control type="label">
+						<height max="55">auto</height>
+						<font>font45_title</font>
+						<label>$PARAM[label]</label>
+					</control>
+					<control type="label">
+						<height max="40">auto</height>
+						<font>font32</font>
+						<textcolor>yellow</textcolor>
+						<label>$PARAM[middlelabel]</label>
+					</control>
+					<control type="textbox">
+						<height max="145">auto</height>
+						<font>font37</font>
+						<label>$PARAM[bottomlabel]</label>
+						<visible>$PARAM[bottomlabevisible]</visible>
+						<autoscroll time="5000" fade="5000" repeat="5000">true</autoscroll>
+					</control>
+				</control>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player_TouchBackOSDButton">
+		<control type="radiobutton" id="799">
+			<left>-10</left>
+			<top>-10</top>
+			<width>120</width>
+			<height>120</height>
+			<align>center</align>
+			<aligny>center</aligny>
+			<onclick>Dialog.Close(all,true)</onclick>
+			<onclick>Action(FullScreen)</onclick>
+			<texturefocus colordiffuse="button_focus">buttons/roundbutton-fo.png</texturefocus>
+			<texturenofocus />
+			<radioposx>30</radioposx>
+			<radiowidth>60</radiowidth>
+			<radioheight>60</radioheight>
+			<textureradioonfocus>icons/back.png</textureradioonfocus>
+			<textureradioonnofocus colordiffuse="grey">icons/back.png</textureradioonnofocus>
+			<textureradioofffocus>icons/back.png</textureradioofffocus>
+			<textureradiooffnofocus colordiffuse="grey">icons/back.png</textureradiooffnofocus>
+			<include>POVIL_Player_Animation_TopSlide</include>
+		</control>
+	</include>
+	<include name="POVIL_Player__FixOsdFlags">
+		<param name="left">0</param>
+		<definition>
+			<control type="group">
+				<width>150</width>
+				<height>60</height>
+				<control type="image">
+					<texture>flags/flag.png</texture>
+				</control>
+				<control type="image">
+					<top>20</top>
+					<left>15</left>
+					<right>10</right>
+					<width>20</width>
+					<height>20</height>
+					<texture>$PARAM[texture]</texture>
+					<visible>$PARAM[visible]</visible>
+				</control>
+				<control type="label">
+					<left>$PARAM[left]</left>
+					<right>0</right>
+					<align>center</align>
+					<aligny>center</aligny>
+					<font>font10</font>
+					<label>$INFO[VideoPlayer.$PARAM[flaglabel]]</label>
+					<visible fallback="n/a">!String.IsEmpty(VideoPlayer.$PARAM[flaglabel])</visible>
+				</control>
+				<control type="label">
+					<left>$PARAM[left]</left>
+					<right>0</right>
+					<align>center</align>
+					<aligny>center</aligny>
+					<font>font10</font>
+					<label fallback="n/a">$PARAM[label2]</label>
+				</control>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player__IconObject">
+		<control type="image">
+			<left>0</left>
+			<right>0</right>
+			<top>0</top>
+			<bottom>0</bottom>
+			<texture border="16">icons/box21.png</texture>
+			<colordiffuse>FF181818</colordiffuse>
+		</control>
+		<control type="image">
+			<left>0</left>
+			<right>0</right>
+			<top>0</top>
+			<bottom>0</bottom>
+			<texture border="16">icons/box.png</texture>
+			<colordiffuse>$INFO[Skin.String(osdframebuttoncolor)]</colordiffuse>
+			<visible>$PARAM[framefocus]</visible>
+			<animation condition="$PARAM[animnofocus]" effect="fade" start="100" end="50" time="150">Conditional</animation>
+		</control>
+		<control type="image">
+			<left>2</left>
+			<right>2</right>
+			<top>2</top>
+			<bottom>2</bottom>
+			<texture border="16">icons/box.png</texture>
+			<colordiffuse>FF181818</colordiffuse>
+		</control>
+		<control type="image">
+			<width>35</width>
+			<height>35</height>
+			<centertop>50%</centertop>
+			<centerleft>50%</centerleft>
+			<texture>$INFO[ListItem.Icon]</texture>
+			<visible>$PARAM[focused]</visible>
+		</control>
+		<control type="image">
+			<width>35</width>
+			<height>35</height>
+			<centertop>50%</centertop>
+			<centerleft>50%</centerleft>
+			<texture>$INFO[ListItem.Icon]</texture>
+			<colordiffuse>$INFO[Skin.String(osdbuttonfocuscolor)]</colordiffuse>
+			<visible>$PARAM[nofocus]</visible>
+		</control>
+		<nested />
+	</include>
+	<include name="POVIL_Player__PoweredSeekTime">
+		<param name="visible">true</param>
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]">
+				<width>205</width>
+				<height>60</height>
+				<align>center</align>
+				<aligny>center</aligny>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus>buttons/button-focus.png</texturefocus>
+				<texturenofocus>buttons/button-nofocus.png</texturenofocus>
+				<alttexturefocus>buttons/button-focus2.png</alttexturefocus>
+				<alttexturenofocus>buttons/button-focus.png</alttexturenofocus>
+				<onclick>$PARAM[actiononclick]</onclick>
+				<usealttexture>$PARAM[alttexturevisible]</usealttexture>
+				<label>$PARAM[labelseektime]</label>
+				<altlabel>$PARAM[altlabel]</altlabel>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player___ChooseSourceOsd__">
+		<onclick condition="$EXP[POVIL_Player___Movies_OSD]">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_change_source)</onclick>
+		<onclick condition="$EXP[POVIL_Player___episode_OSD]">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_change_source)</onclick>
+	</include>
+	<include name="POVIL_Player___OsdEpisodesSeasons__">
+		<control type="fixedlist" id="500323">
+			<height>500</height>
+			<width>80%</width>
+			<top>750</top>
+			<left>360</left>
+			<onback>202</onback>
+			<onleft>false</onleft>
+			<onright>false</onright>
+			<movement>2</movement>
+			<orientation>horizontal</orientation>
+			<include>POVIL_Player_Animation_BottomSlide</include>
+			<scrolltime tween="cubic">550</scrolltime>
+			<visible>Container(202).HasFocus(470) + Control.HasFocus(202) | [Control.HasFocus(500323)]</visible>
+			<animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
+			<animation effect="fade" start="0" end="100" time="0">Hidden</animation>
+			<content target="videos">$VAR[POVIL_Player_build_Episodes_Url_OSD]</content>
+		</control>
+	</include>
+	<include name="POVIL_Player___OsdFixedFlags">
+		<param name="bottom">120</param>
+		<param name="groupalign">center</param>
+		<definition>
+			<control type="grouplist">
+				<align>$PARAM[groupalign]</align>
+				<visible>!Player.Paused</visible>
+				<visible>$PARAM[visible]</visible>
+				<include>$PARAM[animation]</include>
+				<orientation>horizontal</orientation>
+				<animation effect="fade" start="0" end="100" time="150">VisibleChange</animation>
+				<height>100</height>
+				<bottom>$PARAM[bottom]</bottom>
+				<itemgap>10</itemgap>
+				<include content="POVIL_Player__FixOsdFlags">
+					<param name="left">POVIL_Player_Padxy5</param>
+					<param name="flaglabel">VideoResolution</param>
+				</include>
+				<include content="POVIL_Player__FixOsdFlags">
+					<param name="left">POVIL_Player_Padxy5</param>
+					<param name="flaglabel">VideoCodec</param>
+				</include>
+				<include content="POVIL_Player__FixOsdFlags">
+					<param name="left">POVIL_Player_Padxy5</param>
+					<param name="flaglabel">VideoAspect</param>
+				</include>
+				<include content="POVIL_Player__FixOsdFlags">
+					<param name="left">POVIL_Player_Padxy5</param>
+					<param name="flaglabel">AudioChannels, ערוצי שמע </param>
+				</include>
+				<include content="POVIL_Player__FixOsdFlags">
+					<param name="left">POVIL_Player_Padxy10</param>
+					<param name="label2">$VAR[POVIL_Player__FixaudiolangugeOsd]</param>
+					<param name="texture">osd/fullscreen/buttons/audio.png</param>
+					<param name="visible">true</param>
+				</include>
+				<include content="POVIL_Player__FixOsdFlags">
+					<param name="left">POVIL_Player_Padxy10</param>
+					<param name="label2">$VAR[POVIL_Player__FixsublanguageOsd]</param>
+					<param name="texture">osd/fullscreen/buttons/subs3.png</param>
+					<param name="visible">true</param>
+				</include>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player___OsdInfo__">
+		<param name="groupwidth">500</param>
+		<param name="groupheight">280</param>
+		<param name="bottom">220</param>
+		<param name="visible">String.IsEqual(Container(201).ListItem.Property(id),info)</param>
+		<param name="texture">$VAR[POVIL_Player_texturecurrentimage]</param>
+		<param name="grouplistleft">515</param>
+		<param name="grouplistheight">250</param>
+		<param name="grouplistwidth">1380</param>
+		<param name="label1">$VAR[POVIL_Player_OsdTitleLabelVar]</param>
+		<param name="label1visible">true</param>
+		<param name="label2">$VAR[POVIL_Player_osd_middle_info_var]</param>
+		<param name="label2visible">$EXP[POVIL_Player___Movies_OSD] | $EXP[POVIL_Player___episode_OSD] | [VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg]</param>
+		<param name="label3">$VAR[POVIL_Player___Osdprettyplayerlabeltime]</param>
+		<param name="label3visible">$EXP[POVIL_Player___episode_OSD] | $EXP[POVIL_Player___Movies_OSD]</param>
+		<param name="label4">$INFO[VideoPlayer.Plot]</param>
+		<param name="label4visible">!String.IsEmpty(VideoPlayer.Plot)</param>
+		<param name="itemvisible">String.IsEqual(Container(201).ListItem.Property(id),info)</param>
+		<definition>
+			<control type="group">
+				<include>POVIL_Player_bottom2topslideanimation</include>
+				<width>$PARAM[groupwidth]</width>
+				<height>$PARAM[groupheight]</height>
+				<bottom>$PARAM[bottom]</bottom>
+				<visible>!Window.IsActive(textviewer)</visible>
+				<control type="image">
+					<left>-50</left>
+					<top>-40</top>
+					<height>370</height>
+					<width>2200</width>
+					<visible>$PARAM[visible]</visible>
+					<include>POVIL_Player_right2leftslideanimation</include>
+					<texture>masks/list_shadow.png</texture>
+				</control>
+				<control type="group">
+					<include>POVIL_Player_left2rightslideanimation</include>
+					<visible>$PARAM[visible]</visible>
+					<include content="POVIL_Player_BasedResizedWidgetFrame">
+						<include>POVIL_Player_BasedResizedWidgetImage</include>
+					</include>
+					<include name="BasedResizedWidgetFrameBox">
+						<include content="POVIL_Player_BasedResizedWidgetImage">
+							<param name="resize">0</param>
+							<param name="bottom">0</param>
+						</include>
+					</include>
+					<include content="POVIL_Player_BasedResizedWidgetTexture">
+						<include content="POVIL_Player_BasedResizedWidgetImage">
+							<param name="resize">10</param>
+							<param name="bottom">10</param>
+						</include>
+						<param name="texture">$PARAM[texture]</param>
+					</include>
+				</control>
+				<control type="grouplist">
+					<include>POVIL_Player_right2leftslideanimation</include>
+					<visible>$PARAM[visible]</visible>
+					<align>bottom</align>
+					<left>$PARAM[grouplistleft]</left>
+					<bottom>5</bottom>
+					<height>$PARAM[grouplistheight]</height>
+					<width>$PARAM[grouplistwidth]</width>
+					<orientation>vertical</orientation>
+					<control type="label">
+						<height max="54">auto</height>
+						<align>left</align>
+						<font>font45_title</font>
+						<label>$PARAM[label1]</label>
+						<visible>$PARAM[label1visible]</visible>
+					</control>
+					<control type="label">
+						<height max="40">auto</height>
+						<align>left</align>
+						<font>font32_title</font>
+						<label>$PARAM[label2]</label>
+						<visible>$PARAM[label2visible]</visible>
+					</control>
+					<control type="label">
+						<height max="40">auto</height>
+						<align>left</align>
+						<font>font32_title</font>
+						<label>$PARAM[label3]</label>
+						<visible>$PARAM[label3visible]</visible>
+					</control>
+					<control type="textbox">
+						<height max="125">auto</height>
+						<align>left</align>
+						<label>$PARAM[label4]</label>
+						<visible>$PARAM[label4visible]</visible>
+						<autoscroll fade="5000" time="3500" repeat="4000">System.IdleTime(2)</autoscroll>
+					</control>
+				</control>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player___OsdSlider__">
+		<param name="height">15</param>
+		<param name="width">POVIL_Player_fullwidth</param>
+		<param name="progresschacheheight">15</param>
+		<param name="bottom">150</param>
+		<param name="texture">kodirdil/overlays/progress-mid.png</param>
+		<param name="progresscachebg">gray</param>
+		<param name="progresscachemidcolor">white</param>
+		<param name="progressmidcolor">red</param>
+		<param name="progresstop">-9</param>
+		<param name="rangestop">6</param>
+		<definition>
+			<control type="group">
+				<height>$PARAM[height]</height>
+				<width>$PARAM[width]</width>
+				<bottom>$PARAM[bottom]</bottom>
+				<control type="progress">
+					<height>$PARAM[progresschacheheight]</height>
+					<texturebg colordiffuse="$PARAM[progresscachebg]" border="10.8">$PARAM[texture]</texturebg>
+					<midtexture colordiffuse="$PARAM[progresscachemidcolor]" border="10.8">$PARAM[texture]</midtexture>
+					<info>Player.ProgressCache</info>
+				</control>
+				<control type="progress">
+					<top>$PARAM[progresstop]</top>
+					<texturebg />
+					<midtexture colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]" border="10.8">$PARAM[texture]</midtexture>
+					<info>Player.Progress</info>
+				</control>
+				<control type="ranges">
+					<top>$PARAM[rangestop]</top>
+					<texturebg border="3" colordiffuse="00FFFFFF">colors/white50.png</texturebg>
+					<lefttexture>colors/white.png</lefttexture>
+					<midtexture colordiffuse="FFFF0000">colors/white.png</midtexture>
+					<righttexture>colors/white.png</righttexture>
+					<info>Player.Editlist</info>
+				</control>
+				<control type="ranges">
+					<top>$PARAM[rangestop]</top>
+					<texturebg border="3" colordiffuse="00FFFFFF">colors/red50.png</texturebg>
+					<righttexture>colors/red.png</righttexture>
+					<info>Player.Cuts</info>
+				</control>
+				<control type="ranges">
+					<top>$PARAM[rangestop]</top>
+					<texturebg border="3" colordiffuse="00FFFFFF">colors/white50.png</texturebg>
+					<righttexture>colors/white.png</righttexture>
+					<info>Player.SceneMarkers</info>
+				</control>
+				<control type="ranges">
+					<top>$PARAM[rangestop]</top>
+					<texturebg border="3" colordiffuse="00FFFFFF">colors/white50.png</texturebg>
+					<righttexture>colors/white.png</righttexture>
+					<info>Player.Chapters</info>
+				</control>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player___osdtopmenu__">
+		<content>
+			<item>
+				<icon>$VAR[POVIL_Player_stripoutosdbuttons]/previous.png</icon>
+				<property name="id">previuos</property>
+				<onclick>SkipPrevious</onclick>
+			</item>
+			<item id="500">
+				<icon>$VAR[POVIL_Player_stripoutosdbuttons]/rewind.png</icon>
+				<property name="id">rewind</property>
+				<property name="onup">$NUMBER[40022]</property>
+				<onclick>Control.SetFocus(40022)</onclick>
+			</item>
+			<item id="501">
+				<icon>$VAR[POVIL_Player_stripoutosdbuttons]/forward.png</icon>
+				<property name="id">forward</property>
+				<property name="onup">$NUMBER[40023]</property>
+				<onclick>Control.SetFocus(40023)</onclick>
+			</item>
+			<item>
+				<icon>$VAR[POVIL_Player_stripoutosdbuttons]/next.png</icon>
+				<property name="id">next</property>
+				<onclick>SkipNext</onclick>
+			</item>
+		</content>
+	</include>
+	<include name="POVIL_Player__roundedFlagosd_">
+		<param name="groupwidth">220</param>
+		<param name="groupwidth">130</param>
+		<param name="labelposition">2</param>
+		<definition>
+			<control type="group">
+				<width>220</width>
+				<height>130</height>
+				<visible>!String.IsEmpty($PARAM[visible])</visible>
+				<control type="image">
+					<texture colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]" border="5">masks/menumain.png</texture>
+					<bordertexture colordiffuse="black" border="5">masks/menumain.png</bordertexture>
+					<bordersize>5</bordersize>
+				</control>
+				<control type="label">
+					<top>$PARAM[labelposition]</top>
+					<align>center</align>
+					<aligny>center</aligny>
+					<font>font32_title</font>
+					<textcolor>white</textcolor>
+					<shadowcolor>black</shadowcolor>
+					<label>$PARAM[label]</label>
+				</control>
+				<control type="image">
+					<top>$PARAM[icontop]</top>
+					<left>$PARAM[iconleft]</left>
+					<height>25</height>
+					<width>25</width>
+					<texture>$PARAM[icon]</texture>
+				</control>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Player_altosplaycontrol">
+		<onclick>PlayerControl(play)</onclick>
+		<altclick>PlayerControl(play)</altclick>
+	</include>
+	<include name="POVIL_Player_basedframeimage">
+		<control type="image">
+			<left>0</left>
+			<right>0</right>
+			<top>0</top>
+			<bottom>0</bottom>
+			<texture border="16">icons/box21.png</texture>
+			<colordiffuse>FF181818</colordiffuse>
+		</control>
+		<control type="image">
+			<left>2</left>
+			<right>2</right>
+			<top>2</top>
+			<bottom>2</bottom>
+			<texture>$PARAM[texture]</texture>
+		</control>
+	</include>
+	<include name="POVIL_Player_bottom2topslideanimation">
+		<animation type="WindowOpen">
+			<effect type="slide" start="0,120" end="0,0" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="0" end="100" time="350" tween="sine" easing="inout" />
+		</animation>
+		<animation type="WindowClose">
+			<effect type="slide" start="0,0" end="0,120" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="100" end="0" time="350" tween="sine" easing="inout" />
+		</animation>
+		<animation type="Visible">
+			<effect type="slide" start="0,120" end="0,0" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="0" end="100" time="350" tween="sine" easing="inout" />
+		</animation>
+		<animation type="Hidden">
+			<effect type="slide" start="0,0" end="0,120" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="100" end="0" time="350" tween="sine" easing="inout" />
+		</animation>
+	</include>
+	<include name="POVIL_Player_left2rightslideanimation">
+		<animation type="WindowOpen">
+			<effect type="slide" start="-120,0" end="0,0" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="0" end="100" time="350" tween="sine" easing="inout" />
+		</animation>
+		<animation type="WindowClose">
+			<effect type="slide" start="0,0" end="-120,0" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="100" end="0" time="350" tween="sine" easing="inout" />
+		</animation>
+		<animation type="Visible">
+			<effect type="slide" start="-120,0" end="0,0" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="0" end="100" time="350" tween="sine" easing="inout" />
+		</animation>
+		<animation type="Hidden">
+			<effect type="slide" start="0,0" end="-120,0" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="100" end="0" time="350" tween="sine" easing="inout" />
+		</animation>
+	</include>
+	<include name="POVIL_Player_osdprettybottomnenu">
+		<item id="120">
+			<label>הגדרות הנגן</label>
+			<property name="onright">$NUMBER[15000]</property>
+			<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_settings)</onclick>
+		</item>
+		<item id="470">
+			<label>פרקי העונה</label>
+			<property name="onright">$NUMBER[500323]</property>
+			<property name="menu_id">episodes</property>
+			<onclick>Control.SetFocus(500323)</onclick>
+			<visible>$EXP[POVIL_Player___episode_OSD]</visible>
+		</item>
+		<item id="121">
+			<label>הגדרות וידאו</label>
+			<property name="onright">$NUMBER[15000]</property>
+			<onclick>ActivateWindow(osdvideosettings)</onclick>
+		</item>
+		<item id="122">
+			<label>הגדרות אודיו</label>
+			<property name="onright">$NUMBER[15000]</property>
+			<onclick>ActivateWindow(osdaudiosettings)</onclick>
+		</item>
+		<item id="123">
+			<label>החלף נגן</label>
+			<property name="onright">$NUMBER[15000]</property>
+			<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=choose_player_style)</onclick>
+		</item>
+	</include>
+	<include name="POVIL_Player_prettybottomenu_osd">
+		<itemlayout width="350" height="80" condition="Integer.IsEqual(Container(202).NumItems,4)">
+			<control type="group">
+				<height>170</height>
+				<control type="image">
+					<texture colordiffuse="25FFFFFF" border="5">masks/menumain.png</texture>
+				</control>
+				<control type="label">
+					<align>center</align>
+					<aligny>center</aligny>
+					<font>font36_title</font>
+					<label>$INFO[ListItem.Label]</label>
+				</control>
+			</control>
+		</itemlayout>
+		<focusedlayout width="350" height="80" condition="Integer.IsEqual(Container(202).NumItems,4)">
+			<control type="group">
+				<height>170</height>
+				<control type="image">
+					<texture colordiffuse="25FFFFFF" border="5">masks/menumain.png</texture>
+				</control>
+				<control type="image">
+					<texture border="5">masks/menumain.png</texture>
+					<animation condition="!Control.HasFocus(202)" effect="fade" start="100" end="50" time="250">Conditional</animation>
+				</control>
+				<control type="label">
+					<align>center</align>
+					<aligny>center</aligny>
+					<font>font36_title</font>
+					<label>$INFO[ListItem.Label]</label>
+					<textcolor>black</textcolor>
+				</control>
+			</control>
+		</focusedlayout>
+		<itemlayout width="350" height="70" condition="Integer.IsEqual(Container(202).NumItems,5)">
+			<control type="group">
+				<height>170</height>
+				<control type="image">
+					<texture colordiffuse="25FFFFFF" border="5">masks/menumain.png</texture>
+				</control>
+				<control type="label">
+					<align>center</align>
+					<aligny>center</aligny>
+					<font>font36_title</font>
+					<label>$INFO[ListItem.Label]</label>
+				</control>
+			</control>
+		</itemlayout>
+		<focusedlayout width="350" height="70" condition="Integer.IsEqual(Container(202).NumItems,5)">
+			<control type="group">
+				<height>170</height>
+				<control type="image">
+					<texture colordiffuse="25FFFFFF" border="5">masks/menumain.png</texture>
+				</control>
+				<control type="image">
+					<texture border="5">masks/menumain.png</texture>
+					<animation condition="!Control.HasFocus(202)" effect="fade" start="100" end="50" time="250">Conditional</animation>
+				</control>
+				<control type="label">
+					<align>center</align>
+					<aligny>center</aligny>
+					<font>font36_title</font>
+					<label>$INFO[ListItem.Label]</label>
+					<textcolor>black</textcolor>
+				</control>
+			</control>
+		</focusedlayout>
+	</include>
+	<include name="POVIL_Player_right2leftslideanimation">
+		<animation type="WindowOpen">
+			<effect type="slide" start="120,0" end="0,0" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="0" end="100" time="350" tween="sine" easing="inout" />
+		</animation>
+		<animation type="WindowClose">
+			<effect type="slide" start="0,0" end="120,0" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="100" end="0" time="350" tween="sine" easing="inout" />
+		</animation>
+		<animation type="Visible">
+			<effect type="slide" start="120,0" end="0,0" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="0" end="100" time="350" tween="sine" easing="inout" />
+		</animation>
+		<animation type="Hidden">
+			<effect type="slide" start="0,0" end="120,0" time="350" tween="sine" easing="inout" />
+			<effect type="fade" start="100" end="0" time="350" tween="sine" easing="inout" />
+		</animation>
+	</include>
+	<include name="POVIL_Player_seek_forward_osd_item">
+		<content>
+			<item>
+				<label>הרצה</label>
+				<onclick>PlayerControl(forward)</onclick>
+				<visible>!Player.Forwarding</visible>
+			</item>
+			<item>
+				<label>עצור</label>
+				<onclick>PlayerControl(play)</onclick>
+				<visible>Player.Forwarding</visible>
+			</item>
+			<item>
+				<label>1 דקה</label>
+				<onclick>Seek(60)</onclick>
+			</item>
+			<item>
+				<label>5 דקות</label>
+				<onclick>seek(300)</onclick>
+			</item>
+			<item>
+				<label>10 דקות</label>
+				<onclick>seek(600)</onclick>
+			</item>
+			<item>
+				<label>20 דקות</label>
+				<onclick>seek(1200)</onclick>
+			</item>
+			<item>
+				<label>40 דקות</label>
+				<onclick>seek(2400)</onclick>
+			</item>
+			<item>
+				<label>60 דקות</label>
+				<onclick>Seek(3600)</onclick>
+			</item>
+			<item>
+				<label>80 דקות</label>
+				<onclick>Seek(4800)</onclick>
+			</item>
+		</content>
+	</include>
+	<include name="POVIL_Player_seek_rewind_osd_item">
+		<content>
+			<item>
+				<label>הרצה</label>
+				<onclick>PlayerControl(rewind)</onclick>
+				<visible>!Player.Rewinding</visible>
+			</item>
+			<item>
+				<label>עצור</label>
+				<onclick>PlayerControl(play)</onclick>
+				<visible>Player.Rewinding</visible>
+			</item>
+			<item>
+				<label>1 דקה</label>
+				<onclick>Seek(-60)</onclick>
+			</item>
+			<item>
+				<label>5 דקות</label>
+				<onclick>seek(-300)</onclick>
+			</item>
+			<item>
+				<label>10 דקות</label>
+				<onclick>seek(-600)</onclick>
+			</item>
+			<item>
+				<label>20 דקות</label>
+				<onclick>seek(-1200)</onclick>
+			</item>
+			<item>
+				<label>40 דקות</label>
+				<onclick>seek(-2400)</onclick>
+			</item>
+			<item>
+				<label>60 דקות</label>
+				<onclick>Seek(-3600)</onclick>
+			</item>
+			<item>
+				<label>80 דקות</label>
+				<onclick>Seek(-4800)</onclick>
+			</item>
+		</content>
+	</include>
+	<include name="POVIL_Player_syncfakebutton">
+		<control type="image" id="2232320">
+			<visible>!$EXP[POVIL_Player_fakebuttonsync]</visible>
+			<top>60</top>
+			<left>80</left>
+			<description>Manual Subtitles Delay Sync</description>
+			<width>140</width>
+			<height>140</height>
+			<texture>kodirdil/subtitles_window/sync_subtitle.png</texture>
+			<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
+			<visible>!String.Contains(Player.Folderpath, plugin.video.idanplus)</visible>
+		</control>
+		<control type="image" id="2232320">
+			<visible>$EXP[POVIL_Player_fakebuttonsync]</visible>
+			<top>60</top>
+			<left>80</left>
+			<description>Manual Subtitles Delay Sync</description>
+			<width>140</width>
+			<height>140</height>
+			<texture colordiffuse="button_focus">kodirdil/subtitles_window/sync_subtitle.png</texture>
+			<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
+			<visible>!String.Contains(Player.Folderpath, plugin.video.idanplus)</visible>
+		</control>
+	</include>
+	<include name="POVIL_Player_videosd1">
+		<include>POVIL_Player_StyleSelector</include>
+		<control type="group">
+			<left>10</left>
+			<right>10</right>
+			<visible>$EXP[POVIL_Player_sliderdialogfalseortrue]</visible>
+			<include>POVIL_Player_bottom2topslideanimation</include>
+			<control type="image">
+				<left>-40</left>
+				<width>120%</width>
+				<height>700</height>
+				<bottom>0</bottom>
+				<texture flipy="true">frame/osdfade.png</texture>
+			</control>
+			<control type="label">
+				<align>right</align>
+				<left>1200</left>
+				<height>50</height>
+				<bottom>10</bottom>
+				<scroll>true</scroll>
+				<scrolltime>40</scrolltime>
+				<label>$INFO[ListItem.Label]</label>
+				<visible>![Player.Rewinding | Player.Forwarding]</visible>
+			</control>
+			<control type="label">
+				<align>right</align>
+				<height>50</height>
+				<bottom>10</bottom>
+				<label>מעביר [COLOR button_focus]$VAR[POVIL_Player_SeekRewindForwardTime][/COLOR]</label>
+				<visible>Player.Rewinding | Player.Forwarding</visible>
+			</control>
+			<control type="list" id="201">
+				<orientation>horizontal</orientation>
+				<height>60</height>
+				<bottom>0</bottom>
+				<onup>SetFocus($INFO[Container(201).ListItem.Property(onup)])</onup>
+				<itemlayout width="60" height="50">
+					<control type="group">
+						<width>50</width>
+						<include content="POVIL_Player__IconObject">
+							<param name="focused">true</param>
+							<param name="nofocus">false</param>
+							<param name="framefocus">false</param>
+						</include>
+						<control type="image">
+							<width>35</width>
+							<height>35</height>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture colordiffuse="orange">$INFO[ListItem.Property(subon)]</texture>
+							<visible>VideoPlayer.SubtitlesEnabled + VideoPlayer.HasSubtitles</visible>
+						</control>
+						<control type="image">
+							<width>35</width>
+							<height>35</height>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture>$INFO[ListItem.Property(suboff)]</texture>
+							<visible>!VideoPlayer.SubtitlesEnabled + VideoPlayer.HasSubtitles</visible>
+						</control>
+						<control type="image">
+							<width>28</width>
+							<height>28</height>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture>$INFO[ListItem.Property(timer)]</texture>
+						</control>
+						<control type="image">
+							<width>24</width>
+							<height>24</height>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture>$INFO[ListItem.Property(resizedicon2)]</texture>
+						</control>
+						<control type="image">
+							<width>54</width>
+							<height>54</height>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture>$INFO[ListItem.Property(subfixresizing)]</texture>
+						</control>
+					</control>
+				</itemlayout>
+				<focusedlayout width="60" height="50">
+					<control type="group">
+						<width>50</width>
+						<include content="POVIL_Player__IconObject">
+							<param name="focused">true</param>
+							<param name="framefocus">true</param>
+							<param name="nofocus">true</param>
+							<param name="animnofocus">!Control.HasFocus(201)</param>
+						</include>
+						<control type="image">
+							<width>35</width>
+							<height>35</height>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture colordiffuse="orange">$INFO[ListItem.Property(subon)]</texture>
+							<visible>VideoPlayer.SubtitlesEnabled + VideoPlayer.HasSubtitles</visible>
+						</control>
+						<control type="image">
+							<width>35</width>
+							<height>35</height>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<colordiffuse>$INFO[Skin.String(osdbuttonfocuscolor)]</colordiffuse>
+							<texture>$INFO[ListItem.Property(suboff)]</texture>
+							<visible>!VideoPlayer.SubtitlesEnabled + VideoPlayer.HasSubtitles</visible>
+							<visible>Control.HasFocus(201)</visible>
+						</control>
+						<control type="image">
+							<width>35</width>
+							<height>35</height>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<colordiffuse>$INFO[Skin.String(osdbuttonfocuscolor)]</colordiffuse>
+							<texture>$INFO[ListItem.Property(suboff)]</texture>
+							<visible>!VideoPlayer.SubtitlesEnabled + VideoPlayer.HasSubtitles</visible>
+							<visible>!Control.HasFocus(201)</visible>
+						</control>
+						<control type="image">
+							<width>28</width>
+							<height>28</height>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture>$INFO[ListItem.Property(timer)]</texture>
+							<colordiffuse>$INFO[Skin.String(osdbuttonfocuscolor)]</colordiffuse>
+						</control>
+						<control type="image">
+							<width>24</width>
+							<height>24</height>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture>$INFO[ListItem.Property(resizedicon2)]</texture>
+						</control>
+						<control type="image">
+							<width>54</width>
+							<height>54</height>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture colordiffuse="$INFO[Skin.String(osdbuttonfocuscolor)]">$INFO[ListItem.Property(subfixresizing)]</texture>
+						</control>
+					</control>
+				</focusedlayout>
+				<content>
+					<item id="100">
+						<label>מעבר לתכנית הקודמת או לפרק הקודם</label>
+						<icon>osd/fullscreen/buttons/previous.png</icon>
+						<property name="id">previous</property>
+						<onclick>SkipPrevious</onclick>
+						<visible>Player.Chapter | !String.IsEmpty(VideoPlayer.offset(-1).Title)</visible>
+					</item>
+					<item id="250">
+						<label>הרץ קדימה</label>
+						<icon>osd/fullscreen/buttons/rewind.png</icon>
+						<visible>Player.SeekEnabled</visible>
+						<property name="rewind">rewind</property>
+						<property name="onup">$NUMBER[50002]</property>
+						<onclick>Control.SetFocus(50002)</onclick>
+					</item>
+					<item id="500">
+						<label>מידע טכני על הניגון</label>
+						<icon>osd/fullscreen/buttons/information.png</icon>
+						<property name="info">info</property>
+						<visible>!String.IsEmpty(VideoPlayer.Plot)</visible>
+						<visible>!Player.Paused</visible>
+						<onclick>Dialog.Close(videoosd)</onclick>
+						<onclick>Info</onclick>
+					</item>
+					<item id="101">
+						<label>עצור</label>
+						<icon>osd/fullscreen/buttons/stop.png</icon>
+						<onclick>PlayerControl(stop)</onclick>
+					</item>
+					<item id="102">
+						<label>המשך ניגון</label>
+						<icon>osd/fullscreen/buttons/play.png</icon>
+						<onclick>PlayerControl(play)</onclick>
+						<visible>Player.PauseEnabled + Player.Paused</visible>
+					</item>
+					<item id="103">
+						<label>לחץ להשהות את הניגון</label>
+						<icon>osd/fullscreen/buttons/pause.png</icon>
+						<onclick>PlayerControl(play)</onclick>
+						<visible>Player.PauseEnabled + !Player.Paused</visible>
+					</item>
+					<item id="104">
+						<property name="timer">icons\infodialogs\timer.png</property>
+						<label>הנגן יסגר בעוד $INFO[Skin.String(OSDAutoCloseTime)] שניות</label>
+						<onclick>Skin.SetNumeric(OSDAutoCloseTime,20)</onclick>
+						<visible>Skin.HasSetting(playerclosedelay)</visible>
+					</item>
+					<item>
+						<label>קיים פלייליסט</label>
+						<icon>osd/fullscreen/buttons/playlist.png</icon>
+						<onclick>ActivateWindow(videoplaylist)</onclick>
+						<visible>Integer.IsGreater(Playlist.Length(video),0)</visible>
+						<visible>Skin.HasSetting(playerplaylist_osd)</visible>
+					</item>
+					<item id="105">
+						<label>כתובית מופעלת</label>
+						<property name="subon">osd/fullscreen/buttons/settings-subtitle.png</property>
+						<onclick>showsubtitles</onclick>
+						<visible>VideoPlayer.SubtitlesEnabled + VideoPlayer.HasSubtitles</visible>
+					</item>
+					<item id="106">
+						<label>כתובית כבוייה</label>
+						<property name="suboff">osd/fullscreen/buttons/settings-subtitle.png</property>
+						<onclick>showsubtitles</onclick>
+						<visible>!VideoPlayer.SubtitlesEnabled + VideoPlayer.HasSubtitles</visible>
+					</item>
+					<item id="107">
+						<label>חפש כתובית</label>
+						<icon>osd/fullscreen/buttons/subs.png</icon>
+						<visible>VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)</visible>
+						<onclick>RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
+					</item>
+					<item>
+						<label>החלף מקור לניגון</label>
+						<icon>osd/fullscreen/buttons/guide.png</icon>
+						<property name="plyersource">plyersource</property>
+						<property name="onup">$NUMBER[49994]</property>
+						<onclick>Control.SetFocus(49994)</onclick>
+						<visible>!VideoPlayer.Content(LiveTv) + !String.Contains(Player.FolderPath,idanplus)</visible>
+						<visible>!Player.Paused</visible>
+					</item>
+					<item>
+						<label>ערוצי עידן פלוס</label>
+						<property name="timer">icons\submenu\channels.png</property>
+
+						<property name="idanchannels">idanchannels</property>
+						<onclick>ActivateWindow(2111)</onclick>
+						<visible>Skin.HasSetting(disableidan)</visible>
+						<visible>!Player.Paused</visible>
+					</item>
+					<item id="108">
+						<label>הגדרות ויאודו / אודיו / נגן</label>
+						<icon>osd/fullscreen/buttons/settings.png</icon>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_settings)</onclick>
+					</item>
+					<item id="110">
+						<label>השהה כתובית</label>
+						<property name="subfixresizing">osd/fullscreen/buttons/subs2.png</property>
+						<onclick>SubtitleDelay</onclick>
+						<visible>$EXP[POVIL_Player___SubtitleCheckTrueOrFalse]</visible>
+					</item>
+					<item id="251">
+						<label>הרץ קדימה</label>
+						<icon>osd/fullscreen/buttons/forward.png</icon>
+						<visible>Player.SeekEnabled</visible>
+						<property name="forward">forward</property>
+						<property name="onup">$NUMBER[50001]</property>
+						<onclick>Control.SetFocus(50001)</onclick>
+					</item>
+					<item id="109">
+						<label>מעבר לתוכנית הבאה או לא לפרק הבא</label>
+						<icon>osd/fullscreen/buttons/next.png</icon>
+						<property name="id">next</property>
+						<onclick>SkipNext</onclick>
+						<visible>Player.Chapter | !String.IsEmpty(VideoPlayer.offset(1).Title)</visible>
+					</item>
+					<item id="610">
+						<label>פרקי העונה [COLOR yellow]$INFO[VideoPlayer.Season,(,)][/COLOR] $INFO[VideoPlayer.TvShowTitle]</label>
+						<icon>DefaultAddonPVRClient.png</icon>
+						<property name="id">allepisodes</property>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_episodes)</onclick>
+						<visible>$EXP[POVIL_Player___episode_OSD]</visible>
+					</item>
+					<item>
+						<label>לחץ להחלפת נגן</label>
+						<property name="resizedicon2">icons\infodialogs\update.png</property>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=choose_player_style)</onclick>
+					</item>
+				</content>
+			</control>
+		</control>
+		<include content="POVIL_Player_PoweredOsdInfo">
+			<param name="groupheight">550</param>
+			<param name="texture">$VAR[POVIL_Player__FixOsdIcon]</param>
+			<param name="bottomlabel">$INFO[VideoPlayer.Plot]</param>
+			<param name="middlelabel">$VAR[POVIL_Player_middlelabelInfo_OSD_Var]</param>
+			<param name="grouplistheight">250</param>
+			<param name="visible">String.IsEqual(Container(201).ListItem.Property(info),info) + !$EXP[POVIL_Player_IDANPlusCheck_OSd]</param>
+		</include>
+		<include content="POVIL_Player_PoweredOsdInfo">
+			<param name="groupheight">250</param>
+			<param name="texture">$INFO[Player.Icon]</param>
+			<param name="bottomlabel">$INFO[VideoPlayer.Plot]</param>
+			<param name="middlelabel">$VAR[POVIL_Player_middlelabelInfo_OSD_Var]</param>
+			<param name="grouplistheight">150</param>
+			<param name="visible">String.IsEqual(Container(201).ListItem.Property(info),info) + $EXP[POVIL_Player_IDANPlusCheck_OSd]</param>
+		</include>
+		<include content="POVIL_Player_PoweredOsdInfo">
+			<param name="groupheight">250</param>
+			<param name="texture">$VAR[POVIL_Player_NextShowIcon_OSD_Var]</param>
+			<param name="label">$VAR[POVIL_Player_NextTitleInfo_Next_OSD] $VAR[POVIL_Player_NextTitleInfoYear_Next_OSD]</param>
+			<param name="bottomlabel">$VAR[POVIL_Player_bottomlabelinfo_Next_OSD_Var]</param>
+			<param name="middlelabel">$VAR[POVIL_Player_middlelabelInfo_Next_OSD_Var]</param>
+			<param name="grouplistheight">150</param>
+			<param name="visible">String.IsEqual(Container(201).ListItem.Property(id),next) + $EXP[POVIL_Player_IDANPlusCheck_OSd] + $EXP[POVIL_Player_NextItemExist_OSd]</param>
+		</include>
+		<include content="POVIL_Player_PoweredOsdInfo">
+			<param name="groupheight">250</param>
+			<param name="texture">$VAR[POVIL_Player_PreviousShowIcon_OSD_Var]</param>
+			<param name="label">$VAR[POVIL_Player_PreviousTitleInfo_Next_OSD] $VAR[POVIL_Player_PreviousTitleInfoYear_Next_OSD]</param>
+			<param name="bottomlabel">$VAR[POVIL_Player_bottomlabelinfo_Previous_OSD_Var]</param>
+			<param name="middlelabel">$VAR[POVIL_Player_middlelabelInfo_Previous_OSD_Var]</param>
+			<param name="grouplistheight">150</param>
+			<param name="visible">String.IsEqual(Container(201).ListItem.Property(id),previous) + $EXP[POVIL_Player_IDANPlusCheck_OSd] + $EXP[POVIL_Player_PreviousItemExist_OSd]</param>
+		</include>
+		<control type="fixedlist" id="200325">
+			<height>500</height>
+			<left>10</left>
+			<right>10</right>
+			<onleft>false</onleft>
+			<onright>false</onright>
+			<bottom>60</bottom>
+			<onback>201</onback>
+			<ondown>201</ondown>
+			<movement>4</movement>
+			<pagecontrol>50092</pagecontrol>
+			<visible allowhiddenfocus="true">String.IsEqual(Container(201).ListItem.Property(id),allepisodes)</visible>
+			<orientation>horizontal</orientation>
+			<scrolltime tween="cubic">550</scrolltime>
+			<animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
+			<animation effect="fade" start="100" end="0" time="500">Hidden</animation>
+			<content target="videos">$VAR[POVIL_Player_build_Episodes_Url_OSD]</content>
+		</control>
+		<control type="group">
+			<visible>$EXP[POVIL_Player_sliderdialogfalseortrue]</visible>
+			<include content="POVIL_Player___OsdFixedFlags">
+				<param name="visible">$EXP[POVIL_Player_OsdFlagsVisible]</param>
+				<param name="animation">POVIL_Player_bottom2topslideanimation</param>
+			</include>
+		</control>
+		<control type="grouplist" id="50001">
+			<left>10</left>
+			<right>10</right>
+			<include>POVIL_Player_bottom2topslideanimation</include>
+			<visible>String.IsEqual(Container(201).ListItem.Property(forward),forward)</visible>
+			<orientation>horizontal</orientation>
+			<height>120</height>
+			<bottom>110</bottom>
+			<itemgap>7</itemgap>
+			<onback>201</onback>
+			<ondown>201</ondown>
+			<visible>!Player.Paused</visible>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">500</param>
+				<param name="actiononclick">PlayerControl(forward)</param>
+				<param name="labelseektime">הרץ קדימה</param>
+				<param name="altlabel">מהר יותר</param>
+				<param name="alttexturevisible">Player.Forwarding</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">501</param>
+				<param name="actiononclick">PlayerControl(Play)</param>
+				<param name="labelseektime">עצור הרצה $VAR[POVIL_Player_SeekRewindForwardTime]</param>
+				<param name="altlabel">עצור הרצה $VAR[POVIL_Player_SeekRewindForwardTime]</param>
+				<param name="alttexturevisible">Player.Forwarding</param>
+				<param name="visible">Player.Forwarding</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">502</param>
+				<param name="actiononclick">Seek(30)</param>
+				<param name="labelseektime">30 שניות</param>
+				<param name="altlabel">30 שניות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">503</param>
+				<param name="actiononclick">Seek(60)</param>
+				<param name="labelseektime">60 שניות</param>
+				<param name="altlabel">60 שניות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">504</param>
+				<param name="actiononclick">Seek(120)</param>
+				<param name="labelseektime">2 דקות</param>
+				<param name="altlabel">2 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">505</param>
+				<param name="actiononclick">Seek(360)</param>
+				<param name="labelseektime">5 דקות</param>
+				<param name="altlabel">5 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">506</param>
+				<param name="actiononclick">Seek(720)</param>
+				<param name="labelseektime">10 דקות</param>
+				<param name="altlabel">10 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">507</param>
+				<param name="actiononclick">Seek(1440)</param>
+				<param name="labelseektime">20 דקות</param>
+				<param name="altlabel">20 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">508</param>
+				<param name="actiononclick">Seek(2160)</param>
+				<param name="labelseektime">30 דקות</param>
+				<param name="altlabel">30 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">509</param>
+				<param name="actiononclick">Seek(4320)</param>
+				<param name="labelseektime">60 דקות</param>
+				<param name="altlabel">60 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+		</control>
+		<control type="grouplist" id="50002">
+			<left>10</left>
+			<right>10</right>
+			<visible>String.IsEqual(Container(201).ListItem.Property(rewind),rewind)</visible>
+			<orientation>horizontal</orientation>
+			<include>POVIL_Player_bottom2topslideanimation</include>
+			<height>120</height>
+			<bottom>110</bottom>
+			<itemgap>7</itemgap>
+			<onback>201</onback>
+			<ondown>201</ondown>
+			<visible>!Player.Paused</visible>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">500</param>
+				<param name="actiononclick">PlayerControl(rewind)</param>
+				<param name="labelseektime">הרץ אחורה</param>
+				<param name="altlabel">מהר יותר</param>
+				<param name="alttexturevisible">Player.Rewinding</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">501</param>
+				<param name="actiononclick">PlayerControl(Play)</param>
+				<param name="labelseektime">עצור הרצה $VAR[POVIL_Player_SeekRewindForwardTime]</param>
+				<param name="altlabel">עצור הרצה $VAR[POVIL_Player_SeekRewindForwardTime]</param>
+				<param name="alttexturevisible">Player.Rewinding</param>
+				<param name="visible">Player.Rewinding</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">502</param>
+				<param name="actiononclick">Seek(-30)</param>
+				<param name="labelseektime">30 שניות</param>
+				<param name="altlabel">30 שניות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">503</param>
+				<param name="actiononclick">Seek(-60)</param>
+				<param name="labelseektime">60 שניות</param>
+				<param name="altlabel">60 שניות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">504</param>
+				<param name="actiononclick">Seek(-120)</param>
+				<param name="labelseektime">2 דקות</param>
+				<param name="altlabel">2 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">505</param>
+				<param name="actiononclick">Seek(-360)</param>
+				<param name="labelseektime">5 דקות</param>
+				<param name="altlabel">5 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">506</param>
+				<param name="actiononclick">Seek(-720)</param>
+				<param name="labelseektime">10 דקות</param>
+				<param name="altlabel">10 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">507</param>
+				<param name="actiononclick">Seek(-1440)</param>
+				<param name="labelseektime">20 דקות</param>
+				<param name="altlabel">20 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">508</param>
+				<param name="actiononclick">Seek(-2160)</param>
+				<param name="labelseektime">30 דקות</param>
+				<param name="altlabel">30 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+			<include content="POVIL_Player__PoweredSeekTime">
+				<param name="id">509</param>
+				<param name="actiononclick">Seek(-4320)</param>
+				<param name="labelseektime">60 דקות</param>
+				<param name="altlabel">60 דקות</param>
+				<param name="alttexturevisible">Player.Seeking</param>
+				<param name="visible">Player.SeekEnabled</param>
+			</include>
+		</control>
+		<control type="group">
+			<left>10</left>
+			<right>10</right>
+			<height>140</height>
+			<bottom>195</bottom>
+			<include>POVIL_Player_bottom2topslideanimation</include>
+			<visible>String.IsEqual(Container(201).ListItem.Property(plyersource),plyersource)</visible>
+			<control type="group">
+				<width>400</width>
+				<height>400</height>
+				<bottom>0</bottom>
+				<include content="POVIL_Player_basedframeimage">
+					<param name="texture">$VAR[POVIL_Player__FixOsdIcon]</param>
+				</include>
+			</control>
+			<control type="list" id="49994">
+				<bottom>0</bottom>
+				<left>420</left>
+				<onback>201</onback>
+				<onup>false</onup>
+				<ondown>false</ondown>
+				<orientation>vertical</orientation>
+				<itemlayout width="620" height="70">
+					<control type="group">
+						<height>60</height>
+						<control type="image">
+							<texture border="16">buttons/button-nofocus.png</texture>
+						</control>
+						<control type="label">
+							<align>center</align>
+							<aligny>center</aligny>
+							<label>$INFO[ListItem.Label]</label>
+						</control>
+					</control>
+				</itemlayout>
+				<focusedlayout width="620" height="70">
+					<control type="group">
+						<height>60</height>
+						<control type="image">
+							<texture border="16">buttons/button-nofocus.png</texture>
+						</control>
+						<control type="image">
+							<texture border="16">buttons/button-focus.png</texture>
+							<visible>Control.HasFocus(49994)</visible>
+						</control>
+						<control type="label">
+							<align>center</align>
+							<aligny>center</aligny>
+							<label>$INFO[ListItem.Label]</label>
+							<visible>!Control.HasFocus(49994)</visible>
+						</control>
+						<control type="label">
+							<align>center</align>
+							<aligny>center</aligny>
+							<label>$INFO[ListItem.Label]</label>
+							<textcolor>blue</textcolor>
+							<visible>Control.HasFocus(49994)</visible>
+						</control>
+					</control>
+				</focusedlayout>
+				<content>
+					<item>
+						<label>החלף ובחר מקור חדש לסרט</label>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_change_source)</onclick>
+						<visible>VideoPlayer.Content(movies)</visible>
+					</item>
+					<item>
+						<label>החלף ונגן אוטומט מקור אחר לסרט</label>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_change_source)</onclick>
+						<visible>VideoPlayer.Content(movies)</visible>
+					</item>
+					<item>
+						<label>החלף ובחר מקור חדש לפרק</label>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_change_source)</onclick>
+						<visible>VideoPlayer.Content(episodes)</visible>
+					</item>
+					<item>
+						<label>החלף ונגן אוטומט מקור אחר לפרק</label>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_change_source)</onclick>
+						<visible>VideoPlayer.Content(episodes)</visible>
+					</item>
+				</content>
+			</control>
+		</control>
+	</include>
+	<include name="POVIL_Player_videosd2">
+		<include>POVIL_Player_StyleSelector</include>
+		<control type="group">
+			<left>POVIL_Player_Padxy0</left>
+			<right>POVIL_Player_Padxy0</right>
+			<height>280</height>
+			<bottom>105</bottom>
+			<animation condition="Window.IsActive(playerprocessinfo)" effect="slide" start="0,0" end="0,-100" time="250" delay="250">Conditional</animation>
+			<animation condition="Window.IsActive(2111)" effect="slide" start="0,0" end="0,-300" time="250">Conditional</animation>
+			<visible>!Window.IsActive(textviewer)</visible>
+			<control type="button" id="52000">
+				<height>1</height>
+				<width>1</width>
+				<label />
+				<onback>201</onback>
+				<ondown>201</ondown>
+				<onright>201</onright>
+				<onleft>201</onleft>
+			</control>
+			<control type="image">
+				<left>-40</left>
+				<width>120%</width>
+				<height>550</height>
+				<bottom>-395</bottom>
+				<texture flipy="true">frame/osdfade.png</texture>
+				<animation condition="[Window.IsActive(playerprocessinfo) | Window.IsActive(2111)]" effect="zoom" start="100,100" end="100,200" time="0">Conditional</animation>
+			</control>
+			<control type="image">
+				<left>-40</left>
+				<width>120%</width>
+				<height>550</height>
+				<bottom>-395</bottom>
+				<texture flipy="true">frame/osdfade.png</texture>
+				<animation condition="[Window.IsActive(playerprocessinfo) | Window.IsActive(2111)]" effect="zoom" start="100,100" end="100,200" time="0">Conditional</animation>
+			</control>
+			<include content="POVIL_Player_NetFlix_Based_Image">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">POVIL_Player_width75percent</param>
+					<param name="height">1</param>
+					<param name="bottom">-5</param>
+					<param name="centerleft">50%</param>
+				</include>
+				<param name="texture">$VAR[POVIL_Player_GlobalBasedImage]</param>
+				<param name="colordiffuse">50FFFFFF</param>
+			</include>
+			<include content="POVIL_Player_NetFlix_Based_Label">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">POVIL_Player_width5percent</param>
+					<param name="height">POVIL_Player_Pad01</param>
+					<param name="bottom">15</param>
+					<param name="right">POVIL_Player_Pad60</param>
+					<param name="centerleft">1%</param>
+				</include>
+				<param name="label">$VAR[POVIL_Player_StartTime_Osd_VAR]</param>
+				<param name="font">font12_bold</param>
+				<param name="align">right</param>
+			</include>
+			<include content="POVIL_Player_NetFlix_Based_Label">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">POVIL_Player_width5percent</param>
+					<param name="height">POVIL_Player_Pad01</param>
+					<param name="bottom">15</param>
+					<param name="right">POVIL_Player_Pad60</param>
+					<param name="centerleft">99%</param>
+				</include>
+				<param name="label">$VAR[POVIL_Player_EndTime_Osd_VAR]</param>
+				<param name="font">font12_bold</param>
+				<param name="align">left</param>
+			</include>
+			<include content="POVIL_Player_NetFlix_Based_Image">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">POVIL_Player_Pad25</param>
+					<param name="height">POVIL_Player_Pad25</param>
+					<param name="bottom">POVIL_Player_Pad35</param>
+					<param name="centerleft">1%</param>
+				</include>
+				<param name="texture">$VAR[POVIL_Player_netflix_playerpaused_Icon]</param>
+				<param name="visible">true</param>
+			</include>
+			<include content="POVIL_Player_NetFlix_Based_Label">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">POVIL_Player_Pad125</param>
+					<param name="height">POVIL_Player_Pad25</param>
+					<param name="bottom">POVIL_Player_Pad41</param>
+					<param name="centerleft">5%</param>
+				</include>
+				<param name="label">$VAR[POVIL_Player_netflix_playerpaused_label]</param>
+				<param name="font">font12</param>
+				<param name="align">left</param>
+				<param name="visible">true</param>
+			</include>
+			<include content="POVIL_Player_NetFlix_Based_Label">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">POVIL_Player_fullwidth</param>
+					<param name="height">POVIL_Player_Pad25</param>
+					<param name="bottom">POVIL_Player_Pad41</param>
+					<param name="centerleft">49%</param>
+				</include>
+				<param name="label">[B]$INFO[Control.GetLabel(201)][/B]</param>
+				<param name="font">font12</param>
+				<param name="align">right</param>
+				<param name="visible">Control.HasFocus(201)</param>
+			</include>
+			<include content="POVIL_Player_NetFlix_Based_Label">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">POVIL_Player_fullwidth</param>
+					<param name="height">POVIL_Player_Pad25</param>
+					<param name="bottom">POVIL_Player_Pad41</param>
+					<param name="centerleft">49%</param>
+				</include>
+				<param name="label">[B]$INFO[Control.GetLabel(202)][/B]</param>
+				<param name="font">font12</param>
+				<param name="align">right</param>
+				<param name="visible">Control.HasFocus(202)</param>
+			</include>
+			<include content="POVIL_Player_NetFlix_Based_Label">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">POVIL_Player_fullwidth</param>
+					<param name="height">POVIL_Player_Pad25</param>
+					<param name="bottom">POVIL_Player_Pad41</param>
+					<param name="centerleft">49%</param>
+				</include>
+				<param name="label">$VAR[POVIL_Player_NetFlixMenuRightLabel]</param>
+				<param name="font">font12</param>
+				<param name="align">right</param>
+				<param name="visible">ControlGroup(202).HasFocus()</param>
+			</include>
+			<include content="POVIL_Player_NetFlix_Based_Image">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">25</param>
+					<param name="height">25</param>
+					<param name="bottom">-88</param>
+					<param name="centerleft">50%</param>
+				</include>
+				<param name="texture">osd/fullscreen/buttons/forward.png</param>
+				<param name="colordiffuse">95FFFFFF</param>
+				<param name="visible">![Window.IsActive(playerprocessinfo) | Window.IsActive(2111)]</param>
+			</include>
+			<include content="POVIL_Player_NetFlix_Based_Label">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">POVIL_Player_Pad215</param>
+					<param name="height">POVIL_Player_Pad35</param>
+					<param name="bottom">-91</param>
+					<param name="centerleft">50.5%</param>
+				</include>
+				<param name="align">right</param>
+				<param name="font">font10</param>
+				<param name="visible">true</param>
+				<param name="textcolor">95FFFFFF</param>
+				<param name="label">$VAR[POVIL_Player___NetflixCheckStatuWindowOpen_Osd__]</param>
+			</include>
+			<include content="POVIL_Player_NetFlix_Based_Image">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">25</param>
+					<param name="height">25</param>
+					<param name="bottom">-88</param>
+					<param name="centerleft">50%</param>
+				</include>
+				<param name="texture">osd/fullscreen/buttons/forward.png</param>
+				<param name="flipy">true</param>
+				<param name="colordiffuse">95FFFFFF</param>
+				<param name="visible">Window.IsActive(playerprocessinfo)</param>
+			</include>
+			<include content="POVIL_Player_NetFlix_Based_Label">
+				<include content="POVIL_Player_NetFlix_ReSize">
+					<param name="width">POVIL_Player_Pad215</param>
+					<param name="height">POVIL_Player_Pad35</param>
+					<param name="bottom">-91</param>
+					<param name="centerleft">52%</param>
+				</include>
+				<param name="align">right</param>
+				<param name="font">font10</param>
+				<param name="visible">Window.IsActive(playerprocessinfo)</param>
+				<param name="textcolor">95FFFFFF</param>
+				<param name="label">חזרה לתפריט</param>
+			</include>
+			<control type="progress">
+				<height>20</height>
+				<width>POVIL_Player_width75percent</width>
+				<centerleft>50%</centerleft>
+				<texturebg>-</texturebg>
+				<bottom>-5</bottom>
+				<midtexture colordiffuse="gray" border="8">kodirdil/overlays/progress-mid.png</midtexture>
+				<info>Player.ProgressCache</info>
+			</control>
+			<control type="progress">
+				<height>20</height>
+				<width>POVIL_Player_width75percent</width>
+				<centerleft>50%</centerleft>
+				<texturebg>-</texturebg>
+				<bottom>-5</bottom>
+				<midtexture colordiffuse="white" border="8">kodirdil/overlays/progress-mid.png</midtexture>
+				<info>Player.Progress</info>
+			</control>
+			<control type="list" id="201">
+				<orientation>horizontal</orientation>
+				<left>10</left>
+				<height>55</height>
+				<bottom>-95</bottom>
+				<onup>false</onup>
+				<ondown>PlayerProcessInfo</ondown>
+				<onright>202</onright>
+				<itemlayout width="65" height="55">
+					<control type="group">
+						<width>55</width>
+						<height>55</height>
+						<control type="image">
+							<texture colordiffuse="25FFFFFF">masks/circle.png</texture>
+							<visible>!Skin.HasSetting(removenetflixbuttonsbg)</visible>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture>$INFO[ListItem.Icon]</texture>
+						</control>
+						<control type="image">
+							<top>0</top>
+							<left>0</left>
+							<right>0</right>
+							<bottom>0</bottom>
+							<width>55</width>
+							<height>55</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture>$INFO[ListItem.Property(subssyncresize)]</texture>
+						</control>
+						<control type="image">
+							<top>15</top>
+							<left>16</left>
+							<right>15</right>
+							<bottom>15</bottom>
+							<width>22</width>
+							<height>22</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture>$INFO[ListItem.Property(episoderesize)]</texture>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture colordiffuse="orange">$INFO[ListItem.Property(subson)]</texture>
+							<visible>VideoPlayer.HasSubtitles + VideoPlayer.SubtitlesEnabled</visible>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture>$INFO[ListItem.Property(subsoff)]</texture>
+							<visible>VideoPlayer.HasSubtitles + !VideoPlayer.SubtitlesEnabled</visible>
+						</control>
+					</control>
+				</itemlayout>
+				<focusedlayout width="65" height="55">
+					<control type="group">
+						<width>55</width>
+						<height>55</height>
+						<control type="image">
+							<texture colordiffuse="25FFFFFF">masks/circle.png</texture>
+							<visible>!Skin.HasSetting(removenetflixbuttonsbg)</visible>
+						</control>
+						<control type="image">
+							<texture>masks/circle.png</texture>
+							<visible>Control.HasFocus(201)</visible>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture>$INFO[ListItem.Icon]</texture>
+						</control>
+						<control type="image">
+							<top>15</top>
+							<left>16</left>
+							<right>15</right>
+							<bottom>15</bottom>
+							<width>22</width>
+							<height>22</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture colordiffuse="98000000">$INFO[ListItem.Property(episoderesize)]</texture>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture colordiffuse="98000000">$INFO[ListItem.Icon]</texture>
+							<visible>Control.HasFocus(201)</visible>
+						</control>
+						<control type="image">
+							<top>0</top>
+							<left>0</left>
+							<right>0</right>
+							<bottom>0</bottom>
+							<width>55</width>
+							<height>55</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture colordiffuse="98000000">$INFO[ListItem.Property(subssyncresize)]</texture>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture colordiffuse="orange">$INFO[ListItem.Property(subson)]</texture>
+							<visible>VideoPlayer.HasSubtitles + VideoPlayer.SubtitlesEnabled</visible>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture colordiffuse="98000000">$INFO[ListItem.Property(subson)]</texture>
+							<visible>Control.HasFocus(201)</visible>
+							<visible>VideoPlayer.HasSubtitles + VideoPlayer.SubtitlesEnabled</visible>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture>$INFO[ListItem.Property(subsoff)]</texture>
+							<visible>VideoPlayer.HasSubtitles + !VideoPlayer.SubtitlesEnabled</visible>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture colordiffuse="98000000">$INFO[ListItem.Property(subsoff)]</texture>
+							<visible>VideoPlayer.HasSubtitles + !VideoPlayer.SubtitlesEnabled</visible>
+							<visible>Control.HasFocus(201)</visible>
+						</control>
+					</control>
+				</focusedlayout>
+				<content>
+					<item>
+						<label>הקודם</label>
+						<property name="id">previous</property>
+						<icon>osd/fullscreen/buttons/previous.png</icon>
+						<visible>!String.IsEmpty(VideoPlayer.offset(-1).Title) | Player.Chapter</visible>
+						<visible>!VideoPlayer.Content(LiveTv)</visible>
+						<onclick>SkipPrevious</onclick>
+					</item>
+					<item id="500">
+						<label>העבר אחורה</label>
+						<property name="id">rewind</property>
+						<icon>osd/fullscreen/buttons/rewind.png</icon>
+						<visible>Player.SeekEnabled</visible>
+						<onclick>Control.SetFocus(40022)</onclick>
+					</item>
+					<item>
+						<label>נגן</label>
+						<icon>osd/fullscreen/buttons/play.png</icon>
+						<visible>Player.PauseEnabled + Player.Paused</visible>
+						<onclick>PlayerControl(play)</onclick>
+					</item>
+					<item>
+						<label>השהה</label>
+						<icon>osd/fullscreen/buttons/pause.png</icon>
+						<visible>Player.PauseEnabled + !Player.Paused</visible>
+						<onclick>PlayerControl(play)</onclick>
+					</item>
+					<item>
+						<label>עצור</label>
+						<icon>osd/fullscreen/buttons/stop.png</icon>
+						<onclick>PlayerControl(stop)</onclick>
+					</item>
+					<item>
+						<label>לחץ למידע על התוכנית</label>
+						<property name="id">info</property>
+						<icon>osd/fullscreen/buttons/information.png</icon>
+						<onclick>Info</onclick>
+					</item>
+					<item>
+						<label>חפש כתובית</label>
+						<icon>osd/fullscreen/buttons/subs3.png</icon>
+						<onclick>ActivateWindow(subtitlesearch)</onclick>
+						<visible>!$EXP[POVIL_Player___livetv_OSD]</visible>
+					</item>
+					<item>
+						<label>כתובית כבויה</label>
+						<property name="subsoff">osd/fullscreen/buttons/subs.png</property>
+						<onclick>ShowSubtitles</onclick>
+						<visible>VideoPlayer.HasSubtitles + !VideoPlayer.SubtitlesEnabled</visible>
+					</item>
+					<item>
+						<label>כתובית מופעלת</label>
+						<property name="subson">osd/fullscreen/buttons/subs.png</property>
+						<onclick>ShowSubtitles</onclick>
+						<visible>VideoPlayer.HasSubtitles + VideoPlayer.SubtitlesEnabled</visible>
+					</item>
+					<item>
+						<label>פרקי עונה $INFO[VideoPlayer.Season,(,)] לסדרה $INFO[VideoPlayer.TvShowTitle]</label>
+						<property name="episoderesize">osd/fullscreen/buttons/guide.png</property>
+						<property name="visiblepisodes">true</property>
+						<onclick>Control.SetFocus(200323,0,absolute)</onclick>
+						<visible>$EXP[POVIL_Player___episode_OSD]</visible>
+					</item>
+					<item>
+						<label>סנכרן כתוביות</label>
+						<property name="subssyncresize">osd/fullscreen/buttons/subs2.png</property>
+						<onclick>Dialog.Close(videoosd,true)</onclick>
+						<onclick>SubtitleDelay</onclick>
+						<visible>VideoPlayer.HasSubtitles + VideoPlayer.SubtitlesEnabled</visible>
+					</item>
+					<item id="501">
+						<label>העבר קדימה</label>
+						<property name="id">forward</property>
+						<icon>osd/fullscreen/buttons/forward.png</icon>
+						<onclick>Control.SetFocus(40021)</onclick>
+						<visible>Player.SeekEnabled</visible>
+					</item>
+					<item>
+						<label>הבא</label>
+						<property name="id">next</property>
+						<icon>osd/fullscreen/buttons/next.png</icon>
+						<onclick>SkipNext</onclick>
+						<visible>!String.IsEmpty(VideoPlayer.offset(1).Title) | Player.Chapter</visible>
+						<visible>!VideoPlayer.Content(LiveTv)</visible>
+					</item>
+				</content>
+			</control>
+			<control type="list" id="202">
+				<orientation>horizontal</orientation>
+				<left>1530</left>
+				<height>55</height>
+				<bottom>-95</bottom>
+				<onup>false</onup>
+				<ondown>PlayerProcessInfo</ondown>
+				<onleft>201</onleft>
+				<itemlayout width="65" height="55">
+					<control type="group">
+						<width>55</width>
+						<height>55</height>
+						<control type="image">
+							<texture colordiffuse="25FFFFFF">masks/circle.png</texture>
+							<visible>!Skin.HasSetting(removenetflixbuttonsbg)</visible>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture>$INFO[ListItem.Icon]</texture>
+						</control>
+						<control type="image">
+							<top>15</top>
+							<left>15</left>
+							<right>15</right>
+							<bottom>15</bottom>
+							<width>25</width>
+							<height>25</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture>$INFO[ListItem.Property(resizedicon)]</texture>
+						</control>
+					</control>
+				</itemlayout>
+				<focusedlayout width="65" height="55">
+					<control type="group">
+						<width>55</width>
+						<height>55</height>
+						<control type="image">
+							<texture colordiffuse="25FFFFFF">masks/circle.png</texture>
+							<visible>!Skin.HasSetting(removenetflixbuttonsbg)</visible>
+						</control>
+						<control type="image">
+							<texture>masks/circle.png</texture>
+							<visible>Control.HasFocus(202)</visible>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture>$INFO[ListItem.Icon]</texture>
+						</control>
+						<control type="image">
+							<top>12</top>
+							<left>12</left>
+							<right>12</right>
+							<bottom>12</bottom>
+							<width>30</width>
+							<height>30</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture colordiffuse="98000000">$INFO[ListItem.Icon]</texture>
+							<visible>Control.HasFocus(202)</visible>
+						</control>
+						<control type="image">
+							<top>15</top>
+							<left>15</left>
+							<right>15</right>
+							<bottom>15</bottom>
+							<width>25</width>
+							<height>25</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture>$INFO[ListItem.Property(resizedicon)]</texture>
+						</control>
+						<control type="image">
+							<top>15</top>
+							<left>15</left>
+							<right>15</right>
+							<bottom>15</bottom>
+							<width>25</width>
+							<height>25</height>
+							<centerleft>50%</centerleft>
+							<centertop>50%</centertop>
+							<texture colordiffuse="98000000">$INFO[ListItem.Property(resizedicon)]</texture>
+							<visible>Control.HasFocus(202)</visible>
+						</control>
+					</control>
+				</focusedlayout>
+				<content>
+					<item>
+						<label>הגדרות וידאו</label>
+						<icon>osd/fullscreen/buttons/settings.png</icon>
+						<onclick>ActivateWindow(osdvideosettings)</onclick>
+					</item>
+					<item>
+						<label>הגדרות אודיו</label>
+						<icon>osd/fullscreen/buttons/audio.png</icon>
+						<onclick>ActivateWindow(osdaudiosettings)</onclick>
+					</item>
+					<item>
+						<label>לחץ להחלפת נגן</label>
+						<icon>osd/fullscreen/buttons/guide.png</icon>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=choose_player_style)</onclick>
+					</item>
+					<item>
+						<label>החלף מקור</label>
+						<property name="resizedicon">icons\infodialogs\update.png</property>
+						<include>POVIL_Player___ChooseSourceOsd__</include>
+					</item>
+					<item>
+						<label>$VAR[POVIL_Player_NetFlixMenuRightLabel]</label>
+						<property name="resizedicon">osd/fullscreen/buttons/forward.png</property>
+						<onclick>ActivateWindow(2111)</onclick>
+					</item>
+					<item>
+						<label>$VAR[POVIL_Player_CheckNetflixBgButtonsStatus]</label>
+						<icon>dialogs/close.png</icon>
+						<onclick>Skin.ToggleSetting(removenetflixbuttonsbg)</onclick>
+					</item>
+				</content>
+			</control>
+			<control type="list" id="40021">
+				<orientation>horizontal</orientation>
+				<left>200</left>
+				<right>100</right>
+				<height>125</height>
+				<bottom>-60</bottom>
+				<onback>201</onback>
+				<ondown>201</ondown>
+				<onleft>false</onleft>
+				<onright>false</onright>
+				<animation type="Visible">
+					<effect type="fade" start="0" end="100" time="250" tween="sine" easing="inout" />
+				</animation>
+				<animation type="Hidden">
+					<effect type="fade" start="100" end="0" time="250" tween="sine" easing="inout" />
+				</animation>
+				<visible>Container(201).HasFocus(501)</visible>
+				<itemlayout width="145">
+					<control type="group">
+						<width>125</width>
+						<height>40</height>
+						<control type="label">
+							<align>center</align>
+							<aligny>center</aligny>
+							<font>font20_title</font>
+							<label>$INFO[ListItem.Label]</label>
+							<textcolor>95FFFFFF</textcolor>
+						</control>
+					</control>
+				</itemlayout>
+				<focusedlayout width="145">
+					<control type="group">
+						<width>125</width>
+						<height>40</height>
+						<control type="image">
+							<texture>colors/white.png</texture>
+							<visible>Control.HasFocus(40021)</visible>
+						</control>
+						<control type="label">
+							<label>$INFO[ListItem.Label]</label>
+							<font>font20_title</font>
+							<align>center</align>
+							<aligny>center</aligny>
+							<textcolor>black</textcolor>
+							<visible>Control.HasFocus(40021)</visible>
+						</control>
+						<control type="label">
+							<align>center</align>
+							<aligny>center</aligny>
+							<label>$INFO[ListItem.Label]</label>
+							<font>font20_title</font>
+							<textcolor>95FFFFFF</textcolor>
+							<visible>!Control.HasFocus(40021)</visible>
+						</control>
+					</control>
+				</focusedlayout>
+				<include>POVIL_Player_seek_forward_osd_item</include>
+			</control>
+			<control type="list" id="40022">
+				<orientation>horizontal</orientation>
+				<left>200</left>
+				<right>100</right>
+				<height>125</height>
+				<bottom>-60</bottom>
+				<onback>201</onback>
+				<ondown>201</ondown>
+				<onleft>false</onleft>
+				<onright>false</onright>
+				<animation type="Visible">
+					<effect type="fade" start="0" end="100" time="250" tween="sine" easing="inout" />
+				</animation>
+				<animation type="Hidden">
+					<effect type="fade" start="100" end="0" time="250" tween="sine" easing="inout" />
+				</animation>
+				<visible>Container(201).HasFocus(500)</visible>
+				<itemlayout width="145">
+					<control type="group">
+						<width>125</width>
+						<height>40</height>
+						<control type="label">
+							<align>center</align>
+							<aligny>center</aligny>
+							<font>font20_title</font>
+							<label>$INFO[ListItem.Label]</label>
+							<textcolor>95FFFFFF</textcolor>
+						</control>
+					</control>
+				</itemlayout>
+				<focusedlayout width="145">
+					<control type="group">
+						<width>125</width>
+						<height>40</height>
+						<control type="image">
+							<texture>colors/white.png</texture>
+							<visible>Control.HasFocus(40022)</visible>
+						</control>
+						<control type="label">
+							<label>$INFO[ListItem.Label]</label>
+							<font>font20_title</font>
+							<align>center</align>
+							<aligny>center</aligny>
+							<textcolor>black</textcolor>
+							<visible>Control.HasFocus(40022)</visible>
+						</control>
+						<control type="label">
+							<align>center</align>
+							<aligny>center</aligny>
+							<label>$INFO[ListItem.Label]</label>
+							<font>font20_title</font>
+							<textcolor>95FFFFFF</textcolor>
+							<visible>!Control.HasFocus(40022)</visible>
+						</control>
+					</control>
+				</focusedlayout>
+				<include>POVIL_Player_seek_rewind_osd_item</include>
+			</control>
+		</control>
+		<control type="fixedlist" id="200323">
+			<height>500</height>
+			<left>10</left>
+			<right>10</right>
+			<onleft>false</onleft>
+			<onright>false</onright>
+			<bottom>60</bottom>
+			<onback>201</onback>
+			<ondown>201</ondown>
+			<movement>4</movement>
+			<pagecontrol>50092</pagecontrol>
+			<visible allowhiddenfocus="true">Control.HasFocus(200323)</visible>
+			<orientation>horizontal</orientation>
+			<scrolltime tween="cubic">550</scrolltime>
+			<animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
+			<animation effect="fade" start="100" end="0" time="500">Hidden</animation>
+			<content target="videos">$VAR[POVIL_Player_build_Episodes_Url_OSD]</content>
+		</control>
+		<control type="scrollbar" id="50092">
+			<bottom>192</bottom>
+			<onback>201</onback>
+			<height>8</height>
+			<width>1870</width>
+			<left>15</left>
+			<orientation>horizontal</orientation>
+			<visible>Control.HasFocus(200323)</visible>
+			<texturesliderbackground colordiffuse="85FFFFFF">colors/white.png</texturesliderbackground>
+			<texturesliderbarfocus colordiffuse="red">colors/white.png</texturesliderbarfocus>
+			<texturesliderbar colordiffuse="white">colors/white.png</texturesliderbar>
+			<animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
+			<animation effect="fade" start="0" end="100" time="0">Hidden</animation>
+		</control>
+		<include>POVIL_Player___OsdInfo__</include>
+		<include content="POVIL_Player___OsdInfo__">
+			<param name="groupwidth">500</param>
+			<param name="groupheight">280</param>
+			<param name="bottom">220</param>
+			<param name="visible">String.IsEqual(Container(201).ListItem.Property(id),next) + !String.IsEmpty(VideoPlayer.offset(1).Title)</param>
+			<param name="texture">$VAR[POVIL_Player_texturenextimage]</param>
+			<param name="grouplistleft">515</param>
+			<param name="grouplistheight">$PARAM[groupheight]</param>
+			<param name="grouplistwidth">1280</param>
+			<param name="label1">$VAR[POVIL_Player_OsdTitleNextLabelVar]</param>
+			<param name="label1visible">true</param>
+			<param name="label2">$VAR[POVIL_Player_osd_middle_info_next_var]</param>
+			<param name="label2visible">$EXP[POVIL_Player___Movies_OSD] | $EXP[POVIL_Player___episode_OSD] | [VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg]</param>
+			<param name="label3">$VAR[POVIL_Player___Osdprettyplayernextlabeltime]</param>
+			<param name="label3visible">$EXP[POVIL_Player___episode_OSD] | $EXP[POVIL_Player___Movies_OSD]</param>
+			<param name="label4">$INFO[VideoPlayer.offset(1).Plot]</param>
+			<param name="label4visible">!String.IsEmpty(VideoPlayer.offset(1).Plot)</param>
+			<param name="itemvisible">String.IsEqual(Container(201).ListItem.Property(id),next) + !String.IsEmpty(VideoPlayer.offset(1).Title)</param>
+		</include>
+		<include content="POVIL_Player___OsdInfo__">
+			<param name="groupwidth">500</param>
+			<param name="groupheight">280</param>
+			<param name="bottom">220</param>
+			<param name="visible">String.IsEqual(Container(201).ListItem.Property(id),previous) + !String.IsEmpty(VideoPlayer.offset(-1).Title)</param>
+			<param name="texture">$VAR[POVIL_Player_texturepreviousimage]</param>
+			<param name="grouplistleft">515</param>
+			<param name="grouplistheight">$PARAM[groupheight]</param>
+			<param name="grouplistwidth">1280</param>
+			<param name="label1">$VAR[POVIL_Player_OsdTitlePreviousLabelVar]</param>
+			<param name="label1visible">true</param>
+			<param name="label2">$VAR[POVIL_Player_osd_middle_info_previous_var]</param>
+			<param name="label2visible">$EXP[POVIL_Player___Movies_OSD] | $EXP[POVIL_Player___episode_OSD] | [VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg]</param>
+			<param name="label3">$VAR[POVIL_Player___Osdprettyplayerpreviouslabeltime]</param>
+			<param name="label3visible">$EXP[POVIL_Player___episode_OSD] | $EXP[POVIL_Player___Movies_OSD]</param>
+			<param name="label4">$INFO[VideoPlayer.offset(-1).Plot]</param>
+			<param name="label4visible">!String.IsEmpty(VideoPlayer.offset(-1).Plot)</param>
+			<param name="itemvisible">String.IsEqual(Container(201).ListItem.Property(id),previous) + !String.IsEmpty(VideoPlayer.offset(-1).Title)</param>
+			<param name="label3visible">$EXP[POVIL_Player___episode_OSD]</param>
+		</include>
+	</include>
+	<include name="POVIL_Player_videosd3">
+		<include>POVIL_Player_StyleSelector</include>
+		<control type="button">
+			<description>background close area</description>
+			<left>0</left>
+			<top>0</top>
+			<width>100%</width>
+			<bottom>280</bottom>
+			<texturefocus />
+			<texturenofocus />
+			<onclick>Action(close)</onclick>
+		</control>
+		<control type="group">
+			<include>POVIL_Player_Animation_BottomSlide</include>
+			<animation effect="fade" start="0" end="100" time="300">VisibleChange</animation>
+			<height>55</height>
+			<bottom>125</bottom>
+			<control type="image">
+				<left>0</left>
+				<top>0</top>
+				<width>100%</width>
+				<height>655</height>
+				<texture colordiffuse="black">colors/white.png</texture>
+			</control>
+			<control type="label">
+				<left>10</left>
+				<top>6</top>
+				<width>700</width>
+				<height>60</height>
+				<label>$VAR[POVIL_Player_SeekLabel]</label>
+				<font>font30_title</font>
+				<shadowcolor>black</shadowcolor>
+			</control>
+			<control type="label">
+				<centerleft>50%</centerleft>
+				<top>0</top>
+				<width>50%</width>
+				<height>55</height>
+				<align>center</align>
+				<label>$VAR[POVIL_Player_SeekTimeLabelVar]</label>
+				<font>font37</font>
+				<visible>!Player.ChannelPreviewActive | VideoPlayer.HasEpg</visible>
+			</control>
+			<control type="label">
+				<right>25</right>
+				<top>6</top>
+				<width>700</width>
+				<height>60</height>
+				<align>right</align>
+				<font>font30_title</font>
+				<label>$INFO[player.chapter,[COLOR button_focus]$LOCALIZE[21396]:[/COLOR] ]$INFO[Player.ChapterCount,/]</label>
+				<visible>!VideoPlayer.Content(LiveTV) + player.chaptercount</visible>
+			</control>
+			<control type="label">
+				<right>25</right>
+				<top>6</top>
+				<width>700</width>
+				<height>60</height>
+				<align>right</align>
+				<font>font30_title</font>
+				<label>[COLOR button_focus]$LOCALIZE[31026][/COLOR] $INFO[PVR.TimeshiftCur] (-$INFO[PVR.TimeshiftOffset])</label>
+				<visible>VideoPlayer.Content(LiveTV) + PVR.IsTimeShift</visible>
+			</control>
+			<control type="progress">
+				<left>0</left>
+				<top>55</top>
+				<width>100%</width>
+				<height>16</height>
+				<info>Player.ProgressCache</info>
+				<texturebg border="3" colordiffuse="60FFFFFF">colors/white50.png</texturebg>
+				<midtexture>colors/white50.png</midtexture>
+				<visible>!VideoPlayer.Content(LiveTV)</visible>
+			</control>
+			<control type="progress">
+				<left>0</left>
+				<top>55</top>
+				<width>100%</width>
+				<height>16</height>
+				<info>Player.Progress</info>
+				<texturebg border="3" colordiffuse="60FFFFFF">colors/white50.png</texturebg>
+				<midtexture colordiffuse="accent_color">colors/white.png</midtexture>
+				<visible>!VideoPlayer.Content(LiveTV)</visible>
+			</control>
+			<control type="slider" id="878">
+				<left>0</left>
+				<top>50</top>
+				<width>100%</width>
+				<height>26</height>
+				<onback>201</onback>
+				<ondown>201</ondown>
+				<texturesliderbar colordiffuse="00FFFFFF">osd/progress/nub_bar.png</texturesliderbar>
+				<textureslidernib colordiffuse="accent_color">osd/progress/nub_bar.png</textureslidernib>
+				<textureslidernibfocus colordiffuse="white">osd/progress/nub_bar.png</textureslidernibfocus>
+				<info>Player.Seekbar</info>
+				<action>seek</action>
+			<onup>39518</onup></control>
+			<control type="group">
+				<visible>VideoPlayer.Content(LiveTV)</visible>
+				<control type="group">
+					<visible>Player.SeekEnabled + VideoPlayer.HasEPG</visible>
+					<include content="POVIL_Player_PVRProgress">
+						<param name="ts_bar_top" value="55" />
+						<param name="epg_bar_top" value="63" />
+						<param name="ts_bar_height" value="8" />
+						<param name="epg_bar_height" value="8" />
+					</include>
+				</control>
+				<control type="group">
+					<visible>Player.SeekEnabled + !VideoPlayer.HasEPG</visible>
+					<include content="POVIL_Player_PVRProgress">
+						<param name="ts_bar_top" value="55" />
+						<param name="ts_bar_height" value="16" />
+					</include>
+				</control>
+				<control type="group">
+					<visible>!Player.SeekEnabled + VideoPlayer.HasEPG</visible>
+					<include content="POVIL_Player_PVRProgress">
+						<param name="epg_bar_top" value="55" />
+						<param name="epg_bar_height" value="16" />
+					</include>
+				</control>
+			</control>
+			<control type="slider">
+				<left>0</left>
+				<top>50</top>
+				<width>100%</width>
+				<height>26</height>
+				<texturesliderbar colordiffuse="00FFFFFF">osd/progress/nub_bar.png</texturesliderbar>
+				<textureslidernib colordiffuse="button_focus">osd/progress/nub_bar.png</textureslidernib>
+				<textureslidernibfocus colordiffuse="button_focus">colors/white.png</textureslidernibfocus>
+				<info>PVR.TimeShiftSeekbar</info>
+				<visible>VideoPlayer.Content(LiveTV) + [Player.Seeking | Player.HasPerformedSeek(3) | Player.Paused] + !Player.ChannelPreviewActive</visible>
+			<onup>39518</onup></control>
+			<control type="ranges">
+				<left>0</left>
+				<top>55</top>
+				<width>100%</width>
+				<height>8</height>
+				<texturebg border="3" colordiffuse="00FFFFFF">colors/white50.png</texturebg>
+				<lefttexture>colors/white.png</lefttexture>
+				<midtexture colordiffuse="FFFF0000">colors/white.png</midtexture>
+				<righttexture>colors/white.png</righttexture>
+				<info>Player.Editlist</info>
+			</control>
+			<control type="ranges">
+				<left>0</left>
+				<top>67</top>
+				<width>100%</width>
+				<height>8</height>
+				<texturebg border="3" colordiffuse="00FFFFFF">colors/red50.png</texturebg>
+				<righttexture>colors/red.png</righttexture>
+				<info>Player.Cuts</info>
+			</control>
+			<control type="ranges">
+				<left>0</left>
+				<top>67</top>
+				<width>100%</width>
+				<height>4</height>
+				<texturebg border="3" colordiffuse="00FFFFFF">colors/white50.png</texturebg>
+				<righttexture>colors/white.png</righttexture>
+				<info>Player.SceneMarkers</info>
+			</control>
+			<control type="ranges">
+				<left>0</left>
+				<top>67</top>
+				<width>100%</width>
+				<height>4</height>
+				<texturebg border="3" colordiffuse="00FFFFFF">colors/white50.png</texturebg>
+				<righttexture>colors/white.png</righttexture>
+				<info>Player.Chapters</info>
+			</control>
+		</control>
+		<include condition="Skin.HasSetting(touchmode)">POVIL_Player_TouchBackOSDButton</include>
+		<control type="group">
+			<include>POVIL_Player_Animation_BottomSlide</include>
+			<bottom>0</bottom>
+			<height>180</height>
+			<visible>![Window.IsVisible(SliderDialog) | Window.IsVisible(1110) | Window.IsVisible(osdaudiosettings) | Window.IsVisible(osdvideosettings) | Window.IsVisible(VideoBookmarks) | Window.IsVisible(playerprocessinfo) | Window.IsVisible(osdcmssettings) | Window.IsVisible(PVROSDChannels) | Window.IsVisible(pvrchannelguide)]</visible>
+			<animation effect="fade" time="200">VisibleChange</animation>
+			<control type="group" id="200">
+				<include>POVIL_Player_Animation_BottomSlide</include>
+				<include>POVIL_Player_syncfakebutton</include>
+				<control type="grouplist" id="201">
+					<left>20</left>
+					<top>90</top>
+					<width>100%</width>
+					<height>135</height>
+					<itemgap>10</itemgap>
+					<scrolltime tween="sine">200</scrolltime>
+					<orientation>horizontal</orientation>
+					<onup>878</onup>
+					<ondown>noop</ondown>
+					<onleft>70048</onleft>
+					<onright>804</onright>
+					<control type="radiobutton" id="70046">
+						<include content="POVIL_Player_OSDButton">
+							<param name="texture" value="osd/fullscreen/buttons/settings-subtitle.png" />
+						</include>
+						<onclick>ActivateWindow(osdsubtitlesettings)</onclick>
+						<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
+					</control>
+					<control type="button" id="700450">
+						<description>Manual Subtitles Delay Sync</description>
+						<width>100</width>
+						<height>100</height>
+						<texturenofocus colordiffuse="grey_a" />
+						<texturefocus colordiffuse="button_focus" />
+						<onclick>Dialog.Close(videoosd,true)</onclick>
+						<onclick>SubtitleDelay</onclick>
+						<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
+						<visible>!String.Contains(Player.Folderpath, plugin.video.idanplus)</visible>
+					</control>
+					<control type="button" id="700451">
+						<description>DarkSubs Subtitles Window Button</description>
+						<width>225</width>
+						<height>76</height>
+						<texturenofocus colordiffuse="grey_a">kodirdil/subtitles_window/choose_subs.png</texturenofocus>
+						<texturefocus colordiffuse="button_focus">kodirdil/subtitles_window/choose_subs.png</texturefocus>
+						<onclick condition="!Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
+						<onclick condition="Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">ActivateWindow(SubtitleSearch)</onclick>
+						<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
+						<visible>!String.Contains(Player.Folderpath, plugin.video.idanplus)</visible>
+					</control>
+					<control type="radiobutton" id="601">
+						<include content="POVIL_Player_OSDButton">
+							<param name="texture" value="osd/fullscreen/buttons/rewind.png" />
+						</include>
+						<onclick>PlayerControl(Rewind)</onclick>
+						<visible>[Player.SeekEnabled + !VideoPlayer.Content(livetv)] + !Player.Paused</visible>
+					</control>
+					<control type="group" id="698">
+						<width>76</width>
+						<height>76</height>
+						<visible>Player.PauseEnabled</visible>
+						<control type="button" id="602">
+							<left>0</left>
+							<top>0</top>
+							<width>74</width>
+							<height>74</height>
+							<label />
+							<font />
+							<texturefocus colordiffuse="button_focus">osd/fullscreen/buttons/button-fo.png</texturefocus>
+							<texturenofocus />
+							<onleft>601</onleft>
+							<onright>603</onright>
+							<onup>878</onup>
+							<ondown>noop</ondown>
+							<onclick>PlayerControl(Play)</onclick>
+						</control>
+						<control type="image">
+							<left>0</left>
+							<top>0</top>
+							<width>74</width>
+							<height>74</height>
+							<animation center="38,38" effect="zoom" end="100" reversible="false" start="95" time="480" tween="back" condition="Control.HasFocus(602)">Conditional</animation>
+							<texture colordiffuse="white">$VAR[POVIL_Player_PlayerControlsPlayImageVar]</texture>
+						</control>
+					</control>
+					<control type="radiobutton" id="603">
+						<include content="POVIL_Player_OSDButton">
+							<param name="texture" value="osd/fullscreen/buttons/stop.png" />
+						</include>
+						<onclick>PlayerControl(Stop)</onclick>
+					</control>
+					<control type="radiobutton" id="606">
+						<include content="POVIL_Player_OSDButton">
+							<param name="texture" value="osd/fullscreen/buttons/forward.png" />
+						</include>
+						<onclick>PlayerControl(Forward)</onclick>
+						<visible>[Player.SeekEnabled + !VideoPlayer.Content(livetv)] + !Player.Paused</visible>
+					</control>
+					<control type="radiobutton" id="608">
+						<textureradioonfocus colordiffuse="white">osd/fullscreen/buttons/record-white.png</textureradioonfocus>
+						<textureradioonnofocus>osd/fullscreen/buttons/record-white.png</textureradioonnofocus>
+						<textureradioofffocus colordiffuse="white">osd/fullscreen/buttons/record.png</textureradioofffocus>
+						<textureradiooffnofocus>osd/fullscreen/buttons/record.png</textureradiooffnofocus>
+						<texturefocus colordiffuse="button_focus">osd/fullscreen/buttons/button-fo.png</texturefocus>
+						<width>76</width>
+						<animation center="38,38" effect="zoom" end="100" reversible="false" start="95" time="480" tween="back">Focus</animation>
+						<height>76</height>
+						<radiowidth>74</radiowidth>
+						<radioheight>74</radioheight>
+						<font />
+						<texturenofocus />
+						<radioposx>1</radioposx>
+						<radioposy>0</radioposy>
+						<selected>!PVR.IsRecordingPlayingChannel</selected>
+						<onclick>PVR.ToggleRecordPlayingChannel</onclick>
+						<visible>PVR.CanRecordPlayingChannel</visible>
+						<visible>VideoPlayer.Content(livetv)</visible>
+					</control>
+				</control>
+				<control type="grouplist" id="202">
+					<right>20</right>
+					<top>90</top>
+					<width>1800</width>
+					<height>135</height>
+					<align>right</align>
+					<itemgap>10</itemgap>
+					<scrolltime tween="sine">200</scrolltime>
+					<orientation>horizontal</orientation>
+					<onup>878</onup>
+					<ondown condition="Control.HasFocus(70043)">11104</ondown>
+					<ondown condition="Control.HasFocus(704)">12104</ondown>
+					<ondown condition="Control.HasFocus(255)">13103</ondown>
+					<onleft>608</onleft>
+					<onright>70046</onright>
+					<control type="radiobutton" id="700460">
+						<include content="POVIL_Player_OSDButton">
+							<param name="texture" value="icons\infodialogs\update.png" />
+						</include>
+						<include>POVIL_Player___ChooseSourceOsd__</include>
+						<visible>!VideoPlayer.Content(livetv)</visible>
+					</control>
+					<control type="radiobutton" id="804">
+						<include content="POVIL_Player_OSDButton">
+							<param name="texture" value="osd/fullscreen/buttons/home.png" />
+						</include>
+						<onclick>PlayerControl(ShowVideoMenu)</onclick>
+						<visible>VideoPlayer.HasMenu</visible>
+					</control>
+					<control type="radiobutton" id="70040">
+						<include content="POVIL_Player_OSDButton">
+							<param name="texture" value="osd/fullscreen/buttons/channels.png" />
+						</include>
+						<onclick>Dialog.Close(VideoOSD)</onclick>
+						<onclick>ActivateWindow(PVROSDChannels)</onclick>
+						<visible>VideoPlayer.Content(livetv)</visible>
+					</control>
+					<control type="radiobutton" id="70041">
+						<include content="POVIL_Player_OSDButton">
+							<param name="texture" value="osd/fullscreen/buttons/guide.png" />
+						</include>
+						<onclick>Dialog.Close(VideoOSD)</onclick>
+						<onclick>ActivateWindow(pvrchannelguide)</onclick>
+						<visible>VideoPlayer.Content(livetv) + VideoPlayer.HasEPG</visible>
+					</control>
+					<control type="button" id="700454">
+						<description>Episodes Playlist Menu</description>
+						<width>auto</width>
+						<height>76</height>
+						<align>center</align>
+						<texturenofocus>-</texturenofocus>
+						<texturefocus colordiffuse="button_focus">colors/white.png</texturefocus>
+						<label>[B]$LOCALIZE[700035][/B]</label>
+						<visible>String.Contains(Player.Folderpath, plugin.video.idanplus)</visible>
+						<visible>Integer.IsGreater(Playlist.Length(video),0)</visible>
+						<onclick>Dialog.Close(all,true)</onclick>
+						<onclick>ActivateWindow(videoplaylist)</onclick>
+						<onclick />
+					</control>
+					<control type="radiobutton" id="730455">
+						<include content="POVIL_Player_OSDButton">
+							<param name="radiowidth">55</param>
+							<param name="radioheight">55</param>
+							<param name="radioposx">12</param>
+							<param name="radioposy">0</param>
+							<param name="font">font_flag</param>
+							<param name="texture" value="icons\infodialogs\update.png" />
+						</include>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=choose_player_style)</onclick>
+					</control>
+					<control type="button" id="700455">
+						<description>Idan Plus Channels Menu</description>
+						<width>76</width>
+						<height>76</height>
+						<texturenofocus colordiffuse="grey_a">osd/fullscreen/buttons/channels.png</texturenofocus>
+						<texturefocus colordiffuse="button_focus">osd/fullscreen/buttons/channels.png</texturefocus>
+						<onclick>ActivateWindow(2111)</onclick>
+						<visible>!VideoPlayer.Content(LiveTV)</visible>
+					</control>
+					<control type="button" id="700452">
+						<description>Switch to next Audio track</description>
+						<texturenofocus colordiffuse="grey_a">kodirdil/next_audio_track/next_audio_track.png</texturenofocus>
+						<texturefocus colordiffuse="button_focus">kodirdil/next_audio_track/next_audio_track.png</texturefocus>
+						<width>76</width>
+						<height>76</height>
+						<visible>Integer.IsGreater(VideoPlayer.AudioStreamCount,1)</visible>
+						<onclick>AudioNextLanguage</onclick>
+					</control>
+					<control type="radiobutton" id="599">
+						<visible>$EXP[POVIL_Player_SkinZoomToggle]</visible>
+						<include content="POVIL_Player_OSDButtonAdvanced">
+							<param name="texture" value="kodirdil/zoom/zoom-in-hand.png" />
+							<param name="label">$LOCALIZE[700016]</param>
+							<param name="width">68</param>
+							<param name="height">62</param>
+							<param name="radiowidth">55</param>
+							<param name="radioheight">55</param>
+							<param name="textoffsetx">22</param>
+							<param name="textoffsety">60</param>
+						</include>
+						<include condition="$EXP[POVIL_Player_LiveTvCondition]">POVIL_Player_In</include>
+					</control>
+					<control type="radiobutton" id="598">
+						<visible>$EXP[POVIL_Player_SkinZoomToggle]</visible>
+						<include content="POVIL_Player_OSDButtonAdvanced">
+							<param name="texture" value="kodirdil/zoom/zoom-out-hand.png" />
+							<param name="label">$LOCALIZE[700017]</param>
+							<param name="width">68</param>
+							<param name="height">62</param>
+							<param name="radiowidth">55</param>
+							<param name="radioheight">55</param>
+							<param name="textoffsetx">13</param>
+							<param name="textoffsety">60</param>
+						</include>
+						<include condition="$EXP[POVIL_Player_LiveTvCondition]">POVIL_Player_Out</include>
+					</control>
+					<control type="radiobutton" id="70045">
+						<include content="POVIL_Player_OSDButton">
+							<param name="texture" value="osd/fullscreen/buttons/teletext.png" />
+						</include>
+						<onclick>Dialog.Close(VideoOSD)</onclick>
+						<onclick>ActivateWindow(Teletext)</onclick>
+						<visible>VideoPlayer.HasTeletext</visible>
+					</control>
+					<control type="radiobutton" id="70047">
+						<include content="POVIL_Player_OSDButton">
+							<param name="texture" value="osd/fullscreen/buttons/stereoscopic.png" />
+						</include>
+						<visible>VideoPlayer.IsStereoscopic</visible>
+						<onclick>SetProperty(settingslist_content,3d,home)</onclick>
+						<onclick>SetProperty(settingslist_header,$LOCALIZE[36501],home)</onclick>
+						<onclick>ActivateWindow(1101)</onclick>
+					</control>
+					<control type="radiobutton" id="70048">
+						<include content="POVIL_Player_OSDButton">
+							<param name="texture" value="osd/fullscreen/buttons/settings.png" />
+						</include>
+						<onclick>SetProperty(settingslist_content,osd,home)</onclick>
+						<onclick>SetProperty(settingslist_header,$LOCALIZE[5],home)</onclick>
+						<onclick>ActivateWindow(1101)</onclick>
+					</control>
+				</control>
+			</control>
+			<control type="grouplist">
+				<animation effect="fade" start="0" end="100" time="450">VisibleChange</animation>
+				<left>0</left>
+				<centertop>20</centertop>
+				<width>1800</width>
+				<height>150</height>
+				<align>left</align>
+				<bottom>180</bottom>
+				<include>POVIL_Player_Animation_BottomSlide</include>
+				<orientation>horizontal</orientation>
+				<itemgap>5</itemgap>
+				<visible>!Player.ShowInfo</visible>
+				<animation effect="fade" start="0" end="100" time="200" delay="1000">Visible</animation>
+				<control type="group">
+					<width>120</width>
+					<include content="POVIL_Player_MediaLabelFlag">
+						<param name="labelflag">$INFO[VideoPlayer.AudioLanguage]</param>
+						<param name="flagvisible">VideoPlayer.AudioLanguage</param>
+						<param name="freelabel">-Audio</param>
+					</include>
+				</control>
+				<include content="POVIL_Player_MediaFlag">
+					<param name="texture" value="$INFO[VideoPlayer.VideoCodec,flags/videocodec/,.png]" />
+				</include>
+				<include content="POVIL_Player_MediaFlag">
+					<param name="texture" value="$INFO[VideoPlayer.VideoResolution,flags/videoresolution/,.png]" />
+				</include>
+				<include content="POVIL_Player_MediaFlag">
+					<param name="texture" value="$INFO[VideoPlayer.HdrType,flags/videohdr/,.png]" />
+					<param name="visible" value="!String.IsEmpty(VideoPlayer.HdrType)" />
+				</include>
+				<include content="POVIL_Player_MediaFlag">
+					<param name="texture" value="$INFO[VideoPlayer.VideoAspect,flags/aspectratio/,.png]" />
+				</include>
+				<include content="POVIL_Player_MediaFlag">
+					<param name="texture" value="$INFO[VideoPlayer.AudioCodec,flags/audiocodec/,.png]" />
+				</include>
+				<include content="POVIL_Player_MediaFlag">
+					<param name="texture" value="$INFO[VideoPlayer.AudioChannels,flags/audiochannel/,.png]" />
+				</include>
+				<control type="group">
+					<width>120</width>
+					<include content="POVIL_Player_MediaLabelFlag">
+						<param name="labelflag">$VAR[POVIL_Player_SetLabelflag]</param>
+						<param name="flagvisible">Player.Process(VideoFPS)</param>
+						<param name="freelabel">.fps</param>
+					</include>
+				</control>
+			</control>
+			<control type="label">
+				<align>right</align>
+				<height>20</height>
+				<bottom>225</bottom>
+				<right>10</right>
+				<label>$VAR[POVIL_Player___PlayerChoose]</label>
+				<visible>ControlGroup(202).HasFocus(730455)</visible>
+			</control>
+		</control>
+	</include>
+	<include name="POVIL_Player_videosd4">
+		<include>POVIL_Player_StyleSelector</include>
+		<control type="group">
+			<height>850</height>
+			<width>POVIL_Player_fullwidth</width>
+			<bottom>0</bottom>
+			<include>POVIL_Player_bottom2topslideanimation</include>
+			<visible>$EXP[POVIL_Player_sliderdialogfalseortrue]</visible>
+			<animation condition="$EXP[POVIL_Player_groupcontrol1]" effect="slide" start="0,0" end="0,-220" time="250">Conditional</animation>
+			<control type="image">
+				<top>700</top>
+				<height>850</height>
+				<texture>colors/white.png</texture>
+				<colordiffuse>FF181818</colordiffuse>
+				<animation condition="$EXP[POVIL_Player_groupcontrol3]" effect="slide" start="0,0" end="0,-120" time="250">Conditional</animation>
+			</control>
+			<control type="grouplist" id="201">
+				<height>200</height>
+				<align>center</align>
+				<width>1895</width>
+				<bottom>-50</bottom>
+				<itemgap>-35</itemgap>
+				<onup>204</onup>
+				<centerleft>50%</centerleft>
+				<onup>SetProperty(lastlist,50,home)</onup>
+				<ondown>SetProperty(lastlist,60,home)</ondown>
+				<ondown>202</ondown>
+				<visible allowhiddenfocus="true">$EXP[POVIL_Player_groupcontrol2]</visible>
+				<animation effect="fade" start="0" end="100" time="250">VisibleChange</animation>
+				<orientation>horizontal</orientation>
+				<control type="button" id="29993">
+					<label>עצור</label>
+					<height>170</height>
+					<width>335</width>
+					<font>font36_title</font>
+					<align>center</align>
+					<aligny>center</aligny>
+					<textcolor>white</textcolor>
+					<focusedcolor>black</focusedcolor>
+					<shadowcolor>black</shadowcolor>
+					<texturenofocus colordiffuse="25FFFFFF" border="5">masks/menumain.png</texturenofocus>
+					<texturefocus border="5">masks/menumain.png</texturefocus>
+					<onclick>PlayerControl(stop)</onclick>
+				</control>
+				<control type="togglebutton" id="29994">
+					<label>השהה $VAR[POVIL_Player_pauseddbtype_osd]</label>
+					<altlabel>$VAR[POVIL_Player_pauseddbtype_osd] מושהה</altlabel>
+					<height>170</height>
+					<width>335</width>
+					<font>font36_title</font>
+					<align>center</align>
+					<aligny>center</aligny>
+					<texturenofocus colordiffuse="25FFFFFF" border="5">masks/menumain.png</texturenofocus>
+					<textcolor>white</textcolor>
+					<focusedcolor>black</focusedcolor>
+					<shadowcolor>black</shadowcolor>
+					<texturefocus border="5">masks/menumain.png</texturefocus>
+					<alttexturefocus border="5" colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]">masks/menumain.png</alttexturefocus>
+					<alttexturenofocus border="5" colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]">masks/menumain.png</alttexturenofocus>
+					<usealttexture>Player.Paused</usealttexture>
+					<include>POVIL_Player_altosplaycontrol</include>
+				</control>
+				<control type="button" id="29995">
+					<label>חפש כתובית</label>
+					<height>170</height>
+					<width>335</width>
+					<font>font36_title</font>
+					<align>center</align>
+					<textcolor>white</textcolor>
+					<focusedcolor>black</focusedcolor>
+					<shadowcolor>black</shadowcolor>
+					<texturenofocus colordiffuse="25FFFFFF" border="5">masks/menumain.png</texturenofocus>
+					<texturefocus border="5">masks/menumain.png</texturefocus>
+					<onclick>ActivateWindow(subtitlesearch)</onclick>
+				</control>
+				<control type="button" id="29997">
+					<label>החלף מקור</label>
+					<height>170</height>
+					<width>335</width>
+					<font>font36_title</font>
+					<align>center</align>
+					<textcolor>white</textcolor>
+					<focusedcolor>black</focusedcolor>
+					<shadowcolor>black</shadowcolor>
+					<texturenofocus colordiffuse="25FFFFFF" border="5">masks/menumain.png</texturenofocus>
+					<texturefocus border="5">masks/menumain.png</texturefocus>
+					<include>POVIL_Player___ChooseSourceOsd__</include>
+				</control>
+				<control type="button" id="29998">
+					<label>השהה כתובית</label>
+					<height>170</height>
+					<width>335</width>
+					<font>font36_title</font>
+					<align>center</align>
+					<textcolor>white</textcolor>
+					<focusedcolor>black</focusedcolor>
+					<shadowcolor>black</shadowcolor>
+					<texturenofocus colordiffuse="25FFFFFF" border="5">masks/menumain.png</texturenofocus>
+					<texturefocus border="5">masks/menumain.png</texturefocus>
+					<onclick>SubtitleDelay</onclick>
+					<visible>VideoPlayer.HasSubtitles + VideoPlayer.SubtitlesEnabled</visible>
+				</control>
+				<control type="togglebutton" id="29999">
+					<label>כתובית כבוייה</label>
+					<altlabel>כתובית מופעלת</altlabel>
+					<height>170</height>
+					<width>335</width>
+					<font>font36_title</font>
+					<align>center</align>
+					<aligny>center</aligny>
+					<shadowcolor>black</shadowcolor>
+					<texturenofocus colordiffuse="25FFFFFF" border="5">masks/menumain.png</texturenofocus>
+					<textcolor>white</textcolor>
+					<focusedcolor>black</focusedcolor>
+					<texturefocus border="15">masks/menumain.png</texturefocus>
+					<alttexturefocus border="15" colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]">masks/menumain.png</alttexturefocus>
+					<alttexturenofocus border="15" colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]">masks/menumain.png</alttexturenofocus>
+					<usealttexture>VideoPlayer.HasSubtitles + VideoPlayer.SubtitlesEnabled</usealttexture>
+					<onclick>showsubtitles</onclick>
+					<altclick>showsubtitles</altclick>
+				</control>
+			</control>
+			<include>POVIL_Player___OsdSlider__</include>
+			<control type="fixedlist" id="202">
+				<animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
+				<animation effect="fade" start="0" end="100" time="0">Hidden</animation>
+				<visible allowhiddenfocus="true">$EXP[POVIL_Player_groupcontrol1]</visible>
+				<animation condition="Integer.IsEqual(Container(202).NumItems,4)" effect="slide" start="0,0" end="0,-50" time="0">Conditional</animation>
+				<height>450</height>
+				<width>500</width>
+				<top>665</top>
+				<focusposition>2</focusposition>
+				<movement>2</movement>
+				<onback>201</onback>
+				<orientation>vertical</orientation>
+				<onright>SetFocus($INFO[Container(202).ListItem.Property(onright)])</onright>
+				<include>POVIL_Player_prettybottomenu_osd</include>
+				<content>
+					<include>POVIL_Player_osdprettybottomnenu</include>
+				</content>
+			</control>
+			<control type="grouplist" id="2400">
+				<height>295</height>
+				<bottom>-195</bottom>
+				<itemgap>10</itemgap>
+				<left>380</left>
+				<right>20</right>
+				<align>center</align>
+				<animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
+				<animation effect="fade" start="0" end="100" time="0">Hidden</animation>
+				<visible>$EXP[POVIL_Player_groupcontrol6] | Control.HasFocus(15000)</visible>
+				<control type="label">
+					<height>50</height>
+					<font>font45_title</font>
+					<label>$VAR[POVIL_Player_osd_top_info_var]</label>
+				</control>
+				<control type="label">
+					<height>30</height>
+					<label>$VAR[POVIL_Player___Osdprettyplayerlabel]</label>
+				</control>
+				<control type="label">
+					<height>35</height>
+					<label>$VAR[POVIL_Player___Osdprettyplayerlabeltime]</label>
+				</control>
+				<control type="textbox">
+					<height max="145">auto</height>
+					<font>font36_title</font>
+					<label>[B]$INFO[VideoPlayer.Plot][/B]</label>
+					<pagecontrol>15000</pagecontrol>
+				</control>
+			</control>
+		</control>
+		<control type="scrollbar" id="15000">
+			<bottom>30</bottom>
+			<right>10</right>
+			<onback>202</onback>
+			<height>260</height>
+			<width>5</width>
+			<ondown>15000</ondown>
+			<onup>15000</onup>
+			<visible>$EXP[POVIL_Player_groupcontrol1] + $EXP[POVIL_Player_groupcontrol10]</visible>
+			<texturesliderbackground colordiffuse="85FFFFFF">colors/white.png</texturesliderbackground>
+			<texturesliderbarfocus colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]">colors/white.png</texturesliderbarfocus>
+			<texturesliderbar colordiffuse="white">colors/white.png</texturesliderbar>
+			<animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
+			<animation effect="fade" start="0" end="100" time="0">Hidden</animation>
+		</control>
+		<control type="grouplist">
+			<animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
+			<animation effect="fade" start="0" end="100" time="0">Hidden</animation>
+			<orientation>horizontal</orientation>
+			<visible>$EXP[POVIL_Player_groupcontrol5]</visible>
+			<include>POVIL_Player_bottom2topslideanimation</include>
+			<visible>$EXP[POVIL_Player_sliderdialogfalseortrue]</visible>
+			<height>105</height>
+			<bottom>150</bottom>
+			<itemgap>-25</itemgap>
+			<align>center</align>
+			<include content="POVIL_Player__roundedFlagosd_">
+				<param name="label">$INFO[VideoPlayer.VideoResolution]</param>
+				<param name="visible">VideoPlayer.VideoResolution</param>
+			</include>
+			<include content="POVIL_Player__roundedFlagosd_">
+				<param name="label">$INFO[VideoPlayer.VideoCodec]</param>
+				<param name="visible">VideoPlayer.VideoCodec</param>
+			</include>
+			<include content="POVIL_Player__roundedFlagosd_">
+				<param name="label">$INFO[VideoPlayer.AudioChannels] ערוצים</param>
+				<param name="visible">VideoPlayer.AudioChannels</param>
+			</include>
+			<include content="POVIL_Player__roundedFlagosd_">
+				<param name="labelposition">-3</param>
+				<param name="label">$VAR[POVIL_Player__FixaudiolangugeOsd]</param>
+				<param name="visible">VideoPlayer.AudioLanguage</param>
+				<param name="icontop">52</param>
+				<param name="iconleft">32</param>
+				<param name="icon">osd/fullscreen/buttons/audio.png</param>
+			</include>
+			<include content="POVIL_Player__roundedFlagosd_">
+				<param name="labelposition">-3</param>
+				<param name="label">$VAR[POVIL_Player__FixsublanguageOsd]</param>
+				<param name="visible">VideoPlayer.SubtitlesLanguage</param>
+				<param name="icontop">52</param>
+				<param name="iconleft">30</param>
+				<param name="icon">$VAR[POVIL_Player_stripoutosdbuttons]/subs3.png</param>
+			</include>
+			<include content="POVIL_Player__roundedFlagosd_">
+				<param name="label">$INFO[VideoPlayer.AudioCodec]</param>
+				<param name="visible">VideoPlayer.AudioCodec</param>
+			</include>
+			<include content="POVIL_Player__roundedFlagosd_">
+				<param name="label">$INFO[Player.Process(VideoFPS)]</param>
+				<param name="visible">Player.Process(VideoFPS)</param>
+			</include>
+		</control>
+		<control type="group">
+			<control type="button" id="204">
+				<height>1</height>
+				<width>1</width>
+				<onfocus>SetFocus(203)</onfocus>
+				<label />
+			</control>
+			<control type="list" id="203">
+				<height>80</height>
+				<bottom>175</bottom>
+				<width>420</width>
+				<onback>SetFocus(201)</onback>
+				<centerleft>50%</centerleft>
+				<ondown>201</ondown>
+				<onup>SetFocus($INFO[Container(203).ListItem.Property(onup)])</onup>
+				<animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
+				<animation effect="fade" start="0" end="100" time="0">Hidden</animation>
+				<onback condition="String.IsEqual(Window(home).Property(lastlist),50)">201</onback>
+				<visible allowhiddenfocus="true">$EXP[POVIL_Player_groupcontrol7]</visible>
+				<orientation>horizontal</orientation>
+				<itemlayout width="100" height="70">
+					<control type="group">
+						<width>80</width>
+						<height>80</height>
+						<control type="image">
+							<height>55</height>
+							<width>55</width>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture>$INFO[ListItem.Icon]</texture>
+						</control>
+						<control type="image">
+							<height>45</height>
+							<width>45</width>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture>$INFO[ListItem.Property(resizedicon)]</texture>
+						</control>
+					</control>
+				</itemlayout>
+				<focusedlayout width="100" height="50">
+					<control type="group">
+						<width>80</width>
+						<height>80</height>
+						<control type="image">
+							<texture>masks/circle.png</texture>
+							<animation condition="!Control.HasFocus(203)" effect="fade" start="100" end="50" time="150">Conditional</animation>
+						</control>
+						<control type="image">
+							<height>55</height>
+							<width>55</width>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]">$INFO[ListItem.Icon]</texture>
+						</control>
+						<control type="image">
+							<height>45</height>
+							<width>45</width>
+							<centertop>50%</centertop>
+							<centerleft>50%</centerleft>
+							<texture colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]">$INFO[ListItem.Property(resizedicon)]</texture>
+						</control>
+					</control>
+				</focusedlayout>
+				<include>POVIL_Player___osdtopmenu__</include>
+			</control>
+		</control>
+		<control type="list" id="40022">
+			<orientation>horizontal</orientation>
+			<height>165</height>
+			<bottom>225</bottom>
+			<onback>204</onback>
+			<ondown>false</ondown>
+			<onleft>false</onleft>
+			<onright>false</onright>
+			<centerleft>50%</centerleft>
+			<animation type="Visible">
+				<effect type="fade" start="0" end="100" time="250" tween="sine" easing="inout" />
+			</animation>
+			<animation type="Hidden">
+				<effect type="fade" start="100" end="0" time="250" tween="sine" easing="inout" />
+			</animation>
+			<visible>String.IsEqual(Container(203).ListItem.Property(id),rewind)</visible>
+			<visible>$EXP[POVIL_Player_groupcontrol8]</visible>
+			<itemlayout width="240" height="160">
+				<control type="group">
+					<width>230</width>
+					<height>160</height>
+					<control type="image">
+						<texture colordiffuse="white" border="5">masks/menumain.png</texture>
+					</control>
+					<control type="label">
+						<align>center</align>
+						<aligny>center</aligny>
+						<font>font32_title</font>
+						<label>$INFO[ListItem.Label]</label>
+						<textcolor>black</textcolor>
+					</control>
+				</control>
+			</itemlayout>
+			<focusedlayout width="240" height="160">
+				<control type="group">
+					<width>230</width>
+					<height>160</height>
+					<control type="image">
+						<texture colordiffuse="white" border="5">masks/menumain.png</texture>
+						<visible>!Control.HasFocus(40022)</visible>
+					</control>
+					<control type="image">
+						<texture colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]" border="5">masks/menumain.png</texture>
+						<visible>Control.HasFocus(40022)</visible>
+					</control>
+					<control type="label">
+						<align>center</align>
+						<aligny>center</aligny>
+						<label>$INFO[ListItem.Label]</label>
+						<font>font32_title</font>
+						<textcolor>white</textcolor>
+						<visible>Control.HasFocus(40022)</visible>
+					</control>
+					<control type="label">
+						<align>center</align>
+						<aligny>center</aligny>
+						<label>$INFO[ListItem.Label]</label>
+						<font>font32_title</font>
+						<textcolor>black</textcolor>
+						<visible>!Control.HasFocus(40022)</visible>
+					</control>
+				</control>
+			</focusedlayout>
+			<include>POVIL_Player_seek_rewind_osd_item</include>
+		</control>
+		<control type="list" id="40023">
+			<orientation>horizontal</orientation>
+			<height>165</height>
+			<bottom>225</bottom>
+			<onback>204</onback>
+			<ondown>false</ondown>
+			<onleft>false</onleft>
+			<onright>false</onright>
+			<centerleft>50%</centerleft>
+			<animation type="Visible">
+				<effect type="fade" start="0" end="100" time="250" tween="sine" easing="inout" />
+			</animation>
+			<animation type="Hidden">
+				<effect type="fade" start="100" end="0" time="250" tween="sine" easing="inout" />
+			</animation>
+			<visible>String.IsEqual(Container(203).ListItem.Property(id),forward)</visible>
+			<visible>$EXP[POVIL_Player_groupcontrol8]</visible>
+			<itemlayout width="240" height="160">
+				<control type="group">
+					<width>230</width>
+					<height>160</height>
+					<control type="image">
+						<texture colordiffuse="white" border="5">masks/menumain.png</texture>
+					</control>
+					<control type="label">
+						<align>center</align>
+						<aligny>center</aligny>
+						<font>font32_title</font>
+						<label>$INFO[ListItem.Label]</label>
+						<textcolor>black</textcolor>
+					</control>
+				</control>
+			</itemlayout>
+			<focusedlayout width="240" height="160">
+				<control type="group">
+					<width>230</width>
+					<height>160</height>
+					<control type="image">
+						<texture colordiffuse="white" border="5">masks/menumain.png</texture>
+						<visible>!Control.HasFocus(40023)</visible>
+					</control>
+					<control type="image">
+						<texture colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]" border="5">masks/menumain.png</texture>
+						<visible>Control.HasFocus(40023)</visible>
+					</control>
+					<control type="label">
+						<align>center</align>
+						<aligny>center</aligny>
+						<label>$INFO[ListItem.Label]</label>
+						<font>font32_title</font>
+						<textcolor>white</textcolor>
+						<visible>Control.HasFocus(40023)</visible>
+					</control>
+					<control type="label">
+						<align>center</align>
+						<aligny>center</aligny>
+						<label>$INFO[ListItem.Label]</label>
+						<font>font32_title</font>
+						<textcolor>black</textcolor>
+						<visible>!Control.HasFocus(40023)</visible>
+					</control>
+				</control>
+			</focusedlayout>
+			<include>POVIL_Player_seek_forward_osd_item</include>
+		</control>
+		<include condition="$EXP[POVIL_Player___episode_OSD]">POVIL_Player___OsdEpisodesSeasons__</include>
+		<control type="label">
+			<height>50</height>
+			<align>center</align>
+			<top>895</top>
+			<include>POVIL_Player_Animation_BottomSlide</include>
+			<animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
+			<animation effect="fade" start="0" end="100" time="0">Hidden</animation>
+			<animation condition="Container(500323).IsUpdating" effect="fade" stat="0" end="100" time="1500" pulse="true">Conditional</animation>
+			<label>טוען פרקי עונה אנא המתן...</label>
+			<visible>$EXP[POVIL_Player_groupcontrol9]</visible>
+			<font>font45_title</font>
+		</control>
+		<control type="group">
+			<animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
+			<animation effect="fade" start="0" end="100" time="0">Hidden</animation>
+			<visible>ControlGroup(201).HasFocus()</visible>
+			<include>POVIL_Player_Animation_BottomSlide</include>
+			<control type="image">
+				<bottom>40</bottom>
+				<height>50</height>
+				<width>35</width>
+				<texture>osd/fullscreen/buttons/forward.png</texture>
+				<colordiffuse>15FFFFFF</colordiffuse>
+			</control>
+			<control type="image">
+				<bottom>40</bottom>
+				<height>50</height>
+				<width>35</width>
+				<right>5</right>
+				<texture flipy="true">osd/fullscreen/buttons/forward.png</texture>
+				<colordiffuse>15FFFFFF</colordiffuse>
+			</control>
+		</control>
+		<control type="group">
+			<include>POVIL_Player_Animation_BottomSlide</include>
+			<visible>$EXP[POVIL_Player___Movies_OSD] | $EXP[POVIL_Player___episode_OSD] + [Window.IsActive(videoosd) + !$EXP[POVIL_Player___CheckIdanplus_OSD]]</visible>
+			<visible>ControlGroup(201).HasFocus()</visible>
+			<visible>Player.Paused</visible>
+			<animation effect="fade" start="0" end="100" time="250">VisibleChange</animation>
+			<width>500</width>
+			<height>250</height>
+			<top>185</top>
+			<right>10</right>
+			<centerleft>50%</centerleft>
+			<control type="image">
+				<top>-8</top>
+				<left>-8</left>
+				<width>518</width>
+				<height>650</height>
+				<texture diffuse="masks/poster_w460_h680.png">colors/white.png</texture>
+				<bordertexture diffuse="masks/poster_w460_h680.png" colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]">colors/white.png</bordertexture>
+				<bordersize>2</bordersize>
+				<colordiffuse>FF181818</colordiffuse>
+			</control>
+			<include content="POVIL_Player_BasedResizedWidgetFrame">
+				<include content="POVIL_Player_BasedResizedWidgetImage">
+					<param name="resize">0</param>
+					<param name="bottom">0</param>
+				</include>
+			</include>
+			<include content="POVIL_Player_BasedResizedWidgetFrameBox">
+				<include content="POVIL_Player_BasedResizedWidgetImage">
+					<param name="resize">5</param>
+					<param name="bottom">5</param>
+				</include>
+			</include>
+			<include content="POVIL_Player_BasedResizedWidgetTexture">
+				<param name="texture">$INFO[Player.Art(fanart)]</param>
+				<include content="POVIL_Player_BasedResizedWidgetImage">
+					<param name="resize">8</param>
+					<param name="bottom">8</param>
+					<param name="centerleft">50%</param>
+				</include>
+			</include>
+			<control type="grouplist">
+				<top>250</top>
+				<align>center</align>
+				<itemgap>5</itemgap>
+				<control type="textbox">
+					<height max="auto">auto</height>
+					<align>center</align>
+					<font>font45_title</font>
+					<label>$VAR[POVIL_Player_osd_top_info_var]</label>
+				</control>
+				<control type="textbox">
+					<height max="auto">auto</height>
+					<align>center</align>
+					<label>$VAR[POVIL_Player_osd_middle_info_var]</label>
+				</control>
+				<control type="label">
+					<height max="auto">auto</height>
+					<align>center</align>
+					<label>$VAR[POVIL_Player___osdprettylabelpercent]</label>
+				</control>
+				<control type="group">
+					<height max="auto">auto</height>
+					<control type="progress">
+						<top>50</top>
+						<height>15</height>
+						<midtexture colordiffuse="$VAR[POVIL_Player_SetDefaultColorpretttyosd]" border="3">progress/texturebg_white.png</midtexture>
+						<info>Player.Progress</info>
+					</control>
+				</control>
+				<control type="group">
+					<height max="auto">auto</height>
+					<control type="image">
+						<top>110</top>
+						<height max="100">auto</height>
+						<texture>$VAR[POVIL_Player_PlayerClearLogoVar]</texture>
+						<aspectratio>keep</aspectratio>
+						<visible>!String.IsEmpty(Player.Art(clearlogo))</visible>
+					</control>
+				</control>
+				<control type="group">
+					<height max="auto">auto</height>
+					<control type="image">
+						<top>100</top>
+						<height max="100">auto</height>
+						<aspectratio>keep</aspectratio>
+						<texture>$VAR[POVIL_Player_StudiologoShortCutPath]$VAR[POVIL_Player_Studiologotextureinfo]</texture>
+						<visible>String.IsEmpty(Player.Art(clearlogo))</visible>
+					</control>
+				</control>
+			</control>
+		</control>
+	</include>
+	<variable name="POVIL_Player_CheckNetflixBgButtonsStatus">
+		<value condition="!Skin.HasSetting(removenetflixbuttonsbg)">לחץ לביטול רקע בכפתורים</value>
+		<value condition="Skin.HasSetting(removenetflixbuttonsbg)">לחץ להפעלת רקע בכפתורים</value>
+	</variable>
+	<variable name="POVIL_Player_EndTime_Osd_VAR">
+		<value condition="$EXP[POVIL_Player_IDANPlusCheck_OSd]">$INFO[Player.FinishTime(hh:mm:ss)]</value>
+		<value condition="!$EXP[POVIL_Player_IDANPlusCheck_OSd]">$INFO[Player.TimeRemaining(hh:mm:ss)]</value>
+	</variable>
+	<variable name="POVIL_Player_GlobalBasedImage">
+		<value>colors/white.png</value>
+	</variable>
+	<variable name="POVIL_Player_NetFlixMenuRightLabel">
+		<value condition="$EXP[POVIL_Player___Movies_OSD] + !$EXP[POVIL_Player___CheckIdanplus_OSD]">לחץ לרשימת הסרטים שלך WatchList ב טראקט</value>
+		<value condition="$EXP[POVIL_Player___episode_OSD]+ !$EXP[POVIL_Player___CheckIdanplus_OSD]">לוח שידורים בסדרות לפי מעקב הסדרות שלך בטראקט</value>
+		<value condition="$EXP[POVIL_Player___CheckIdanplus_OSD]">לחץ לוידג'ט עידן פלוס</value>
+	</variable>
+	<variable name="POVIL_Player_NextShowIcon_OSD_Var">
+		<value condition="!String.IsEmpty(VideoPlayer.offset(1).Cover)">$INFO[VideoPlayer.offset(1).Cover]</value>
+		<value condition="!String.IsEmpty(VideoPlayer.offset(1).Icon)">$INFO[VideoPlayer.offset(1).Icon]</value>
+	</variable>
+	<variable name="POVIL_Player_NextTitleInfoYear_Next_OSD">
+		<value condition="!String.IsEmpty(VideoPlayer.offset(1).Year)">$INFO[VideoPlayer.offset(1).Year]</value>
+		<value condition="!String.IsEmpty(Player.offset(1).Year)">$INFO[Player.offset(1).Year]</value>
+	</variable>
+	<variable name="POVIL_Player_NextTitleInfo_Next_OSD">
+		<value condition="!String.IsEmpty(VideoPlayer.offset(1).Title)">$INFO[VideoPlayer.offset(1).Title]</value>
+		<value condition="!String.IsEmpty(Player.offset(1).Title)">$INFO[Player.offset(1).Title]</value>
+		<value>No Title</value>
+	</variable>
+	<variable name="POVIL_Player_NoLabelFlagFound">
+		<value>$INFO[Player.Process(VideoFPS)]</value>
+	</variable>
+	<variable name="POVIL_Player_OsdSeasonInfo">
+		<value>$INFO[VideoPlayer.Season]</value>
+	</variable>
+	<variable name="POVIL_Player_OsdTitleLabelVar">
+		<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(LiveTv)">$INFO[VideoPlayer.Title] $INFO[VideoPlayer.Year,(,)]</value>
+		<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.TvShowTitle] $INFO[VideoPlayer.Year,(,)]</value>
+		<value>$INFO[VideoPlayer.Title] $INFO[VideoPlayer.Year,(,)]</value>
+	</variable>
+	<variable name="POVIL_Player_OsdTitleNextLabelVar">
+		<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(LiveTv)">$INFO[VideoPlayer.offset(1).Title] $INFO[VideoPlayer.offset(1).Year,(,)]</value>
+		<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.offset(1).TvShowTitle] $INFO[VideoPlayer.offset(1).Year,(,)]</value>
+		<value>$INFO[VideoPlayer.offset(1).Title] $INFO[VideoPlayer.offset(1).Year,(,)]</value>
+	</variable>
+	<variable name="POVIL_Player_OsdTitlePreviousLabelVar">
+		<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(LiveTv)">$INFO[VideoPlayer.offset(-1).Title] $INFO[VideoPlayer.offset(-1).Year,(,)]</value>
+		<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.offset(-1).TvShowTitle] $INFO[VideoPlayer.offset(-1).Year,(,)]</value>
+		<value>$INFO[VideoPlayer.offset(-1).Title] $INFO[VideoPlayer.offset(-1).Year,(,)]</value>
+	</variable>
+	<variable name="POVIL_Player_PlayerClearLogoVar">
+		<value condition="!String.IsEmpty(Player.Art(tvshow.clearlogo))">$INFO[Player.Art(tvshow.clearlogo)]</value>
+		<value condition="!String.IsEmpty(Player.Art(clearlogo))">$INFO[Player.Art(clearlogo)]</value>
+	</variable>
+	<variable name="POVIL_Player_PlayerControlsPlayImageVar">
+		<value condition="Player.Playing">osd/fullscreen/buttons/pause.png</value>
+		<value>osd/fullscreen/buttons/play.png</value>
+	</variable>
+	<variable name="POVIL_Player_PovStartPoint_OSD">
+		<value>plugin://plugin.video.pov/?mode=</value>
+	</variable>
+	<variable name="POVIL_Player_PreviousShowIcon_OSD_Var">
+		<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Cover)">$INFO[VideoPlayer.offset(-1).Cover]</value>
+		<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Icon)">$INFO[VideoPlayer.offset(-1).Icon]</value>
+		<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Icon)">$INFO[VideoPlayer.offset(-1).Icon]</value>
+	</variable>
+	<variable name="POVIL_Player_PreviousTitleInfoYear_Next_OSD">
+		<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Year)">$INFO[VideoPlayer.offset(-1).Year]</value>
+		<value condition="!String.IsEmpty(Player.offset(-1).Year)">$INFO[Player.offset(-1).Year]</value>
+	</variable>
+	<variable name="POVIL_Player_PreviousTitleInfo_Next_OSD">
+		<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Title)">$INFO[VideoPlayer.offset(-1).Title]</value>
+		<value condition="!String.IsEmpty(Player.offset(-1).Title)">$INFO[Player.offset(-1).Title]</value>
+		<value>No Title</value>
+	</variable>
+	<variable name="POVIL_Player_SeekLabel">
+		<value condition="!String.IsEmpty(VideoPlayer.Title)">$INFO[VideoPlayer.Title]</value>
+		<value condition="!String.IsEmpty(Player.SeekStepSize)">[COLOR button_focus]$LOCALIZE[773][/COLOR] $INFO[Player.SeekStepSize]</value>
+		<value condition="!String.IsEmpty(Player.SeekOffset) + Player.HasPerformedSeek(3)">[COLOR button_focus]$LOCALIZE[773][/COLOR] $INFO[Player.SeekOffset]</value>
+		<value condition="Player.Forwarding">$LOCALIZE[31039] $VAR[POVIL_Player_VideoPlayerForwardRewindVar]</value>
+		<value condition="Player.Rewinding">$LOCALIZE[31038] $VAR[POVIL_Player_VideoPlayerForwardRewindVar]</value>
+		<value condition="Player.IsTempo">$LOCALIZE[31142]: $INFO[Player.PlaySpeed]</value>
+	</variable>
+	<variable name="POVIL_Player_SeekRewindForwardTime">
+		<value condition="Player.Forwarding2x | Player.Rewinding2x">x2</value>
+		<value condition="Player.Forwarding4x | Player.Rewinding4x">x4</value>
+		<value condition="Player.Forwarding8x | Player.Rewinding8x">x8</value>
+		<value condition="Player.Forwarding16x | Player.Rewinding16x">x16</value>
+		<value condition="Player.Forwarding32x | Player.Rewinding32x">x32</value>
+	</variable>
+	<variable name="POVIL_Player_SeekTimeLabelVar">
+		<value condition="!String.IsEmpty(Player.SeekNumeric)">[B]$INFO[Player.SeekNumeric(hh:mm:ss)][/B]</value>
+		<value condition="Player.Seeking + VideoPlayer.HasEPG">$INFO[PVR.EpgEventSeekTime]$INFO[PVR.EpgEventDuration, / ]</value>
+		<value condition="Player.Seeking">$INFO[Player.SeekTime]$INFO[Player.Duration, / ]</value>
+		<value condition="VideoPlayer.HasEpg">$INFO[PVR.EpgEventElapsedTime]$INFO[PVR.EpgEventDuration, / ]</value>
+		<value>$INFO[Player.Time]$INFO[Player.Duration, / ]</value>
+	</variable>
+	<variable name="POVIL_Player_SetDefaultColorpretttyosd">
+		<value condition="!String.IsEmpty(Skin.String(osdprettychangecolor))">$INFO[Skin.String(osdprettychangecolor)]</value>
+		<value>FF1A4876</value>
+	</variable>
+	<variable name="POVIL_Player_SetLabelflag">
+		<value condition="!String.IsEmpty(Player.Process(VideoFPS))">$VAR[POVIL_Player_NoLabelFlagFound]</value>
+	</variable>
+	<variable name="POVIL_Player_StartTime_Osd_VAR">
+		<value condition="!VideoPlayer.Content(LiveTv)">$INFO[Player.Time(hh:mm:ss)]</value>
+		<value condition="VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg">$INFO[PVR.TimeShiftStart(hh:mm:ss)]</value>
+		<value condition="VideoPlayer.Content(LiveTv) + !VideoPlayer.HasEpg">$INFO[Player.Time(hh:mm:ss)]</value>
+		<value>$INFO[VideoPlayer.Duration(hh:mm:ss)]</value>
+	</variable>
+	<variable name="POVIL_Player_StudiologoShortCutPath">
+		<value>kodirdil/studiologos/</value>
+	</variable>
+	<variable name="POVIL_Player_Studiologotextureinfo">
+		<value>$INFO[VideoPlayer.Studio].png</value>
+	</variable>
+	<variable name="POVIL_Player_VideoPlayerForwardRewindVar">
+		<value condition="Player.Forwarding2x | Player.Rewinding2x">2x</value>
+		<value condition="Player.Forwarding4x | Player.Rewinding4x">4x</value>
+		<value condition="Player.Forwarding8x | Player.Rewinding8x">8x</value>
+		<value condition="Player.Forwarding16x | Player.Rewinding16x">16x</value>
+		<value condition="Player.Forwarding32x | Player.Rewinding32x">32x</value>
+	</variable>
+	<variable name="POVIL_Player__FixOsdIcon">
+		<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(episodes) + !String.IsEmpty(Player.Art(poster))">$INFO[Player.Art(poster)]</value>
+		<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(episodes) + !String.IsEmpty(VideoPlayer.Cover)">$INFO[VideoPlayer.Cover]</value>
+		<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(episodes) + !String.IsEmpty(Player.Icon)">$INFO[Player.Icon]</value>
+		<value>$INFO[Player.Icon]</value>
+	</variable>
+	<variable name="POVIL_Player__FixaudiolangugeOsd">
+		<value condition="String.IsEqual(VideoPlayer.AudioLanguage,eng)">אנגלית</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioLanguage,heb)">עברית</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioLanguage,ita)">איטלקית</value>
+		<value>$INFO[VideoPlayer.AudioLanguage]</value>
+	</variable>
+	<variable name="POVIL_Player__FixsublanguageOsd">
+		<value condition="String.IsEqual(VideoPlayer.SubtitlesLanguage,eng)">אנגלית</value>
+		<value condition="String.IsEqual(VideoPlayer.SubtitlesLanguage,heb)">עברית</value>
+		<value condition="String.IsEqual(VideoPlayer.SubtitlesLanguage,ita)">איטלקית</value>
+		<value>$INFO[VideoPlayer.AudioLanguage]</value>
+	</variable>
+	<variable name="POVIL_Player___FixTmdbOsd__">
+		<value>$INFO[VideoPlayer.UniqueID(tmdb)]</value>
+	</variable>
+	<variable name="POVIL_Player___NetflixCheckStatuWindowOpen_Osd__">
+		<value condition="![Window.IsActive(playerprocessinfo) | Window.IsActive(2111)]">פרטי מדיה</value>
+	</variable>
+	<variable name="POVIL_Player___Osdprettyplayerlabel">
+		<value condition="$EXP[POVIL_Player___Movies_OSD]">[B]שנה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Year][/COLOR][/B] [B]סגנון: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Genre][/COLOR][/B]</value>
+		<value condition="$EXP[POVIL_Player___episode_OSD]">[B]שנה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Year][/COLOR][/B] [B]סגנון: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Genre][/COLOR][/B] [B]תאריך יציאת הפרק: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Premiered][/COLOR][/B]</value>
+		<value conditon="$EXP[POVIL_Player___livetv_OSD]">[B]מתחיל: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.StartTime][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.EndTime][/COLOR][/B]</value>
+	</variable>
+	<variable name="POVIL_Player___Osdprettyplayerlabelepisode">
+		<value condition="$EXP[POVIL_Player___episode_OSD]">[B]עונה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Season,(,)][/COLOR][/B] [B]פרק: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Episode,(,)][/COLOR][/B]</value>
+	</variable>
+	<variable name="POVIL_Player___Osdprettyplayerlabelnextepisode">
+		<value condition="$EXP[POVIL_Player___episode_OSD]">[B]עונה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.offset(1).Season,(,)][/COLOR][/B] [B]פרק: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.offset(1).Episode,(,)][/COLOR][/B]</value>
+	</variable>
+	<variable name="POVIL_Player___Osdprettyplayerlabelpreviousepisode">
+		<value condition="$EXP[POVIL_Player___episode_OSD]">[B]עונה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.offset(-1).Season,(,)][/COLOR][/B] [B]פרק: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.offset(-1).Episode,(,)][/COLOR][/B]</value>
+	</variable>
+	<variable name="POVIL_Player___Osdprettyplayerlabeltime">
+		<value condition="$EXP[POVIL_Player___episode_OSD] | $EXP[POVIL_Player___Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.FinishTime][/COLOR][/B] [B]:אחוזי צפיה עד כה [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.Progress]% אחוז[/COLOR][/B] $VAR[POVIL_Player___Osdprettyplayerlabelepisode]</value>
+	</variable>
+	<variable name="POVIL_Player___Osdprettyplayernextlabeltime">
+		<value condition="$EXP[POVIL_Player___episode_OSD] | $EXP[POVIL_Player___Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).FinishTime][/COLOR][/B] [B]:אחוזי צפיה עד כה [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).Progress]% אחוז[/COLOR][/B] $VAR[POVIL_Player___Osdprettyplayerlabelnextepisode]</value>
+	</variable>
+	<variable name="POVIL_Player___Osdprettyplayerpreviouslabeltime">
+		<value condition="$EXP[POVIL_Player___episode_OSD] | $EXP[POVIL_Player___Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).FinishTime][/COLOR][/B] [B]:אחוזי צפיה עד כה [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).Progress]% אחוז[/COLOR][/B] $VAR[POVIL_Player___Osdprettyplayerlabelpreviousepisode]</value>
+	</variable>
+	<variable name="POVIL_Player___PlayerChoose">
+		<value condition="String.IsEqual(Skin.String(__chooseplayer),__simpleplayer)">נגן פשוט</value>
+		<value condition="String.IsEqual(Skin.String(__chooseplayer),__advancedplayer)">נגן מתקדם</value>
+		<value condition="String.IsEqual(Skin.String(__chooseplayer),__netflixplayer)">נגן נטפליקס</value>
+		<value condition="String.IsEqual(Skin.String(__chooseplayer),__prettyplayer)">נגן למבוגרים</value>
+	</variable>
+	<variable name="POVIL_Player___osdprettylabelpercent">
+		<value>$INFO[Player.TimeRemaining(hh:mm:ss)] • $INFO[Player.Time(hh:mm:ss)] • $INFO[Player.Progress]%</value>
+	</variable>
+	<variable name="POVIL_Player_bottomlabelinfo_Next_OSD_Var">
+		<value>$INFO[VideoPlayer.offset(1).Plot]</value>
+	</variable>
+	<variable name="POVIL_Player_bottomlabelinfo_Previous_OSD_Var">
+		<value>$INFO[VideoPlayer.offset(-1).Plot]</value>
+	</variable>
+	<variable name="POVIL_Player_build_Episodes_Url_OSD">
+		<value condition="$EXP[POVIL_Player___episode_OSD]">$VAR[POVIL_Player_PovStartPoint_OSD]build_episode_list&amp;season=$VAR[POVIL_Player_OsdSeasonInfo]&amp;tmdb_id=$VAR[POVIL_Player___FixTmdbOsd__]</value>
+	</variable>
+	<variable name="POVIL_Player_middlelabelInfo_Next_OSD_Var">
+		<value condition="!String.IsEmpty(VideoPlayer.offset(1).Genre)">$INFO[VideoPlayer.offset(1).Genre]</value>
+		<value condition="VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg">מתחיל [COLOR button_focus]$INFO[VideoPlayer.NextStartTime][/COLOR] מסתיים [COLOR button_focus]$INFO[VideoPlayer.NextEndTime][/COLOR]</value>
+		<value>No Information</value>
+	</variable>
+	<variable name="POVIL_Player_middlelabelInfo_OSD_Var">
+		<value condition="$EXP[POVIL_Player_MoviesTvShowsExpression_OSD]">$INFO[VideoPlayer.Genre]</value>
+		<value condition="$EXP[POVIL_Player_LivetvExpressionEPG_OSD]">מתחיל [COLOR button_focus]$INFO[VideoPlayer.StartTime][/COLOR] מסתיים [COLOR button_focus]$INFO[VideoPlayer.EndTime][/COLOR]</value>
+		<value>No Information</value>
+	</variable>
+	<variable name="POVIL_Player_middlelabelInfo_Previous_OSD_Var">
+		<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Genre)">$INFO[VideoPlayer.offset(-1).Genre]</value>
+		<value>No Information</value>
+	</variable>
+	<variable name="POVIL_Player_netflix_playerpaused_Icon">
+		<value condition="Player.Paused">osd/fullscreen/buttons/pause.png</value>
+		<value condition="!Player.Paused">osd/fullscreen/buttons/play.png</value>
+	</variable>
+	<variable name="POVIL_Player_netflix_playerpaused_label">
+		<value condition="Player.Paused">[B]מושהה[/B]</value>
+		<value condition="!Player.Paused">[B]מנגן עכשיו[/B]</value>
+	</variable>
+	<variable name="POVIL_Player_osd_middle_info_next_var">
+		<value condition="$EXP[POVIL_Player___Movies_OSD] | $EXP[POVIL_Player___episode_OSD]">$INFO[VideoPlayer.offset(1).Genre]</value>
+		<value condition="VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg">$INFO[VideoPlayer.StartTime,מתחיל (,)] •  $INFO[VideoPlayer.EndTime,מסתיים (,)]</value>
+		<value>אין מידע</value>
+	</variable>
+	<variable name="POVIL_Player_osd_middle_info_previous_var">
+		<value condition="$EXP[POVIL_Player___Movies_OSD] | $EXP[POVIL_Player___episode_OSD]">$INFO[VideoPlayer.offset(-1).Genre]</value>
+		<value condition="VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg">$INFO[VideoPlayer.StartTime,מתחיל (,)] •  $INFO[VideoPlayer.EndTime,מסתיים (,)]</value>
+		<value>אין מידע</value>
+	</variable>
+	<variable name="POVIL_Player_osd_middle_info_var">
+		<value condition="$EXP[POVIL_Player___Movies_OSD] | $EXP[POVIL_Player___episode_OSD]">$INFO[VideoPlayer.Genre]</value>
+		<value condition="VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg">$INFO[VideoPlayer.StartTime,מתחיל (,)] •  $INFO[VideoPlayer.EndTime,מסתיים (,)]</value>
+		<value>$INFO[VideoPlayer.Genre]</value>
+	</variable>
+	<variable name="POVIL_Player_osd_top_info_var">
+		<value condition="$EXP[POVIL_Player___Movies_OSD]">$INFO[VideoPlayer.Title] $INFO[VideoPlayer.Year,(,)]</value>
+		<value condition="$EXP[POVIL_Player___episode_OSD]">$INFO[VideoPlayer.TvShowTitle] $INFO[VideoPlayer.Year,(,)]</value>
+		<value condition="$EXP[POVIL_Player___livetv_OSD] + VideoPlayer.HasEpg">$INFO[VideoPlayer.StartTime,מתחיל(,)] $INFO[VideoPlayer.EndTime,מסתיים(,)]</value>
+		<value>$INFO[VideoPlayer.Title]</value>
+	</variable>
+	<variable name="POVIL_Player_pauseddbtype_osd">
+		<value condition="$EXP[POVIL_Player___Movies_OSD]">סרט</value>
+		<value condition="$EXP[POVIL_Player___episode_OSD]">פרק</value>
+	</variable>
+	<variable name="POVIL_Player_stripoutosdbuttons">
+		<value>osd/fullscreen/buttons</value>
+	</variable>
+	<variable name="POVIL_Player_texturecurrentimage">
+		<value condition="!String.IsEmpty(Player.Art(fanart))">$INFO[Player.Art(fanart)]</value>
+		<value condition="!String.IsEmpty(Player.Art(landscape))">$INFO[Player.Art(landscape)]</value>
+		<value condition="!String.IsEmpty(VideoPlayer.Cover)">$INFO[VideoPlayer.Cover]</value>
+		<value>$INFO[VideoPlayer.Cover]</value>
+	</variable>
+	<variable name="POVIL_Player_texturenextimage">
+		<value condition="!String.IsEmpty(Player.offset(1).Art(fanart))">$INFO[Player.offset(1).Art(fanart)]</value>
+		<value condition="!String.IsEmpty(Player.offset(1).Art(landscape))">$INFO[Player.offset(1).Art(landscape)]</value>
+		<value condition="!String.IsEmpty(VideoPlayer.offset(1).Cover)">$INFO[VideoPlayer.offset(1).Cover]</value>
+		<value>$INFO[VideoPlayer.offset(1).Cover]</value>
+	</variable>
+	<variable name="POVIL_Player_texturepreviousimage">
+		<value condition="!String.IsEmpty(Player.offset(-1).Art(fanart))">$INFO[Player.offset(-1).Art(fanart)]</value>
+		<value condition="!String.IsEmpty(Player.offset(-1).Art(landscape))">$INFO[Player.offset(-1).Art(landscape)]</value>
+		<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Cover)">$INFO[VideoPlayer.offset(-1).Cover]</value>
+		<value>$INFO[VideoPlayer.offset(-1).Cover]</value>
+	</variable>
+	<expression name="POVIL_NativePlayer">![Skin.String(__chooseplayer,__advancedplayer) | Skin.String(__chooseplayer,__netflixplayer) | Skin.String(__chooseplayer,__simpleplayer) | Skin.String(__chooseplayer,__prettyplayer)]</expression>
+	<variable name="POVIL_PlayerLabel">
+		<value condition="Skin.String(__chooseplayer,__advancedplayer)">מתקדם</value>
+		<value condition="Skin.String(__chooseplayer,__netflixplayer)">קולנועי</value>
+		<value condition="Skin.String(__chooseplayer,__simpleplayer)">פשוט</value>
+		<value condition="Skin.String(__chooseplayer,__prettyplayer)">מעוצב</value>
+		<value>Nox המקורי</value>
+	</variable>
+	<include name="POVIL_Player_StyleSelector">
+        <control type="button" id="39518">
+            <right>24</right><top>144</top><width>220</width><height>52</height>
+            <label>עיצוב הנגן</label><font>font25_title</font><align>center</align>
+            <textcolor>white</textcolor><focusedcolor>black</focusedcolor>
+            <texturefocus colordiffuse="accent_color" border="5">buttons/button-focus.png</texturefocus>
+            <texturenofocus colordiffuse="CC333333" border="5">buttons/button-focus.png</texturenofocus>
+            <onleft>201</onleft><onright>201</onright><ondown>201</ondown>
+            <onback>Close</onback>
+            <onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=choose_player_style)</onclick>
+        </control>
+    </include>
+</includes>

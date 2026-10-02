@@ -30,7 +30,13 @@
 					<onup>11100</onup>
 					<ondown>11100</ondown>
 					<orientation>vertical</orientation>
-					<control type="button" id="11110">
+					<control type="button" id="11112">
+    <width>700</width><include>DialogSettingButton</include>
+    <label>עיצוב הנגן</label><label2>$VAR[POVIL_PlayerLabel]</label2>
+    <onclick>Dialog.Close(1101)</onclick>
+    <onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=choose_player_style)</onclick>
+</control>
+<control type="button" id="11110">
 						<width>700</width>
 						<include>DialogSettingButton</include>
 						<label>הגדרות הפרק הבא</label>

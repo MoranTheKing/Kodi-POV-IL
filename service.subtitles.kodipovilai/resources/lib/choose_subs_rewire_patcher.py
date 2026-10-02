@@ -66,6 +66,8 @@ TARGETS = (
     # reaches our chooser even before the skin updates. (nox_choose_subs_patcher
     # also handles NOX's newer ActivateWindow(2118) form -- both are idempotent.)
     ('skin.povil.nox', 'xml/VideoOSD.xml'),
+    ('skin.povil.nox', 'xml/Includes_POVIL_NativePlayer.xml'),
+    ('skin.povil.nox', 'xml/Includes_POVIL_Players.xml'),
 )
 
 # FENtastic's OSD files use raw, unescaped "&" in RunPlugin URLs (Kodi's skin
