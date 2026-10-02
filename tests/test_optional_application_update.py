@@ -54,7 +54,8 @@ class OptionalApplicationUpdateTests(unittest.TestCase):
 
     def test_build_only_package_never_offers_a_reinstall(self):
         for platform in ('apk', 'windows'):
-            for installed in ('21.3-povil.47', '21.3-povil.48'):
+            for installed in ('21.3-povil.1', '21.3-povil.25', '21.3-povil.35',
+                              '21.3-povil.46', '21.3-povil.47', '21.3-povil.48'):
                 for manual in (False, True):
                     with self.subTest(platform=platform, installed=installed,
                                       manual=manual):
