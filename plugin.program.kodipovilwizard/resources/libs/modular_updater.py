@@ -12,9 +12,15 @@ from resources.libs.common import tools
 
 
 class ModularUpdater:
-    # NOX is installed by Switch Skin, not during the default FENtastic setup.
-    # Keep it in the manifest for users who select it later.
+    # NOX is required for fresh installs. Existing users install it only
+    # through Switch Skin; OTA never changes their chosen skin.
     ON_DEMAND_SKINS = frozenset(('skin.povil.nox',))
+
+    @staticmethod
+    def _pending_addon_receipt(addon_id):
+        from resources.libs import addon_install_receipt
+        return addon_install_receipt.needs_retry(
+            os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID), addon_id)
 
     def __init__(self, background=False):
         self.background = background
@@ -66,10 +72,12 @@ class ModularUpdater:
             q = json.dumps({'jsonrpc': '2.0', 'id': 1,
                             'method': 'Addons.SetAddonEnabled',
                             'params': {'addonid': addon_id, 'enabled': True}})
-            xbmc.executeJSONRPC(q)
+            response = json.loads(xbmc.executeJSONRPC(q))
+            return ('error' not in response and response.get('result') in ('OK', True))
         except Exception as e:
             logging.log("[ModularUpdater] enable {0} failed: {1}".format(addon_id, e),
                         level=xbmc.LOGWARNING)
+            return False
 
     @staticmethod
     def _runtime_addon_enabled(addon_id):
@@ -231,13 +239,15 @@ class ModularUpdater:
                 continue
 
             pending = False
-            if (not getattr(self, 'fresh', False) and
-                    addon_id != 'service.subtitles.kodipovilai'):
+            if getattr(self, 'fresh', False):
+                pending = self._pending_addon_receipt(addon_id)
+            elif addon_id != 'service.subtitles.kodipovilai':
                 from resources.libs import addon_install_receipt
                 pending = addon_install_receipt.needs_retry(
                     os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID), addon_id)
             if not local_ver:
-                if addon_id in self.ON_DEMAND_SKINS and not pending:
+                if (addon_id in self.ON_DEMAND_SKINS and not pending
+                        and not getattr(self, 'fresh', False)):
                     logging.log('[ModularUpdater] on-demand skin remains optional: {0}'
                                 .format(addon_id), level=xbmc.LOGINFO)
                     continue
@@ -770,13 +780,13 @@ class ModularUpdater:
         for addon_id, mod in (manifest.get('addons') or {}).items():
             expected = mod.get('version')
             actual = self.get_local_version(addon_id)
-            if addon_id in self.ON_DEMAND_SKINS and not actual:
-                continue
+            if self._pending_addon_receipt(addon_id):
+                missing.append('{0} (extraction not verified)'.format(addon_id))
             if (not expected or not actual or
                     self._version_tuple(actual) < self._version_tuple(expected)):
                 missing.append('{0} ({1}, expected {2})'.format(
                     addon_id, actual or 'missing', expected or 'unspecified'))
-        for addon_id in self.CORE_PROVISION_IDS:
+        for addon_id in self.CORE_PROVISION_IDS + ('skin.povil.nox', 'script.fentastic.helper'):
             try:
                 enabled = xbmc.getCondVisibility(
                     'System.HasAddon({0})'.format(addon_id))
@@ -1137,7 +1147,23 @@ class ModularUpdater:
 
         if fresh:
             manifest = getattr(self, '_manifest', None) or {}
-            if xbmc.Monitor().abortRequested() or not self._fresh_install_complete(manifest):
+            monitor = xbmc.Monitor()
+            if failed_addons:
+                return False
+            # UpdateLocalAddons and enabling dependencies are asynchronous.
+            # Wait for their actual state in this launch rather than leaving a
+            # complete download waiting for another manual restart.
+            for _ in range(20):
+                if self._fresh_install_complete(manifest):
+                    break
+                for addon_id in self.CORE_PROVISION_IDS + ('skin.povil.nox', 'script.fentastic.helper'):
+                    if not xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
+                        self._enable_addon(addon_id)
+                if monitor.waitForAbort(1):
+                    return False
+            else:
+                return False
+            if monitor.abortRequested():
                 return False
             cfg = manifest.get('config') or {}
             self.mark_provisioned(cfg.get('config_version'))
