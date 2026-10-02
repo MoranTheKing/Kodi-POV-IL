@@ -623,7 +623,12 @@
 				<pagecontrol>60</pagecontrol>
 				<ondown>622</ondown>
 				<visible>Container(9000).HasFocus(7)</visible>
-				<control type="radiobutton" id="6220">
+				<control type="button" id="6222">
+    <include>DefaultSettingButton</include><label>עיצוב הנגן</label>
+    <label2>$VAR[POVIL_PlayerLabel]</label2>
+    <onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=choose_player_style)</onclick>
+</control>
+<control type="radiobutton" id="6220">
 					<label>$LOCALIZE[31172]</label>
 					<include>DefaultSettingButton</include>
 					<selected>Skin.HasSetting(OSDAutoClose)</selected>

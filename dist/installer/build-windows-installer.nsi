@@ -557,9 +557,10 @@ Section "Install"
       MessageBox MB_OK|MB_ICONSTOP "Build extraction failed (tar exit $0). The partial fresh-install staging profile was removed; setup has stopped."
       Abort
     fresh_build_extracted:
-    ; These are real payload anchors from build .101. Checking the directories
+    ; Minimal bootstrap anchors; the Wizard hydrates the fresh modular build. Checking the directories
     ; would be tautological because setup creates them before extraction.
-    IfFileExists "$FreshProfileStage\addons\skin.fentastic\addon.xml" 0 fresh_build_invalid
+    IfFileExists "$FreshProfileStage\addons\script.module.requests\addon.xml" 0 fresh_build_invalid
+    IfFileExists "$FreshProfileStage\userdata\kodipovil.modular_install_started" 0 fresh_build_invalid
     IfFileExists "$FreshProfileStage\userdata\guisettings.xml" profile_target_ready fresh_build_invalid
     fresh_build_invalid:
       RMDir /r "$FreshProfileStage"

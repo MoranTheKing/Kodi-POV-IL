@@ -13,11 +13,11 @@ on:
       version:
         description: 'Release tag / version label (e.g., 21.3-povil.1)'
         required: true
-        default: '21.3-povil.49'
+        default: '21.3-povil.50'
       version_code:
         description: 'Android versionCode (integer, must increase each release)'
         required: true
-        default: '2103049'
+        default: '2103050'
       kodi_version:
         description: 'Upstream Kodi version to rebrand (e.g., 21.3)'
         required: true
@@ -35,17 +35,13 @@ env:
   OLD_PACKAGE_ID: 'org.xbmc.kodi'
   PACKAGE_ID: 'org.xbmc.povi'
   APP_NAME: 'Kodi POV IL'
-  WIZARD_VERSION: '0.1.49'
-  # The full build this package hydrates from. It used to be the same
-  # filename typed out three times below, and it went stale the moment a
-  # release bumped the build: the unzip would fail on a name that no longer
-  # existed, or -- worse on the two paths that pass it to a script -- quietly
-  # ship the previous build inside a new package. One name, one place, and a
-  # test that requires it to be the build wizard/assets/build.txt actually
-  # serves, so it cannot drift from what devices download.
-  BUILD_ZIP: 'Kodi-POV-IL-FENtastic-test-0.1.179.zip'
-  EXPECTED_RELEASE: '21.3-povil.49'
-  EXPECTED_VERSION_CODE: '2103049'
+  WIZARD_VERSION: '0.4.7'
+  # The historic archive supplies only six portable Python dependencies.
+  # Current Wizard code creates a minimal seed; the manifest provisions the build.
+  DEPENDENCY_SOURCE_ZIP: 'Kodi-POV-IL-FENtastic-test-0.1.179.zip'
+  BUILD_ZIP: 'platform-bootstrap.zip'
+  EXPECTED_RELEASE: '21.3-povil.50'
+  EXPECTED_VERSION_CODE: '2103050'
   EXPECTED_KODI_VERSION: '21.3'
 
 jobs:
@@ -95,6 +91,22 @@ jobs:
           git clone --depth=1 --branch=main \
             "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" \
             src
+
+      - name: Build verified modular platform bootstrap
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'src/.github/scripts')
+          import build_addons
+          wizard = next(addon for addon in build_addons.discover_addons() if addon.id == 'plugin.program.kodipovilwizard')
+          build_addons.build_zip(wizard)
+          PY
+          python3 src/.github/scripts/build_platform_bootstrap.py \
+            --source "src/dist/${DEPENDENCY_SOURCE_ZIP}" \
+            --wizard "src/dist/plugin.program.kodipovilwizard-${WIZARD_VERSION}.zip" \
+            --version "$WIZARD_VERSION" \
+            --output "src/dist/${BUILD_ZIP}"
 
       - name: Generate shared platform branding
         run: |
@@ -382,7 +394,7 @@ jobs:
             "Android APK: stable package id '${PACKAGE_ID}', complete POV IL launcher/TV branding, and the wizard pre-bundled in assets/." \
             "Windows installer: preserves an existing portable_data profile, repairs standard-user access, and creates branded -p shortcuts without launching Kodi elevated." \
             "LG webOS IPK: keeps app id org.xbmc.kodi for in-place updates, uses a valid numeric package version, preserves upstream archive metadata, and bundles the same wizard." \
-            "Fresh installs share the same first-launch flow: the wizard downloads and installs Kodi POV IL - FENtastic, then closes Kodi; reopen it to finish.")
+            "Fresh installs provision the modular build and open Nox after checking the required add-ons and home configuration. Existing app installations do not need an APK update for this build update.")
           # Also keep stable filenames (no version) so download pages
           # can use the /latest/download/ redirect without rewriting.
           cp "../out/Kodi-POV-IL-${VERSION}-32bit.apk" "../out/Kodi-POV-IL-32bit.apk"
@@ -401,30 +413,7 @@ jobs:
             ../out/Kodi-POV-IL-64bit.apk \
             ../out/Kodi-POV-IL-Setup.exe
 
-      - name: Update version pointer files on main
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: src
+      - name: Preserve existing application update notification baseline
         run: |
-          set -euo pipefail
-          VERSION="${{ github.event.inputs.version }}"
-          mkdir -p wizard/assets/kodi_version_auto_update/apk wizard/assets/kodi_version_auto_update/windows
-          echo "$VERSION" > wizard/assets/kodi_version_auto_update/apk/latest_apk_version.txt
-          echo "$VERSION" > wizard/assets/kodi_version_auto_update/windows/latest_windows_version.txt
-          # Commit only if there's actually a change.
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
-          git add wizard/assets/kodi_version_auto_update/
-          if git diff --cached --quiet; then
-            echo "Version pointer files already up to date."
-            exit 0
-          fi
-          # Branch protection on main blocks direct push, so open a PR
-          # the user can merge with one click.
-          BRANCH="bot/apk-release-${VERSION}"
-          git checkout -b "$BRANCH"
-          git commit -m "Publish APK ${VERSION} pointer files"
-          git push origin "$BRANCH"
-          gh pr create --base main --head "$BRANCH" \
-            --title "Publish APK ${VERSION} pointer files" \
-            --body "Auto-generated by build-apk workflow run ${{ github.run_id }}. Bumps the wizard's latest_apk_version.txt and latest_windows_version.txt to ${VERSION}, so installed Kodi POV IL clients notice the new release."
+          echo "This installer release changes first-install provisioning only."
+          echo "Existing clients receive the fixes through modular OTA; app update pointers remain unchanged."

@@ -136,7 +136,7 @@ def _first_boot_marker_path():
 
 def arm_first_boot_stabilize():
     """Drop the one-shot marker so the NEXT boot runs the stabilizer. Called at
-    the end of a successful install, right before the force-close."""
+    the end of a successful install."""
     try:
         with open(_first_boot_marker_path(), 'w') as fh:
             fh.write('1')
@@ -165,8 +165,8 @@ def first_boot_stabilize_if_needed():
     countdown banner) then UpdateLocalAddons + ReloadSkin so FENtastic's home
     widgets load against a ready POV instead of a half-initialised one.
 
-    Returns True if the stabilizer ran. NEVER raises. The marker is cleared in a
-    finally so a failure can't re-arm itself."""
+    Returns True if the stabilizer ran. NEVER raises. Pending work survives
+    until the required add-ons are ready."""
     try:
         if not os.path.exists(_first_boot_marker_path()):
             return False
@@ -174,6 +174,7 @@ def first_boot_stabilize_if_needed():
         return False
 
     banner = None
+    completed = False
     try:
         total = _first_boot_warmup_seconds()
         header = CONFIG.ADDONTITLE
@@ -191,6 +192,7 @@ def first_boot_stabilize_if_needed():
         monitor = xbmc.Monitor()
         logging.log('[FirstBoot] stabilizing: warming POV for up to {0}s'.format(total),
                     level=xbmc.LOGINFO)
+        pov_present = False
         for elapsed in range(total):
             if monitor.abortRequested():
                 break
@@ -216,6 +218,10 @@ def first_boot_stabilize_if_needed():
             if monitor.waitForAbort(1):
                 break
 
+        if monitor.abortRequested() or not pov_present:
+            logging.log('[FirstBoot] core not ready; retaining retry marker', level=xbmc.LOGWARNING)
+            return False
+
         # POV is warm -> force a clean skin reload so home widgets re-query a
         # responsive POV. Guarded individually so one failing builtin can't abort
         # the rest.
@@ -230,17 +236,19 @@ def first_boot_stabilize_if_needed():
                 pass
             # Let the skin finish redrawing before any first-launch modal below.
             monitor.waitForAbort(3)
+        if monitor.abortRequested():
+            return False
+        completed = True
         logging.log('[FirstBoot] stabilizer completed', level=xbmc.LOGINFO)
         return True
     except Exception as e:
         logging.log('[FirstBoot] stabilizer error: {0}'.format(e), level=xbmc.LOGERROR)
         return False
     finally:
-        # ALWAYS clear the one-shot marker. A stabilizer failure must never
-        # re-arm itself -> no infinite loop, no permanent stabilize screen.
+        # Clear only after success; incomplete provisioning retries next startup.
         try:
             mp = _first_boot_marker_path()
-            if os.path.exists(mp):
+            if completed and os.path.exists(mp):
                 os.remove(mp)
         except Exception:
             pass
@@ -292,7 +300,10 @@ def fresh_build_auto_install_if_needed():
                                       'kodipovil.modular_install_started')
     resume_finalization = (os.path.isfile(provision_marker) and
                            os.path.isfile(in_progress_marker))
-    if os.path.isfile(provision_marker) and not resume_finalization:
+    if resume_finalization and not os.path.isfile(os.path.join(
+            CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')):
+        resume_finalization = False
+    if os.path.isfile(provision_marker) and not os.path.isfile(in_progress_marker):
         return False
 
     # 2. Migration from the public, pre-modular build: those devices have
@@ -350,7 +361,13 @@ def fresh_build_auto_install_if_needed():
             logging.log('[Fresh Build Auto Install] resuming post-provision '
                         'finalization.', level=xbmc.LOGINFO)
         else:
-            ModularUpdater(background=False).run_fresh_install()
+            # A transient repository/download failure can recover while the
+            # installer remains open; don't require several manual restarts.
+            for _attempt in range(3):
+                if ModularUpdater(background=False).run_fresh_install():
+                    break
+                if xbmc.Monitor().waitForAbort(3):
+                    return False
 
         # Sanity gate: the build engine must be on disk AND run_fresh_install
         # must have written the .provisioned marker (i.e. it ran to completion
@@ -369,83 +386,10 @@ def fresh_build_auto_install_if_needed():
             _close_provisioning_banner(wait_banner)
             return False
 
-        logging.log('[Fresh Build Auto Install] finalizing build flags and '
-                    'first-boot assets.', level=xbmc.LOGINFO)
-        db.fix_metas()
-
-        CONFIG.set_setting('buildname', build_name)
-        CONFIG.set_setting('installed', 'true')
-        CONFIG.set_setting('buildversion', build_version)
-        CONFIG.set_setting('latestversion', build_version)
-        CONFIG.set_setting('nextbuildcheck', tools.get_date(days=CONFIG.UPDATECHECK, formatted=True))
-        CONFIG.set_setting('extract', '100')
-        CONFIG.set_setting('errors', '0')
-        CONFIG.set_setting('fresh_build_auto_install_done', build_version)
-
-        CONFIG.BUILDNAME = build_name
-        CONFIG.BUILDVERSION = build_version
-        CONFIG.BUILDLATEST = build_version
-        CONFIG.INSTALLED = 'true'
-
-        try:
-            import importlib.util
-            import xbmcvfs
-
-            addon_folder = 'special://home/addons/plugin.program.orderfavourites-hebrew'
-            of_addon_path = xbmcvfs.translatePath(addon_folder)
-            mi_file = os.path.join(of_addon_path, 'resources', 'lib', 'media_installer.py')
-
-            if os.path.isfile(mi_file):
-                logging.log("[Fresh Build Auto Install] Running media_installer.py...", level=xbmc.LOGINFO)
-                spec = importlib.util.spec_from_file_location('media_installer_wizard_run', mi_file)
-                mi_module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mi_module)
-
-                mi_module.install_global_media_assets()
-                logging.log("[Fresh Build Auto Install] Media assets installed successfully.", level=xbmc.LOGINFO)
-            else:
-                logging.log("[Fresh Build Auto Install] media_installer.py not found at: {0}".format(mi_file), level=xbmc.LOGERROR)
-
-        except Exception as err:
-            logging.log("[Fresh Build Auto Install] Failed to execute media_installer: {0}".format(err), level=xbmc.LOGERROR)
-
-        # KODI-POV-IL - Engine v2 Runtime Patching. Freshly extracted addons
-        # (plugin.video.pov and friends) have never been patched at this
-        # point -- run it now, before arm_first_boot_stabilize() and the
-        # forced restart, so the very first boot against the new install
-        # already has every source patch applied instead of racing to catch
-        # up on a later ModularUpdater pass.
-        try:
-            from resources.libs.patch_engine import PatchEngine
-            PatchEngine().run()
-        except Exception as _patch_err:
-            logging.log("[Fresh Build Auto Install] PatchEngine run failed: {0}".format(_patch_err),
-                        level=xbmc.LOGERROR)
-
-        # Arm the first-boot stabilizer: the NEXT boot (the first time the
-        # FENtastic home renders against the freshly installed POV) is the race
-        # window. The marker makes that boot warm POV up before loading widgets.
-        arm_first_boot_stabilize()
-
-        # This is the commit point for startup's own work. Earlier failures
-        # leave the marker in place and retry this idempotent tail next boot.
-        try:
-            os.remove(in_progress_marker)
-            logging.log('[Fresh Build Auto Install] finalization complete.',
-                        level=xbmc.LOGINFO)
-        except OSError as exc:
-            logging.log('[Fresh Build Auto Install] cannot clear resume marker: '
-                        '{0}'.format(exc), level=xbmc.LOGERROR)
-            _close_provisioning_banner(wait_banner)
-            return False
-
-        # Keep the wait banner up THROUGH the force-close countdown -- it tells
-        # the user to wait until Kodi fully closes. Kodi tears it down on exit.
-        from resources.libs.wizard import Wizard
-        Wizard().force_close_kodi_in_5_seconds(
-            dialog_header="Kodi POV IL build installed"
-        )
-        return True
+        from resources.libs import fresh_install
+        completed = fresh_install.finalize()
+        _close_provisioning_banner(wait_banner)
+        return completed
     except Exception as err:
         logging.log(
             "[Fresh Build Auto Install] Failed: {0}".format(err),
@@ -608,7 +552,10 @@ if not os.path.isfile(os.path.join(CONFIG.USERDATA, 'kodipovil.provisioned')):
                                                 'plugin.video.pov', 'addon.xml'))),
                 level=xbmc.LOGINFO)
 
-if fresh_build_auto_install_if_needed():
+fresh_build_auto_install_if_needed()
+if os.path.isfile(os.path.join(CONFIG.USERDATA, 'kodipovil.modular_install_started')):
+    # Incomplete setup must not proceed to normal notifications or claim ready.
+    logging.log('[FreshInstall] setup remains pending', level=xbmc.LOGWARNING)
     sys.exit()
 
 # Everything below can pop a modal dialog (build first-launch notification,
@@ -617,7 +564,9 @@ if fresh_build_auto_install_if_needed():
 # and deadlock the boot -- the "hangs once after install/quick update,
 # force-stop to recover" symptom. Block here until Home is actually live
 # (bounded) so every dialog below has a real parent window.
-wait_for_gui_ready()
+if not wait_for_gui_ready():
+    logging.log('[Startup] GUI unavailable; deferring dialogs', level=xbmc.LOGWARNING)
+    sys.exit()
 
 # FIRST-BOOT STABILIZER (race shield). Runs ONLY when the one-shot marker from a
 # just-completed install is present. Warms POV up (user-visible countdown) and
