@@ -146,6 +146,8 @@ def grab_log(file=False, old=False, wizard=False):
                 
     logsfound = []
 
+    if not os.path.isdir(CONFIG.LOGPATH):
+        return False
     for item in [file for file in os.listdir(CONFIG.LOGPATH) if os.path.basename(file).startswith('kodi')]:
         if item.endswith('.log'):
             if (old and 'old' in item) or (not old and 'old' not in item):
@@ -166,12 +168,10 @@ def upload_log():
     for item in files:
         filetype = item[0]
         if filetype == 'log':
-            log = os.path.basename(grab_log(file=True))
-            name = log if log else "kodi.log"
+            name = os.path.basename(item[1]) or "kodi.log"
             error = "Error posting the {0} file".format(name)
         elif filetype == 'oldlog':
-            log = os.path.basename(grab_log(file=True, old=True))
-            name = log if log else "kodi.old.log"
+            name = os.path.basename(item[1]) or "kodi.old.log"
             error = "Error posting the {0} file".format(name)
         elif filetype == 'wizlog':
             name = "wizard.log"
@@ -199,7 +199,7 @@ def upload_log():
             else:
                 show_result('{0}[CR]{1}'.format(error, result))
         else:
-            show_result('{0}[CR]{1}'.format(error, result))
+            show_result('{0}[CR]{1}'.format(error, data))
 
 
 def get_files():
@@ -258,6 +258,7 @@ def get_files():
 
 
 def read_log(path):
+    lf = None
     try:
         lf = xbmcvfs.File(path)
         content = lf.read()
@@ -269,12 +270,45 @@ def read_log(path):
     except Exception as e:
         log('unable to read file: {0}'.format(e))
         return False, "Unable to Read File"
+    finally:
+        if lf is not None:
+            try:
+                lf.close()
+            except Exception:
+                pass
 
 
 def clean_log(content):
     for pattern, repl in REPLACES:
         content = re.sub(pattern, repl, content)
-        return content
+    return content
+
+
+def show_result(message, url=None):
+    """Display an uploaded link locally, with a text fallback for QR failures."""
+    imagefile = None
+    if url:
+        try:
+            import tempfile
+            import segno
+            from resources.libs.gui import window
+
+            folder = os.path.join(CONFIG.PLUGIN_DATA, 'qrcodes')
+            os.makedirs(folder, exist_ok=True)
+            fd, imagefile = tempfile.mkstemp(prefix='log-', suffix='.png', dir=folder)
+            os.close(fd)
+            segno.make_qr(url).save(imagefile, scale=8)
+            window.show_qr_code('loguploader.xml', imagefile, message)
+            return
+        except Exception as e:
+            log('Could not display log QR: {0}'.format(e), level=xbmc.LOGWARNING)
+        finally:
+            if imagefile:
+                try:
+                    os.remove(imagefile)
+                except OSError:
+                    pass
+    xbmcgui.Dialog().ok(CONFIG.ADDONTITLE, message)
 
 
 def post_log(data, name):
