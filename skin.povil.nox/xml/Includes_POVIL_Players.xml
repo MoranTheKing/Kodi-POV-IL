@@ -2462,7 +2462,6 @@
 		</include>
 	</include>
 	<include name="POVIL_Player_videosd3">
-		<include>POVIL_Player_StyleSelector</include>
 		<control type="button">
 			<description>background close area</description>
 			<left>0</left>
@@ -2954,6 +2953,7 @@
 				<visible>ControlGroup(202).HasFocus(730455)</visible>
 			</control>
 		</control>
+		<include>POVIL_Player_StyleSelector</include>
 	</include>
 	<include name="POVIL_Player_videosd4">
 		<include>POVIL_Player_StyleSelector</include>

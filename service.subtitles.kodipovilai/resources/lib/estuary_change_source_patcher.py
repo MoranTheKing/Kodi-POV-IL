@@ -55,6 +55,42 @@ _REVERT_RE = re.compile(
 )
 
 
+def _mask_comments(content):
+    # Keep offsets and line endings while excluding commented-out controls.
+    return re.sub(r'<!--.*?-->',
+                  lambda match: re.sub(r'[^\r\n]', ' ', match.group(0)),
+                  content, flags=re.DOTALL)
+
+
+def _dedupe_owned_buttons(content):
+    # Old XML serializers may have discarded marker comments. Only remove a
+    # second copy of our known ID with identical actions/visibility/label.
+    # Do not remove commented examples or differently configured controls.
+    seen = set()
+    removed = []
+    for match in re.finditer(r'<control\b[^>]*type="button"[^>]*>.*?</control>',
+                             _mask_comments(content), flags=re.DOTALL):
+        try:
+            control = ET.fromstring(content[match.start():match.end()])
+        except Exception:
+            continue
+        actions = tuple((action.get('condition'), action.text) for action in
+                        control.findall('onclick')
+                        if 'PlayerControl(Play)' not in (action.text or ''))
+        if (control.get('id') != BUTTON_ID or
+                not any('mode=play_media' in (text or '') and 'mediatype=' in (text or '')
+                        for _, text in actions)):
+            continue
+        signature = (actions, control.findtext('label'),
+                     tuple(e.text for e in control.findall('visible')))
+        if signature in seen:
+            removed.append((match.start(), match.end()))
+        seen.add(signature)
+    for start, end in reversed(removed):
+        content = content[:start] + content[end:]
+    return content
+
+
 def _log(msg, level='INFO'):
     if kodi_utils is None:
         return
@@ -130,15 +166,34 @@ def ensure_patched():
     already = MARKER in original
 
     # Strip any prior version so we re-apply cleanly (idempotent).
-    content = _REVERT_RE.sub('', original)
+    content = _dedupe_owned_buttons(_REVERT_RE.sub('', original))
 
-    m = _ANCHOR_RE.search(content)
-    if not m:
-        _log('audio-button anchor not found -- skipping', level='WARNING')
-        return 'unmatched'
-    indent = m.group('indent')
-    block = _button_block(indent, eol)
-    content = content[:m.start()] + block + content[m.start():]
+    # Updated skin packages already contain this action without our marker.
+    # Parse real controls: commented-out Twilight examples are not buttons.
+    # Remove only our marked addition, preserving the skin's native action,
+    # pause behavior, visibility and exact formatting.
+    try:
+        tree = ET.fromstring(content)
+    except Exception:
+        return 'parse_failed'
+    native = any(
+        ('mode=player_change_source' in (action.text or '') or
+         ('mode=play_media' in (action.text or '') and
+          'mediatype=' in (action.text or '') and
+          'autoplay=false' in (action.text or '')))
+        for button in tree.findall(".//control[@type='button']")
+        for action in button.findall('onclick'))
+    if not native:
+        # A different control owns this ID: never introduce a collision.
+        if tree.find(".//control[@id='" + BUTTON_ID + "']") is not None:
+            return 'id_conflict'
+        m = _ANCHOR_RE.search(_mask_comments(content))
+        if not m:
+            _log('audio-button anchor not found -- skipping', level='WARNING')
+            return 'unmatched'
+        indent = m.group('indent')
+        block = _button_block(indent, eol)
+        content = content[:m.start()] + block + content[m.start():]
 
     # SAFETY: never write XML that doesn't parse -- a broken OSD would
     # black-screen the player.
@@ -166,5 +221,6 @@ def ensure_patched():
         _log('write failed: {0}'.format(e), level='WARNING')
         return 'write_failed'
 
-    _log('injected change-source button into Estuary VideoOSD', level='INFO')
-    return 'unchanged' if already else 'patched'
+    _log('removed duplicate change-source button' if native else
+         'injected change-source button into Estuary VideoOSD', level='INFO')
+    return 'deduplicated' if native else ('unchanged' if already else 'patched')
