@@ -268,8 +268,16 @@ class ModularUpdater:
         # mix its new hooks with that tree. Keep the old repair service until
         # POV has a clean host; replacing it now would leave neither owner
         # able to repair those files after the next POV update.
-        if any(mod.get('id') == 'service.subtitles.kodipovilai'
-               for mod in update_queue):
+        # A clean installation has no old service to hand off. Kodi reports
+        # an error for an unknown addon; the conservative live-service probe
+        # deliberately treats that error as running. Do not mistake an absent
+        # addon on a fresh profile for a legacy service. Existing trees still
+        # require the full handoff protocol, even during manual provisioning.
+        initial_service_install = (getattr(self, 'fresh', False) and
+                                   not self._on_disk('service.subtitles.kodipovilai'))
+        if (not initial_service_install and
+                any(mod.get('id') == 'service.subtitles.kodipovilai'
+                    for mod in update_queue)):
             service_mod = next(mod for mod in update_queue if
                                mod.get('id') == 'service.subtitles.kodipovilai')
             if self._runtime_addon_enabled('service.subtitles.kodipovilai'):
