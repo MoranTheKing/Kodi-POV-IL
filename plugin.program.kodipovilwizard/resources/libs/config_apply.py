@@ -571,6 +571,22 @@ def apply_config_pack(manifest, fresh=False, background=True):
         tools.remove_file(zip_path)
         return result
 
+    if fresh:
+        # Kodi may rewrite guisettings.xml on shutdown after a failed skin
+        # activation. Keep the intended fresh defaults until finalization can
+        # verify them, rather than certifying the rewritten old profile.
+        gui_spec = next((s for s in policy.get('files', [])
+                         if s.get('src') == 'guisettings.xml'), None)
+        if gui_spec:
+            gui = ET.parse(os.path.join(work_dir, 'guisettings.xml'))
+            excluded = set(gui_spec.get('exclude_ids', []))
+            for node in list(gui.getroot()):
+                if node.get('id') in excluded:
+                    gui.getroot().remove(node)
+            snapshot = os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')
+            gui.write(snapshot + '.tmp', encoding='utf-8', xml_declaration=True)
+            os.replace(snapshot + '.tmp', snapshot)
+
     _run_cleanup(policy)
 
     CONFIG.set_setting('config_applied_version', version)

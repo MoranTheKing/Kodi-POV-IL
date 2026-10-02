@@ -70,6 +70,13 @@ class Router:
             MainMenu().get_listing()
             self._finish(handle)
 
+        elif mode in ('choose_player_style', 'player_settings', 'player_change_source', 'player_episodes'):
+            from resources.libs import player_styles
+            {'choose_player_style': player_styles.choose,
+             'player_settings': player_styles.settings,
+             'player_change_source': player_styles.change_source,
+             'player_episodes': player_styles.episodes}[mode]()
+
         # SETTINGS
         elif mode == 'settings':  # OpenWizard settings
             CONFIG.open_settings(name)
