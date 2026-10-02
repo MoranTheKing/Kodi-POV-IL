@@ -87,7 +87,8 @@ class ProvisioningGateTests(unittest.TestCase):
         messages = []
         config = types.SimpleNamespace(get_setting=lambda key: state.get(key, ''))
         logging = types.SimpleNamespace(log=lambda message, **kw: messages.append(message))
-        native_present = {'plugin.video.pov': True, 'plugin.video.idanplus': True}
+        native_present = {'plugin.video.pov': True, 'plugin.video.idanplus': True,
+                          'skin.povil.nox': True, 'script.fentastic.helper': True}
         xbmc = types.SimpleNamespace(
             LOGERROR=4, LOGINFO=1,
             getCondVisibility=lambda condition: native_present.get(
@@ -101,10 +102,13 @@ class ProvisioningGateTests(unittest.TestCase):
             get_local_version=lambda aid: versions.get(aid),
             _version_tuple=lambda ver: tuple(int(part) for part in ver.split('.')),
             ON_DEMAND_SKINS=frozenset(('skin.povil.nox',)),
+            _pending_addon_receipt=lambda _aid: False,
             CORE_PROVISION_IDS=('plugin.video.pov', 'plugin.video.idanplus'))
         manifest = {'addons': {aid: {'version': ver} for aid, ver in versions.items()},
                     'config': {'config_version': '2.0.7'}}
         manifest['addons']['skin.povil.nox'] = {'version': '1.0.11'}
+        self.assertFalse(fn(updater, manifest), 'missing default skin must block completion')
+        versions['skin.povil.nox'] = '1.0.11'
         self.assertTrue(fn(updater, manifest))
         native_present['plugin.video.idanplus'] = False
         self.assertFalse(fn(updater, manifest), 'missing native core must block completion')
@@ -116,7 +120,7 @@ class ProvisioningGateTests(unittest.TestCase):
         self.assertFalse(fn(updater, manifest))
         self.assertTrue(any('incomplete' in message for message in messages))
 
-    def test_fresh_queue_does_not_install_optional_nox_skin(self):
+    def test_fresh_queue_installs_default_nox_skin(self):
         config = types.SimpleNamespace(USER_AGENT='Kodi POV IL QA')
         logs = types.SimpleNamespace(log=lambda *_a, **_kw: None)
         xbmc = types.SimpleNamespace(LOGINFO=1)
@@ -135,12 +139,13 @@ class ProvisioningGateTests(unittest.TestCase):
             _load_manifest=lambda: manifest,
             get_local_version=lambda _id: None,
             ON_DEMAND_SKINS=frozenset(('skin.povil.nox',)),
+            _pending_addon_receipt=lambda _aid: False,
             install_missing=True, fresh=True,
             _config_pending=lambda _manifest: True,
             execute_updates=lambda queue: seen.extend(queue) or True)
         self.assertTrue(fn(updater))
         self.assertEqual([item['id'] for item in seen],
-                         ['plugin.program.kodipovilwizard'])
+                         ['plugin.program.kodipovilwizard', 'skin.povil.nox'])
 
     def test_legacy_pov_host_keeps_its_old_repair_service(self):
         fn = _load_function(
@@ -315,7 +320,7 @@ class ProvisioningGateTests(unittest.TestCase):
         present = {'core.one': True, 'core.two': False}
         xbmc = types.SimpleNamespace(
             LOGINFO=1, LOGERROR=4, LOGWARNING=2,
-            Monitor=lambda: types.SimpleNamespace(abortRequested=lambda: False),
+            Monitor=lambda: types.SimpleNamespace(abortRequested=lambda: False, waitForAbort=lambda _n: False),
             getCondVisibility=lambda condition: present.get(
                 condition.removeprefix('System.HasAddon(').removesuffix(')'), False))
         xbmcgui = types.SimpleNamespace(DialogProgressBG=lambda: types.SimpleNamespace(
@@ -355,7 +360,8 @@ class ProvisioningGateTests(unittest.TestCase):
                 RuntimeError('repository unavailable')),
             _native_install_fallback=lambda ids, per_addon_timeout:
                 attempted.append((ids, per_addon_timeout)),
-            _fresh_install_complete=lambda _manifest: False)
+            _fresh_install_complete=lambda _manifest: False,
+            CORE_PROVISION_IDS=(), _enable_addon=lambda _aid: None)
         with patch.dict(sys.modules, modules):
             self.assertFalse(fn(updater, []))
         self.assertEqual(attempted, [(['core.two'], 60)])

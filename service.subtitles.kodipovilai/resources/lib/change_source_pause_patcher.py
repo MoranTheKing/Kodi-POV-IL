@@ -57,6 +57,7 @@ _FEN_RX = re.compile(
 # (skin id, OSD file, regex, mode 'first'|'each')
 TARGETS = (
     ('skin.povil.nox', 'xml/VideoOSD.xml', _POV_RX, 'first'),
+    ('skin.povil.nox', 'xml/Includes_POVIL_NativePlayer.xml', _POV_RX, 'first'),
     ('skin.estuary', 'xml/VideoOSD.xml', _POV_RX, 'first'),
     # FENtastic: the change-source onclicks appear inline as separate list
     # items in each player style, plus once in a shared include.
