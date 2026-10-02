@@ -15,6 +15,22 @@ FRESH = ROOT / 'plugin.program.kodipovilwizard/resources/libs/fresh_install.py'
 
 
 class FreshHomeReadinessTests(unittest.TestCase):
+    def test_late_first_install_tiles_get_one_bounded_extra_profile_refresh(self):
+        with tempfile.TemporaryDirectory() as raw:
+            Path(raw, 'favourites.xml').write_text(
+                '<favourites><favourite name="Tonight">RunScript(tonight)</favourite></favourites>')
+            calls = []
+            cached = []
+            fn = _load_function(FRESH, 'live_favourites_ready', {
+                'CONFIG': types.SimpleNamespace(USERDATA=raw), 'ET': ET, 'os': os,
+                '_rpc': lambda *_a: {'favourites': cached},
+                'xbmc': types.SimpleNamespace(getInfoLabel=lambda _k: 'Master user',
+                                              executebuiltin=calls.append)})
+            self.assertFalse(fn()); self.assertFalse(fn()); self.assertFalse(fn())
+            self.assertEqual(calls, ['LoadProfile("Master user")'] * 2)
+            cached.append({'title': 'Tonight'})
+            self.assertTrue(fn()); self.assertEqual(len(calls), 2)
+
     def test_exact_skin_question_uses_native_heading(self):
         sent = []
         # Native controls expose no heading through the Python wrapper's label.
