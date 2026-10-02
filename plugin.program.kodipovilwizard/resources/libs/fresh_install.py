@@ -126,13 +126,18 @@ def live_favourites_ready():
     actual = {item.get('title') for item in (_rpc('Favourites.GetFavourites', {}).get('favourites') or [])}
     if expected and expected.issubset(actual):
         return True
-    # A one-time profile reload also starts services against their final
-    # configuration. Keep the install pending until the next service instance
-    # verifies the live cache. This does not close or restart Kodi.
+    # First-time subtitle-service migrations can add home tiles after the
+    # first profile refresh. Permit one further refresh, then retain the
+    # pending marker on failure. This never closes Kodi or loops indefinitely.
     marker = os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_profile_reload')
-    if not os.path.isfile(marker):
+    try:
+        with open(marker, encoding='utf-8') as fh:
+            reloads = int(fh.read().strip())
+    except (OSError, ValueError):
+        reloads = 0
+    if reloads < 2:
         with open(marker, 'w', encoding='utf-8') as fh:
-            fh.write('1')
+            fh.write(str(reloads + 1))
         profile = xbmc.getInfoLabel('System.ProfileName')
         xbmc.executebuiltin('LoadProfile("{0}")'.format(profile.replace('"', '')))
     return False

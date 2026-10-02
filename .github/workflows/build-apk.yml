@@ -35,7 +35,7 @@ env:
   OLD_PACKAGE_ID: 'org.xbmc.kodi'
   PACKAGE_ID: 'org.xbmc.povi'
   APP_NAME: 'Kodi POV IL'
-  WIZARD_VERSION: '0.4.8'
+  WIZARD_VERSION: '0.4.9'
   # The historic archive supplies only six portable Python dependencies.
   # Current Wizard code creates a minimal seed; the manifest provisions the build.
   DEPENDENCY_SOURCE_ZIP: 'Kodi-POV-IL-FENtastic-test-0.1.179.zip'
