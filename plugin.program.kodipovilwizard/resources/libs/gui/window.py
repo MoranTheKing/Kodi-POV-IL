@@ -158,6 +158,28 @@ def show_contact(msg=""):
     cw.doModal()
     del cw
 
+def show_qr_code(layout, imagefile, message):
+    """Use the bundled uploader layout; QR generation requires no network."""
+    class QRCode(xbmcgui.WindowXMLDialog):
+        def onInit(self):
+            self.getControl(501).setImage(imagefile)
+            self.getControl(502).setText(message)
+            self.getControl(504).setLabel(CONFIG.ADDONTITLE)
+            self.setFocusId(503)
+
+        def onClick(self, controlid):
+            if controlid == 503:
+                self.close()
+
+        def onAction(self, action):
+            if action.getId() in BACK_ACTIONS:
+                self.close()
+
+    dialog = QRCode(layout, CONFIG.ADDON_PATH, 'Default')
+    dialog.doModal()
+    del dialog
+
+
 def show_apk_warning(apk):
     class APKInstaller(xbmcgui.WindowXMLDialog):
 
