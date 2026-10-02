@@ -7,7 +7,7 @@ import types
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,7 +20,11 @@ def load_player(choice, current='__advancedplayer', provider='pov', playing=True
             'VideoPlayer.Season': '2', 'VideoPlayer.Episode': '3',
             'VideoPlayer.Title': 'Title', 'VideoPlayer.TVShowTitle': 'Series',
             'VideoPlayer.IMDBNumber': 'tt1234567', 'VideoPlayer.Year': '2020'}
-    xbmc = types.SimpleNamespace(getInfoLabel=lambda key: info.get(key, ''),
+    home = Mock()
+    home.getProperty.return_value = ''
+    monitor = Mock()
+    monitor.waitForAbort.return_value = False
+    xbmc = types.SimpleNamespace(Monitor=lambda: monitor, getInfoLabel=lambda key: info.get(key, ''),
         getCondVisibility=lambda key: playing if key == 'Player.Playing' else key in
             ('Window.IsVisible(videoosd)', 'Player.HasVideo', 'VideoPlayer.Content(episodes)',
              'System.HasAddon(plugin.video.umbrella)'), executebuiltin=calls.append,
@@ -28,6 +32,7 @@ def load_player(choice, current='__advancedplayer', provider='pov', playing=True
     dialog = types.SimpleNamespace(select=lambda *_a, **_kw: choice, notification=lambda *_a: None)
     with patch.dict(sys.modules, {'xbmc': xbmc, 'xbmcgui': types.SimpleNamespace(Dialog=lambda: dialog),
             'xbmcaddon': types.SimpleNamespace(Addon=lambda _id: types.SimpleNamespace(getSetting=lambda _k: provider))}):
+        sys.modules['xbmcgui'].Window = lambda _id: home
         spec = importlib.util.spec_from_file_location('qa_player_styles',
             ROOT / 'plugin.program.kodipovilwizard/resources/libs/player_styles.py')
         module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
@@ -37,10 +42,43 @@ def load_player(choice, current='__advancedplayer', provider='pov', playing=True
 class NoxPlayerStylesTests(unittest.TestCase):
     def test_selection_and_cancel_preserve_playback(self):
         module, calls = load_player(2); module.choose()
-        self.assertEqual(calls, ['Dialog.Close(videoosd,true)',
-            'Skin.SetString(__chooseplayer,__netflixplayer)', 'ActivateWindow(videoosd)'])
+        self.assertEqual(calls, ['Dialog.Close(videoosd)',
+            'Skin.SetString(__chooseplayer,__netflixplayer)'])
         module, calls = load_player(-1); module.choose()
-        self.assertEqual(calls, ['Dialog.Close(videoosd,true)', 'ActivateWindow(videoosd)'])
+        self.assertEqual(calls, ['Dialog.Close(videoosd)'])
+
+    def test_gui_teardown_timeout_or_abort_never_changes_the_layout(self):
+        module, calls = load_player(2)
+        original = module.xbmc.getCondVisibility
+        module.xbmc.getCondVisibility = lambda key: key.startswith('Window.') or original(key)
+        with patch.object(module.time, 'monotonic', side_effect=[0, 3]):
+            module.choose()
+        self.assertEqual(calls, ['Dialog.Close(videoosd)'])
+        module, calls = load_player(2)
+        module.xbmc.Monitor().waitForAbort.return_value = True
+        module.choose()
+        self.assertEqual(calls, ['Dialog.Close(videoosd)'])
+        module.xbmcgui.Window(10000).clearProperty.assert_called_once()
+
+    def test_selector_must_finish_closing_and_reentrant_calls_are_ignored(self):
+        module, calls = load_player(2)
+        original = module.xbmc.getCondVisibility
+        module.xbmc.getCondVisibility = lambda key: 'selectdialog' in key or original(key)
+        with patch.object(module.time, 'monotonic', side_effect=[0, 0, 3]):
+            module.choose()
+        self.assertEqual(calls, ['Dialog.Close(videoosd)'])
+        module, calls = load_player(2)
+        module.xbmcgui.Window(10000).getProperty.return_value = 'true'
+        module.choose()
+        self.assertEqual(calls, [])
+
+    def test_every_style_changes_without_reopening_or_reloading_the_skin(self):
+        for choice in range(5):
+            with self.subTest(choice=choice):
+                module, calls = load_player(choice, current='__prettyplayer' if choice != 4 else '__advancedplayer')
+                module.choose()
+                self.assertEqual(calls, ['Dialog.Close(videoosd)',
+                    'Skin.SetString(__chooseplayer,{0})'.format(module.STYLES[choice][0])])
 
     def test_separate_control_sets_and_shared_settings_entry(self):
         root = ET.parse(SKIN / 'VideoOSD.xml').getroot()
@@ -104,6 +142,12 @@ class NoxPlayerStylesTests(unittest.TestCase):
         repaired = repair._REVERT_RE.sub('', source)
         self.assertIn('mode=player_change_source', repaired)
         self.assertEqual(len(ET.fromstring(repaired).findall(".//control[@id='39517']")), 1)
+
+    def test_simple_selector_is_above_the_fullscreen_close_hit_area(self):
+        root = ET.parse(SKIN / 'Includes_POVIL_Players.xml').getroot()
+        style = root.find("include[@name='POVIL_Player_videosd3']")
+        self.assertEqual(style[-1].tag, 'include')
+        self.assertEqual(style[-1].text, 'POVIL_Player_StyleSelector')
 
 
 if __name__ == '__main__':

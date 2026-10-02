@@ -1,6 +1,7 @@
 """Nox player controls: local style selection, no skin reload during playback."""
 import json
 import re
+import time
 from urllib.parse import urlencode
 
 import xbmc
@@ -16,19 +17,46 @@ STYLES = (
 )
 
 
+_STYLE_BUSY = 'POVIL.PlayerStyleBusy'
+
+
+def _wait_closed(name, monitor):
+    # Builtins are queued on Kodi's GUI thread. Returning from Dialog.Close
+    # does not prove that its controls/close animation have finished.
+    deadline = time.monotonic() + 2.0
+    condition = 'Window.IsVisible({0}) | Window.IsActive({0})'.format(name)
+    while xbmc.getCondVisibility(condition):
+        if time.monotonic() >= deadline or monitor.waitForAbort(0.05):
+            return False
+    return not monitor.waitForAbort(0.15)
+
+
 def choose():
-    current = xbmc.getInfoLabel('Skin.String(__chooseplayer)')
-    selected = next((i for i, (key, _) in enumerate(STYLES) if key == current), 0)
-    osd = xbmc.getCondVisibility('Window.IsVisible(videoosd)')
-    if osd:
-        xbmc.executebuiltin('Dialog.Close(videoosd,true)')
-    choice = xbmcgui.Dialog().select('בחר את עיצוב הנגן',
-                                     [label for _, label in STYLES], preselect=selected)
-    if choice >= 0:
+    home = xbmcgui.Window(10000)
+    if home.getProperty(_STYLE_BUSY):
+        return
+    home.setProperty(_STYLE_BUSY, 'true')
+    try:
+        monitor = xbmc.Monitor()
+        current = xbmc.getInfoLabel('Skin.String(__chooseplayer)')
+        selected = next((i for i, (key, _) in enumerate(STYLES) if key == current), 0)
+        if xbmc.getCondVisibility('Window.IsVisible(videoosd)'):
+            # Let Kodi finish the close animation and release GUI controls on
+            # its render thread. Forced teardown can race an OSD button click.
+            xbmc.executebuiltin('Dialog.Close(videoosd)')
+            if not _wait_closed('videoosd', monitor):
+                return
+        choice = xbmcgui.Dialog().select('בחר את עיצוב הנגן',
+                                         [label for _, label in STYLES], preselect=selected)
+        if (not _wait_closed('selectdialog', monitor) or
+                choice < 0 or choice >= len(STYLES) or choice == selected):
+            return
         xbmc.executebuiltin('Skin.SetString(__chooseplayer,{0})'.format(STYLES[choice][0]))
-    if osd and xbmc.getCondVisibility('Player.HasVideo'):
-        # Reopening only this dialog reevaluates its conditional includes.
-        xbmc.executebuiltin('ActivateWindow(videoosd)')
+        # Leave the OSD closed. A fresh user activation creates the new
+        # control set; never reopen it during the selector's native teardown.
+        xbmcgui.Dialog().notification('עיצוב הנגן', STYLES[choice][1])
+    finally:
+        home.clearProperty(_STYLE_BUSY)
 
 
 def settings():
