@@ -132,12 +132,15 @@ class ProvisioningGateTests(unittest.TestCase):
         manifest = {'addons': {
             'plugin.program.kodipovilwizard': {'id': 'plugin.program.kodipovilwizard',
                                                 'version': '0.4.3'},
+            'service.subtitles.kodipovilai': {'id': 'service.subtitles.kodipovilai',
+                                              'version': '0.3.18'},
             'skin.povil.nox': {'id': 'skin.povil.nox', 'version': '1.0.11'}},
             'config': {'config_version': '2.0.7'}}
         seen = []
         updater = types.SimpleNamespace(
             _load_manifest=lambda: manifest,
             get_local_version=lambda _id: None,
+            _on_disk=lambda _id: False,
             ON_DEMAND_SKINS=frozenset(('skin.povil.nox',)),
             _pending_addon_receipt=lambda _aid: False,
             install_missing=True, fresh=True,
@@ -145,7 +148,30 @@ class ProvisioningGateTests(unittest.TestCase):
             execute_updates=lambda queue: seen.extend(queue) or True)
         self.assertTrue(fn(updater))
         self.assertEqual([item['id'] for item in seen],
-                         ['plugin.program.kodipovilwizard', 'skin.povil.nox'])
+                         ['plugin.program.kodipovilwizard',
+                          'service.subtitles.kodipovilai', 'skin.povil.nox'])
+        # No old service exists. The conservative unknown-addon probe must
+        # never prevent an initial installation (real Kodi returns an error).
+        updater._runtime_addon_enabled = lambda _aid: True
+        updater._service_handoff_ready = lambda: False
+        seen.clear()
+        self.assertTrue(fn(updater))
+        self.assertIn('service.subtitles.kodipovilai', [item['id'] for item in seen])
+        # A manually requested fresh provisioning on an existing profile still
+        # protects its live service, regardless of the fresh flag.
+        updater.get_local_version = lambda aid: ('0.2.566' if aid.startswith('service.') else None)
+        updater._on_disk = lambda aid: aid == 'service.subtitles.kodipovilai'
+        updater._version_tuple = lambda ver: tuple(map(int, ver.split('.')))
+        xbmc.LOGWARNING = 2
+        seen.clear()
+        self.assertTrue(fn(updater))
+        self.assertNotIn('service.subtitles.kodipovilai', [item['id'] for item in seen])
+        # Broken/versionless existing metadata is still an existing tree;
+        # inability to parse its version cannot waive live-service protection.
+        updater.get_local_version = lambda _aid: None
+        seen.clear()
+        self.assertTrue(fn(updater))
+        self.assertNotIn('service.subtitles.kodipovilai', [item['id'] for item in seen])
 
     def test_legacy_pov_host_keeps_its_old_repair_service(self):
         fn = _load_function(
