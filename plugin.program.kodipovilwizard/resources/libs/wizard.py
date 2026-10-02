@@ -88,6 +88,8 @@ class Wizard:
         # A user-triggered Full Install starts clean: drop the marker so the whole
         # fresh sequence runs (and so an interrupted run is resumable).
         ModularUpdater.clear_provisioned()
+        from resources.libs import fresh_install
+        fresh_install.begin()
 
         try:
             ModularUpdater(background=False).run_fresh_install()
@@ -111,28 +113,16 @@ class Wizard:
                            "[COLOR {0}]ההתקנה לא הושלמה. הפעל מחדש את קודי כדי להמשיך.[/COLOR]".format(CONFIG.COLOR2))
             return
 
-        db.fix_metas()
-        CONFIG.set_setting('buildname', build_name)
-        CONFIG.set_setting('buildversion', build_version)
-        CONFIG.set_setting('buildtheme', '')
-        CONFIG.set_setting('latestversion', build_version)
-        CONFIG.set_setting('nextbuildcheck', tools.get_date(days=CONFIG.UPDATECHECK, formatted=True))
-        CONFIG.set_setting('installed', 'true')
-        CONFIG.set_setting('extract', '100')
-        CONFIG.set_setting('errors', '0')
-        CONFIG.set_setting('fresh_build_auto_install_done', build_version)
+        try:
+            if not fresh_install.finalize():
+                self.dialog.ok(CONFIG.ADDONTITLE, 'ההתקנה ממתינה להשלמה. אשר את הסקין או נסה שוב.')
+                return
+        except Exception as err:
+            logging.log('[Build] finalization failed: {0}'.format(err), level=xbmc.LOGERROR)
+            self.dialog.ok(CONFIG.ADDONTITLE, 'ההתקנה לא הושלמה. ניתן לנסות שוב בלי למחוק הגדרות.')
+            return
         db.addon_database(CONFIG.ADDON_ID, 1)
-
-        CONFIG.BUILDNAME = build_name
-        CONFIG.BUILDVERSION = build_version
-        CONFIG.BUILDLATEST = build_version
-        CONFIG.INSTALLED = 'true'
-
-        # First-launch notification windows (build-first-launch + skin-switch help).
-        CONFIG.set_setting('notedismiss', 'false')
-        CONFIG.set_setting('build_skin_switch_notifcation_dismiss', 'false')
-
-        self.force_close_kodi_in_5_seconds(dialog_header="התקנת הבילד הסתיימה בהצלחה")
+        self.dialog.notification(CONFIG.ADDONTITLE, 'הבילד הותקן ומוכן לשימוש')
 
     def gui(self, name, over=False):
         # KODI-POV-IL - DEPRECATED legacy "GuiFix" quickfix installer.

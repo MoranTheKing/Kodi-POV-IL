@@ -151,6 +151,27 @@ def _refresh_favourites(addon_path):
         return False
 
 
+def install_and_verify_global_media_assets():
+    """Strict installer gate; zero writes alone does not prove completeness."""
+    if xbmcvfs is None or _ADDON is None:
+        return False
+    addon_path = xbmcvfs.translatePath(_ADDON.getAddonInfo('path'))
+    _install_assets(addon_path)
+    found = False
+    for src_rel, dst_special in _COPY_JOBS:
+        src_root = os.path.join(addon_path, src_rel)
+        if not os.path.isdir(src_root):
+            return False
+        dst_root = xbmcvfs.translatePath(dst_special)
+        for root, _dirs, files in os.walk(src_root):
+            for name in files:
+                found = True
+                src = os.path.join(root, name)
+                if not _same_file(src, os.path.join(dst_root, os.path.relpath(src, src_root))):
+                    return False
+    return found and _refresh_favourites(addon_path)
+
+
 def install_global_media_assets():
     """Refresh changed bundled assets and merge the skin's favourites.
 

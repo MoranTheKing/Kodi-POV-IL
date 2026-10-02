@@ -66,6 +66,8 @@ TARGETS = (
     # reaches our chooser even before the skin updates. (old_choose_subs_patcher
     # also handles OLD's newer ActivateWindow(2118) form -- both are idempotent.)
     ('skin.povil.old', 'xml/VideoOSD.xml'),
+    ('skin.povil.old', 'xml/Includes_POVIL_NativePlayer.xml'),
+    ('skin.povil.old', 'xml/Includes_POVIL_Players.xml'),
 )
 
 # FENtastic's OSD files use raw, unescaped "&" in RunPlugin URLs (Kodi's skin

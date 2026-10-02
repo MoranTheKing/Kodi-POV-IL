@@ -2,6 +2,8 @@
 
 # Registry schema for Engine v2 patches
 PATCH_CONFIG = [
+    {'id': 'pov_hebrew_interface', 'name': 'Persistent Hebrew POV interface', 'addon_id': 'plugin.video.pov', 'enabled': True, 'target_file': 'resources/lib/modules/kodi_utils.py', 'marker': '# WIZARD_POV_HEBREW_INTERFACE_v1', 'anchor': '\ttry: _string = int(string)', 'action': 'prepend_before', 'hook': "\ttry:\n\t\timport sys, xbmcvfs\n\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\t\tif p not in sys.path: sys.path.append(p)\n\t\tfrom pov_ui_labels import hebrew_label\n\t\t_hebrew_label = hebrew_label(string)\n\t\tif _hebrew_label is not None: return _hebrew_label\n\texcept Exception: pass\n"},
+    {'id': 'pov_local_favorites_recent', 'name': 'Newest local favorites first', 'addon_id': 'plugin.video.pov', 'enabled': True, 'target_file': 'resources/lib/indexers/local_api.py', 'marker': '# WIZARD_POV_LOCAL_FAVORITES_RECENT_v1', 'anchor': "\tpath = 'SELECT tmdb_id, title FROM favorites WHERE db_type = ?'", 'action': 'prepend_before', 'hook': "\tdata = call_local('SELECT tmdb_id, title FROM favorites WHERE db_type = ? ORDER BY rowid DESC', (mediatype,))\n\tif page_no == 'all': return data\n\treturn [{'media_id': str(i['tmdb_id']), 'title': i['title']} for i in data], 1\n"},
     {
         "id": "pov_cache_empty_prevention",
         "name": "POV Empty Cache Prevention",
@@ -1234,9 +1236,9 @@ PATCH_CONFIG = [
     {
         "id": "pov_mdblist_sort_default",
         "name": "MDBList Watchlist/Collection Sort Default",
-        "description": "Intercepts list sorting to default to 'Date Added' (recency) if unconfigured.",
+        "description": "Uses newest-added ordering for watchlists and collections; preserves release-date sorting.",
         "addon_id": "plugin.video.pov",
-        "enabled": False,
+        "enabled": True,
         "target_file": "resources/lib/modules/settings.py",
         "marker": "# WIZARD_POV_MDBL_SORT_DEFAULT_v2",
         "anchor": "def metadata_user_info():",
