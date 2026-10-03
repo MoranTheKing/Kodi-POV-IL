@@ -106,6 +106,17 @@ class StagedInstallTests(unittest.TestCase):
         installer.clear_handoff(userdata)
         self.assertEqual(installer.read_handoff(userdata), (None, None))
 
+    def test_notice_survives_request_clear_and_is_per_prepared_package(self):
+        self.bundle_with()
+        digest = hashlib.sha256(self.bundle.read_bytes()).hexdigest()
+        installer.install(self.bundle, self.addons, ADDON, '0.3.15', digest, defer_swap=True)
+        self.assertTrue(installer.claim_restart_notice(self.addons, ADDON, '0.3.15', digest))
+        installer.clear_handoff(self.addons.parent / 'userdata')
+        installer.recover(self.addons, self.bundle, ADDON)
+        self.assertFalse(installer.claim_restart_notice(self.addons, ADDON, '0.3.15', digest))
+        self.assertFalse(installer.claim_restart_notice(self.addons, ADDON, '0.3.16', digest))
+        self.assertTrue(installer.prepared_matches(self.addons, ADDON, '0.3.15', digest))
+
     def test_python_fallback_when_kodi_extractor_is_unavailable(self):
         self.bundle_with()
         with mock.patch.object(installer, '_extract_kodi', return_value=False):
