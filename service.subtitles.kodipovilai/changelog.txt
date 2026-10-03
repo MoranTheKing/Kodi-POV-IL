@@ -1,3 +1,7 @@
+0.3.21
+- Repair Estuary's legacy icon/text source-button pair, including radiobuttons and old bare-ampersand URLs; preserve native actions and separate layouts.
+- Reload the active skin after removing a duplicate when it is safe to do so.
+
 0.3.16
 - Keep automatic subtitle selection active when a previous film's AI translation is still running; cancel obsolete Gemini retries after playback or the selected subtitle changes.
 - Pass already-discovered Hebrew alternatives to the background timing verifier and restore verified fallback selection ownership.
