@@ -162,6 +162,9 @@ class PersonalListOrderTests(unittest.TestCase):
             # Watchlists/collections use their actual dates, even without API sorting.
             result = owner.get_mdbuser_watchlist(create_directory=False)
             self.assertEqual([i['id'] for i in owner.list], [5, 4])
+            ns['_povil_order'] = None
+            owner.list = []
+            self.assertNotIn('povil_personal', owner.mbd_user_lists(False)[0]['url'])
 
     def test_local_umbrella_sqlite_remove_readd_and_media_isolation(self):
         source = setup._personal_order_source((FIX / 'favourites.py').read_text('utf8'), 'favourites.py')
@@ -196,6 +199,12 @@ class PersonalListOrderTests(unittest.TestCase):
             self.assertNotIn('\n', patched.replace('\r\n', ''))
         with self.assertRaises(ValueError):
             setup._personal_order_source('import re\nclass Movies: pass\n', 'movies.py')
+        source = setup._personal_order_source((FIX / 'movies.py').read_text('utf8'), 'movies.py')
+        with patch.dict(sys.modules, {'xbmcvfs': types.SimpleNamespace(translatePath=lambda _: str(WIZ)),
+                                    'pov_mdblist_patch_logic': types.SimpleNamespace()}):
+            ns = {}
+            exec(source, ns)
+            self.assertIsNone(ns['_povil_order'])
 
 
 if __name__ == '__main__': unittest.main()
