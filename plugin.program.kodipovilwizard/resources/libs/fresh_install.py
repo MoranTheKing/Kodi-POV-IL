@@ -211,6 +211,26 @@ def live_favourites_ready():
     return False
 
 
+def seed_fresh_home_shortcuts():
+    """Seed local service shortcuts before certifying Kodi's favourites cache.
+
+    The subtitle service starts asynchronously after activation. Its one-time
+    shortcuts can otherwise arrive after finalization and miss the first home.
+    Load just the existing local writers, without importing the service or
+    sharing its resources package with the Wizard.
+    """
+    base = os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai',
+                        'resources', 'lib')
+    for name, relative, entry in (
+            ('tonight', os.path.join('tonight', 'entrypoints.py'), 'ensure'),
+            ('recent_updates', 'recent_updates_tile_patcher.py', 'ensure_patched')):
+        spec = importlib.util.spec_from_file_location(
+            'povil_fresh_' + name, os.path.join(base, relative))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        getattr(module, entry)()
+
+
 def finalize():
     """Return success only after media, patches and the live home are ready."""
     from resources.libs.modular_updater import ModularUpdater
@@ -254,6 +274,7 @@ def finalize():
     # Refresh favourites for the activated skin, without extra provider calls.
     if not media.install_and_verify_global_media_assets():
         raise RuntimeError('Fresh skin favourites are incomplete')
+    seed_fresh_home_shortcuts()
     if not live_favourites_ready():
         return False
     version = CONFIG.BUILDVERSION_DEFAULT
