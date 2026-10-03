@@ -306,6 +306,7 @@ class ModularUpdater:
         logging.log('[ModularUpdater] update queue={0}, config_pending={1}, fresh={2}'
                     .format(len(update_queue), config_pending, fresh), level=xbmc.LOGINFO)
         if not update_queue and not config_pending and not fresh:
+            self._record_build_identity(manifest)
             logging.log("[ModularUpdater] All modules and config are up to date.", level=xbmc.LOGINFO)
             if not self.background:
                 self.dialog.ok(CONFIG.ADDONTITLE, "כל ההרחבות מעודכנות לגרסה האחרונה.")
@@ -317,7 +318,29 @@ class ModularUpdater:
         # interrupted setup whose addons all landed but whose config / marker
         # never did).
         logging.log('[ModularUpdater] entering execute_updates', level=xbmc.LOGINFO)
-        return self.execute_updates(update_queue)
+        success = self.execute_updates(update_queue)
+        if success:
+            self._record_build_identity(manifest)
+        return success
+
+    def _record_build_identity(self, manifest):
+        """An OTA completion updates the build label too; never certify a failure."""
+        if self._config_pending(manifest):
+            return False
+        for addon_id, mod in (manifest.get('addons') or {}).items():
+            actual = self.get_local_version(addon_id)
+            if not actual and addon_id in self.ON_DEMAND_SKINS:
+                continue
+            if (not actual or not mod.get('version') or
+                    self._pending_addon_receipt(addon_id) or
+                    self._version_tuple(actual) < self._version_tuple(mod['version'])):
+                return False
+        version = CONFIG.BUILDVERSION_DEFAULT
+        for key in ('buildversion', 'latestversion'):
+            if CONFIG.get_setting(key) != version:
+                CONFIG.set_setting(key, version)
+        CONFIG.BUILDVERSION = CONFIG.BUILDLATEST = version
+        return True
 
     @staticmethod
     def _service_handoff_ready():
@@ -1172,6 +1195,13 @@ class ModularUpdater:
             return False
 
         config_skin_touched = _apply_config_pack()
+        try:
+            from resources.libs import fentastic_widgets
+            # Preserve saved rows before the updater's own skin reload.
+            config_skin_touched = bool(fentastic_widgets.repair(reload_skin=False)) or config_skin_touched
+        except Exception as exc:
+            logging.log('[FENtastic widgets] update repair deferred: {}'.format(exc),
+                        level=xbmc.LOGWARNING)
 
         if fresh:
             manifest = getattr(self, '_manifest', None) or {}
