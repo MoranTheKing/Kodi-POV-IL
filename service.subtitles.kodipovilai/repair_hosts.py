@@ -14,12 +14,13 @@ def repair():
             ('umbrella_source_ux_patcher', 'ensure_patched'),
             ('umbrella_language_patcher', 'ensure_patched'),
             ('umbrella_hebrew_ui_patcher', 'ensure_patched'),
-            ('umbrella_setup_patcher', 'ensure_source_name_published')):
+            ('umbrella_setup_patcher', 'ensure_source_name_published'),
+            ('umbrella_setup_patcher', 'ensure_personal_list_order')):
         try:
             module = importlib.import_module('resources.lib.' + name)
-            results[name] = getattr(module, function)()
+            results[name + '.' + function] = getattr(module, function)()
         except Exception:
-            results[name] = 'failed'
+            results[name + '.' + function] = 'failed'
     kodi_utils.log('Host-update repair: {}'.format(results))
     return results
 
