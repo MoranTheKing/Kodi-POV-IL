@@ -20,6 +20,64 @@ def begin():
         fh.write('1\n')
 
 
+def provision(attempts=3):
+    """Resume only missing work on both manual and automatic installation.
+
+    Keep a small local diagnostic with addon IDs, never request URLs/accounts.
+    Completion still requires the updater's verified provisioning marker.
+    """
+    from resources.libs.modular_updater import ModularUpdater
+    monitor = xbmc.Monitor()
+    issues = []
+    for attempt in range(attempts):
+        if monitor.abortRequested():
+            break
+        updater = ModularUpdater(background=False)
+        try:
+            if updater.run_fresh_install() and updater.is_provisioned():
+                try:
+                    os.remove(os.path.join(CONFIG.USERDATA, 'kodipovil.install_failure.json'))
+                except OSError:
+                    pass
+                return True, []
+            issues = list(getattr(updater, 'last_install_issues', []))
+            if not issues:
+                manifest = getattr(updater, '_manifest', None)
+                if manifest:
+                    updater._fresh_install_complete(manifest)
+                    issues = list(getattr(updater, 'last_install_issues', []))
+                else:
+                    issues = ['manifest unavailable']
+        except Exception as exc:
+            logging.log('[Fresh install] provisioning attempt failed: {}'.format(exc),
+                        level=xbmc.LOGERROR)
+            issues = ['installation interrupted']
+        if attempt + 1 < attempts:
+            xbmcgui.Dialog().notification(
+                CONFIG.ADDONTITLE, 'משלים רכיבים חסרים — ניסיון נוסף', time=4000)
+            if monitor.waitForAbort(3):
+                break
+    issues = issues or ['installation interrupted']
+    try:
+        with open(os.path.join(CONFIG.USERDATA, 'kodipovil.install_failure.json'),
+                  'w', encoding='utf-8') as fh:
+            json.dump({'issues': issues, 'attempts': attempt + 1}, fh)
+    except OSError:
+        pass
+    return False, issues
+
+
+def failure_message(issues):
+    """Explain failed prerequisites instead of prescribing reinstall loops."""
+    if 'manifest unavailable' in issues:
+        detail = 'לא ניתן להוריד את מידע ההתקנה. בדוק את החיבור לרשת.'
+    else:
+        detail = 'רכיבים שלא הושלמו:\n' + '\n'.join(issues[:6])
+    return ('ההתקנה לא הושלמה.\n' + detail +
+            '\nניתן לנסות השלמת התקנה שוב בלי למחוק את Kodi.\n'
+            'אם התקלה נמשכת, שלח לוג דרך הוויזרד.')
+
+
 def _rpc(method, params):
     reply = json.loads(xbmc.executeJSONRPC(json.dumps(
         {'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': params})))
@@ -39,9 +97,8 @@ def _accept_initial_skin_confirmation():
             not xbmc.getCondVisibility('Window.IsVisible(yesnodialog)')):
         return False
     try:
-        dialog = xbmcgui.Window(10100)
         if (xbmc.getInfoLabel('Control.GetLabel(1)') != xbmc.getLocalizedString(13123) or
-                dialog.getControl(9).getText() != xbmc.getLocalizedString(13111)):
+                xbmc.getInfoLabel('Control.GetLabel(9)') != xbmc.getLocalizedString(13111)):
             return False
         xbmc.executebuiltin('SendClick(10100,11)')
         return True
@@ -89,7 +146,8 @@ def apply_live_defaults():
         if current != value and _rpc('Settings.SetSettingValue',
                                       {'setting': key, 'value': value}) is not True:
             raise RuntimeError('Fresh setting was rejected: ' + key)
-    if xbmc.getSkinDir() != target_skin:
+    skin_changed = xbmc.getSkinDir() != target_skin
+    if skin_changed:
         finished = threading.Event()
         def confirm_requested_skin():
             # SetSettingValue can wait for its GUI confirmation. Start this
@@ -111,12 +169,22 @@ def apply_live_defaults():
             observer.join(1)
     # The skin-confirmation timeout is ten seconds. Wait beyond that before
     # certifying activation, and never certify merely from the RPC reply.
-    for _ in range(16):
+    for _ in range(16 if skin_changed else 0):
         if monitor.waitForAbort(1):
             return False
         _accept_initial_skin_confirmation()
-    return (xbmc.getSkinDir() == target_skin and
-            bool(xbmc.getCondVisibility('Window.IsActive(home)')))
+    if xbmc.getSkinDir() != target_skin:
+        return False
+    # A manual completion runs inside the Wizard menu. That is not evidence
+    # of a failed home: show the verified home instead of requiring a restart.
+    if not xbmc.getCondVisibility('Window.IsActive(home)'):
+        xbmc.executebuiltin('ActivateWindow(Home)')
+    for _ in range(5):
+        if xbmc.getCondVisibility('Window.IsActive(home)'):
+            return True
+        if monitor.waitForAbort(0.2):
+            return False
+    return False
 
 
 def live_favourites_ready():
