@@ -522,7 +522,11 @@ def apply_config_pack(manifest, fresh=False, background=True):
         for index, path in enumerate(destinations):
             if os.path.isfile(path):
                 backup = os.path.join(backup_dir, str(index))
-                shutil.copy2(path, backup)
+                # Android emulated storage allows copying the bytes but can
+                # reject copy2's chmod/utime metadata operation (EACCES).
+                # Rollback needs the original content, not its filesystem
+                # metadata. A real read/write failure must still abort here.
+                shutil.copyfile(path, backup)
                 original_files[path] = backup
             else:
                 original_files[path] = None
