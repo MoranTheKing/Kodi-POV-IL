@@ -1,3 +1,6 @@
+0.3.22
+- Verify subscription-notice settings were accepted by Kodi before confirming a saved choice.
+
 0.3.21
 - Repair Estuary's legacy icon/text source-button pair, including radiobuttons and old bare-ampersand URLs; preserve native actions and separate layouts.
 - Reload the active skin after removing a duplicate when it is safe to do so.
