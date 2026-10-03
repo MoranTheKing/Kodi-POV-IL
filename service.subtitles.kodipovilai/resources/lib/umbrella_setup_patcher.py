@@ -493,7 +493,7 @@ def _personal_order_source(source, filename):
         insert('trakt_userList', 'self.sort() # sort before local pagination',
                "\t\tif _povil_order: _povil_order.umbrella_personal_sort(self, %r, getSetting, url)\n" % media)
         insert('mbd_user_lists', 'list_url = self.mbdlist_list_items % (list_id)',
-               "\t\t\t\tlist_url += '&povil_personal=1'\n", True)
+               "\t\t\t\tif _povil_order: list_url += '&povil_personal=1'\n", True)
         insert('mdb_list_items', 'q = dict(parse_qsl(urlsplit(url).query))',
                "\t\tif _povil_order: url = _povil_order.personal_mdbl_url(url, getSetting('sort.%s.type') in ('', '0'))\n" % media)
     elif filename == 'favourites.py':
