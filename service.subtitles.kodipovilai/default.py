@@ -3292,6 +3292,13 @@ def _handle_debrid_notice_settings(_params):
     value = DEBRID_NOTICE_VALUES[value_idx][1]
     try:
         pov.setSetting(key, value)
+        # Kodi's legacy slider silently rejects values outside its schema.
+        # setSetting returns None even on rejection, so verify the read-back.
+        if pov.getSetting(key) != value:
+            dialog.ok(
+                'התראות מנוי',
+                'הבחירה לא נשמרה. יש להשלים את עדכון הבילד, לסגור ולפתוח את Kodi ולבחור שוב.')
+            return
     except Exception as e:
         xbmcgui.Dialog().ok(
             'התראות מנוי',
