@@ -242,6 +242,29 @@ def prepared_matches(addons_dir, addon_id, version, sha256):
                 (stage / 'addon.xml').is_file())
 
 
+def claim_restart_notice(addons_dir, addon_id, version, sha256):
+    """Persist one notice in the existing prepared-package receipt.
+
+    A renewed/cleared handoff request must not repeat the same package's toast.
+    No extra user cache file or network request is needed.
+    """
+    _target, stage, _backup = _paths(addons_dir, addons_dir, addon_id)
+    ready = _read_ready(stage, addon_id)
+    if (not ready or ready['version'] != version or
+            ready['sha256'] != str(sha256).lower() or
+            ready.get('restart_notified') is True):
+        return False
+    ready['restart_notified'] = True
+    path = _ready_path(stage)
+    temp = path.with_name(path.name + '.tmp')
+    with open(temp, 'w', encoding='utf-8') as output:
+        json.dump(ready, output, sort_keys=True)
+        output.flush()
+        os.fsync(output.fileno())
+    os.replace(str(temp), str(path))
+    return True
+
+
 def activate_prepared(addons_dir, addon_id, expected_version, expected_sha256):
     """Activate only a complete previously verified package after service yield."""
     target, stage, backup = _paths(addons_dir, addons_dir, addon_id)

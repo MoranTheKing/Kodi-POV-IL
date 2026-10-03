@@ -77,3 +77,54 @@ class EstuarySourceButtonTests(unittest.TestCase):
             original='<window><controls>\r\n'+fragment+ANCHOR+'</controls></window>'
             status,result,_=self.apply(original)
             self.assertEqual(status,expected); self.assertEqual(result,original)
+
+    def test_active_twilight_icon_and_text_pair(self):
+        legacy = ('<control type="radiobutton" id="700453">'
+                  '<description>Twilight Switch Source Button</description>'
+                  '<include content="OSDButtonAdvanced"><param name="label">'
+                  '$LOCALIZE[700036]</param></include>'
+                  '<onclick>RunPlugin(plugin://plugin.video.pov/?mode=play_media'
+                  '&amp;media_type=movie&amp;autoplay=false)</onclick></control>')
+        for addition in (NATIVE, repair._button_block('', '\r\n'), ''):
+            original = '<window><controls><control type="grouplist">'+legacy+addition+'\r\n'+ANCHOR+'</control></controls></window>'
+            _, result, repeated = self.apply(original)
+            tree = ET.fromstring(result)
+            self.assertIsNone(tree.find(".//control[@id='700453']"))
+            self.assertEqual(len(tree.findall(".//control[@id='700458']")), 1)
+            self.assertEqual(repeated, 'unchanged')
+
+    def test_native_radiobutton_does_not_receive_extra_text_control(self):
+        native = NATIVE.replace('type="button"', 'type="radiobutton"').replace('700458', '700453')
+        original = '<window><controls>'+native+ANCHOR+'</controls></window>'
+        _, result, repeated = self.apply(original)
+        self.assertEqual(result, original)
+        self.assertEqual(repeated, 'unchanged')
+
+    def test_equivalent_different_id_preserved_in_separate_layout(self):
+        native = NATIVE.replace('700458', '700453').replace('<description>native</description>',
+                 '<description>Twilight Switch Source Button</description>')
+        original = '<window><controls><control type="group">'+native+'</control><control type="group">'+NATIVE+ANCHOR+'</control></controls></window>'
+        _, result, _ = self.apply(original)
+        self.assertEqual(result, original)
+
+    def test_same_group_different_id_equivalent_copy_removed(self):
+        native = NATIVE.replace('700458', '700453').replace('<description>native</description>',
+                 '<description>Twilight Switch Source Button</description>')
+        original = '<window><controls><control type="group">'+native+NATIVE+ANCHOR+'</control></controls></window>'
+        _, result, repeated = self.apply(original)
+        self.assertIn(native, result)
+        self.assertIsNone(ET.fromstring(result).find(".//control[@id='700458']"))
+        self.assertEqual(repeated, 'unchanged')
+
+    def test_old_bare_ampersand_urls_do_not_block_duplicate_repair(self):
+        legacy = ('<control type="radiobutton" id="700453">'
+                  '<description>Twilight Switch Source Button</description>'
+                  '<onclick>RunPlugin(plugin://plugin.video.pov/?mode=play_media'
+                  '&media_type=movie&autoplay=false)</onclick></control>')
+        native = NATIVE.replace('&amp;', '&')
+        original = '<window><controls>'+legacy+native+ANCHOR+'</controls></window>'
+        status, result, repeated = self.apply(original)
+        self.assertEqual(status, 'deduplicated')
+        self.assertIn(native, result)
+        self.assertNotIn('id="700453"', result)
+        self.assertEqual(repeated, 'unchanged')
