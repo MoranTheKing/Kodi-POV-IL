@@ -47,7 +47,7 @@ class ConfigTransactionTests(unittest.TestCase):
                                                    str(dest))
             self.assertEqual(make_opener.call_args.args[0].proxies, {})
             self.assertEqual(dest.read_bytes(), expected)
-            self.assertEqual(calls, [('http://local/config.zip', 8)])
+            self.assertEqual(calls, [('http://local/config.zip', 20)])
 
     def test_policy_paths_cannot_escape_kodi_home(self):
         for value in ('../outside', 'userdata/../../outside', '/absolute',

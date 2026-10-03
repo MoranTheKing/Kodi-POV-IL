@@ -1233,8 +1233,12 @@ class ModularUpdater:
                 logging.log("[ModularUpdater] Native fallback failed: {0}".format(e), level=xbmc.LOGERROR)
 
         # 4b/4c. Build-config pack Phase
-        config_skin_touched = (_apply_config_pack() if early_config_touched[0] is None
-                               else early_config_touched[0])
+        config_skin_touched = bool(early_config_touched[0])
+        # A false early result can mean failure, not successful unchanged
+        # settings. Retry after dependencies have been registered/enabled.
+        if (early_config_touched[0] is None or
+                self._config_pending(getattr(self, '_manifest', None))):
+            config_skin_touched = _apply_config_pack() or config_skin_touched
         try:
             from resources.libs import fentastic_widgets
             # Preserve saved rows before the updater's own skin reload.
@@ -1247,6 +1251,11 @@ class ModularUpdater:
             manifest = getattr(self, '_manifest', None) or {}
             monitor = xbmc.Monitor()
             if failed_addons:
+                return False
+            if self._config_pending(manifest):
+                # Waiting for addon scans cannot complete a failed config.
+                # Return to bounded provisioning recovery immediately.
+                self._fresh_install_complete(manifest)
                 return False
             # UpdateLocalAddons and enabling dependencies are asynchronous.
             # Wait for their actual state in this launch rather than leaving a

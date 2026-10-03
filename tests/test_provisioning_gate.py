@@ -408,6 +408,7 @@ class ProvisioningGateTests(unittest.TestCase):
         updater = types.SimpleNamespace(
             fresh=True, background=False, PROVISION_IDS=('core.one', 'core.two'),
             _manifest={'addons': {}, 'config': {}},
+            _config_pending=lambda _manifest: False,
             _resolve_phase_two_bounded=lambda: (_ for _ in ()).throw(
                 RuntimeError('repository unavailable')),
             _native_install_fallback=lambda ids, per_addon_timeout:

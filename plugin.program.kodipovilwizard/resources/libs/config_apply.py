@@ -221,13 +221,25 @@ def _atomic_copy(src, dest):
 
 def _download_config_zip(url, dest):
     """Stream a config ZIP with a timeout, without importing requests."""
-    from urllib.request import Request, ProxyHandler, build_opener
+    from urllib.request import Request, ProxyHandler, HTTPSHandler, build_opener
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     temp = None
     try:
         request = Request(url)
-        opener = build_opener(ProxyHandler({}))
-        with opener.open(request, timeout=8) as source:
+        handlers = [ProxyHandler({})]
+        if url.lower().startswith('https://'):
+            import ssl
+            context = ssl.create_default_context()
+            # Keep Kodi/system trust and add the portable bundle already used
+            # by requests. Android may have no usable system CA store.
+            try:
+                import certifi
+                context.load_verify_locations(cafile=certifi.where())
+            except ImportError:
+                pass
+            handlers.append(HTTPSHandler(context=context))
+        opener = build_opener(*handlers)
+        with opener.open(request, timeout=20) as source:
             fd, temp = tempfile.mkstemp(prefix='.config-download-',
                                         dir=os.path.dirname(dest))
             with os.fdopen(fd, 'wb') as out:
@@ -241,6 +253,22 @@ def _download_config_zip(url, dest):
     finally:
         if temp and os.path.exists(temp):
             os.remove(temp)
+
+
+def _bundled_config_zip(cfg):
+    """Use the small shipped pack only when the live manifest proves its bytes."""
+    path = os.path.join(os.path.dirname(__file__), '..', 'bootstrap', 'config.zip')
+    want = cfg.get('sha256')
+    if not want or not os.path.isfile(path):
+        return None
+    try:
+        if cfg.get('size') and os.path.getsize(path) != cfg['size']:
+            return None
+        if sha256_file(path).lower() == str(want).lower():
+            return path
+    except OSError:
+        pass
+    return None
 
 
 def _require_valid_xml(text, expected_root, label):
@@ -432,7 +460,13 @@ def apply_config_pack(manifest, fresh=False, background=True):
     zip_path = os.path.join(CONFIG.PACKAGES, 'build_config.zip')
     tools.remove_file(zip_path)
     try:
-        _download_config_zip(url, zip_path)
+        bundled = _bundled_config_zip(cfg)
+        if bundled:
+            _atomic_copy(bundled, zip_path)
+            logging.log('[config_apply] using manifest-verified bundled config {0}'.format(version),
+                        level=xbmc.LOGINFO)
+        else:
+            _download_config_zip(url, zip_path)
     except Exception as e:
         logging.log("[config_apply] config download failed: {0}".format(e), level=xbmc.LOGERROR)
         return result
