@@ -34,9 +34,13 @@ class ConfigBootstrapRecoveryTests(unittest.TestCase):
             self.assertIsNone(z.testzip())
             self.assertIn('config_policy.json', z.namelist())
 
-    def test_actual_pack_applies_when_network_is_unavailable(self):
+    def apply_actual_pack(self, deny_metadata=False, deny_backup=False, fresh=True):
         with tempfile.TemporaryDirectory() as raw:
             home=Path(raw); userdata=home/'userdata'; userdata.mkdir()
+            original_gui='<settings><setting id="lookandfeel.skin">skin.estuary</setting><setting id="subtitles.languages">English</setting></settings>'
+            (userdata/'guisettings.xml').write_text(original_gui,encoding='utf8')
+            original_sources='<sources><files><source><name>My source</name><path>/my/media/</path></source></files></sources>'
+            (userdata/'sources.xml').write_text(original_sources,encoding='utf8')
             settings={}; cfg=json.loads((ROOT/'manifest.json').read_text('utf8'))['config']
             pack=ROOT/'plugin.program.kodipovilwizard/resources/bootstrap/config.zip'
             cfg=dict(cfg,config_version='seed-test',sha256=hashlib.sha256(pack.read_bytes()).hexdigest(),size=pack.stat().st_size)
@@ -48,13 +52,56 @@ class ConfigBootstrapRecoveryTests(unittest.TestCase):
             common=types.ModuleType('resources.libs.common');common.logging=logging;common.tools=tools
             modules={'resources.libs.common':common,'resources.libs.common.config':types.SimpleNamespace(CONFIG=config),
                 'xbmc':types.SimpleNamespace(LOGINFO=1,LOGERROR=4,LOGWARNING=3)}
-            with patch.dict(sys.modules,modules),patch.object(config_apply,'_download_config_zip',side_effect=OSError('blocked')) as download:
-                result=config_apply.apply_config_pack({'config':cfg},fresh=True)
+            original_copy=config_apply.shutil.copyfile
+            def copy_bytes(src,dst,*args,**kwargs):
+                if deny_backup and Path(dst).parent.name.startswith('config-rollback-'):
+                    raise PermissionError(13,'backup content is not writable',str(dst))
+                return original_copy(src,dst,*args,**kwargs)
+            def copy_metadata(*args,**kwargs):
+                if deny_metadata:
+                    raise PermissionError(13,'Android emulated storage rejects chmod/utime',str(args[1]))
+            with patch.dict(sys.modules,modules),patch.object(config_apply,'_download_config_zip',side_effect=OSError('blocked')) as download, \
+                    patch.object(config_apply.shutil,'_winapi',None,create=True), \
+                    patch.object(config_apply.shutil,'copystat',side_effect=copy_metadata), \
+                    patch.object(config_apply.shutil,'copyfile',side_effect=copy_bytes):
+                result=config_apply.apply_config_pack({'config':cfg},fresh=fresh)
             download.assert_not_called()
+            if deny_backup:
+                self.assertFalse(result['applied'])
+                self.assertEqual((userdata/'guisettings.xml').read_text('utf8'),original_gui)
+                self.assertEqual((userdata/'sources.xml').read_text('utf8'),original_sources)
+                self.assertNotIn('config_applied_version',settings)
+                self.assertFalse((userdata/'kodipovil.fresh_gui_defaults.xml').exists())
+                self.assertFalse(list((home/'packages').glob('config-rollback-*')))
+                return
             self.assertTrue(result['applied'])
             self.assertEqual(settings['config_applied_version'],'seed-test')
+            if not fresh:
+                self.assertEqual((userdata/'guisettings.xml').read_text('utf8'),original_gui)
+                self.assertFalse((userdata/'kodipovil.fresh_gui_defaults.xml').exists())
+                return
             for file in ('guisettings.xml','favourites.xml','sources.xml','kodipovil.fresh_gui_defaults.xml'):
                 self.assertTrue((userdata/file).is_file(),file)
+            import xml.etree.ElementTree as ET
+            snapshot=ET.parse(userdata/'kodipovil.fresh_gui_defaults.xml')
+            for key in ('locale.subtitlelanguage','subtitles.languages'):
+                self.assertEqual(snapshot.find("setting[@id='"+key+"']").text,'Hebrew')
+            self.assertEqual(snapshot.find("setting[@id='lookandfeel.skin']").text,'skin.povil.nox')
+
+    def test_actual_pack_applies_when_network_is_unavailable(self):
+        self.apply_actual_pack()
+
+    def test_android_metadata_permission_does_not_block_fresh_home_and_hebrew(self):
+        self.apply_actual_pack(deny_metadata=True)
+
+    def test_real_backup_write_failure_still_leaves_profile_intact(self):
+        self.apply_actual_pack(deny_metadata=True,deny_backup=True)
+
+    def test_quick_update_on_android_keeps_existing_skin_and_language(self):
+        self.apply_actual_pack(deny_metadata=True,fresh=False)
+
+    def test_quick_update_real_backup_failure_keeps_existing_profile(self):
+        self.apply_actual_pack(deny_metadata=True,deny_backup=True,fresh=False)
 
     def test_https_uses_verified_portable_roots_and_a_bounded_timeout(self):
         with tempfile.TemporaryDirectory() as raw:
