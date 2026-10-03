@@ -23,7 +23,6 @@ row i: base = 1000 + i*10 -> base(group) +1 anim icon, +2 glyph, +3 name,
 
 import os
 import threading
-import zipfile
 
 try:
     import queue as _queue
@@ -114,20 +113,30 @@ def _download(url, dest, on_progress, should_abort):
         return False
 
 
-def _extract(zip_path, dest_dir, on_progress):
-    """Extract a single-addon zip into dest_dir reporting (current, total) files.
-    Single-addon zips are rooted at the addon id and contain no userdata, so a
-    plain extractall (no KEEP* build logic, no competing dialog) is correct."""
+def _install_job(job, package, on_progress):
+    """The foreground installer uses the same verified swap as OTA.
+
+    A written addon.xml must never hide a partial extraction from the next
+    install attempt. Upstream repositories omit hashes: compute the received
+    file's hash for local staging, without claiming publisher authentication.
+    """
+    from resources.libs import addon_install_receipt, staged_addon_install
+    data_dir = os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID)
     try:
-        with zipfile.ZipFile(zip_path, 'r') as zf:
-            members = zf.namelist()
-            total = len(members) or 1
-            for i, member in enumerate(members, 1):
-                zf.extract(member, dest_dir)
-                on_progress(i, total)
+        digest = job.get('sha256') or config_apply.sha256_file(package)
+        pinned = bool(job.get('sha256'))
+        if pinned:
+            addon_install_receipt.begin(data_dir, job['id'], job['version'], digest)
+        on_progress(0, 1)
+        count = staged_addon_install.install(
+            package, CONFIG.ADDONS, job['id'], str(job['version']), digest)
+        if pinned:
+            addon_install_receipt.complete(data_dir, job['id'])
+        on_progress(count, count)
         return True
-    except Exception as e:
-        logging.log("[InstallManager] extract error for {0}: {1}".format(zip_path, e), level=xbmc.LOGERROR)
+    except Exception as exc:
+        logging.log('[InstallManager] verified install failed for {}: {}'.format(
+            job['id'], exc), level=xbmc.LOGERROR)
         return False
 
 
@@ -366,7 +375,7 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
                 self._set(idx, progress=int(cur * 100 / tot),
                           status='מתקין... ({0} מתוך {1} קבצים)'.format(cur, tot))
 
-            ok = _extract(dest, CONFIG.ADDONS, on_ex)
+            ok = _install_job(job, dest, on_ex)
             tools.remove_file(dest)
             if ok:
                 self._set(idx, state='success', status='הותקן בהצלחה', progress=100)

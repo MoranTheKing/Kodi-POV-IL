@@ -92,7 +92,7 @@ class Wizard:
         fresh_install.begin()
 
         try:
-            ModularUpdater(background=False).run_fresh_install()
+            completed, issues = fresh_install.provision()
         except Exception as err:
             logging.log("[Build] Modular fresh install failed: {0}".format(err), level=xbmc.LOGERROR)
             self.dialog.ok(CONFIG.ADDONTITLE,
@@ -105,12 +105,11 @@ class Wizard:
         # must have written the .provisioned marker (ran end-to-end). Otherwise do
         # NOT flip the build to installed -- startup resumes it next launch.
         engine_present = os.path.exists(os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai'))
-        if not engine_present or not ModularUpdater.is_provisioned():
+        if not completed or not engine_present or not ModularUpdater.is_provisioned():
             logging.log("[Build] Full install did not complete (engine={0}, marker={1}); "
                         "will resume next launch.".format(engine_present, ModularUpdater.is_provisioned()),
                         level=xbmc.LOGERROR)
-            self.dialog.ok(CONFIG.ADDONTITLE,
-                           "[COLOR {0}]ההתקנה לא הושלמה. הפעל מחדש את קודי כדי להמשיך.[/COLOR]".format(CONFIG.COLOR2))
+            self.dialog.ok(CONFIG.ADDONTITLE, fresh_install.failure_message(issues))
             return
 
         try:

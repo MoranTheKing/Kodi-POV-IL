@@ -29,6 +29,30 @@ def _load_function(path, name, globals_dict, class_name=None):
 
 
 class ProvisioningGateTests(unittest.TestCase):
+    def test_native_fallback_confirms_only_exact_install_modal_in_correct_window(self):
+        calls = []
+        labels = {24076: 'Add-on installation', 24100: 'This feature requires an add-on:',
+                  24101: 'Download this add-on?'}
+        heading = ['Add-on installation']
+        body = ['This feature requires an add-on:\nYouTube\nDownload this add-on?']
+        dialog = [10100]
+        fn = _load_function(ROOT / 'plugin.program.kodipovilwizard/resources/libs/modular_updater.py',
+            '_confirm_native_install', {'xbmc': types.SimpleNamespace(
+                getInfoLabel=lambda key: body[0] if key == 'Control.GetLabel(9)' else heading[0], getLocalizedString=lambda key: labels[key],
+                executebuiltin=calls.append), 'xbmcgui': types.SimpleNamespace(
+                getCurrentWindowDialogId=lambda: dialog[0], Window=lambda _id:
+                types.SimpleNamespace(getControl=lambda _i: types.SimpleNamespace(getText=lambda: body[0])))},
+            class_name='ModularUpdater')
+        self.assertTrue(fn()); self.assertEqual(calls, ['SendClick(10100,11)'])
+        for other_heading, other_body, other_dialog in (
+                ('Skin', 'Keep this skin?', 10100),
+                ('Add-on installation', 'Allow unknown sources?', 10100),
+                ('Security warning', body[0], 10100),
+                ('Add-on installation', body[0], 10101)):
+            heading[0], body[0], dialog[0] = other_heading, other_body, other_dialog
+            self.assertFalse(fn())
+        self.assertEqual(calls, ['SendClick(10100,11)'])
+
     def test_background_zip_download_is_atomic_and_size_bounded(self):
         path = (ROOT / 'plugin.program.kodipovilwizard' / 'resources' / 'libs'
                 / 'modular_updater.py')
@@ -390,6 +414,14 @@ class ProvisioningGateTests(unittest.TestCase):
                 attempted.append((ids, per_addon_timeout)),
             _fresh_install_complete=lambda _manifest: False,
             CORE_PROVISION_IDS=(), _enable_addon=lambda _aid: None)
+        with patch.dict(sys.modules, modules):
+            self.assertFalse(fn(updater, []))
+        self.assertEqual(attempted, [(['core.two'], 60)])
+        # Resolution can succeed while the actual core download fails. It
+        # must still reach the native recovery path in the same install.
+        attempted.clear()
+        updater.CORE_PROVISION_IDS = ('core.one', 'core.two')
+        updater._resolve_phase_two_bounded = lambda: ([], [])
         with patch.dict(sys.modules, modules):
             self.assertFalse(fn(updater, []))
         self.assertEqual(attempted, [(['core.two'], 60)])
