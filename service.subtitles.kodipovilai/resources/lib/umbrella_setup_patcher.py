@@ -514,6 +514,7 @@ def _personal_order_source(source, filename):
              "    _povil_path = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
              '    if _povil_path not in sys.path: sys.path.append(_povil_path)\n'
              '    import pov_mdblist_patch_logic as _povil_order\n'
+             "    if not all(hasattr(_povil_order, name) for name in ('personal_mdbl_url', 'umbrella_personal_sort')): _povil_order = None\n"
              'except Exception: _povil_order = None\n')
     lines.insert(import_at, block.replace('\n', eol))
     result = ''.join(lines)
