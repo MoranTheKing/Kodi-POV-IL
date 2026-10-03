@@ -37,12 +37,17 @@ def repair_changed(addons, previous, current, window, monitor):
                 healthy = False
             finally:
                 window.clearProperty(ack)
+    if any(row[0] in ('skin.fentastic', 'script.fentastic.helper') and
+           old.get(row[0]) != row[1:] for row in current):
+        from resources.libs import fentastic_widgets
+        fentastic_widgets.repair()
     xbmc.log('[POV IL] Host-update patch repair: {} acknowledged={}'.format(stats, healthy), xbmc.LOGINFO)
     return healthy
 
 def signature(addons):
     result = []
-    for addon in ('plugin.video.pov', 'plugin.video.umbrella'):
+    for addon in ('plugin.video.pov', 'plugin.video.umbrella',
+                  'skin.fentastic', 'script.fentastic.helper'):
         path = os.path.join(addons, addon, 'addon.xml')
         try:
             info = os.stat(path)
