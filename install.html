@@ -269,7 +269,7 @@
       <li><a href="#downloader">📱 שיטה 1 — Android (טלפון / טאבלט / סטרימר) דרך Downloader</a></li>
       <li><a href="#windows">💻 שיטה 2 — Windows</a></li>
       <li><a href="#webos">📺 שיטה 3 — LG webOS</a></li>
-      <li><a href="#wizard">🧙 שיטה 4 — מסלול Wizard קודם</a></li>
+      <li><a href="#wizard">🧙 שיטה 4 — Wizard עדכני מקובץ</a></li>
       <li><a href="#filemanager">📂 שיטה 5 — Wizard חדש דרך Source או קובץ (מומלץ)</a></li>
       <li><a href="#ai-only">🤖 שיטה 6 — רק תוסף AI</a></li>
       <li><a href="#gemini">🔑 חיבור Gemini AI</a></li>
@@ -330,8 +330,8 @@
         <p>הזן ל-Downloader את הקוד הישיר לפי הארכיטקטורה — הוא מוריד את ה-APK מיד בשלב אחד, בלי דף ביניים שתוקע את Downloader:</p>
         <ul>
           <li>פתח את Downloader, ובשדה ה-URL/Code הזן את הקוד לפי המכשיר:</li>
-          <li><strong>אנדרואיד 64-bit</strong> (טלפון / טאבלט / Shield Pro): קוד <code>5364281</code></li>
-          <li><strong>אנדרואיד 32-bit</strong> (Fire TV / שאר הסטרימרים): קוד <code>3158525</code></li>
+          <li><strong>אנדרואיד 64-bit</strong> (רוב המכשירים המודרניים, כולל Shield): קוד <code>5364281</code></li>
+          <li><strong>אנדרואיד 32-bit</strong> (למכשירים שאינם תומכים ב־64 ביט): קוד <code>3158525</code></li>
           <li>לחץ <strong>GO</strong> (כפתור צהוב) → ההורדה מתחילה מיד (~75MB)</li>
         </ul>
         <div class="callout tip">
@@ -340,7 +340,7 @@
           32-bit: <code>morantheking.github.io/Kodi-POV-IL/downloads/Kodi-POV-IL-32bit.apk</code>
         </div>
         <div class="callout warn">
-          <strong>נתקע על "Connecting" ולא יורד?</strong> סימן שהזנת קוד שמוביל לדף בחירה (HTML) במקום ישירות לקובץ — Downloader לא מוריד דפי אינטרנט. השתמש בקוד הישיר (<code>5364281</code> ל-64 / <code>3158525</code> ל-32) או בכתובת המלאה למעלה. <strong>איזו גרסה?</strong> טלפון / טאבלט / Shield Pro → 64-bit; כל סטרימר אחר → 32-bit (<a href="#bits">הסבר מלא</a>).
+          <strong>נתקע על "Connecting" ולא יורד?</strong> סימן שהזנת קוד שמוביל לדף בחירה (HTML) במקום ישירות לקובץ — Downloader לא מוריד דפי אינטרנט. השתמש בקוד הישיר (<code>5364281</code> ל-64 / <code>3158525</code> ל-32) או בכתובת המלאה למעלה. <strong>איזו גרסה?</strong> ברוב המכשירים המודרניים → 64-bit; מכשיר שאינו תומך ב־64 ביט → 32-bit (<a href="#bits">הסבר מלא</a>).
         </div>
         <div class="callout tip">
           <strong>חלופה — דף בחירה אחד לכל הפלטפורמות:</strong> הקוד <code>6699594</code> מוביל לעמוד בחירה (32/64-bit, Windows, webOS). שים לב שדף הבחירה עלול לתקוע את Downloader על "Connecting" — אם זה קורה, השתמש בקוד הישיר למעלה.
@@ -363,7 +363,7 @@
         <ul>
           <li>פתח את <strong>"Kodi POV IL"</strong></li>
           <li>המתן להשלמת התקנת הבילד והעדכונים. הזמן תלוי במכשיר ובחיבור האינטרנט</li>
-          <li>בסיום סגור ופתח את Kodi כדי להשלים את טעינת התוספים</li>
+          <li>בסיום ההכנה מסך הבית ייפתח אוטומטית. אם ההתקנה מדווחת על כשל, ניתן לנסות השלמה דרך הוויזרד בלי למחוק את Kodi</li>
         </ul>
       </div>
 
@@ -410,60 +410,19 @@
     </section>
 
     <section id="wizard">
-      <h2>🧙 שיטה 4 — מסלול ההתקנה הקודם דרך Wizard</h2>
-      <p>מסלול זה מתאר את ה־Wizard הישן. להתקנת הבילד החדש על Kodi 21+ בחר <a href="#filemanager">בשיטה 5</a>.</p>
-
-      <div class="step">
-        <h4>שלב א' — הוסף Source</h4>
-        <ul>
-          <li>Kodi → הגדרות (גלגל שיניים) → מנהל קבצים (File Manager)</li>
-          <li>לחץ פעמיים על "הוסף מקור" (Add Source) בחלון השמאלי</li>
-          <li>בכתובת הזן: <code>https://morantheking.github.io/Kodi-POV-IL/wizard/</code></li>
-          <li>בשם הזן: <code>pov</code></li>
-          <li>אישור (OK)</li>
-        </ul>
-      </div>
-
-      <div class="step">
-        <h4>שלב ב' — אפשר התקנה ממקורות לא ידועים (חובה ב-Kodi 21!)</h4>
-        <p><strong>בלי השלב הזה ההתקנה תיכשל בלי הסבר ברור.</strong> Kodi 21 חוסם התקנה מ-zip כברירת מחדל לאבטחה.</p>
-        <ul>
-          <li>Kodi → הגדרות (גלגל שיניים) → מערכת (System)</li>
-          <li>גלול ל-Add-ons (תוספים)</li>
-          <li>"Unknown sources" (מקורות לא ידועים) → הפעל ל-<strong>ON</strong></li>
-          <li>תופיע התראה — אישור</li>
-        </ul>
-      </div>
-
-      <div class="step">
-        <h4>שלב ג' — התקן את ה-Wizard</h4>
-        <ul>
-          <li>חזור ל-Kodi → Add-ons (בתפריט הראשי)</li>
-          <li>לחץ על כפתור הקופסה בפינה השמאלית למעלה</li>
-          <li>Install from zip file</li>
-          <li>בחר <code>pov</code> → <code>plugin.program.kodipovilwizard-latest.zip</code></li>
-          <li>אם תופיע התראת אזהרה על מקור לא ידוע — אישור</li>
-          <li>חכה להודעה "הותקן בהצלחה"</li>
-        </ul>
-      </div>
-
-      <div class="step">
-        <h4>שלב ד' — אוטומטי</h4>
-        <p>הוויזרד יזהה שאין בילד מותקן ויפעיל את עצמו אוטומטית. אין צורך לעשות כלום ידנית.</p>
-        <ul>
-          <li>הוויזרד ישאל אם לשמור הגדרות קיימות (Trakt, Debrid, Favorites וכו') — <strong>אשר את כולן</strong> אלא אם רוצה התקנה נקייה לחלוטין</li>
-          <li>חכה — הוויזרד יוריד את הבילד (~50MB), ינקה ויתקין הכל</li>
-          <li>בסיום Kodi יבקש סגירה ופתיחה מחדש → אשר</li>
-        </ul>
-        <div class="callout tip">
-          <strong>אם משום מה לא התחיל אוטומטית:</strong> אפשר להפעיל ידנית דרך Kodi → Programs (בתפריט הראשי) → Kodi POV IL Wizard → Install Build → Kodi POV IL — FENtastic.
-        </div>
-      </div>
+      <h2>🧙 שיטה 4 — התקנת ה־Wizard העדכני מקובץ</h2>
+      <p>מסלול זה מתקין את אותו Wizard עדכני שבשיטה 5, על Kodi 21 ומעלה.</p>
+      <ol>
+        <li>הורד את <a href="https://morantheking.github.io/Kodi-POV-IL/wizard-new/plugin.program.kodipovilwizard-latest.zip"><code>plugin.program.kodipovilwizard-latest.zip</code></a> והעבר את הקובץ למכשיר.</li>
+        <li>ב־Kodi: Settings → System → Add-ons → Unknown sources, ואז Add-ons → סמל הקופסה → Install from zip file → בחר את הקובץ.</li>
+        <li>המתן להורדת התוספים ולהכנת מסך הבית. בהתקנה חדשה הבילד נפתח ב־Nox.</li>
+      </ol>
+      <p>להתקנה דרך כתובת Source במקום העברת קובץ, השתמש <a href="#filemanager">בשיטה 5</a>. משתמשים קיימים מקבלים תיקונים בעדכון הרגיל ואינם צריכים התקנה מלאה.</p>
     </section>
 
     <section id="filemanager">
       <h2>📂 שיטה 5 — התקנת ה־Wizard החדש דרך Source או קובץ</h2>
-      <p><strong>זו השיטה להתקנה חדשה על Kodi 21+.</strong> שיטה 4 מיועדת ל־Wizard הישן; אל תבחר בה להתקנת הבילד החדש. משתמשי הבילד הקיים יכולים להמשיך בעדכון הרגיל ולשמור על ההגדרות שלהם.</p>
+      <p><strong>זו השיטה להתקנה חדשה על Kodi 21+.</strong> גם שיטה 4 מתקינה את אותו Wizard עדכני מקובץ. משתמשי הבילד הקיים יכולים להמשיך בעדכון הרגיל ולשמור על ההגדרות שלהם.</p>
       <div class="callout warn">
         <strong>חובה לפני התחלה ב-Kodi 21:</strong> Settings → System → Add-ons → "Unknown sources" → ON (ולאשר את ההתראה). בלי זה התקנת ה-zip תיכשל עם ההודעה "נכשל בהתקנת הרחבה מקובץ".
       </div>
