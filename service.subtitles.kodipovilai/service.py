@@ -1600,6 +1600,14 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
+    try:
+        from resources.lib import umbrella_setup_patcher
+        st = umbrella_setup_patcher.ensure_personal_list_order()
+        if st in ('patched', 'unmatched', 'write_failed'):
+            kodi_utils.log('umbrella personal list order: ' + st)
+    except Exception as e:
+        kodi_utils.log('umbrella personal list order failed: ' + str(e), level='WARNING')
+
     # Two source-flow repairs: fire the Hebrew-availability warm at the START
     # of the scrape so the badge is there on the FIRST entry rather than the
     # second, and stop Kodi announcing "playback failed" when the user simply

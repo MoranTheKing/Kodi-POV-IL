@@ -252,6 +252,54 @@ def lists_sort_order_override(orig_func, setting, mediatype):
         return 1
 
 
+def newest_personal_items(items):
+    """Order a copy by addition time, never mutate a provider's cached list."""
+    from datetime import datetime, timezone
+    def added(item):
+        for key in ('listed_at', 'watchlist_at', 'collected_at', 'last_collected_at', 'added'):
+            value = item.get(key) if isinstance(item, dict) else None
+            if value in (None, ''): continue
+            try:
+                date = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+                if date.tzinfo is None: date = date.replace(tzinfo=timezone.utc)
+                return date.timestamp()
+            except (ValueError, TypeError, OverflowError): pass
+        return float('-inf')
+    return sorted(items, key=added, reverse=True) if isinstance(items, list) else items
+
+
+def personal_mdbl_url(url, enabled=True):
+    """Use the documented server sort before cursor pagination; strip UI flag."""
+    from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+    parts = urlsplit(url)
+    query = parse_qsl(parts.query, keep_blank_values=True)
+    personal = any(k == 'povil_personal' and v == '1' for k, v in query)
+    if not any(k == 'povil_personal' for k, v in query): return url
+    query = [(k, v) for k, v in query if k != 'povil_personal']
+    if personal and enabled:
+        query = [(k, v) for k, v in query if k not in ('sort', 'order')]
+        query.extend((('sort', 'added'), ('order', 'desc')))
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+def is_own_trakt_url(url, username):
+    from urllib.parse import urlsplit, unquote
+    parts = [unquote(p).casefold() for p in urlsplit(url).path.split('/') if p]
+    return (len(parts) >= 4 and parts[0] == 'users' and parts[2] == 'lists'
+            and parts[1] in ('me', str(username or '').strip().casefold()))
+
+
+def umbrella_personal_sort(owner, setting, get_setting, url=None):
+    """Default personal views use newest first; explicit sorting stays native."""
+    if str(get_setting('sort.%s.type' % setting) or '0') != '0': return False
+    personal = setting.endswith(('.watchlist', '.collection'))
+    if url is not None:
+        personal = is_own_trakt_url(url, get_setting('trakt.user.name'))
+    if not personal: return False
+    owner.list = newest_personal_items(owner.list)
+    return True
+
+
 def heal_mdblist_account_if_needed():
     """
     Repairs the 'No MDBList Account Active' state.
