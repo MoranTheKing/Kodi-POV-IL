@@ -746,6 +746,29 @@ class ModularUpdater:
         )
         return all_present
 
+    @staticmethod
+    def _confirm_native_install():
+        """Only Kodi's InstallModal download question, in its actual dialog.
+
+        Kodi 21 uses heading 24076 and body lines 24100/24101. A skin-change,
+        security or unrelated Yes/No question must remain under user control.
+        """
+        if xbmcgui.getCurrentWindowDialogId() != 10100:
+            return False
+        try:
+            if xbmc.getInfoLabel('Control.GetLabel(1)') != xbmc.getLocalizedString(24076):
+                return False
+            # Read through Kodi's GUI-info API; never wrap a control that the
+            # GUI thread may still be constructing or unloading.
+            body = xbmc.getInfoLabel('Control.GetLabel(9)')
+            phrases = [xbmc.getLocalizedString(key) for key in (24100, 24101)]
+            if not all(phrase and phrase in body for phrase in phrases):
+                return False
+            xbmc.executebuiltin('SendClick(10100,11)')
+            return True
+        except Exception:
+            return False
+
     def _native_install_fallback(self, ids, per_addon_timeout=60):
         """Last-resort native install for addons the headless resolver could not
         place (e.g. a dependency only in a repo we don't ship). Uses Kodi's own
@@ -774,8 +797,7 @@ class ModularUpdater:
         def _confirmer():
             while not stop.is_set():
                 try:
-                    if xbmcgui.getCurrentWindowDialogId() == 10100:
-                        xbmc.executebuiltin('SendClick(11)')  # Yes / OK
+                    if self._confirm_native_install():
                         if monitor.waitForAbort(0.8):
                             return
                         continue
@@ -850,9 +872,12 @@ class ModularUpdater:
         if not config_version or actual_config != config_version:
             missing.append('config ({0}, expected {1})'.format(
                 actual_config or 'missing', config_version or 'unspecified'))
+        previous = getattr(self, 'last_install_issues', None)
+        self.last_install_issues = missing
         if missing:
-            logging.log('[Provisioning] incomplete; next launch will retry: {0}'
-                        .format(', '.join(missing)), level=xbmc.LOGERROR)
+            if previous != missing:
+                logging.log('[Provisioning] incomplete; retry required: {0}'
+                            .format(', '.join(missing)), level=xbmc.LOGERROR)
             return False
         return True
 
@@ -956,6 +981,20 @@ class ModularUpdater:
         self._missing_native = []
 
         fresh = getattr(self, 'fresh', False)
+        early_config_touched = [None]
+
+        def _apply_config_pack():
+            try:
+                logging.log('[ModularUpdater] importing config_apply', level=xbmc.LOGINFO)
+                from resources.libs import config_apply
+                logging.log('[ModularUpdater] config_apply ready', level=xbmc.LOGINFO)
+                manifest = getattr(self, '_manifest', None)
+                if manifest:
+                    res = config_apply.apply_config_pack(manifest, fresh=fresh, background=self.background)
+                    return bool(res.get('skin_touched'))
+            except Exception as e:
+                logging.log("[ModularUpdater] config apply failed: {0}".format(e), level=xbmc.LOGERROR)
+            return False
 
         class _OrchestratorProxy:
             def __init__(self, target_queue): self.target_queue = target_queue
@@ -975,6 +1014,9 @@ class ModularUpdater:
                 dialog.wait_for_queue_empty()
 
             if fresh:
+                # Seed managed settings before UpdateLocalAddons can start
+                # freshly extracted services with their upstream defaults.
+                early_config_touched[0] = _apply_config_pack()
                 # Bridge Phase 1 -> Phase 2 DB Registration so Phase 2 logic can "see" the extracted Phase 1 modules
                 extracted_so_far = dialog.get_installed()
                 if extracted_so_far:
@@ -1170,6 +1212,16 @@ class ModularUpdater:
             for _aid in extracted_addons:
                 self._enable_addon(_aid)
 
+        # A resolved job can still fail during download/extraction. Such core
+        # addons were previously omitted from native fallback because only
+        # resolution failures populated this list.
+        if fresh:
+            for addon_id in self.CORE_PROVISION_IDS:
+                if (addon_id not in extracted_addons and
+                        addon_id not in self._missing_native and
+                        not xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id))):
+                    self._missing_native.append(addon_id)
+
         # 4a. Native Binary/Fallback handling outside of custom window loops
         if getattr(self, '_missing_native', None) and not xbmc.Monitor().abortRequested():
             try:
@@ -1181,20 +1233,8 @@ class ModularUpdater:
                 logging.log("[ModularUpdater] Native fallback failed: {0}".format(e), level=xbmc.LOGERROR)
 
         # 4b/4c. Build-config pack Phase
-        def _apply_config_pack():
-            try:
-                logging.log('[ModularUpdater] importing config_apply', level=xbmc.LOGINFO)
-                from resources.libs import config_apply
-                logging.log('[ModularUpdater] config_apply ready', level=xbmc.LOGINFO)
-                manifest = getattr(self, '_manifest', None)
-                if manifest:
-                    res = config_apply.apply_config_pack(manifest, fresh=fresh, background=self.background)
-                    return bool(res.get('skin_touched'))
-            except Exception as e:
-                logging.log("[ModularUpdater] config apply failed: {0}".format(e), level=xbmc.LOGERROR)
-            return False
-
-        config_skin_touched = _apply_config_pack()
+        config_skin_touched = (_apply_config_pack() if early_config_touched[0] is None
+                               else early_config_touched[0])
         try:
             from resources.libs import fentastic_widgets
             # Preserve saved rows before the updater's own skin reload.

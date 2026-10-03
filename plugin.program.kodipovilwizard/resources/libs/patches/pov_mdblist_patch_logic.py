@@ -256,7 +256,7 @@ def newest_personal_items(items):
     """Order a copy by addition time, never mutate a provider's cached list."""
     from datetime import datetime, timezone
     def added(item):
-        for key in ('listed_at', 'watchlist_at', 'collected_at', 'last_collected_at', 'added'):
+        for key in ('listed_at', 'watchlisted_at', 'watchlist_at', 'collected_at', 'last_collected_at', 'added'):
             value = item.get(key) if isinstance(item, dict) else None
             if value in (None, ''): continue
             try:
