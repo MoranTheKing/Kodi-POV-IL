@@ -709,8 +709,15 @@ if CONFIG.get_setting('buildname'):
         logging.log("[PatchEngine] Boot-cycle run failed: {0}".format(_patch_err),
                     level=xbmc.LOGERROR)
 ######################################
-    
+
 # KOD-RD-IL - New Kodi ANDROID/WINDOWS version check on startup
+try:
+    from resources.libs import fentastic_widgets
+    fentastic_widgets.repair()
+except Exception as _widget_repair_error:
+    logging.log('[FENtastic widgets] repair deferred: {}'.format(_widget_repair_error),
+                level=xbmc.LOGWARNING)
+
 if tools.platform() in ['android', 'windows'] and CONFIG.get_setting('buildname'):
     from resources.libs.wizard import kodi_version_update_check
     kodi_version_update_check()

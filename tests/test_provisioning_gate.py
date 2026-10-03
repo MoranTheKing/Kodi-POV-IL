@@ -144,6 +144,7 @@ class ProvisioningGateTests(unittest.TestCase):
             ON_DEMAND_SKINS=frozenset(('skin.povil.nox',)),
             _pending_addon_receipt=lambda _aid: False,
             install_missing=True, fresh=True,
+            _record_build_identity=lambda _manifest: True,
             _config_pending=lambda _manifest: True,
             execute_updates=lambda queue: seen.extend(queue) or True)
         self.assertTrue(fn(updater))
@@ -197,6 +198,7 @@ class ProvisioningGateTests(unittest.TestCase):
             _complete_pending_service_handoff=lambda: False,
             _version_tuple=lambda version: tuple(int(x) for x in version.split('.')),
             ON_DEMAND_SKINS=frozenset(), background=True,
+            _record_build_identity=lambda _manifest: False,
             _config_pending=lambda _manifest: False,
             execute_updates=lambda items: queued.extend(items) or True)
         resources = types.ModuleType('resources')
