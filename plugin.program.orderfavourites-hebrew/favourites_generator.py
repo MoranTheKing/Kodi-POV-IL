@@ -217,7 +217,7 @@ def _save_state(baseline, deleted):
         os.makedirs(folder, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix='.favourites-', dir=folder)
         with os.fdopen(fd, 'w', encoding='utf-8') as fh:
-            json.dump({'version': 1, 'baseline': baseline,
+            json.dump({'version': 1, 'layout_version': 2, 'baseline': baseline,
                        'deleted': sorted(deleted)}, fh, ensure_ascii=False)
         os.replace(tmp, path)
         return True
@@ -272,7 +272,31 @@ def _same_favourite(left, right):
             and (left.text or '').strip() == (right.text or '').strip())
 
 
-def _merge_favourites(existing, previous, desired, deleted):
+def _layout_version():
+    try:
+        with open(_state_file(), 'r', encoding='utf-8') as fh:
+            return int(json.load(fh).get('layout_version', 1))
+    except (OSError, ValueError, TypeError):
+        return 1
+
+
+def _mdbl_personal(item):
+    return 'action=mdblist_my_' in (item.text or '')
+
+
+def _insert_personal(root, item, desired_root):
+    """Anchor a new service tile without sorting any existing user tiles."""
+    preceding = list(desired_root)[:list(desired_root).index(item)]
+    for anchor in reversed(preceding):
+        for existing in root:
+            if existing.get('name') == anchor.get('name'):
+                root.insert(list(root).index(existing) + 1,
+                            ET.fromstring(ET.tostring(item)))
+                return
+    root.append(ET.fromstring(ET.tostring(item)))
+
+
+def _merge_favourites(existing, previous, desired, deleted, repair_tail=False):
     """Three-way merge: preserve user order, edits, additions and deletions.
 
     `previous` is the last generated *default*, even if the installed file
@@ -303,11 +327,28 @@ def _merge_favourites(existing, previous, desired, deleted):
         user_root.remove(item)
         if replacement is not None:
             user_root.insert(index, ET.fromstring(ET.tostring(replacement)))
+    if repair_tail:
+        # The previous generator appended newly connected MDBList tiles.
+        # Repair only that untouched trailing block, once; leave edited tiles,
+        # deliberate non-tail positions and other favourites where they are.
+        trailing = []
+        for item in reversed(list(user_root)):
+            name = item.get('name')
+            old = old_by_name.get(name)
+            if (not _mdbl_personal(item) or old is None
+                    or not _same_favourite(item, old)):
+                break
+            trailing.append(item)
+        for item in trailing:
+            user_root.remove(item)
     current_names = {item.get('name') for item in user_root}
     for item in desired_root:
         name = item.get('name')
         if name not in current_names and name not in deleted:
-            user_root.append(ET.fromstring(ET.tostring(item)))
+            if _mdbl_personal(item) and previous is not None:
+                _insert_personal(user_root, item, desired_root)
+            else:
+                user_root.append(ET.fromstring(ET.tostring(item)))
             current_names.add(name)
     return ET.tostring(user_root, encoding='unicode'), deleted
 
@@ -375,14 +416,15 @@ def generate_favourites_xml(skin_id, merge=True, write=True, config_path=None):
         existing = _read_existing()
         try:
             xml, deleted = _merge_favourites(
-                existing, previous, desired, previous_deleted)
+                existing, previous, desired, previous_deleted,
+                repair_tail=_layout_version() < 2)
         except ValueError as exc:
             _log('leaving existing favourites untouched: {0}'.format(exc), error=True)
             return None
 
     if write:
         if existing == xml:
-            if previous != desired or previous_deleted != deleted:
+            if previous != desired or previous_deleted != deleted or _layout_version() < 2:
                 if not _save_state(desired, deleted):
                     return None
             return xml
