@@ -105,15 +105,17 @@ class BuildMenu:
             build = '{0} [COLOR springgreen][מותקן v{1}][/COLOR]'.format(build, CONFIG.BUILDVERSION)
         directory.add_file(build, description=description, fanart=fanart, icon=icon, themeit=CONFIG.THEME4)
 
-        directory.add_separator('התקנה מלאה')
-        directory.add_file('לחץ כאן להתקנה מלאה של הבילד',
-                           {'mode': 'install', 'action': 'build', 'name': name},
-                           description=description, fanart=fanart, icon=icon, themeit=CONFIG.THEME1)
-
         directory.add_separator('עדכון')
+        directory.add_file('למשתמשים קיימים: הבילד מתעדכן אוטומטית. אין צורך בהתקנה מלאה.',
+                           description=description, fanart=fanart, icon=icon, themeit=CONFIG.THEME4)
         directory.add_file('לחץ כאן לבדיקת עדכונים (עדכון מהיר)',
                            {'mode': 'install', 'action': 'quick_update', 'name': name,
                             'auto_quick_update': 'false'},
+                           description=description, fanart=fanart, icon=icon, themeit=CONFIG.THEME1)
+
+        directory.add_separator('התקנה חדשה / השלמת התקנה')
+        directory.add_file('התקנת הבילד — אינה נדרשת לעדכון גרסה',
+                           {'mode': 'install', 'action': 'build', 'name': name},
                            description=description, fanart=fanart, icon=icon, themeit=CONFIG.THEME1)
 
         directory.add_separator()

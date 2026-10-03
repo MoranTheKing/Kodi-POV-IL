@@ -1,3 +1,8 @@
+0.4.14
+- Restore FENtastic generated rows from saved widget paths after updates without resetting layouts.
+- Fix helper regeneration dropping rows containing XML entities; preserve limits and custom paths.
+- Record the canonical build identity after verified OTA completion and clarify the update menu.
+
 0.4.13
 - Show the restart notice once per prepared subtitle package, using its existing receipt.
 - Start the replacement subtitle service after the acknowledged handoff in the same boot; remove the unconditional second restart request.
