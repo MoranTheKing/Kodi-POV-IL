@@ -10,6 +10,15 @@ lists it in `manifest.json` under `"config"`, and publishes it to the rolling
 release. The wizard (`resources/libs/config_apply.py`) downloads it, verifies
 its sha256, and applies each file per `config_policy.json`.
 
+The Wizard also carries a small published config ZIP at
+`resources/bootstrap/config.zip`. It uses this copy only when both the SHA-256
+and the declared size match the current manifest. This lets a fresh install
+complete when that particular download is unavailable. A newer manifest never
+uses a stale seed: it falls back to the verified network download. To refresh
+the seed, copy the already published config artifact, verify its manifest hash
+and size, and bump the Wizard version before packaging it. Updating this README
+alone does not require a config-version bump.
+
 ## Why a separate pack (Option 3)
 
 * **Fresh install** can be fully configured from the addon zips + this pack —
