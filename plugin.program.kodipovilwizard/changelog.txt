@@ -1,3 +1,8 @@
+0.4.13
+- Show the restart notice once per prepared subtitle package, using its existing receipt.
+- Start the replacement subtitle service after the acknowledged handoff in the same boot; remove the unconditional second restart request.
+- Preserve playback and unacknowledged live services; report activation failures rather than claiming success.
+
 v0.1.48
 - A quick update no longer discards the settings you changed that evening.
   Kodi was being killed rather than closed, which skips the save it does on a

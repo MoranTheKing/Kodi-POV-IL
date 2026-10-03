@@ -424,7 +424,11 @@ class ModularUpdater:
                 tools.remove_file(zip_path)
             old_plan, _ack = staged_addon_install.read_handoff(CONFIG.USERDATA)
             staged_addon_install.request_handoff(CONFIG.USERDATA, version, sha256)
-            if not old_plan:
+            notice = staged_addon_install.claim_restart_notice(
+                CONFIG.ADDONS, addon_id, version, sha256)
+            previous_notice = (old_plan and old_plan.get('version') == version and
+                               old_plan.get('sha256') == sha256)
+            if notice and not previous_notice:
                 xbmcgui.Dialog().notification(
                     CONFIG.ADDONTITLE,
                     'עדכון התרגום מוכן. יש לסגור את Kodi ולפתוח מחדש להשלמתו.',
@@ -461,18 +465,34 @@ class ModularUpdater:
                         'old service remains installed.', level=xbmc.LOGERROR)
             return False
         try:
+            # The acknowledged service returned without starting listeners,
+            # but Kodi still marks its addon enabled. Setting enabled=True
+            # again is a no-op and does NOT start the replacement service.
+            # Stop/disable it explicitly before swapping, then enable the new
+            # package in this boot. Never do this to a live unacknowledged one.
+            response = json.loads(xbmc.executeJSONRPC(json.dumps({
+                'jsonrpc': '2.0', 'id': 1, 'method': 'Addons.SetAddonEnabled',
+                'params': {'addonid': addon_id, 'enabled': False}})))
+            if ('error' in response or response.get('result') not in ('OK', True)
+                    or self._runtime_addon_enabled(addon_id)):
+                raise RuntimeError('acknowledged subtitle service did not disable')
             count = staged_addon_install.activate_prepared(
                 CONFIG.ADDONS, addon_id, plan['version'], plan['sha256'])
             from resources.libs import db
             db.addon_database([addon_id], 1, True)
             xbmc.executebuiltin('UpdateLocalAddons')
-            self._enable_addon(addon_id)
             staged_addon_install.clear_handoff(CONFIG.USERDATA)
+            if not self._enable_addon(addon_id):
+                xbmcgui.Dialog().notification(
+                    CONFIG.ADDONTITLE,
+                    'עדכון הכתוביות הותקן, אך השירות לא התחיל. יש לפתוח את Kodi מחדש.',
+                    time=8000)
+                raise RuntimeError('updated subtitle service could not enable')
             logging.log('[ModularUpdater] MoranSubs handoff complete: {0} files'
                         .format(count), level=xbmc.LOGINFO)
             xbmcgui.Dialog().notification(
                 CONFIG.ADDONTITLE,
-                'עדכון התרגום הושלם. יש להפעיל מחדש את Kodi.', time=8000)
+                'עדכון הכתוביות הושלם.', time=5000)
             return True
         except Exception as exc:
             staged_addon_install.clear_handoff(CONFIG.USERDATA)

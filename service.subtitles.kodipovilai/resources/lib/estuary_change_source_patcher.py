@@ -53,6 +53,13 @@ _REVERT_RE = re.compile(
     r'[ \t]*<!--\s*AI_SUBS_ESTUARY_CHANGE_SOURCE_v\d+\s*-->.*?</control>[ \t]*\r?\n',
     re.DOTALL,
 )
+_RAW_AMP = re.compile(r'&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9A-Fa-f]+;)')
+
+
+def _xml_tree(content):
+    # Kodi accepts old skin URLs containing bare ampersands. Normalize only
+    # for Python's stricter parser, preserving the actual action/file bytes.
+    return ET.fromstring(_RAW_AMP.sub('&amp;', content))
 
 
 def _mask_comments(content):
@@ -71,7 +78,7 @@ def _dedupe_owned_buttons(content):
     for match in re.finditer(r'<control\b[^>]*type="button"[^>]*>.*?</control>',
                              _mask_comments(content), flags=re.DOTALL):
         try:
-            control = ET.fromstring(content[match.start():match.end()])
+            control = _xml_tree(content[match.start():match.end()])
         except Exception:
             continue
         actions = tuple((action.get('condition'), action.text) for action in
@@ -87,6 +94,70 @@ def _dedupe_owned_buttons(content):
             removed.append((match.start(), match.end()))
         seen.add(signature)
     for start, end in reversed(removed):
+        content = content[:start] + content[end:]
+    return content
+
+
+def _dedupe_legacy_controls(content):
+    """Remove the old icon/text pair only within the same OSD group.
+
+    Some existing skins have an active Twilight radiobutton (700453), with
+    media_type rather than POV's mediatype, alongside our working text button.
+    The earlier repair looked only at button/700458 and could not see it.
+    Keep working native controls byte-for-byte and never collapse controls in
+    separate layouts or with different actions/visibility.
+    """
+    masked = _mask_comments(content)
+    matches = list(re.finditer(
+        r'<control\b[^>]*\btype=["\'](?:button|radiobutton)["\'][^>]*>.*?</control>',
+        masked, flags=re.DOTALL))
+    tree = _xml_tree(content)
+    parents = {child: parent for parent in tree.iter() for child in parent}
+    buttons = [node for node in tree.iter('control')
+               if node.get('type') in ('button', 'radiobutton')]
+    if len(matches) != len(buttons):
+        return content
+    groups = {}
+    for match, button in zip(matches, buttons):
+        actions = tuple((node.get('condition') or '',
+                         re.sub(r'\s+', '', node.text or ''))
+                        for node in button.findall('onclick')
+                        if 'PlayerControl(Play)' not in (node.text or ''))
+        valid = any('mode=player_change_source' in text or
+                    ('mode=play_media' in text and 'mediatype=' in text
+                     and 'autoplay=false' in text) for _, text in actions)
+        owned = button.get('id') == BUTTON_ID and valid
+        legacy = (button.get('id') == '700453' and
+                  any('plugin.video.pov/' in text and 'mode=play_media' in text
+                      for _, text in actions) and
+                  ('700036' in ET.tostring(button, encoding='unicode') or
+                   'Switch Source' in (button.findtext('description') or '')))
+        signature = (actions, tuple(re.sub(r'\s+', '', node.text or '')
+                                    for node in button.findall('visible')))
+        groups.setdefault(parents.get(button), []).append(
+            (match, button, valid, owned, legacy, signature))
+    removed = []
+    for controls in groups.values():
+        working = [item for item in controls if item[2]]
+        if not working:
+            continue
+        # Prefer an existing native control to our redundant injected copy.
+        working.sort(key=lambda item: item[3])
+        kept = []
+        for item in working:
+            if item[3] and any(
+                    other[5] == item[5] or
+                    (other[1].get('id') == '700453' and other[4] and
+                     other[5][0] == item[5][0] and
+                     set(other[5][1]).issubset(item[5][1]))
+                    for other in kept):
+                removed.append((item[0].start(), item[0].end()))
+            else:
+                kept.append(item)
+        for item in controls:
+            if item[4] and not item[2]:
+                removed.append((item[0].start(), item[0].end()))
+    for start, end in sorted(set(removed), reverse=True):
         content = content[:start] + content[end:]
     return content
 
@@ -173,7 +244,8 @@ def ensure_patched():
     # Remove only our marked addition, preserving the skin's native action,
     # pause behavior, visibility and exact formatting.
     try:
-        tree = ET.fromstring(content)
+        content = _dedupe_legacy_controls(content)
+        tree = _xml_tree(content)
     except Exception:
         return 'parse_failed'
     native = any(
@@ -181,7 +253,8 @@ def ensure_patched():
          ('mode=play_media' in (action.text or '') and
           'mediatype=' in (action.text or '') and
           'autoplay=false' in (action.text or '')))
-        for button in tree.findall(".//control[@type='button']")
+        for button in tree.iter('control')
+        if button.get('type') in ('button', 'radiobutton')
         for action in button.findall('onclick'))
     if not native:
         # A different control owns this ID: never introduce a collision.
@@ -195,11 +268,13 @@ def ensure_patched():
         block = _button_block(indent, eol)
         content = content[:m.start()] + block + content[m.start():]
 
+    content = _dedupe_legacy_controls(content)
+
     # SAFETY: never write XML that doesn't parse -- a broken OSD would
     # black-screen the player.
     if ET is not None:
         try:
-            ET.fromstring(content)
+            _xml_tree(content)
         except Exception as e:
             _log('patched XML would not parse -- skipping ({0})'.format(e),
                  level='WARNING')

@@ -3724,10 +3724,10 @@ def _maybe_patch_estuary_change_source():
         return
     try:
         status = estuary_change_source_patcher.ensure_patched()
-        if status == 'patched':
+        if status in ('patched', 'deduplicated'):
             kodi_utils.log(
-                'estuary_change_source_patcher: change-source button added to '
-                'Estuary OSD', level='INFO')
+                'estuary_change_source_patcher: Estuary OSD repaired (' +
+                status + ')', level='INFO')
             _maybe_reload_estuary_skin()
         elif status in ('unmatched', 'parse_failed', 'write_failed',
                         'read_failed'):
