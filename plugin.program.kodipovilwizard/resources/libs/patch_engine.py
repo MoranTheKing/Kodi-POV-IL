@@ -32,6 +32,7 @@
 import os
 import re
 import textwrap
+import xml.etree.ElementTree as ET
 
 import xbmc
 import xbmcaddon
@@ -54,6 +55,46 @@ END_TAG = '# --- END PATCH ID: {id} ---'
 # see _normalize_entry).
 _REQUIRED_FIELDS = ('id', 'name', 'target_file', 'marker', 'anchor', 'action', 'hook')
 _VALID_ACTIONS = ('prepend_before', 'append_after')
+
+_EXPIRY_SETTINGS = ('rd.expires', 'tb.expires', 'pm.expires', 'ad.expires', 'oc.expires')
+
+
+def expand_expiry_ranges(content):
+    """Let native POV settings accept every day threshold in the build picker.
+
+    Only change integer expiry sliders. Preserve the source formatting, defaults
+    and unrelated controls; do not rewrite user preferences or limit a future
+    upstream range that already supports more than 365 days.
+    """
+    ET.fromstring(content)
+    changed = []
+
+    def expand(match):
+        tag = match.group(0)
+        node = ET.fromstring(tag if tag.endswith('/>') else tag[:-1] + '/>')
+        if node.get('id') not in _EXPIRY_SETTINGS:
+            return tag
+        if node.get('type') != 'slider' or node.get('option') != 'int':
+            raise ValueError('Unsupported expiry setting: ' + node.get('id'))
+        bounds = node.get('range', '').split(',')
+        if len(bounds) != 3:
+            raise ValueError('Unsupported expiry range: ' + node.get('id'))
+        low, step, high = (int(value) for value in bounds)
+        if low != 0 or step != 1 or high < low:
+            raise ValueError('Unsupported expiry bounds: ' + node.get('id'))
+        if high >= 365:
+            return tag
+        changed.append(node.get('id'))
+        return re.sub(r'(\brange\s*=\s*)([\"\'])(.*?)(\2)',
+                      lambda attr: attr.group(1) + attr.group(2) + '0,1,365' + attr.group(4),
+                      tag, count=1)
+
+    # Strip comments from the match candidates without changing their bytes.
+    result = re.sub(r'<!--[\s\S]*?-->|<setting\b[^>]*>',
+                    lambda match: match.group(0) if match.group(0).startswith('<!--') else expand(match),
+                    content)
+    ET.fromstring(result)
+    return result, len(changed)
 
 
 class PatchEngine(object):
@@ -110,6 +151,21 @@ class PatchEngine(object):
                 return self._stats
 
             grouped = self._group_patches(patches)
+
+            if any(p['addon_id'] == DEFAULT_ADDON_ID and p.get('enabled', True)
+                   for p in patches):
+                try:
+                    _, schema = self._resolve_paths(DEFAULT_ADDON_ID, 'resources/settings.xml')
+                    if os.path.isfile(schema):
+                        source = self._read_file(schema)
+                        repaired, count = expand_expiry_ranges(source)
+                        if count:
+                            self._write_file(schema, repaired)
+                            self._stats['settings_expanded'] = count
+                except Exception as err:
+                    self._stats['failed'] += 1
+                    logging.log('[PatchEngine] Expiry settings repair failed: {0}'.format(err),
+                                level=xbmc.LOGERROR)
 
             for (addon_id, target_file), patch_list in grouped.items():
                 try:
