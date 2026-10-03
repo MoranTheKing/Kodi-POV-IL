@@ -13,11 +13,11 @@ on:
       version:
         description: 'Release tag / version label (e.g., 21.3-povil.1)'
         required: true
-        default: '21.3-povil.53'
+        default: '21.3-povil.54'
       version_code:
         description: 'Android versionCode (integer, must increase each release)'
         required: true
-        default: '2103053'
+        default: '2103054'
       kodi_version:
         description: 'Upstream Kodi version to rebrand (e.g., 21.3)'
         required: true
@@ -40,8 +40,8 @@ env:
   # Current Wizard code creates a minimal seed; the manifest provisions the build.
   DEPENDENCY_SOURCE_ZIP: 'Kodi-POV-IL-FENtastic-test-0.1.179.zip'
   BUILD_ZIP: 'platform-bootstrap.zip'
-  EXPECTED_RELEASE: '21.3-povil.53'
-  EXPECTED_VERSION_CODE: '2103053'
+  EXPECTED_RELEASE: '21.3-povil.54'
+  EXPECTED_VERSION_CODE: '2103054'
   EXPECTED_KODI_VERSION: '21.3'
 
 jobs:
