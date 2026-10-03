@@ -1,3 +1,6 @@
+0.4.17
+- Expand native POV expiry sliders to accept all subscription-notice thresholds up to 365 days; preserve saved choices and repair the range again after host updates.
+
 0.4.14
 - Restore FENtastic generated rows from saved widget paths after updates without resetting layouts.
 - Fix helper regeneration dropping rows containing XML entities; preserve limits and custom paths.
