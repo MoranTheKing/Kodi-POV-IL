@@ -13,11 +13,11 @@ on:
       version:
         description: 'Release tag / version label (e.g., 21.3-povil.1)'
         required: true
-        default: '21.3-povil.51'
+        default: '21.3-povil.52'
       version_code:
         description: 'Android versionCode (integer, must increase each release)'
         required: true
-        default: '2103051'
+        default: '2103052'
       kodi_version:
         description: 'Upstream Kodi version to rebrand (e.g., 21.3)'
         required: true
@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
   pull-requests: write
 
 env:
@@ -35,13 +36,12 @@ env:
   OLD_PACKAGE_ID: 'org.xbmc.kodi'
   PACKAGE_ID: 'org.xbmc.povi'
   APP_NAME: 'Kodi POV IL'
-  WIZARD_VERSION: '0.4.9'
   # The historic archive supplies only six portable Python dependencies.
   # Current Wizard code creates a minimal seed; the manifest provisions the build.
   DEPENDENCY_SOURCE_ZIP: 'Kodi-POV-IL-FENtastic-test-0.1.179.zip'
   BUILD_ZIP: 'platform-bootstrap.zip'
-  EXPECTED_RELEASE: '21.3-povil.51'
-  EXPECTED_VERSION_CODE: '2103051'
+  EXPECTED_RELEASE: '21.3-povil.52'
+  EXPECTED_VERSION_CODE: '2103052'
   EXPECTED_KODI_VERSION: '21.3'
 
 jobs:
@@ -92,16 +92,21 @@ jobs:
             "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" \
             src
 
+      - name: Verify installation and application notification rules
+        run: python3 -m unittest discover -s src/tests
+
+      - name: Fetch the current verified Wizard for all installers
+        run: |
+          set -euo pipefail
+          python3 src/.github/scripts/fetch_platform_wizard.py \
+            --manifest src/manifest.json \
+            --source-addon src/plugin.program.kodipovilwizard/addon.xml \
+            --destination src/dist \
+            --env-file "$GITHUB_ENV"
+
       - name: Build verified modular platform bootstrap
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import sys
-          sys.path.insert(0, 'src/.github/scripts')
-          import build_addons
-          wizard = next(addon for addon in build_addons.discover_addons() if addon.id == 'plugin.program.kodipovilwizard')
-          build_addons.build_zip(wizard)
-          PY
           python3 src/.github/scripts/build_platform_bootstrap.py \
             --source "src/dist/${DEPENDENCY_SOURCE_ZIP}" \
             --wizard "src/dist/plugin.program.kodipovilwizard-${WIZARD_VERSION}.zip" \
@@ -385,9 +390,10 @@ jobs:
           set -euo pipefail
           VERSION="${{ github.event.inputs.version }}"
           TAG="v${VERSION}"
-          # Delete the release if it already exists (gh CLI is preinstalled)
+          # Publish a new version; never delete a previously installed release.
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release delete "$TAG" --yes --cleanup-tag
+            echo "::error::Release $TAG already exists. Choose a new installer version."
+            exit 1
           fi
           NOTES=$(printf '%s\n%s\n%s\n%s\n%s' \
             "Built automatically by .github/workflows/build-apk.yml." \
@@ -417,3 +423,10 @@ jobs:
         run: |
           echo "This installer release changes first-install provisioning only."
           echo "Existing clients receive the fixes through modular OTA; app update pointers remain unchanged."
+
+      - name: Refresh direct installation downloads after publication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/actions/workflows/deploy-pages.yml/dispatches" \
+            --method POST -f ref=main
