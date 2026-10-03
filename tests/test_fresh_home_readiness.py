@@ -15,6 +15,37 @@ FRESH = ROOT / 'plugin.program.kodipovilwizard/resources/libs/fresh_install.py'
 
 
 class FreshHomeReadinessTests(unittest.TestCase):
+    def test_fresh_local_shortcuts_are_seeded_before_cache_and_keep_user_removal(self):
+        import importlib.util
+        with tempfile.TemporaryDirectory() as raw:
+            profile = Path(raw)
+            favs = profile / 'favourites.xml'
+            favs.write_text('<favourites><favourite name="Custom">RunScript(custom)</favourite></favourites>', encoding='utf8')
+            vfs = types.SimpleNamespace(translatePath=lambda p:
+                str(profile / p.replace('special://profile/', '').replace('special://userdata/', '')))
+            addon = types.SimpleNamespace(Addon=lambda _id:
+                types.SimpleNamespace(getAddonInfo=lambda _key: '0.4.19'))
+            fn = _load_function(FRESH, 'seed_fresh_home_shortcuts', {
+                'CONFIG': types.SimpleNamespace(ADDONS=str(ROOT)),
+                'os': os, 'importlib': importlib})
+            with patch.dict('sys.modules', {'xbmcvfs': vfs, 'xbmcaddon': addon}):
+                fn()
+                first = favs.read_text('utf8')
+                self.assertIn('action=tonight', first)
+                self.assertIn('mode=recentupdates', first)
+                self.assertIn('RunScript(custom)', first)
+                fn()
+                self.assertEqual(favs.read_text('utf8'), first)
+                root = ET.fromstring(first)
+                for node in list(root):
+                    if 'tonight' in (node.text or '') or 'recentupdates' in (node.text or ''):
+                        root.remove(node)
+                # Native favourites edits discard comment markers. The
+                # update tile's existing sidecar still owns deletion policy.
+                favs.write_text(ET.tostring(root, encoding='unicode'), encoding='utf8')
+                fn()
+                self.assertNotIn('mode=recentupdates', favs.read_text('utf8'))
+
     def test_late_first_install_tiles_get_one_bounded_extra_profile_refresh(self):
         with tempfile.TemporaryDirectory() as raw:
             Path(raw, 'favourites.xml').write_text(
