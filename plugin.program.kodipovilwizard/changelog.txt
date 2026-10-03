@@ -1,3 +1,6 @@
+0.4.18
+- Copy rollback content without unsupported filesystem metadata operations on Android emulated storage; unblock fresh config, Nox activation and Hebrew subtitle defaults while retaining transactional rollback on real I/O failures.
+
 0.4.17
 - Expand native POV expiry sliders to accept all subscription-notice thresholds up to 365 days; preserve saved choices and repair the range again after host updates.
 
