@@ -3,6 +3,113 @@
 
 _AI_MDBL_REFRESH_LOCK = 'pov_ai_mdbl_refreshing'
 _ai_liked_ids_cache = [False]
+_refresh_mutex = __import__('threading').Lock()
+_last_failure = [0]
+
+
+class MDBListUnavailable(Exception):
+    """A failed read must not become a cached, apparently empty list."""
+
+
+def record_failure(response=None):
+    _last_failure[0] = getattr(response, 'status_code', 0) or 0
+
+
+def notify_unavailable():
+    import time
+    from modules import kodi_utils
+    try:
+        import xbmcgui
+        window = xbmcgui.Window(10000)
+        now = time.time()
+        if now - float(window.getProperty('povil.mdbl.error_notice') or 0) < 15:
+            return
+        window.setProperty('povil.mdbl.error_notice', str(now))
+    except Exception:
+        pass
+    if _last_failure[0] == 401:
+        text = 'MDBList: החיבור אינו תקף. יש לחבר מחדש דרך חיבור שירותים.'
+    elif _last_failure[0] == 403:
+        text = 'MDBList: אין הרשאה לפעולה. בדוק את הרשאות החיבור.'
+    elif _last_failure[0] == 429:
+        text = 'MDBList: הגעת למגבלת הבקשות. נסה שוב מאוחר יותר.'
+    else:
+        text = 'MDBList: הרשימה לא נטענה. נסה שוב; הרשימות שלך לא נמחקו.'
+    kodi_utils.notification(text)
+
+
+def cache_list(function, string, url):
+    """Keep native keys/invalidation; invalidate poisoned legacy reads once.
+
+    The epoch also isolates account changes. Do not touch watched/progress
+    tables, and never store failed or incomplete responses.
+    """
+    import hashlib, json
+    from caches import mdbl_cache
+    from modules import kodi_utils
+    def valid(data):
+        key = ('items' if string in ('mdbl_my_lists', 'mdbl_external')
+               else 'lists' if string == 'mdbl_liked_lists' else None)
+        if key:
+            return isinstance(data, dict) and isinstance(data.get(key), list)
+        return isinstance(data, (dict, list))
+    def epoch():
+        token = kodi_utils.get_setting('mdblist.token') or ''
+        return 'v3:' + hashlib.sha256(token.encode('utf-8')).hexdigest()
+    def prepare(cur):
+        value = epoch()
+        cur.execute(mdbl_cache.MC_BASE_GET, ('povil_mdbl_cache_epoch',))
+        row = cur.fetchone()
+        if not row or row[0] != value:
+            cur.execute('DELETE FROM mdbl_data')
+            cur.execute(mdbl_cache.MC_BASE_SET, ('povil_mdbl_cache_epoch', value))
+        return value
+    cur = mdbl_cache.MDBLCache().dbcur
+    prepare(cur)
+    cur.execute(mdbl_cache.MC_BASE_GET, (string,))
+    row = cur.fetchone()
+    if row:
+        try:
+            data = json.loads(row[0])
+            if valid(data):
+                return data
+        except (ValueError, TypeError):
+            pass
+    result = function(url)
+    if not valid(result):
+        raise MDBListUnavailable('MDBList read failed')
+    # A refresh during the request changes the token/epoch.
+    prepare(cur)
+    cur.execute(mdbl_cache.MC_BASE_SET, (string, json.dumps(result)))
+    return result
+
+
+def paginated_list(url, max_items=250000):
+    """Accept complete valid pages only, including genuinely empty lists."""
+    items = {'movies': [], 'shows': [], 'episodes': [], 'items': []}
+    params, cursors = {'limit': 1000}, set()
+    for _ in range(max_items // params['limit']):
+        result = _call_mdblist(url, params=params)
+        if not isinstance(result, dict):
+            raise MDBListUnavailable('MDBList page unavailable')
+        pagination = result.get('pagination')
+        if not isinstance(pagination, dict) or 'has_more' not in pagination:
+            raise MDBListUnavailable('MDBList pagination unavailable')
+        if not any(isinstance(result.get(key), list) for key in items):
+            raise MDBListUnavailable('MDBList items unavailable')
+        for key in items:
+            if key in result:
+                if not isinstance(result[key], list):
+                    raise MDBListUnavailable('MDBList items invalid')
+                items[key].extend(result[key])
+        if not pagination['has_more']:
+            return items
+        cursor = pagination.get('next_cursor')
+        if not cursor or cursor in cursors:
+            raise MDBListUnavailable('MDBList cursor invalid')
+        cursors.add(cursor)
+        params['cursor'] = cursor
+    raise MDBListUnavailable('MDBList pagination incomplete')
 
 def _call_mdblist(path, **kwargs):
     from indexers.mdblist_api import call_mdblist, base_url
@@ -10,9 +117,12 @@ def _call_mdblist(path, **kwargs):
     return call_mdblist(path, **kwargs)
 
 
-def handle_401_reauth(e, path, params, json_data, method):
-    """Intercepts a 401 error, attempts to acquire a GUI lock, refreshes the token, and recurses safely."""
-    status = getattr(getattr(e, 'response', None), 'status_code', 0)
+def handle_401_reauth(e, path, params, json_data, method, response=None):
+    """Recover one failed request; never recursively retry or steal a busy lock."""
+    import hashlib, time
+    response = response if response is not None else getattr(e, 'response', None)
+    record_failure(response)
+    status = getattr(response, 'status_code', 0)
     if status != 401: return None
     from modules import kodi_utils
     if not kodi_utils.get_setting('mdblist.refresh', ''): return None
@@ -24,32 +134,39 @@ def handle_401_reauth(e, path, params, json_data, method):
         window = None
 
     before = kodi_utils.get_setting('mdblist.token')
+    failure_key = 'povil.mdbl.refresh_failed.' + hashlib.sha256((before or '').encode('utf-8')).hexdigest()[:16]
     if window is not None:
+        if time.time() - float(window.getProperty(failure_key) or 0) < 60:
+            return None
         from modules.kodi_utils import sleep
         for _ in range(60):
             if window.getProperty(_AI_MDBL_REFRESH_LOCK) != 'true': break
             sleep(250)
         if kodi_utils.get_setting('mdblist.token') != before: return _retry_call(path, params, json_data, method)
+        if window.getProperty(_AI_MDBL_REFRESH_LOCK) == 'true': return None
         window.setProperty(_AI_MDBL_REFRESH_LOCK, 'true')
         if kodi_utils.get_setting('mdblist.token') != before:
             window.clearProperty(_AI_MDBL_REFRESH_LOCK)
             return _retry_call(path, params, json_data, method)
 
     try:
-        from indexers.mdblist_api import mdbl_refresh
-        mdbl_refresh()
+        with _refresh_mutex:
+            if kodi_utils.get_setting('mdblist.token') == before:
+                from indexers.mdblist_api import mdbl_refresh
+                mdbl_refresh()
     finally:
         if window is not None: window.clearProperty(_AI_MDBL_REFRESH_LOCK)
 
     if kodi_utils.get_setting('mdblist.token') != before:
         return _retry_call(path, params, json_data, method)
+    if window is not None: window.setProperty(failure_key, str(time.time()))
     return None
 
 def _retry_call(path, params, json_data, method):
     from indexers.mdblist_api import session, base_url, timeout
     from modules import kodi_utils
     headers = None
-    params = params or {}
+    params = dict(params or {})
     if not bool(kodi_utils.get_setting('mdblist.refresh')):
         params['apikey'] = kodi_utils.get_setting('mdblist.token')
     else:
@@ -64,7 +181,10 @@ def _retry_call(path, params, json_data, method):
             timeout=timeout
         )
         result = response.json() if 'json' in response.headers.get('Content-Type', '') else response.text
-        if not response.ok: response.raise_for_status()
+        if not response.ok:
+            record_failure(response)
+            return None
+        _last_failure[0] = 0
         if isinstance(result, list):
             result = {'items': result, 'pagination': {'has_more': response.headers.get('X-Has-More') == 'true'}}
             if response.headers.get('X-Next-Cursor'): result['pagination']['next_cursor'] = response.headers.get('X-Next-Cursor')
@@ -314,21 +434,10 @@ def heal_mdblist_account_if_needed():
     # Only execute if broken (token exists, but user string is empty)
     if token and not user:
         try:
-            import json
-            import urllib.request
-            import urllib.parse
-
-            url = 'https://api.mdblist.com/user?apikey=' + urllib.parse.quote(token, safe='')
-            req = urllib.request.Request(url, headers={'User-Agent': 'kodi-pov-il'})
-
-            # Short timeout to prevent stalling boot
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                if getattr(resp, 'status', 200) == 200:
-                    data = json.loads(resp.read().decode('utf-8', 'replace'))
-                    username = str((data or {}).get('username') or '').strip()
-
-                    if username:
-                        kodi_utils.set_setting('mdbl_indicators_active', 'true')
-                        kodi_utils.set_setting('mdblist_user', username)
+            data = _call_mdblist('/user')
+            username = str((data or {}).get('username') or '').strip()
+            if username:
+                kodi_utils.set_setting('mdbl_indicators_active', 'true')
+                kodi_utils.set_setting('mdblist_user', username)
         except Exception:
             pass # Fail gracefully; the native check will simply return 'no account' as it originally did.

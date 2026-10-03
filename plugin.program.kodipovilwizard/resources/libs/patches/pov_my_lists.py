@@ -59,6 +59,10 @@ def _safe_fetch(fn, media_type, page_no, source_label):
 		data, total_pages = fn(media_type, page_no)
 		return data or [], total_pages or 0
 	except Exception as e:
+		if source_label.startswith('mdblist_'):
+			from pov_mdblist_patch_logic import MDBListUnavailable, notify_unavailable
+			if isinstance(e, MDBListUnavailable):
+				notify_unavailable()
 		_log('%s fetch failed (media_type=%r, page=%r): %r' % (
 			source_label, media_type, page_no, e))
 		return [], 0

@@ -1080,14 +1080,45 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/mdblist_api.py",
-        "marker": "# WIZARD_POV_MDBL_REAUTH_RETRY_v2",
+        "marker": "# WIZARD_POV_MDBL_REAUTH_RETRY_v3",
         "anchor": "\t\tlogger('mdblist error', str(e))",
         "action": "append_after",
         "hook": (
             "\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic;\n"
-            "\t\t_ai_retry = pov_mdblist_patch_logic.handle_401_reauth(_orig_e, path, params, json, method);\n"
+            "\t\t_ai_retry = pov_mdblist_patch_logic.handle_401_reauth(_orig_e, path, params, json, method, locals().get('response'));\n"
             "\t\tif _ai_retry is not None: return _ai_retry\n"
         )
+    },
+    {
+        "id": "mdblist_cache_verified_reads",
+        "name": "MDBList cache verified reads",
+        "description": "Do not cache failed reads; recover legacy empty caches without changing account data.",
+        "addon_id": "plugin.video.pov", "enabled": True,
+        "target_file": "resources/lib/caches/mdbl_cache.py",
+        "marker": "# WIZARD_POV_MDBL_CACHE_READS_v1",
+        "anchor": "\tdbcur = MDBLCache().dbcur",
+        "action": "prepend_before",
+        "hook": "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n\treturn pov_mdblist_patch_logic.cache_list(function, string, url)\n"
+    },
+    {
+        "id": "mdblist_complete_pagination",
+        "name": "MDBList complete pagination",
+        "description": "Reject unavailable or incomplete pages rather than reporting an empty list.",
+        "addon_id": "plugin.video.pov", "enabled": True,
+        "target_file": "resources/lib/indexers/mdblist_api.py",
+        "marker": "# WIZARD_POV_MDBL_PAGES_v1",
+        "anchor": "\tparams = {'limit': 1000}", "action": "prepend_before",
+        "hook": "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n\treturn pov_mdblist_patch_logic.paginated_list(url, MAX_LIST_ITEMS)\n"
+    },
+    {
+        "id": "mdblist_manager_read_failure",
+        "name": "MDBList manager read failure",
+        "description": "Keep failed authorization out of the add/remove selection flow.",
+        "addon_id": "plugin.video.pov", "enabled": True,
+        "target_file": "resources/lib/menus/mdblist.py",
+        "marker": "# WIZARD_POV_MDBL_MANAGER_READ_v1",
+        "anchor": "class MdbListManager(list_helper.BaseListManager):", "action": "append_after",
+        "hook": "# Guard only MDBList reads; keep native mutations.\n\tdef manage(self):\n\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n\t\ttry: return super().manage()\n\t\texcept pov_mdblist_patch_logic.MDBListUnavailable:\n\t\t\treturn pov_mdblist_patch_logic.notify_unavailable()\n\n"
     },
     {
         "id": "mdblist_api_scrobble_stop",
@@ -1103,6 +1134,16 @@ PATCH_CONFIG = [
             "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic;\n"
             "\tpov_mdblist_patch_logic.scrobble_stop_if_watched(action, key, media, media_id, season, episode)\n"
         )
+    },
+    {
+        "id": "mdblist_activity_failed_read",
+        "name": "MDBList failed activity read",
+        "description": "Preserve watched and progress data when authorization or the network fails.",
+        "addon_id": "plugin.video.pov", "enabled": True,
+        "target_file": "resources/lib/indexers/mdblist_api.py",
+        "marker": "# WIZARD_POV_MDBL_ACTIVITY_READ_v1",
+        "anchor": "\t\tlogger('mdblist error', str(latest))", "action": "append_after",
+        "hook": "\t\treturn 'failed'\n"
     },
     {
         "id": "mdblist_api_add_to_list_guard",
