@@ -24,17 +24,12 @@ FIXES vs. the legacy in-memory patcher this replaces
    TRACE_TARGETS list, so anything NOT caught here (e.g. a bug in the
    merge/dedup logic itself) is still caught by that settrace hook
    before POV's own untouched `except: pass` in run() swallows it.
-2. Real pagination: total_pages is the max across the merged sources,
-   and self.new_page is only set following the same
-   `isinstance(page_no, int)` guard POV's own trakt_personal branch
-   uses (page_no can be a raw string in POV's own ValueError fallback
-   path), so the native "next page" nav item and alphabet-jump logic
-   already in run() keep working unmodified across multiple pages
-   instead of always stopping after page 1.
-
-Dedup is per-page, matching POV's own pagination model: each run() is
-a fresh process with no cross-page state, so this is parity with how
-every native personal-list branch already behaves, not a regression.
+2. Recent Trakt/MDBList views merge full cached native lists, order by
+   addition time and deduplicate BEFORE the combined page slice. A newer
+   watchlist entry therefore precedes an older collection entry, and
+   duplicate entries cannot leak onto another page. Native filters remain
+   in use. Explicit release sorting, TMDB and an unpatched host keep the
+   original per-source merge path during staggered updates.
 """
 try:
 	import xbmc
@@ -69,8 +64,51 @@ def _safe_fetch(fn, media_type, page_no, source_label):
 		return [], 0
 
 
+def _recent_merge_enabled(media_type, page_no):
+	"""Use full cached native lists only when the host supports our sentinel."""
+	if not isinstance(page_no, int) or page_no < 1:
+		return False
+	try:
+		from modules import settings, utils
+		return (settings.lists_sort_order('collection') == 1
+		        and settings.lists_sort_order('watchlist', media_type) == 1
+		        and utils.paginate_list([], 'povil_merge_all')[1] == 1)
+	except Exception:
+		return False
+
+
+def _merge_recent(fns_and_labels, media_type, page_no, trakt=False):
+	"""Deduplicate the newest occurrence, then paginate the combined timeline.
+
+	Native provider methods retain their filters and caches. The sentinel only
+	defers their local page slice; it does not fetch additional provider pages.
+	"""
+	from modules import settings
+	from pov_mdblist_patch_logic import newest_personal_items
+	rows = []
+	for fn, label in fns_and_labels:
+		data, _pages = _safe_fetch(fn, media_type, 'povil_merge_all', label)
+		rows.extend(item for item in data if isinstance(item, dict))
+	seen, merged = set(), []
+	for item in newest_personal_items(rows):
+		value = (item.get('media_ids') or {}) if trakt else item.get('id')
+		key = (value.get('tmdb') or value.get('imdb') or value.get('trakt')) if trakt else value
+		if key is not None and key not in seen:
+			seen.add(key)
+			merged.append(value)
+	if not settings.paginate():
+		return merged, 1 if merged else 0
+	limit = max(1, settings.page_limit())
+	pages = (len(merged) + limit - 1) // limit
+	start = (page_no - 1) * limit
+	return merged[start:start + limit], pages
+
+
 def _merge_tmdb_or_mdblist(fns_and_labels, media_type, page_no):
 	"""Used for both TMDB and MDBList as both expect native TMDB IDs in the final list."""
+	if (all(label.startswith('mdblist_') for _fn, label in fns_and_labels)
+	        and _recent_merge_enabled(media_type, page_no)):
+		return _merge_recent(fns_and_labels, media_type, page_no)
 	seen, merged, total_pages = set(), [], 0
 	for fn, label in fns_and_labels:
 		data, pages = _safe_fetch(fn, media_type, page_no, label)
@@ -84,6 +122,8 @@ def _merge_tmdb_or_mdblist(fns_and_labels, media_type, page_no):
 
 
 def _merge_trakt(fns_and_labels, media_type, page_no):
+	if _recent_merge_enabled(media_type, page_no):
+		return _merge_recent(fns_and_labels, media_type, page_no, trakt=True)
 	seen, merged, total_pages = set(), [], 0
 	for fn, label in fns_and_labels:
 		data, pages = _safe_fetch(fn, media_type, page_no, label)

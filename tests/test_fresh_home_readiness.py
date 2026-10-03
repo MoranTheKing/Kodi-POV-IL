@@ -35,7 +35,8 @@ class FreshHomeReadinessTests(unittest.TestCase):
         sent = []
         # Native controls expose no heading through the Python wrapper's label.
         xbmc = types.SimpleNamespace(getSkinDir=lambda: 'skin.povil.nox',
-            getCondVisibility=lambda _c: True, getInfoLabel=lambda _c: 'Skin',
+            getCondVisibility=lambda _c: True, getInfoLabel=lambda key:
+                'Keep this skin?' if key == 'Control.GetLabel(9)' else 'Skin',
             getLocalizedString=lambda i: {13123: 'Skin', 13111: 'Keep this skin?'}[i],
             executebuiltin=sent.append)
         textbox = types.SimpleNamespace(getText=lambda: 'Keep this skin?', getLabel=lambda: '')
@@ -78,6 +79,23 @@ class FreshHomeReadinessTests(unittest.TestCase):
             self.assertGreater(sum(waits), 10)
             xbmc.getSkinDir = lambda: 'skin.estuary'
             self.assertFalse(fn(), 'RPC success cannot certify a reverted skin')
+
+    def test_manual_resume_with_loaded_skin_shows_home_without_confirmation_wait(self):
+        with tempfile.TemporaryDirectory() as raw:
+            Path(raw, 'kodipovil.fresh_gui_defaults.xml').write_text('<settings/>')
+            home = [False]; calls = []; waits = []
+            def builtin(value):
+                calls.append(value); home[0] = True
+            xbmc = types.SimpleNamespace(
+                Monitor=lambda: types.SimpleNamespace(abortRequested=lambda: False,
+                    waitForAbort=lambda secs: waits.append(secs) or False),
+                getSkinDir=lambda: 'skin.povil.nox', getCondVisibility=lambda _c: home[0],
+                executebuiltin=builtin)
+            fn = _load_function(FRESH, 'apply_live_defaults', {'ET': ET, 'os': os,
+                'CONFIG': types.SimpleNamespace(USERDATA=raw), 'xbmc': xbmc})
+            self.assertTrue(fn())
+            self.assertEqual(calls, ['ActivateWindow(Home)'])
+            self.assertEqual(waits, [])
 
     def test_missing_core_retains_first_boot_retry_marker(self):
         with tempfile.TemporaryDirectory() as raw:

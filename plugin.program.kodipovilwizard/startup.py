@@ -363,11 +363,12 @@ def fresh_build_auto_install_if_needed():
         else:
             # A transient repository/download failure can recover while the
             # installer remains open; don't require several manual restarts.
-            for _attempt in range(3):
-                if ModularUpdater(background=False).run_fresh_install():
-                    break
-                if xbmc.Monitor().waitForAbort(3):
-                    return False
+            from resources.libs import fresh_install
+            ready, issues = fresh_install.provision()
+            if not ready:
+                _close_provisioning_banner(wait_banner)
+                xbmcgui.Dialog().ok(CONFIG.ADDONTITLE, fresh_install.failure_message(issues))
+                return False
 
         # Sanity gate: the build engine must be on disk AND run_fresh_install
         # must have written the .provisioned marker (i.e. it ran to completion
