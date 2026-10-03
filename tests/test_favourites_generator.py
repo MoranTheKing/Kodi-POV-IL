@@ -106,6 +106,55 @@ class FavouritesGeneratorTests(unittest.TestCase):
         visible = self._refresh()
         self.assertEqual(sum('Umbrella' in i.get('name') for i in _items(visible)), 2)
 
+    def test_connecting_mdblist_inserts_each_tile_in_its_personal_group(self):
+        self.visibility.active.remove('mdblist')
+        first = self._refresh('skin.povil.nox')
+        before = [i.get('name') for i in _items(first)]
+        self.visibility.active.add('mdblist')
+        after = [i.get('name') for i in _items(self._refresh('skin.povil.nox'))]
+        for media in ('הסרטים', 'הסדרות'):
+            mdbl = '[B]%s שלי (MDBList)[/B]' % media
+            pov = '[B]%s שלי (POV)[/B]' % media
+            self.assertEqual(after.index(mdbl), after.index(pov) + 1)
+        self.assertEqual([n for n in after if n in before], before)
+
+    def test_legacy_appended_mdblist_tiles_repaired_once_and_edits_preserved(self):
+        import json
+        first = self._refresh()
+        root = ET.fromstring(first)
+        for item in list(root):
+            if 'action=mdblist_my_' in (item.text or ''):
+                root.remove(item)
+                root.append(item)
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        state_path = Path(generator._state_file())
+        state = json.loads(state_path.read_text('utf8'))
+        state.pop('layout_version')
+        state_path.write_text(json.dumps(state), 'utf8')
+        repaired = self._refresh()
+        self.assertEqual([i.get('name') for i in _items(repaired)], [i.get('name') for i in _items(first)])
+        root = ET.fromstring(repaired)
+        item = next(i for i in root if 'action=mdblist_my_movies' in (i.text or ''))
+        root.remove(item)
+        root.append(item)
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        # A later deliberate move stays authoritative on every refresh.
+        self.assertEqual(_items(self._refresh())[-1].get('name'), item.get('name'))
+
+    def test_legacy_edited_mdblist_tail_is_not_moved(self):
+        import json
+        first = self._refresh()
+        root = ET.fromstring(first)
+        item = next(i for i in root if 'action=mdblist_my_movies' in (i.text or ''))
+        root.remove(item)
+        item.set('thumb', 'my-icon.png')
+        root.append(item)
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        path = Path(generator._state_file())
+        state = json.loads(path.read_text('utf8')); state.pop('layout_version')
+        path.write_text(json.dumps(state), 'utf8')
+        self.assertEqual(_items(self._refresh())[-1].get('thumb'), 'my-icon.png')
+
     def test_bad_existing_xml_is_never_overwritten(self):
         self._refresh()
         self._installed().write_text('<favourites><broken', 'utf-8')
