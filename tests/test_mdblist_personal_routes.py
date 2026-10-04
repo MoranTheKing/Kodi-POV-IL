@@ -42,6 +42,11 @@ class MDBListPersonalRoutesTests(unittest.TestCase):
                                      'String.IsEqual(Container(9000).ListItem.Property(id),favorites)')
                 else:
                     self.assertEqual(rows[0].findtext('onclick'), 'Close')
+            if filename == 'Custom_2115_next_watch.xml':
+                group = root.find('controls/control')
+                self.assertEqual(group.findtext('centertop'), '50%')
+                self.assertEqual(group.findtext('height'), '980')
+                self.assertEqual(group.find('include/param[@name="height"]').get('value'), '980')
         home = ET.parse(ROOT / 'skin.povil.nox/xml/Home_nox.xml').getroot()
         self.assertTrue(any(item.text == 'MainMenu' for item in home.iter('include')))
         self.assertTrue(any('ActivateWindow(2115)' in (param.get('value') or '')
