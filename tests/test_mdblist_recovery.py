@@ -278,6 +278,7 @@ class MDBListRecoveryTests(unittest.TestCase):
         self.api.settings, self.api.paginate_list = settings, paginate['paginate_list']
         exec((ROOT / 'tests/fixtures/list_order/merged_mdblist.py').read_text('utf8'), vars(self.api))
         merged = load('qa_my_lists', WIZ / 'patches/pov_my_lists.py')
+        visibility = load('qa_personal_routes', WIZ / 'patches/pov_visibility_mgr.py')
         for media, singular in (('movies', 'movie'), ('shows', 'show')):
             self.db.execute('DELETE FROM mdbl_data')
             collection = {media: [self.collection_row(singular, i, '2026-10-0%dT08:00:00Z' % i)
@@ -290,6 +291,18 @@ class MDBListRecoveryTests(unittest.TestCase):
                        (self.api.mdblist_watchlist, 'mdblist_watchlist'))
             self.assertEqual(merged._merge_tmdb_or_mdblist(sources, media, 1), ([4, 3], 2))
             self.assertEqual(merged._merge_tmdb_or_mdblist(sources, media, 2), ([2, 1], 2))
+            name, canonical = next((name, row) for name, row in visibility._MDBLIST_ROWS.items()
+                                   if row['action'].endswith('movies' if media == 'movies' else 'tvshows'))
+            with patch.object(visibility, '_snapshot', return_value={'svc': {'mdblist': True}}), \
+                    patch.object(visibility, 'is_service_active', return_value=True), \
+                    patch.dict(sys.modules, {'pov_visibility_mgr': visibility}):
+                route = visibility.filter_navigator_list(
+                    [dict(canonical, action='mdblist_watchlist')], name)[0]
+                entry_point = merged.maybe_populate_movies if media == 'movies' else merged.maybe_populate_tvshows
+                for page, expected in ((1, [4, 3]), (2, [2, 1])):
+                    instance = types.SimpleNamespace(action=route['action'], list=[])
+                    entry_point(instance, page)
+                    self.assertEqual(instance.list, expected)
             self.assertEqual(self.api.session.request.call_count, 2 if media == 'movies' else 4)
 
 

@@ -1,3 +1,6 @@
+0.4.22
+- Route existing FENtastic personal MDBList rows to both library and Watchlist without changing navigator.db or restoring removed rows.
+
 0.4.21
 - Restore MDBList collection (Recently Added) alongside the Watchlist in personal movie/show lists; accept documented cursor and header pagination without caching failed or incomplete reads.
 
