@@ -68,7 +68,7 @@ class MDBListRecoveryTests(unittest.TestCase):
         config = runpy.run_path(str(WIZ / 'patches/patches_config.py'))['PATCH_CONFIG']
         ids = {'mdblist_api_redact_and_reauth_prep', 'mdblist_api_reauth_retry',
                'mdblist_cache_verified_reads', 'mdblist_complete_pagination', 'mdblist_manager_read_failure',
-               'mdblist_activity_failed_read'}
+               'mdblist_activity_failed_read', 'mdblist_response_pagination'}
         def patched(filename, target):
             source = (FIX / filename).read_text('utf8')
             for entry in config:
@@ -86,8 +86,8 @@ class MDBListRecoveryTests(unittest.TestCase):
         patched('mdblist.py', menu)
         self.Manager = menu['MdbListManager']
 
-    def response(self, status, body):
-        return types.SimpleNamespace(status_code=status, ok=status < 400, headers={'Content-Type': 'application/json'},
+    def response(self, status, body, headers=None):
+        return types.SimpleNamespace(status_code=status, ok=status < 400, headers=dict({'Content-Type': 'application/json'}, **(headers or {})),
             reason='Unauthorized' if status == 401 else 'API error', url='https://api.mdblist.com/lists/user',
             json=lambda: body, text='')
 
@@ -181,6 +181,108 @@ class MDBListRecoveryTests(unittest.TestCase):
         self.api.mdbl_get_activity = lambda: self.api.call_mdblist('/sync/last_activities')
         self.assertEqual(self.api.mdbl_sync_activities(), 'failed')
         self.cache.clear_all_mdbl_cache_data.assert_not_called()
+
+    def collection_row(self, media, id, date):
+        return {'collected_at': date, media: {'title': str(id), 'year': 2020,
+                'ids': {'tmdb': id, 'imdb': 'tt%s' % id}}}
+
+    def test_documented_collection_cursor_without_has_more_recovers_both_media(self):
+        body = {'movies': [self.collection_row('movie', 42, '2026-10-04T08:00:00Z')],
+                'shows': [self.collection_row('show', 43, '2026-10-04T09:00:00Z')],
+                'pagination': {'total': 2, 'limit': 1000, 'offset': 0, 'next_cursor': None}}
+        self.api.session.request.return_value = self.response(200, body)
+        for media, id in (('movies', 42), ('shows', 43)):
+            self.assertEqual(self.api.mdbl_collection_watchlist_items('collection', media)[0]['id'], id)
+        self.assertEqual(self.api.session.request.call_count, 1)
+        self.assertNotIn('has_more', body['pagination'])  # Provider object remains unchanged.
+
+    def test_collection_cursor_pages_and_empty_final_page_keep_all_items(self):
+        self.api.session.request.side_effect = [
+            self.response(200, {'movies': [self.collection_row('movie', 42, '2026-10-04T08:00:00Z')],
+                'pagination': {'total': 2, 'offset': 0, 'next_cursor': 'opaque+a'}}),
+            self.response(200, {'shows': [self.collection_row('show', 43, '2026-10-04T09:00:00Z')],
+                'pagination': {'total': 2, 'offset': 1, 'next_cursor': 'opaque+b'}}),
+            self.response(200, {'movies': [], 'shows': [],
+                'pagination': {'total': 2, 'offset': 2, 'next_cursor': None}})]
+        self.assertEqual(self.api.mdbl_collection_watchlist_items('collection', 'shows')[0]['id'], 43)
+        self.assertEqual(self.api.mdbl_collection_watchlist_items('collection', 'movies')[0]['id'], 42)
+        params = [c.kwargs['params'] for c in self.api.session.request.call_args_list]
+        self.assertEqual([p.get('cursor') for p in params], [None, 'opaque+a', 'opaque+b'])
+        self.assertEqual(self.api.session.request.call_count, 3)
+
+    def test_bucketed_watchlist_header_pagination_is_preserved(self):
+        self.api.session.request.side_effect = [
+            self.response(200, {'movies': [{'id': 1}], 'shows': []},
+                {'X-Has-More': 'true', 'X-Next-Cursor': 'header+a'}),
+            self.response(200, {'movies': [], 'shows': [{'id': 2}]}, {'X-Has-More': 'false'})]
+        self.assertEqual(self.api.mdbl_collection_watchlist_items('watchlist', 'movies'), [{'id': 1}])
+        self.assertEqual(self.api.mdbl_collection_watchlist_items('watchlist', 'shows'), [{'id': 2}])
+        self.assertEqual(self.api.session.request.call_count, 2)
+
+    def test_refreshed_oauth_preserves_bucketed_response_headers(self):
+        self.api.session.request.side_effect = [self.response(401, {}),
+            self.response(200, {'expires_in': 3600, 'access_token': 'new-fixture', 'refresh_token': 'new-refresh'}),
+            self.response(200, {'movies': [{'id': 42}]}, {'X-Has-More': 'false'})]
+        self.assertEqual(self.api.mdbl_collection_watchlist_items('watchlist', 'movies'), [{'id': 42}])
+        self.assertEqual(self.api.session.request.call_count, 3)
+
+    def test_empty_collection_cursor_is_valid_and_cached(self):
+        self.api.session.request.return_value = self.response(200, {'movies': [], 'shows': [],
+            'pagination': {'total': 0, 'next_cursor': None}})
+        for media in ('movies', 'shows'):
+            self.assertEqual(self.api.mdbl_collection_watchlist_items('collection', media), [])
+        self.assertEqual(self.api.session.request.call_count, 1)
+
+    def test_unknown_or_inconsistent_pagination_never_caches_partial_data(self):
+        for pagination in ({}, {'has_more': 'false'}, {'has_more': False, 'next_cursor': 'more'},
+                {'next_cursor': 42}, {'next_cursor': None, 'total': 100}, {'has_more': True}):
+            with self.subTest(pagination=pagination):
+                self.api.session.request.return_value = self.response(200, {'items': [{'id': 1}], 'pagination': pagination})
+                with self.assertRaises(self.logic.MDBListUnavailable):
+                    self.cache.cache_mdbl_object(self.api._get_mdbl_paginated_list, 'fixture', '/lists/7/items')
+                self.assertIsNone(self.db.execute("SELECT data FROM mdbl_data WHERE id='fixture'").fetchone())
+
+    def test_repeated_cursor_or_later_failure_does_not_cache_collection(self):
+        page = {'movies': [self.collection_row('movie', 42, '2026-10-04T08:00:00Z')],
+                'pagination': {'next_cursor': 'repeated'}}
+        for last in (self.response(200, page), self.response(503, {})):
+            self.api.session.request.side_effect = [self.response(200, page), last]
+            with self.assertRaises(self.logic.MDBListUnavailable):
+                self.api.mdbl_collection_watchlist_items('collection', 'movies')
+            self.assertIsNone(self.db.execute("SELECT data FROM mdbl_data WHERE id='mdbl_collection'").fetchone())
+
+    def test_conflicting_header_or_unknown_completion_is_rejected(self):
+        for body, headers in (({'items': [], 'pagination': {'has_more': False}}, {'X-Has-More': 'true'}),
+                ({'items': []}, {'X-Has-More': 'invalid'}), ({'movies': [], 'shows': []}, {})):
+            self.api.session.request.return_value = self.response(200, body, headers)
+            with self.assertRaises(self.logic.MDBListUnavailable): self.api._get_mdbl_paginated_list('/watchlist/items')
+
+    def test_collection_and_watchlist_merged_newest_before_slice_for_movies_and_shows(self):
+        settings = types.SimpleNamespace(lists_sort_order=lambda *a: 1, paginate=lambda: True,
+            page_limit=lambda: 2, show_unaired_watchlist=lambda: True)
+        paginate = {'chunks': lambda rows, limit: [rows[i:i+limit] for i in range(0, len(rows), limit)]}
+        source = (ROOT / 'tests/fixtures/list_order/paginate.py').read_text('utf8')
+        entry = next(e for e in runpy.run_path(str(WIZ / 'patches/patches_config.py'))['PATCH_CONFIG']
+                     if e['id'] == 'pov_merged_personal_pagination')
+        exec(source.replace(entry['anchor'], entry['hook'] + entry['anchor']), paginate)
+        self.modules['modules'].settings = settings
+        self.modules['modules'].utils = types.SimpleNamespace(paginate_list=paginate['paginate_list'])
+        self.api.settings, self.api.paginate_list = settings, paginate['paginate_list']
+        exec((ROOT / 'tests/fixtures/list_order/merged_mdblist.py').read_text('utf8'), vars(self.api))
+        merged = load('qa_my_lists', WIZ / 'patches/pov_my_lists.py')
+        for media, singular in (('movies', 'movie'), ('shows', 'show')):
+            self.db.execute('DELETE FROM mdbl_data')
+            collection = {media: [self.collection_row(singular, i, '2026-10-0%dT08:00:00Z' % i)
+                                 for i in (1, 2, 3)], 'pagination': {'total': 3, 'next_cursor': None}}
+            watchlist = {media: [{'id': i, 'watchlist_at': '2026-10-0%dT09:00:00Z' % i}
+                                for i in (3, 4)]}
+            self.api.session.request.side_effect = [self.response(200, collection),
+                self.response(200, watchlist, {'X-Has-More': 'false'})]
+            sources = ((self.api.mdblist_collection, 'mdblist_collection'),
+                       (self.api.mdblist_watchlist, 'mdblist_watchlist'))
+            self.assertEqual(merged._merge_tmdb_or_mdblist(sources, media, 1), ([4, 3], 2))
+            self.assertEqual(merged._merge_tmdb_or_mdblist(sources, media, 2), ([2, 1], 2))
+            self.assertEqual(self.api.session.request.call_count, 2 if media == 'movies' else 4)
 
 
 if __name__ == '__main__':

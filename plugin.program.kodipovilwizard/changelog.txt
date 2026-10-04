@@ -1,3 +1,6 @@
+0.4.21
+- Restore MDBList collection (Recently Added) alongside the Watchlist in personal movie/show lists; accept documented cursor and header pagination without caching failed or incomplete reads.
+
 0.4.19
 - Seed existing local home shortcuts before verifying the first-install favourites cache; prevent late service startup from hiding Tonight and recent updates until a restart.
 
