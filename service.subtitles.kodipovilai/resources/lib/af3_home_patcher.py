@@ -40,7 +40,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-09-17-pov-home-v24'
+PATCH_VERSION = '2026-10-04-pov-home-v25'
 # Must track wizard.py's AF3_CE_SKIN_VERSION, which is the version actually
 # shipped in the pack. It did not: the wizard went to 6.3.2.14 and this stayed
 # at 6.3.2.9, so every AF3 user already ON the correct pack was told to
@@ -285,11 +285,10 @@ HOME_WIDGETS = [
         'widget_limit': '7',
     },
     {
-        # MDBList watchlist -- movies. Routes to POV's mdblist_watchlist, which
-        # merges Watchlist + Collection and sorts newest-first (inherited here).
+        # Build personal list: merge Watchlist + Collection, including Recently Added.
         'label': 'הסרטים שלי (MDBList)',
         'icon': 'special://home/media/povil_icons/My_Movies_MDBList.png',
-        'path': _pov('mdblist_watchlist', 'build_movie_list', 'MDBList%20Watchlist',
+        'path': _pov('mdblist_my_movies', 'build_movie_list', 'MDBList%20Watchlist',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2fmdblist.png'),
         'target': 'videos',
         'widget_style': 'Poster',
@@ -326,10 +325,10 @@ HOME_WIDGETS = [
         'widget_limit': '7',
     },
     {
-        # MDBList watchlist -- shows. Same routing/sort as the movie row above.
+        # Same combined personal-list route as the movie row above.
         'label': 'הסדרות שלי (MDBList)',
         'icon': 'special://home/media/povil_icons/My_Shows_MDBList.png',
-        'path': _pov('mdblist_watchlist', 'build_tvshow_list', 'MDBList%20Watchlist',
+        'path': _pov('mdblist_my_tvshows', 'build_tvshow_list', 'MDBList%20Watchlist',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2fmdblist.png'),
         'target': 'videos',
         'widget_style': 'Poster',
@@ -800,6 +799,20 @@ def _item_key(item):
             # user-facing tile. Ignore it while matching old/current rows.
             path = re.sub(r'([?&])widget_limit=\d+&?', r'\1', path)
             path = path.replace('?&', '?').rstrip('?&')
+            # The build's two old Watchlist-only defaults are the same tiles,
+            # now routed to the combined library. Match both baseline/current
+            # so migration preserves positions and deliberate removals.
+            for row in HOME_WIDGETS:
+                canonical = row.get('path', '')
+                canonical = re.sub(r'([?&])widget_limit=\d+&?', r'\1', canonical)
+                canonical = canonical.replace('?&', '?').rstrip('?&')
+                for action in ('mdblist_my_movies', 'mdblist_my_tvshows'):
+                    if ('action=' + action) not in canonical:
+                        continue
+                    legacy = canonical.replace('action=' + action,
+                                               'action=mdblist_watchlist', 1)
+                    if path == legacy:
+                        return canonical
             return path
         return item.get('label', '')
     except Exception:
