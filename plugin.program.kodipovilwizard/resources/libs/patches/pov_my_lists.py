@@ -57,6 +57,9 @@ def _safe_fetch(fn, media_type, page_no, source_label):
 	instead of aborting the whole merge."""
 	try:
 		data, total_pages = fn(media_type, page_no)
+		if source_label.startswith('mdblist_'):
+			_log('%s media=%s page=%s rows=%d pages=%s' % (
+				source_label, media_type, page_no, len(data or []), total_pages))
 		return data or [], total_pages or 0
 	except Exception as e:
 		if source_label.startswith('mdblist_'):
