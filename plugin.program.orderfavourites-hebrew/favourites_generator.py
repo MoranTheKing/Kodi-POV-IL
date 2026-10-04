@@ -20,7 +20,9 @@
 
 import json
 import os
+import re
 import tempfile
+from urllib.parse import parse_qsl, urlsplit
 from xml.etree import ElementTree as ET
 
 try:
@@ -284,6 +286,46 @@ def _mdbl_personal(item):
     return 'action=mdblist_my_' in (item.text or '')
 
 
+def _repair_mdbl_personal(item, desired_by_name):
+    """Upgrade known build shortcuts even when the old baseline was lost.
+
+    Earlier installs retained watchlist-only actions as user edits after a
+    baseline refresh. The old URL also has a separate Kodi directory cache.
+    Use the same full-library URL as the skin menus. Match only the two build
+    labels and unfiltered default parameters; custom watchlists stay intact.
+    Keep the user's position and thumbnail, and never create a deleted tile.
+    """
+    name = item.get('name')
+    if name not in ('[B]הסרטים שלי (MDBList)[/B]', '[B]הסדרות שלי (MDBList)[/B]'):
+        return
+    desired = desired_by_name.get(name)
+    if desired is None:
+        return
+    match = re.fullmatch(r'ActivateWindow\(10025,"([^"]+)",return\)',
+                         (item.text or '').strip())
+    if not match:
+        return
+    url = urlsplit(match.group(1))
+    if (url.scheme != 'plugin' or url.netloc != 'plugin.video.pov'
+            or url.path != '/' or url.fragment):
+        return
+    pairs = parse_qsl(url.query, keep_blank_values=True)
+    params = dict(pairs)
+    if len(params) != len(pairs) or set(params) - {'action', 'mode', 'name', 'iconImage'}:
+        return
+    shows = name == '[B]הסדרות שלי (MDBList)[/B]'
+    action = 'mdblist_my_tvshows' if shows else 'mdblist_my_movies'
+    mode = 'build_tvshow_list' if shows else 'build_movie_list'
+    icon = ('special://home/addons/plugin.video.pov/resources/skins/'
+            'Default/media/mdblist.png')
+    if (params.get('action') not in ('mdblist_watchlist', action)
+            or params.get('mode') != mode
+            or params.get('name') not in ('MDBList', 'MDBList Watchlist')
+            or ('iconImage' in params and params['iconImage'] != icon)):
+        return
+    item.text = desired.text
+
+
 def _insert_personal(root, item, desired_root):
     """Anchor a new service tile without sorting any existing user tiles."""
     preceding = list(desired_root)[:list(desired_root).index(item)]
@@ -327,6 +369,8 @@ def _merge_favourites(existing, previous, desired, deleted, repair_tail=False):
         user_root.remove(item)
         if replacement is not None:
             user_root.insert(index, ET.fromstring(ET.tostring(replacement)))
+    for item in user_root:
+        _repair_mdbl_personal(item, desired_by_name)
     if repair_tail:
         # The previous generator appended newly connected MDBList tiles.
         # Repair only that untouched trailing block, once; leave edited tiles,
