@@ -1111,6 +1111,16 @@ PATCH_CONFIG = [
         "hook": "\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n\t\tresult = pov_mdblist_patch_logic.list_response_pagination(result, response)\n"
     },
     {
+        "id": "mdblist_collection_parent_projection",
+        "name": "MDBList collection parent shows",
+        "addon_id": "plugin.video.pov", "enabled": True,
+        "target_file": "resources/lib/indexers/mdblist_api.py",
+        "marker": "# WIZARD_POV_MDBL_COLLECTION_PARENTS_v1",
+        "anchor": "\tresults = results['movies' if mediatype in ('movie', 'movies') else 'shows']",
+        "action": "prepend_before",
+        "hook": "\tif list_type == 'collection':\n\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n\t\treturn pov_mdblist_patch_logic.collection_items(results, mediatype)\n"
+    },
+    {
         "id": "mdblist_complete_pagination",
         "name": "MDBList complete pagination",
         "description": "Reject unavailable or incomplete pages rather than reporting an empty list.",
