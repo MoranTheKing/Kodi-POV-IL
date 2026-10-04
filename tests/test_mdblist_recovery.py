@@ -233,6 +233,14 @@ class MDBListRecoveryTests(unittest.TestCase):
             self.assertEqual(self.api.mdbl_collection_watchlist_items('collection', media), [])
         self.assertEqual(self.api.session.request.call_count, 1)
 
+    def test_terminal_collection_counts_prove_completion_without_cursor_field(self):
+        self.api.session.request.return_value = self.response(200, {'movies': [
+            self.collection_row('movie', 42, '2026-10-04T08:00:00Z')], 'shows': [],
+            'pagination': {'total': 1, 'offset': 0, 'limit': 1000}})
+        self.assertEqual(self.api.mdbl_collection_watchlist_items('collection', 'movies')[0]['id'], 42)
+        self.assertEqual(self.api.mdbl_collection_watchlist_items('collection', 'shows'), [])
+        self.assertEqual(self.api.session.request.call_count, 1)
+
     def test_unknown_or_inconsistent_pagination_never_caches_partial_data(self):
         for pagination in ({}, {'has_more': 'false'}, {'has_more': False, 'next_cursor': 'more'},
                 {'next_cursor': 42}, {'next_cursor': None, 'total': 100}, {'has_more': True}):
