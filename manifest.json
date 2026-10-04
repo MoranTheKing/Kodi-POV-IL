@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-10-04T11:57:53Z",
+  "generated": "2026-10-04T13:08:02Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -36,13 +36,13 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.4.22",
+      "version": "0.4.23",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.4.22.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.22.zip",
-      "size": 2302801,
-      "sha256": "ac62d3e4a8d5ebe4119e42900db4949588eb5385fd19f38af341549efb350747",
-      "updated": "2026-10-04T11:57:53Z"
+      "filename": "plugin.program.kodipovilwizard-0.4.23.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.23.zip",
+      "size": 2303749,
+      "sha256": "bc929fda4d1c6d1d754b7db3a6e225778e34361aebc4713289f88eb36c688827",
+      "updated": "2026-10-04T13:08:02Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
@@ -168,13 +168,13 @@
     "skin.povil.nox": {
       "id": "skin.povil.nox",
       "name": "Kodi POV IL - NOX",
-      "version": "1.0.13",
+      "version": "1.0.14",
       "type": "skin",
-      "filename": "skin.povil.nox-1.0.13.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.nox-1.0.13.zip",
-      "size": 24501327,
-      "sha256": "d9d1316bba17dd476c209f46ba2408ecb4d1a48c783229f4dbf6550418f7c85c",
-      "updated": "2026-10-03T21:38:04Z"
+      "filename": "skin.povil.nox-1.0.14.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.nox-1.0.14.zip",
+      "size": 24501549,
+      "sha256": "34ad4fb9c2186546a6874fd49b01767bc13ad2af8fa7202337f23bc434f69996",
+      "updated": "2026-10-04T13:08:02Z"
     }
   }
 }
