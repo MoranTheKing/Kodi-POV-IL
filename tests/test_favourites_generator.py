@@ -214,8 +214,8 @@ class FavouritesGeneratorTests(unittest.TestCase):
         mdblist_widgets = [row['path'] for row in af3.HOME_WIDGETS
                            if 'MDBList' in row['label']]
         self.assertEqual(len(mdblist_widgets), 2)
-        self.assertTrue(all('action=mdblist_watchlist' in path
-                            for path in mdblist_widgets))
+        self.assertTrue(any('action=mdblist_my_movies' in path for path in mdblist_widgets))
+        self.assertTrue(any('action=mdblist_my_tvshows' in path for path in mdblist_widgets))
 
     def test_legacy_seed_upgrades_untouched_tile_but_keeps_user_edit(self):
         desired = generator.generate_favourites_xml(
