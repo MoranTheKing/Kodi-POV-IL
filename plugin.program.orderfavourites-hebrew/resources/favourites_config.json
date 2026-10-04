@@ -50,7 +50,7 @@
     "my_shows_mdblist": {
       "name": "[B]הסדרות שלי (MDBList)[/B]",
       "icon": "My_Shows_MDBList.png",
-        "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=mdblist_my_tvshows&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2fmdblist.png&mode=build_tvshow_list&name=MDBList%20Watchlist\",return)",
+        "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=mdblist_my_tvshows&mode=build_tvshow_list&name=MDBList\",return)",
         "condition": "mdblist"
     },
     "my_movies_tmdb": {
@@ -73,7 +73,7 @@
     "my_movies_mdblist": {
       "name": "[B]הסרטים שלי (MDBList)[/B]",
       "icon": "My_Movies_MDBList.png",
-      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=mdblist_my_movies&iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2fmdblist.png&mode=build_movie_list&name=MDBList%20Watchlist\",return)",
+      "action": "ActivateWindow(10025,\"plugin://plugin.video.pov/?action=mdblist_my_movies&mode=build_movie_list&name=MDBList\",return)",
       "condition": "mdblist"
     },
     "shows_popular": {
