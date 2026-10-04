@@ -137,7 +137,7 @@
 					<label>$INFO[ListItem.Label]</label>
 				</control>
 			</itemlayout>
-			<focusedlayout height="87" width="300"condition="String.IsEqual(Container(9000).ListItem.Property(id),movies)">
+			<focusedlayout height="87" width="300" condition="String.IsEqual(Container(9000).ListItem.Property(id),movies)">
 				<control type="group">
 					<visible>Control.HasFocus(9010)</visible>
 					<control type="image">
@@ -835,6 +835,18 @@
 						<label>הסדרות שלי (TMDB)</label>
 						<icon>special://skin/extras/icons/kidseng.png</icon>
 						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=tmdb_my_tvshows&amp;mode=build_tvshow_list&amp;name=TV+Show+Favorites&quot;,return)</onclick>
+						<visible>String.IsEqual(Container(9000).ListItem.Property(id),favorites)</visible>
+					</item>
+					<item>
+						<label>הסרטים שלי (MDBList)</label>
+						<icon>special://skin/extras/icons/kidseng.png</icon>
+						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=mdblist_my_movies&amp;mode=build_movie_list&amp;name=MDBList&quot;,return)</onclick>
+						<visible>String.IsEqual(Container(9000).ListItem.Property(id),favorites)</visible>
+					</item>
+					<item>
+						<label>הסדרות שלי (MDBList)</label>
+						<icon>special://skin/extras/icons/kidseng.png</icon>
+						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=mdblist_my_tvshows&amp;mode=build_tvshow_list&amp;name=MDBList&quot;,return)</onclick>
 						<visible>String.IsEqual(Container(9000).ListItem.Property(id),favorites)</visible>
 					</item>
 					<item>

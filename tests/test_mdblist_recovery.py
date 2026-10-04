@@ -68,7 +68,7 @@ class MDBListRecoveryTests(unittest.TestCase):
         config = runpy.run_path(str(WIZ / 'patches/patches_config.py'))['PATCH_CONFIG']
         ids = {'mdblist_api_redact_and_reauth_prep', 'mdblist_api_reauth_retry',
                'mdblist_cache_verified_reads', 'mdblist_complete_pagination', 'mdblist_manager_read_failure',
-               'mdblist_activity_failed_read', 'mdblist_response_pagination'}
+               'mdblist_activity_failed_read', 'mdblist_response_pagination', 'mdblist_collection_parent_projection'}
         def patched(filename, target):
             source = (FIX / filename).read_text('utf8')
             for entry in config:
@@ -185,6 +185,70 @@ class MDBListRecoveryTests(unittest.TestCase):
     def collection_row(self, media, id, date):
         return {'collected_at': date, media: {'title': str(id), 'year': 2020,
                 'ids': {'tmdb': id, 'imdb': 'tt%s' % id}}}
+
+    def test_collected_seasons_and_episodes_project_only_explicit_parent_shows(self):
+        season = self.collection_row('show', 43, '2026-10-04T10:00:00Z')
+        season['season'] = {'ids': {'tmdb': 999}}
+        episode = self.collection_row('show', 44, '2026-10-04T11:00:00Z')
+        episode['episode'] = {'ids': {'tmdb': 998}}
+        self.api.session.request.side_effect = [
+            self.response(200, {'seasons': [season], 'pagination': {'next_cursor': 'season-page'}}),
+            self.response(200, {'episodes': [episode], 'shows': [
+                self.collection_row('show', 43, '2026-10-03T10:00:00Z')],
+                'pagination': {'total': 3, 'next_cursor': None}})]
+        rows = self.api.mdbl_collection_watchlist_items('collection', 'shows')
+        self.assertEqual({r['id']: r['collected_at'] for r in rows},
+                         {43: season['collected_at'], 44: episode['collected_at']})
+        self.assertEqual(self.api.mdbl_collection_watchlist_items('collection', 'movies'), [])
+        cached = json.loads(self.db.execute(
+            "SELECT data FROM mdbl_data WHERE id='mdbl_collection'").fetchone()[0])
+        self.assertEqual(cached['seasons'], [season])
+        self.assertEqual(self.api.session.request.call_count, 2)
+
+    def test_optional_collection_metadata_does_not_drop_valid_media(self):
+        rows = [self.collection_row('show', 43, '2026-10-04T10:00:00Z'),
+                {'show': {'ids': {'tmdb': '44'}}, 'collected_at': {'invalid': True}},
+                {'episode': {'ids': {'tmdb': 998}}},
+                {'show': {'ids': {'tmdb': True}}},
+                {'show': {'ids': {'tmdb': 45.5}}}, None]
+        del rows[0]['show']['ids']['imdb']
+        self.api.session.request.return_value = self.response(200, {
+            'episodes': rows, 'pagination': {'total': 6, 'next_cursor': None}})
+        result = self.api.mdbl_collection_watchlist_items('collection', 'shows')
+        self.assertEqual([r['id'] for r in result], [43, 44])
+        self.assertIsNone(result[0]['imdb_id'])
+        self.assertEqual(result[1]['collected_at'], '')
+        self.assertEqual(result[1]['year'], '')
+
+    def test_parent_schema_refreshes_collection_only_once_without_erasing_other_data(self):
+        self.logic.cache_list(lambda _: [], 'other-read', '/fixture')
+        self.db.execute('CREATE TABLE watched_status(id INTEGER)')
+        self.db.execute('INSERT INTO watched_status VALUES(9)')
+        self.db.execute('INSERT INTO mdbl_data VALUES(?,?)',
+                        ('mdbl_collection', json.dumps({'shows': [], 'movies': []})))
+        self.api.session.request.return_value = self.response(200, {
+            'seasons': [self.collection_row('show', 43, '2026-10-04T10:00:00Z')],
+            'pagination': {'next_cursor': None}})
+        for _ in range(2):
+            self.assertEqual(self.api.mdbl_collection_watchlist_items('collection', 'shows')[0]['id'], 43)
+        self.assertEqual(self.api.session.request.call_count, 1)
+        self.assertEqual(self.db.execute("SELECT data FROM mdbl_data WHERE id='other-read'").fetchone(), ('[]',))
+        self.assertEqual(self.db.execute('SELECT id FROM watched_status').fetchall(), [(9,)])
+
+    def test_failed_parent_schema_refresh_is_retryable_not_cached(self):
+        self.api.session.request.side_effect = [self.response(503, {}), self.response(200, {
+            'episodes': [self.collection_row('show', 44, '2026-10-04T10:00:00Z')],
+            'pagination': {'next_cursor': None}})]
+        with self.assertRaises(self.logic.MDBListUnavailable):
+            self.api.mdbl_collection_watchlist_items('collection', 'shows')
+        self.assertIsNone(self.db.execute("SELECT data FROM mdbl_data WHERE id='mdbl_collection'").fetchone())
+        self.assertEqual(self.api.mdbl_collection_watchlist_items('collection', 'shows')[0]['id'], 44)
+
+    def test_season_only_header_pagination_is_preserved(self):
+        self.api.session.request.return_value = self.response(200, {
+            'seasons': [self.collection_row('show', 43, '2026-10-04T10:00:00Z')]},
+            {'X-Has-More': 'false'})
+        self.assertEqual(self.api.mdbl_collection_watchlist_items('collection', 'shows')[0]['id'], 43)
 
     def test_documented_collection_cursor_without_has_more_recovers_both_media(self):
         body = {'movies': [self.collection_row('movie', 42, '2026-10-04T08:00:00Z')],

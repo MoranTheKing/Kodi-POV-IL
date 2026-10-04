@@ -71,6 +71,12 @@
 						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=tmdb_my_movies&amp;mode=build_movie_list&amp;name=Movie+Favorites&quot;,return)</onclick>
 					</item>
 					<item>
+						<label>הסרטים שלי (MDBList)</label>
+						<icon>special://skin/extras/icons/kodi.png</icon>
+						<onclick>Close</onclick>
+						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=mdblist_my_movies&amp;mode=build_movie_list&amp;name=MDBList&quot;,return)</onclick>
+					</item>
+					<item>
 						<label>הסרטים שלי (POV)</label>
 						<icon>special://skin/extras/icons/kodi.png</icon>
 						<onclick>Close</onclick>
@@ -87,6 +93,12 @@
 						<icon>special://skin/extras/icons/download.png</icon>
 						<onclick>Close</onclick>
 						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=tmdb_my_tvshows&amp;mode=build_tvshow_list&amp;name=TV+Show+Favorites&quot;,return)</onclick>
+					</item>
+					<item>
+						<label>הסדרות שלי (MDBList)</label>
+						<icon>special://skin/extras/icons/download.png</icon>
+						<onclick>Close</onclick>
+						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=mdblist_my_tvshows&amp;mode=build_tvshow_list&amp;name=MDBList&quot;,return)</onclick>
 					</item>
 					<item>
 						<label>הסדרות שלי (POV)</label>

@@ -66,6 +66,15 @@ def cache_list(function, string, url):
         return value
     cur = mdbl_cache.MDBLCache().dbcur
     prepare(cur)
+    if string == 'mdbl_collection':
+        # Earlier cached snapshots discarded the seasons bucket. Refresh only
+        # this read once; watched/progress and other lists are not migration data.
+        key, value = 'povil_mdbl_collection_schema', 'parents_v1'
+        cur.execute(mdbl_cache.MC_BASE_GET, (key,))
+        row = cur.fetchone()
+        if not row or row[0] != value:
+            cur.execute('DELETE FROM mdbl_data WHERE id=?', (string,))
+            cur.execute(mdbl_cache.MC_BASE_SET, (key, value))
     cur.execute(mdbl_cache.MC_BASE_GET, (string,))
     row = cur.fetchone()
     if row:
@@ -92,7 +101,7 @@ def list_response_pagination(result, response):
     required JSON field. Do not guess that an unknown response is complete.
     """
     if not isinstance(result, dict) or not any(
-            isinstance(result.get(key), list) for key in ('movies', 'shows', 'episodes', 'items')):
+            isinstance(result.get(key), list) for key in ('movies', 'shows', 'seasons', 'episodes', 'items')):
         return result
     headers = response.headers
     more = headers.get('X-Has-More')
@@ -122,7 +131,7 @@ def list_response_pagination(result, response):
 
 def paginated_list(url, max_items=250000):
     """Accept complete valid pages only, including genuinely empty lists."""
-    items = {'movies': [], 'shows': [], 'episodes': [], 'items': []}
+    items = {'movies': [], 'shows': [], 'seasons': [], 'episodes': [], 'items': []}
     params, cursors, received = {'limit': 1000}, set(), 0
     for _ in range(max_items // params['limit']):
         result = _call_mdblist(url, params=dict(params))
@@ -167,6 +176,54 @@ def paginated_list(url, max_items=250000):
         cursors.add(cursor)
         params['cursor'] = cursor
     raise MDBListUnavailable('MDBList pagination incomplete')
+
+
+def collection_items(results, mediatype):
+    """Project collected seasons/episodes to their explicit parent show IDs.
+
+    Never use a season/episode ID as a show ID. Missing optional IMDb/title/year
+    fields do not invalidate other valid collected titles. No cloud writes.
+    """
+    movie = mediatype in ('movie', 'movies')
+    key = 'movie' if movie else 'show'
+    buckets = ('movies',) if movie else ('shows', 'seasons', 'episodes')
+    merged, skipped = {}, 0
+    for bucket in buckets:
+        for row in results.get(bucket, []):
+            if not isinstance(row, dict):
+                skipped += 1
+                continue
+            media = row.get(key)
+            ids = media.get('ids') if isinstance(media, dict) else None
+            value = ids.get('tmdb') if isinstance(ids, dict) else None
+            try:
+                if isinstance(value, bool) or str(value).strip() != str(int(value)) or int(value) <= 0:
+                    raise ValueError('invalid media id')
+                value = int(value)
+            except (TypeError, ValueError, OverflowError):
+                skipped += 1
+                continue
+            date = row.get('collected_at')
+            date = date if isinstance(date, str) else ''
+            year = media.get('year')
+            year = str(year) if type(year) is int else year if isinstance(year, str) else ''
+            item = {'id': value, 'imdb_id': ids.get('imdb'),
+                    'title': media.get('title') if isinstance(media.get('title'), str) else '',
+                    'year': year,
+                    'collected_at': date}
+            previous = merged.get(value)
+            if previous is None or date > previous['collected_at']:
+                merged[value] = item
+    try:
+        from modules import kodi_utils
+        kodi_utils.logger('MDBList collection projection',
+                          'media=%s direct=%d seasons=%d episodes=%d unique=%d skipped=%d' % (
+                              key, len(results.get('movies' if movie else 'shows', [])),
+                              len(results.get('seasons', [])), len(results.get('episodes', [])),
+                              len(merged), skipped))
+    except Exception:
+        pass
+    return list(merged.values())
 
 def _call_mdblist(path, **kwargs):
     from indexers.mdblist_api import call_mdblist, base_url

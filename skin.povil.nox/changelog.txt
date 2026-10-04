@@ -1,0 +1,2 @@
+1.0.14
+- Add personal MDBList movie/show shortcuts to the home favourites submenu and continue-watching dialog, using the combined library routes.
