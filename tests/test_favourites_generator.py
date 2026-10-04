@@ -235,6 +235,76 @@ class FavouritesGeneratorTests(unittest.TestCase):
         self.assertEqual(migrated[0].get('thumb'), 'user-pov.png')
         self.assertEqual(migrated[1].get('thumb'), desired_rows[1].get('thumb'))
 
+    def test_stale_build_watchlist_routes_repair_without_baseline_and_keep_order_icons(self):
+        import json
+        desired = self._refresh('skin.povil.nox')
+        for lost_baseline in (False, True):
+            root = ET.fromstring(desired)
+            for item in root:
+                if 'action=mdblist_my_' in (item.text or ''):
+                    item.text = item.text.replace('action=mdblist_my_movies',
+                        'action=mdblist_watchlist').replace('action=mdblist_my_tvshows',
+                        'action=mdblist_watchlist').replace('name=MDBList', 'name=MDBList%20Watchlist')
+                    item.set('thumb', 'my-custom-thumbnail.png')
+            root[:] = list(reversed(list(root)))
+            self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+            state_path = Path(generator._state_file())
+            if lost_baseline:
+                state_path.unlink()
+            else:
+                state = json.loads(state_path.read_text('utf8'))
+                # Baseline already canonical, installed legacy route wrongly
+                # considered an edit by the previous three-way merge.
+                self.assertIn('action=mdblist_my_', state['baseline'])
+            repaired = _items(self._refresh('skin.povil.nox'))
+            self.assertEqual([i.get('name') for i in repaired], [i.get('name') for i in root])
+            for item in repaired:
+                if 'MDBList' in item.get('name'):
+                    self.assertEqual(item.get('thumb'), 'my-custom-thumbnail.png')
+                    self.assertIn('action=mdblist_my_', item.text)
+                    self.assertNotIn('Watchlist', item.text)
+            self.assertEqual(_items(self._refresh('skin.povil.nox'))[-1].get('name'), root[-1].get('name'))
+
+    def test_custom_filtered_watchlist_and_deleted_build_tile_stay_authoritative(self):
+        first = self._refresh()
+        root = ET.fromstring(first)
+        for item in list(root):
+            if 'action=mdblist_my_movies' in (item.text or ''):
+                root.remove(item)
+            elif 'action=mdblist_my_tvshows' in (item.text or ''):
+                item.text = item.text.replace('action=mdblist_my_tvshows',
+                                              'action=mdblist_watchlist')
+                item.text = item.text.replace('&name=MDBList', '&name=MDBList&filter=unwatched')
+                custom = item.text
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        repaired = _items(self._refresh())
+        self.assertFalse(any('action=mdblist_my_movies' in i.text for i in repaired))
+        self.assertTrue(any(i.text == custom for i in repaired))
+
+    def test_legacy_encoded_icon_route_repairs_but_custom_or_ambiguous_queries_do_not(self):
+        from urllib.parse import urlencode
+        desired = ET.fromstring(self._refresh())
+        target = next(i for i in desired if 'action=mdblist_my_tvshows' in i.text)
+        by_name = {i.get('name'): i for i in desired}
+        params = dict(action='mdblist_watchlist', mode='build_tvshow_list',
+                      name='MDBList Watchlist', iconImage=(
+                          'special://home/addons/plugin.video.pov/resources/'
+                          'skins/Default/media/mdblist.png'))
+        for extra, should_repair in (('', True), ('&action=mdblist_watchlist', False),
+                                    ('&list_id=123', False)):
+            item = ET.fromstring(ET.tostring(target))
+            original = 'ActivateWindow(10025,"plugin://plugin.video.pov/?%s%s",return)' % (urlencode(params), extra)
+            item.text = original
+            generator._repair_mdbl_personal(item, by_name)
+            self.assertEqual(item.text, target.text if should_repair else original)
+        for change in ({'iconImage': 'my-icon.png'}, {'mode': 'build_movie_list'},
+                       {'name': 'My custom Watchlist'}):
+            item = ET.fromstring(ET.tostring(target))
+            original = 'ActivateWindow(10025,"plugin://plugin.video.pov/?%s",return)' % urlencode(dict(params, **change))
+            item.text = original
+            generator._repair_mdbl_personal(item, by_name)
+            self.assertEqual(item.text, original)
+
 
 if __name__ == '__main__':
     unittest.main()
