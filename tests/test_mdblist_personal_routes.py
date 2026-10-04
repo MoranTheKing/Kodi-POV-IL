@@ -25,6 +25,17 @@ af3 = load('qa_mdbl_personal_af3',
 
 
 class MDBListPersonalRoutesTests(unittest.TestCase):
+    def test_large_tiles_submenu_and_continue_use_identical_directory_urls(self):
+        generator = load('qa_fav_routes', 'plugin.program.orderfavourites-hebrew/favourites_generator.py')
+        with patch.object(generator, '_check_condition', return_value=True):
+            for skin in ('skin.povil.nox', 'skin.fentastic', 'skin.estuary'):
+                rows = ET.fromstring(generator.generate_favourites_xml(skin, merge=False, write=False))
+                for action in ('mdblist_my_movies', 'mdblist_my_tvshows'):
+                    tile = next(i.text for i in rows if 'action=' + action + '&' in i.text)
+                    for filename in ('Custom_nox_main_menu.xml', 'Custom_2115_next_watch.xml'):
+                        menu = ET.parse(ROOT / 'skin.povil.nox/xml' / filename)
+                        self.assertIn(tile, [i.text for i in menu.iter('onclick')])
+
     def test_nox_favourites_submenu_and_continue_dialog_include_combined_library_routes(self):
         for filename in ('Custom_nox_main_menu.xml', 'Custom_2115_next_watch.xml'):
             root = ET.parse(ROOT / 'skin.povil.nox/xml' / filename).getroot()
