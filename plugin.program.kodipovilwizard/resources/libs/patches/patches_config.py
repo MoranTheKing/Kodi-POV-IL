@@ -1101,6 +1101,16 @@ PATCH_CONFIG = [
         "hook": "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n\treturn pov_mdblist_patch_logic.cache_list(function, string, url)\n"
     },
     {
+        "id": "mdblist_response_pagination",
+        "name": "MDBList bucketed response pagination",
+        "description": "Preserve pagination headers for collection and watchlist JSON objects as well as native arrays.",
+        "addon_id": "plugin.video.pov", "enabled": True,
+        "target_file": "resources/lib/indexers/mdblist_api.py",
+        "marker": "# WIZARD_POV_MDBL_RESPONSE_PAGES_v1",
+        "anchor": "\t\tif isinstance(result, list):", "action": "prepend_before",
+        "hook": "\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n\t\tresult = pov_mdblist_patch_logic.list_response_pagination(result, response)\n"
+    },
+    {
         "id": "mdblist_complete_pagination",
         "name": "MDBList complete pagination",
         "description": "Reject unavailable or incomplete pages rather than reporting an empty list.",
