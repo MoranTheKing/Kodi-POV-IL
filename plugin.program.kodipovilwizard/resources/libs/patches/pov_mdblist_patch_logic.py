@@ -84,16 +84,52 @@ def cache_list(function, string, url):
     return result
 
 
+def list_response_pagination(result, response):
+    """Keep pagination headers for bucketed JSON, as native POV does for arrays.
+
+    MDBList documents next_cursor (including null at the end) for collection
+    and watched history, and X-Has-More for list responses. has_more is not a
+    required JSON field. Do not guess that an unknown response is complete.
+    """
+    if not isinstance(result, dict) or not any(
+            isinstance(result.get(key), list) for key in ('movies', 'shows', 'episodes', 'items')):
+        return result
+    headers = response.headers
+    more = headers.get('X-Has-More')
+    cursor = headers.get('X-Next-Cursor')
+    if more is None and cursor is None:
+        return result
+    result = dict(result)
+    pagination = result.get('pagination', {})
+    if not isinstance(pagination, dict):
+        raise MDBListUnavailable('MDBList pagination invalid')
+    pagination = dict(pagination)
+    if more is not None:
+        more = str(more).strip().lower()
+        if more not in ('true', 'false'):
+            raise MDBListUnavailable('MDBList pagination header invalid')
+        more = more == 'true'
+        if 'has_more' in pagination and pagination['has_more'] is not more:
+            raise MDBListUnavailable('MDBList pagination conflict')
+        pagination['has_more'] = more
+    if cursor:
+        if 'next_cursor' in pagination and pagination['next_cursor'] != cursor:
+            raise MDBListUnavailable('MDBList cursor conflict')
+        pagination['next_cursor'] = cursor
+    result['pagination'] = pagination
+    return result
+
+
 def paginated_list(url, max_items=250000):
     """Accept complete valid pages only, including genuinely empty lists."""
     items = {'movies': [], 'shows': [], 'episodes': [], 'items': []}
-    params, cursors = {'limit': 1000}, set()
+    params, cursors, received = {'limit': 1000}, set(), 0
     for _ in range(max_items // params['limit']):
-        result = _call_mdblist(url, params=params)
+        result = _call_mdblist(url, params=dict(params))
         if not isinstance(result, dict):
             raise MDBListUnavailable('MDBList page unavailable')
         pagination = result.get('pagination')
-        if not isinstance(pagination, dict) or 'has_more' not in pagination:
+        if not isinstance(pagination, dict):
             raise MDBListUnavailable('MDBList pagination unavailable')
         if not any(isinstance(result.get(key), list) for key in items):
             raise MDBListUnavailable('MDBList items unavailable')
@@ -102,9 +138,27 @@ def paginated_list(url, max_items=250000):
                 if not isinstance(result[key], list):
                     raise MDBListUnavailable('MDBList items invalid')
                 items[key].extend(result[key])
-        if not pagination['has_more']:
-            return items
         cursor = pagination.get('next_cursor')
+        if cursor is not None and not isinstance(cursor, str):
+            raise MDBListUnavailable('MDBList cursor invalid')
+        if 'has_more' in pagination:
+            more = pagination['has_more']
+            if not isinstance(more, bool) or (not more and cursor):
+                raise MDBListUnavailable('MDBList pagination invalid')
+        elif 'next_cursor' in pagination:
+            more = bool(cursor)
+        else:
+            raise MDBListUnavailable('MDBList pagination unavailable')
+        # Seasons also contribute to the collection endpoint's total.
+        page_count = sum(len(result[key]) for key in ('movies', 'shows', 'seasons', 'episodes', 'items')
+                         if isinstance(result.get(key), list))
+        received += page_count
+        if not more:
+            total, offset = pagination.get('total'), pagination.get('offset')
+            end = offset + page_count if type(offset) is int and offset >= 0 else received
+            if type(total) is int and total > end:
+                raise MDBListUnavailable('MDBList pagination incomplete')
+            return items
         if not cursor or cursor in cursors:
             raise MDBListUnavailable('MDBList cursor invalid')
         cursors.add(cursor)
@@ -184,6 +238,7 @@ def _retry_call(path, params, json_data, method):
         if not response.ok:
             record_failure(response)
             return None
+        result = list_response_pagination(result, response)
         _last_failure[0] = 0
         if isinstance(result, list):
             result = {'items': result, 'pagination': {'has_more': response.headers.get('X-Has-More') == 'true'}}
