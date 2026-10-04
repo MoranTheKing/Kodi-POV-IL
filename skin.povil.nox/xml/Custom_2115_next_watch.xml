@@ -7,11 +7,11 @@
 		<control type="group">
 			<centerleft>50%</centerleft>
 			<width>600</width>
-			<centertop>77%</centertop>
+			<centertop>50%</centertop>
 			<height>980</height>
 			<include content="DialogBackgroundCommons">
 				<param name="width" value="600" />
-				<param name="height" value="530" />
+				<param name="height" value="980" />
 				<param name="header_label" value="תפריט המשך צפייה" />
 				<param name="header_id" value="2" />
 				<param name="diffusetexture" value="masks/dialog-bg-squareish.png" />

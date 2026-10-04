@@ -1,2 +1,5 @@
+1.0.15
+- Center the continue-watching dialog and fit its background to the full menu so all personal series shortcuts remain on screen.
+
 1.0.14
 - Add personal MDBList movie/show shortcuts to the home favourites submenu and continue-watching dialog, using the combined library routes.
