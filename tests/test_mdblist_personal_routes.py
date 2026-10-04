@@ -4,6 +4,7 @@ import importlib.util
 import json
 import sqlite3
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
 
@@ -24,6 +25,28 @@ af3 = load('qa_mdbl_personal_af3',
 
 
 class MDBListPersonalRoutesTests(unittest.TestCase):
+    def test_nox_favourites_submenu_and_continue_dialog_include_combined_library_routes(self):
+        for filename in ('Custom_nox_main_menu.xml', 'Custom_2115_next_watch.xml'):
+            root = ET.parse(ROOT / 'skin.povil.nox/xml' / filename).getroot()
+            for action, mode in (('mdblist_my_movies', 'build_movie_list'),
+                                 ('mdblist_my_tvshows', 'build_tvshow_list')):
+                rows = [item for item in root.iter('item')
+                        if any('action=' + action + '&' in (onclick.text or '')
+                               for onclick in item.findall('onclick'))]
+                self.assertEqual(len(rows), 1, (filename, action))
+                self.assertIn('MDBList', rows[0].findtext('label'))
+                self.assertTrue(any('mode=' + mode + '&' in onclick.text
+                                    for onclick in rows[0].findall('onclick')))
+                if filename == 'Custom_nox_main_menu.xml':
+                    self.assertEqual(rows[0].findtext('visible'),
+                                     'String.IsEqual(Container(9000).ListItem.Property(id),favorites)')
+                else:
+                    self.assertEqual(rows[0].findtext('onclick'), 'Close')
+        home = ET.parse(ROOT / 'skin.povil.nox/xml/Home_nox.xml').getroot()
+        self.assertTrue(any(item.text == 'MainMenu' for item in home.iter('include')))
+        self.assertTrue(any('ActivateWindow(2115)' in (param.get('value') or '')
+                            for param in home.iter('param')))
+
     def test_shipped_personal_folders_repaired_in_memory_only(self):
         path = ROOT / 'userdata/addon_data/plugin.video.pov/navigator.db'
         before = path.read_bytes()
