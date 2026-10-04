@@ -138,6 +138,13 @@ def paginated_list(url, max_items=250000):
                 if not isinstance(result[key], list):
                     raise MDBListUnavailable('MDBList items invalid')
                 items[key].extend(result[key])
+        # A legacy terminal page can omit next_cursor but still give an exact
+        # total/offset. Only those counts can prove completion without a flag.
+        page_count = sum(len(result[key]) for key in ('movies', 'shows', 'seasons', 'episodes', 'items')
+                         if isinstance(result.get(key), list))
+        received += page_count
+        total, offset = pagination.get('total'), pagination.get('offset')
+        end = offset + page_count if type(offset) is int and offset >= 0 else received
         cursor = pagination.get('next_cursor')
         if cursor is not None and not isinstance(cursor, str):
             raise MDBListUnavailable('MDBList cursor invalid')
@@ -147,15 +154,11 @@ def paginated_list(url, max_items=250000):
                 raise MDBListUnavailable('MDBList pagination invalid')
         elif 'next_cursor' in pagination:
             more = bool(cursor)
+        elif type(total) is int and total >= 0 and total == end:
+            more = False
         else:
             raise MDBListUnavailable('MDBList pagination unavailable')
-        # Seasons also contribute to the collection endpoint's total.
-        page_count = sum(len(result[key]) for key in ('movies', 'shows', 'seasons', 'episodes', 'items')
-                         if isinstance(result.get(key), list))
-        received += page_count
         if not more:
-            total, offset = pagination.get('total'), pagination.get('offset')
-            end = offset + page_count if type(offset) is int and offset >= 0 else received
             if type(total) is int and total > end:
                 raise MDBListUnavailable('MDBList pagination incomplete')
             return items
