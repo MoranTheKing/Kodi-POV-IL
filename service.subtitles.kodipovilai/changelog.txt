@@ -1,3 +1,6 @@
+0.3.23
+- Restore MDBList library items in Arctic Fuse personal widgets; upgrade the old routes in place while preserving positions and removed widgets.
+
 0.3.22
 - Verify subscription-notice settings were accepted by Kodi before confirming a saved choice.
 

@@ -101,17 +101,15 @@ _RULES = (
 	 re.compile(r'^(build_mdbl_list\.|mdblist\.|build_my_calendar_mdbl$)')),
 )
 
-# Canonical MDBList rows (routing rescued from the legacy AF3 patcher: POV's
-# native `mdblist_watchlist` action, movie/tv distinguished by `mode`).
-# Injected in memory into the personal folders only when MDBList is connected
-# and the shipped navigator.db does not already carry the row.
+# Canonical build personal rows. Repair the historical watchlist-only route
+# in memory; never write navigator.db or recreate a row the user removed.
 _MDBLIST_ROWS = {
 	'FENtastic - סרטים - איזור אישי': {
-		'action': 'mdblist_watchlist', 'category_name': 'MDBList Watchlist',
+		'action': 'mdblist_my_movies', 'category_name': 'MDBList Watchlist',
 		'iconImage': 'mdblist.png', 'mode': 'build_movie_list',
 		'name': '[B]הסרטים שלי (MDBList)[/B]'},
 	'FENtastic - סדרות - איזור אישי': {
-		'action': 'mdblist_watchlist', 'category_name': 'MDBList Watchlist',
+		'action': 'mdblist_my_tvshows', 'category_name': 'MDBList Watchlist',
 		'iconImage': 'mdblist.png', 'mode': 'build_tvshow_list',
 		'name': '[B]הסדרות שלי (MDBList)[/B]'},
 }
@@ -361,8 +359,8 @@ def _coerce_list(value):
 # Hook entry point (POV navigator.build_shortcut_folder_list)
 # ---------------------------------------------------------------------------
 def filter_navigator_list(list_items, list_name=None):
-	"""Return `list_items` without rows whose service is not connected, plus
-	the MDBList row when connected. Input is never mutated; on ANY failure the
+	"""Hide disconnected personal rows and repair known build MDBList routes.
+	Input is never mutated; on ANY failure the
 	original object is returned unchanged."""
 	try:
 		items = _coerce_list(list_items)
@@ -373,6 +371,12 @@ def filter_navigator_list(list_items, list_name=None):
 		for it in items:
 			svc = service_of(it)
 			if svc is None or states.get(svc, False):
+				canonical = _MDBLIST_ROWS.get(list_name)
+				if (canonical and isinstance(it, dict)
+						and it.get('action') == 'mdblist_watchlist'
+						and it.get('mode') == canonical['mode']
+						and it.get('name') == canonical['name']):
+					it = dict(it, action=canonical['action'])
 				kept.append(it)
 		removed = len(items) - len(kept)
 		if removed:
