@@ -13,6 +13,41 @@ LIBS = ROOT / 'plugin.program.kodipovilwizard/resources/libs'
 
 
 class SkinProfileCompletionTests(unittest.TestCase):
+    def test_estuary_sidebar_initialized_per_profile_once(self):
+        flags = set(); calls = []
+        def builtin(command, wait):
+            self.assertTrue(wait)
+            calls.append(command)
+            if command.startswith('Skin.SetBool('):
+                flags.add(command[13:-1])
+            elif command.startswith('Skin.Reset('):
+                flags.discard(command[11:-1])
+        fn = _load_function(LIBS / 'build_skin.py', 'prepare_active_skin_defaults', dict(
+            xbmc=types.SimpleNamespace(getSkinDir=lambda: 'skin.estuary', executebuiltin=builtin,
+                getCondVisibility=lambda condition: condition[16:-1] in flags)))
+        self.assertTrue(fn())
+        self.assertIn('HomeMenuNoMusicButton', flags)
+        self.assertIn('HomeMenuNoPicturesButton', flags)
+        self.assertNotIn('HomeMenuNoMovieButton', flags)
+        count = len(calls)
+        flags.remove('HomeMenuNoMusicButton')  # user later re-enables Music
+        self.assertFalse(fn())
+        self.assertEqual(len(calls), count)
+        self.assertNotIn('HomeMenuNoMusicButton', flags)
+
+    def test_regular_profile_uses_master_picker_and_child_cannot_change_skin(self):
+        dialog = unittest.mock.Mock(); picker = unittest.mock.Mock()
+        policy = [None]
+        fn = _load_function(LIBS / 'build_profiles.py', 'choose_skin', dict(
+            profile_age_guard=types.SimpleNamespace(active_policy=lambda: policy[0]),
+            xbmc=types.SimpleNamespace(getCondVisibility=lambda _: False),
+            xbmcgui=types.SimpleNamespace(Dialog=lambda: dialog), _wait_dialogs=lambda: True))
+        with patch.dict('sys.modules', {'resources.libs': types.SimpleNamespace(
+                wizard=types.SimpleNamespace(build_switch_skin=picker))}):
+            fn(); picker.assert_called_once()
+            policy[0] = {'age': 7}; fn()
+            picker.assert_called_once(); dialog.ok.assert_called_once()
+
     def test_live_settings_save_uses_native_path_and_verifies_profile_skin(self):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / 'guisettings.xml'
@@ -52,7 +87,7 @@ class SkinProfileCompletionTests(unittest.TestCase):
                 return str(ARCHIVE if 'bootstrap' in path else profile)
             import hashlib, zipfile
             fn = _load_function(LIBS / 'build_skin.py', 'prepare_layout',
-                dict(hashlib=hashlib, zipfile=zipfile,
+                dict(hashlib=hashlib, zipfile=zipfile, prepare_active_skin_defaults=lambda: False,
                     xbmcvfs=types.SimpleNamespace(translatePath=translate),
                     xbmc=types.SimpleNamespace(getSkinDir=lambda: 'skin.fentastic')))
             with patch.dict('sys.modules', {'resources.libs': libs}):
@@ -73,7 +108,9 @@ class SkinProfileCompletionTests(unittest.TestCase):
             fn = _load_function(ROOT / 'plugin.program.kodipovilwizard/profile_bootstrap.py', 'resume',
                 dict(os=__import__('os'), xbmcvfs=types.SimpleNamespace(translatePath=translate),
                      xbmc=types.SimpleNamespace(executeJSONRPC=lambda _q: self.fail('Must not modify established choices'))))
-            self.assertFalse(fn())
+            with patch.dict('sys.modules', {'resources.libs': types.SimpleNamespace(
+                    build_skin=types.SimpleNamespace(prepare_active_skin_defaults=lambda: False))}):
+                self.assertFalse(fn())
 
 
 if __name__ == '__main__':
