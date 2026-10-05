@@ -487,6 +487,7 @@ def wait_for_gui_ready(timeout=90):
     try:
         monitor = xbmc.Monitor()
         waited = 0
+        login_checked = False
         while waited < timeout:
             home_visible = xbmc.getCondVisibility('Window.IsVisible(home)')
             if home_visible:
@@ -496,6 +497,10 @@ def wait_for_gui_ready(timeout=90):
                 logging.log('[GUI Ready] Home visible after {0}s'.format(waited),
                             level=xbmc.LOGINFO)
                 return True
+            if not login_checked and xbmc.getCondVisibility('Window.IsActive(loginscreen)'):
+                login_checked = True
+                from resources.libs import build_profiles
+                build_profiles.resume_single_login()
             if monitor.waitForAbort(1):
                 return False
             waited += 1
@@ -511,7 +516,18 @@ def wait_for_gui_ready(timeout=90):
 
 
 # Don't run the script while video is playing :)
+xbmc.executebuiltin('RunScript({})'.format(os.path.join(CONFIG.ADDON_PATH, 'profile_service.py')))
 check_for_video()
+# A native secondary profile does not include build addon_data/favourites.
+# Repair missing defaults before interpreting it as a fresh APK installation.
+try:
+    from resources.libs import build_profiles
+    build_profiles.install_login_hooks()
+    build_profiles.repair_active()
+    if not build_profiles.prepare_first_login():
+        logging.log('[Profiles] add-on registration incomplete; retrying next startup', level=xbmc.LOGWARNING)
+except Exception as profile_err:
+    logging.log('[Profiles] active repair failed: {}'.format(type(profile_err).__name__), level=xbmc.LOGERROR)
 # Ensure that any needed folders are created
 tools.ensure_folders()
 
@@ -569,6 +585,17 @@ if not wait_for_gui_ready():
     logging.log('[Startup] GUI unavailable; deferring dialogs', level=xbmc.LOGWARNING)
     sys.exit()
 
+try:
+    build_profiles.repair_single_login()
+    profile_defaults = os.path.join(CONFIG.USERDATA, 'kodipovil.profile_gui_defaults.xml')
+    if not build_profiles.is_master() and os.path.isfile(profile_defaults):
+        from resources.libs import fresh_install
+        if fresh_install.apply_live_defaults(defaults_path=profile_defaults):
+            os.remove(profile_defaults)
+            xbmc.executebuiltin('ReloadSkin()')
+except Exception as profile_err:
+    logging.log('[Profiles] login repair failed: {}'.format(type(profile_err).__name__), level=xbmc.LOGERROR)
+
 # FIRST-BOOT STABILIZER (race shield). Runs ONLY when the one-shot marker from a
 # just-completed install is present. Warms POV up (user-visible countdown) and
 # ReloadSkin()s so the FENtastic home widgets load against a ready POV instead of
@@ -577,7 +604,8 @@ if not wait_for_gui_ready():
 first_boot_stabilize_if_needed()
 
 # SHOW NOTIFICATIONS
-if CONFIG.ENABLE_NOTIFICATION == 'Yes' and (CONFIG.get_setting('buildname') or
+from resources.libs.patches import profile_age_guard
+if profile_age_guard.active_policy() is None and CONFIG.ENABLE_NOTIFICATION == 'Yes' and (CONFIG.get_setting('buildname') or
         os.path.isfile(os.path.join(CONFIG.ADDONS, 'plugin.video.pov', 'addon.xml'))):
     show_notification()
 else:

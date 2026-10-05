@@ -106,14 +106,14 @@ def _accept_initial_skin_confirmation():
         return False
 
 
-def apply_live_defaults():
+def apply_live_defaults(defaults_path=None):
     """Persist fresh GUI defaults through Kodi, which owns the in-memory copy.
 
     Set the skin last, after all assets and dependencies have been verified.
     Only the exact first-install skin-retention question is accepted. A
     reverted skin is not reported as a successfully activated build.
     """
-    root = ET.parse(os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')).getroot()
+    root = ET.parse(defaults_path or os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')).getroot()
     target_skin = 'skin.povil.nox'
     monitor = xbmc.Monitor()
     for setting in root.findall('setting'):
@@ -148,6 +148,15 @@ def apply_live_defaults():
             raise RuntimeError('Fresh setting was rejected: ' + key)
     skin_changed = xbmc.getSkinDir() != target_skin
     if skin_changed:
+        # Native profile loading can fall back to Estuary while leaving NOX
+        # selected in settings (third-party add-ons were initially disabled).
+        # Setting NOX to its existing value emits no change event. Reconcile
+        # the setting with the actual fallback before requesting NOX again.
+        selected = _rpc('Settings.GetSettingValue', {'setting': 'lookandfeel.skin'})['value']
+        if selected == target_skin:
+            if _rpc('Settings.SetSettingValue', {'setting': 'lookandfeel.skin',
+                                                'value': xbmc.getSkinDir()}) is not True:
+                return False
         finished = threading.Event()
         def confirm_requested_skin():
             # SetSettingValue can wait for its GUI confirmation. Start this

@@ -1,0 +1,212 @@
+<?xml version='1.0' encoding='utf-8'?>
+<window type="dialog">
+  <defaultcontrol always="true">100</defaultcontrol>
+  <coordinates>
+    <system>1</system>
+    <posx>0</posx>
+    <posy>0</posy>
+  </coordinates>
+  <controls>
+    <control type="image">
+      <left>0</left>
+      <top>0</top>
+      <width>1920</width>
+      <height>1080</height>
+      <texture colordiffuse="F0161C26">white.png</texture>
+    </control>
+    <control type="label">
+      <left>120</left>
+      <top>98</top>
+      <width>1680</width>
+      <height>98</height>
+      <align>center</align>
+      <font>font27</font>
+      <label>מי צופה?</label>
+      <textcolor>FFFFFFFF</textcolor>
+    </control>
+    <control type="label">
+      <left>120</left>
+      <top>202</top>
+      <width>1680</width>
+      <height>60</height>
+      <align>center</align>
+      <font>font13</font>
+      <label>בחר פרופיל להמשך — המעבר מתבצע בתוך Kodi</label>
+      <textcolor>FFB9C2D4</textcolor>
+    </control>
+    <control type="panel" id="100">
+      <left>150</left>
+      <top>322</top>
+      <width>1620</width>
+      <height>435</height>
+      <orientation>horizontal</orientation>
+      <onup>204</onup>
+      <ondown condition="String.IsEqual(Window.Property(child),true)">204</ondown>
+      <onleft>100</onleft>
+      <onright>100</onright>
+      <itemlayout width="405" height="412">
+        <control type="image">
+          <left>52</left>
+          <top>22</top>
+          <width>300</width>
+          <height>270</height>
+          <aspectratio>keep</aspectratio>
+          <texture>$INFO[ListItem.Art(thumb)]</texture>
+        </control>
+        <control type="label">
+          <left>15</left>
+          <top>304</top>
+          <width>375</width>
+          <height>52</height>
+          <align>center</align>
+          <font>font13</font>
+          <label>$INFO[ListItem.Label]</label>
+          <textcolor>FFDAE1ED</textcolor>
+        </control>
+        <control type="label">
+          <left>15</left>
+          <top>364</top>
+          <width>375</width>
+          <height>38</height>
+          <align>center</align>
+          <font>font12</font>
+          <label>$INFO[ListItem.Property(status)]</label>
+          <textcolor>FF99A5B8</textcolor>
+        </control>
+      </itemlayout>
+      <focusedlayout width="405" height="412">
+        <control type="image">
+          <left>18</left>
+          <top>0</top>
+          <width>369</width>
+          <height>410</height>
+          <texture colordiffuse="FF365B81">white.png</texture>
+        </control>
+        <control type="image">
+          <left>52</left>
+          <top>22</top>
+          <width>300</width>
+          <height>270</height>
+          <aspectratio>keep</aspectratio>
+          <texture>$INFO[ListItem.Art(thumb)]</texture>
+        </control>
+        <control type="label">
+          <left>15</left>
+          <top>304</top>
+          <width>375</width>
+          <height>52</height>
+          <align>center</align>
+          <font>font13</font>
+          <label>$INFO[ListItem.Label]</label>
+          <textcolor>FFFFFFFF</textcolor>
+        </control>
+        <control type="label">
+          <left>15</left>
+          <top>364</top>
+          <width>375</width>
+          <height>38</height>
+          <align>center</align>
+          <font>font12</font>
+          <label>$INFO[ListItem.Property(status)]</label>
+          <textcolor>FFFFFFFF</textcolor>
+        </control>
+      </focusedlayout>
+      <ondown condition="!String.IsEqual(Window.Property(child),true)">202</ondown>
+    </control>
+    <control type="button" id="202">
+      <left>158</left>
+      <top>825</top>
+      <width>390</width>
+      <height>90</height>
+      <label>סקין וחיבורים אישיים</label>
+      <font>font13</font>
+      <align>center</align>
+      <onup>100</onup>
+      <ondown condition="String.IsEqual(Window.Property(master),true)">205</ondown>
+      <ondown condition="!String.IsEqual(Window.Property(master),true)">100</ondown>
+      <onleft>204</onleft>
+      <onright condition="String.IsEqual(Window.Property(master),true)">201</onright>
+      <onright condition="!String.IsEqual(Window.Property(master),true)">204</onright>
+      <texturefocus colordiffuse="FF365B81">white.png</texturefocus>
+      <texturenofocus colordiffuse="FF252F40">white.png</texturenofocus>
+      <visible>!String.IsEqual(Window.Property(child),true)</visible>
+    </control>
+    <control type="button" id="201">
+      <left>578</left>
+      <top>825</top>
+      <width>360</width>
+      <height>90</height>
+      <label>+ הוספת פרופיל</label>
+      <font>font13</font>
+      <align>center</align>
+      <visible>String.IsEqual(Window.Property(master),true)</visible>
+      <onup>100</onup>
+      <ondown>205</ondown>
+      <onleft>202</onleft>
+      <onright>203</onright>
+      <texturefocus colordiffuse="FF365B81">white.png</texturefocus>
+      <texturenofocus colordiffuse="FF252F40">white.png</texturenofocus>
+    </control>
+    <control type="button" id="203">
+      <left>968</left>
+      <top>825</top>
+      <width>360</width>
+      <height>90</height>
+      <label>ניהול ובחירה בהפעלה</label>
+      <font>font13</font>
+      <align>center</align>
+      <visible>String.IsEqual(Window.Property(master),true)</visible>
+      <onup>100</onup>
+      <ondown>205</ondown>
+      <onleft>201</onleft>
+      <onright>204</onright>
+      <texturefocus colordiffuse="FF365B81">white.png</texturefocus>
+      <texturenofocus colordiffuse="FF252F40">white.png</texturenofocus>
+    </control>
+    <control type="button" id="204">
+      <left>1358</left>
+      <top>825</top>
+      <width>360</width>
+      <height>90</height>
+      <label>חזרה למסך הבית</label>
+      <font>font13</font>
+      <align>center</align>
+      <onup>100</onup>
+      <ondown condition="String.IsEqual(Window.Property(master),true)">205</ondown>
+      <ondown condition="!String.IsEqual(Window.Property(master),true)">100</ondown>
+      <onleft condition="String.IsEqual(Window.Property(master),true)">203</onleft>
+      <onleft condition="!String.IsEqual(Window.Property(master),true) + !String.IsEqual(Window.Property(child),true)">202</onleft>
+      <onleft condition="String.IsEqual(Window.Property(child),true)">100</onleft>
+      <onright condition="!String.IsEqual(Window.Property(child),true)">202</onright>
+      <onright condition="String.IsEqual(Window.Property(child),true)">100</onright>
+      <texturefocus colordiffuse="FF365B81">white.png</texturefocus>
+      <texturenofocus colordiffuse="FF252F40">white.png</texturenofocus>
+    </control>
+    <control type="label">
+      <left>120</left>
+      <top>1020</top>
+      <width>1680</width>
+      <height>52</height>
+      <align>center</align>
+      <font>font12</font>
+      <label>פרופיל פעיל: $INFO[Window.Property(current)]</label>
+      <textcolor>FF99A5B8</textcolor>
+    </control>
+    <control type="button" id="205">
+      <left>600</left>
+      <top>933</top>
+      <width>720</width>
+      <height>68</height>
+      <label>בקרת הורים — גיל ואישור תוכן</label>
+      <font>font13</font>
+      <align>center</align>
+      <visible>String.IsEqual(Window.Property(master),true)</visible>
+      <onup>201</onup>
+      <ondown>100</ondown>
+      <onleft>204</onleft>
+      <onright>202</onright>
+      <texturefocus colordiffuse="FF365B81">white.png</texturefocus>
+      <texturenofocus colordiffuse="FF252F40">white.png</texturenofocus>
+    </control>
+  </controls>
+</window>

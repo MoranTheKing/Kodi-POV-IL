@@ -843,6 +843,28 @@ class ModularUpdater:
             return False
         return CONFIG.get_setting('config_applied_version') != remote
 
+    def _install_verified_module(self, zip_path, mod, sha256):
+        """Fresh and OTA use the same complete extraction and atomic swap.
+
+        Never replace a running subtitle service. Missing or proven-disabled
+        services can be installed immediately; live ones use the handoff gate.
+        A previous failed in-place extraction receipt is cleared only after
+        the staged package has been fully verified and activated.
+        """
+        from resources.libs import staged_addon_install, addon_install_receipt
+        addon_id = mod['id']
+        if not sha256:
+            raise ValueError('add-on installation requires SHA-256')
+        if (addon_id == 'service.subtitles.kodipovilai' and self._on_disk(addon_id)
+                and self._runtime_addon_enabled(addon_id)):
+            raise RuntimeError('refusing live MoranSubs directory swap')
+        data_dir = os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID)
+        addon_install_receipt.begin(data_dir, addon_id, mod.get('version'), sha256)
+        count = staged_addon_install.install(
+            zip_path, CONFIG.ADDONS, addon_id, str(mod.get('version')), sha256)
+        addon_install_receipt.complete(data_dir, addon_id)
+        return count
+
     def _fresh_install_complete(self, manifest):
         """Certify the installed files, not the installer dialog's completion.
 
@@ -1079,9 +1101,6 @@ class ModularUpdater:
                         level=xbmc.LOGINFO)
             if not self.background:
                 from resources.libs.downloader import Downloader
-            from resources.libs import extract
-            logging.log('[ModularUpdater] classic installer: extract ready',
-                        level=xbmc.LOGINFO)
             from resources.libs import config_apply
             logging.log('[ModularUpdater] classic installer: modules ready',
                         level=xbmc.LOGINFO)
@@ -1142,51 +1161,12 @@ class ModularUpdater:
                         failed_addons.append(addon_id)
                         continue
 
-                title = "[COLOR {0}]מתקין:[/COLOR] [COLOR {1}]{2}[/COLOR]".format(CONFIG.COLOR2, CONFIG.COLOR1, tools.clean_text(name))
                 try:
                     logging.log('[ModularUpdater] extracting {0}'.format(addon_id),
                                 level=xbmc.LOGINFO)
-                    if addon_id == 'service.subtitles.kodipovilai' and self.background:
-                        from resources.libs import staged_addon_install
-                        if self._runtime_addon_enabled(addon_id):
-                            raise RuntimeError('refusing live MoranSubs directory swap')
-                        if not want_sha:
-                            raise ValueError('MoranSubs migration requires a pinned SHA-256')
-                        count = staged_addon_install.install(
-                            zip_path, CONFIG.ADDONS, addon_id,
-                            str(mod.get('version')), want_sha)
-                        logging.log('[ModularUpdater] verified and swapped {0} files for {1}'
-                                    .format(count, addon_id), level=xbmc.LOGINFO)
-                    elif addon_id != 'service.subtitles.kodipovilai':
-                        if not want_sha:
-                            raise ValueError('add-on update requires SHA-256')
-                        from resources.libs import staged_addon_install, addon_install_receipt
-                        data_dir = os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID)
-                        addon_install_receipt.begin(
-                            data_dir, addon_id, mod.get('version'), want_sha)
-                        count = staged_addon_install.install(
-                            zip_path, CONFIG.ADDONS, addon_id,
-                            str(mod.get('version')), want_sha)
-                        addon_install_receipt.complete(data_dir, addon_id)
-                        logging.log('[ModularUpdater] verified and swapped {0} files for {1}'
-                                    .format(count, addon_id), level=xbmc.LOGINFO)
-                    else:
-                        from resources.libs import addon_install_receipt
-                        data_dir = os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID)
-                        addon_install_receipt.begin(
-                            data_dir, addon_id, mod.get('version'), want_sha)
-                        _percent, errors, detail = extract.all(
-                            zip_path, CONFIG.ADDONS, ignore=True, title=title,
-                            progress_dialog_bg=self.background)
-                        if errors:
-                            raise RuntimeError('{0} extraction errors: {1}'
-                                               .format(errors, detail[:500]))
-                        count = addon_install_receipt.verify(
-                            zip_path, CONFIG.ADDONS, addon_id,
-                            mod.get('version'))
-                        addon_install_receipt.complete(data_dir, addon_id)
-                        logging.log('[ModularUpdater] verified {0} files for {1}'
-                                    .format(count, addon_id), level=xbmc.LOGINFO)
+                    count = self._install_verified_module(zip_path, mod, want_sha)
+                    logging.log('[ModularUpdater] verified and swapped {0} files for {1}'
+                                .format(count, addon_id), level=xbmc.LOGINFO)
                     extracted_addons.append(addon_id)
                     logging.log('[ModularUpdater] extracted {0}'.format(addon_id),
                                 level=xbmc.LOGINFO)

@@ -95,7 +95,12 @@
 					<item>
 						<label>החלף סקין</label>
 						<onclick>Dialog.Close(all)</onclick>
-						<onclick>PlayMedia(&quot;plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=build_switch_skin&quot;)</onclick>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profile_skin)</onclick>
+					</item>
+					<item>
+						<label>מי צופה? — פרופילים</label>
+						<onclick>Dialog.Close(all)</onclick>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profiles)</onclick>
 					</item>
 					<item>
 						<label>ניקוי קאש POV</label>

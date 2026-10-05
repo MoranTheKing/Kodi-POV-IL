@@ -2,6 +2,11 @@
   "_comment": "Canonical favourites for the Kodi POV IL build. favourites_generator.generate_favourites_xml(skin_id) builds userdata/favourites.xml from this per active skin. Each tile: 'name' (label), 'icon' (bare filename -> prefixed with icon_base, OR a full special:// path used as-is), 'action' (the <favourite> body). A skin either 'inherit's another skin's order or defines its own 'order' (list of tile keys) plus optional per-tile 'overrides'.",
   "icon_base": "special://home/media/povil_icons/",
   "tiles": {
+    "profiles": {
+      "name": "[B]מי צופה? — פרופילים[/B]",
+      "icon": "special://home/addons/plugin.program.kodipovilwizard/resources/skins/Default/media/DefaultUser.png",
+      "action": "RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profiles)"
+    },
     "pov": {
       "name": "[B]POV[/B]",
       "icon": "Logo_POV_IL.png",
@@ -219,6 +224,7 @@
     "default": {
       "order": [
         "pov",
+        "profiles",
         "umbrella",
         "connect_services",
         "search_provider",
@@ -269,6 +275,7 @@
     "skin.arctic.fuse.3": {
       "order": [
         "pov",
+        "profiles",
         "umbrella",
         "search_provider",
         "connect_services",

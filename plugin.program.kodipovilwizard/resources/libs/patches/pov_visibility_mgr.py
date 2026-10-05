@@ -150,6 +150,12 @@ def _trigger_favourites_refresh():
 			_log('Auto-refresh skipped: installed favourites could not be merged safely')
 			return
 
+		# A reload closes Kodi's keep-skin dialog and makes it revert the
+		# first requested profile skin. The profile startup refreshes once
+		# activation is confirmed; ordinary account changes still refresh.
+		if (os.path.isfile(xbmcvfs.translatePath('special://profile/kodipovil.profile_gui_defaults.xml')) or
+				xbmc.getCondVisibility('Window.IsVisible(yesnodialog)')):
+			return
 		xbmc.executebuiltin('ReloadSkin()')
 		_log('Auto-refresh: Favourites regenerated and skin reloaded for %s' % current_skin)
 	except Exception as e:

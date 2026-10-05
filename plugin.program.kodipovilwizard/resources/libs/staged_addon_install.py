@@ -191,6 +191,11 @@ def _extract_kodi(zip_path, stage, addon_id, expected_files):
         import xbmc
     except ImportError:
         return False
+    # This optimisation works around Kodi's Windows Python ZIP stalls.
+    # Android and other platforms use the verified Python extractor instead
+    # of depending on the asynchronous Extract builtin and its 20s deadline.
+    if not xbmc.getCondVisibility('System.Platform.Windows'):
+        return False
     # The builtin parses comma-separated arguments, so unusual profile paths
     # fall back to the safe Python reader instead of changing their meaning.
     if any(char in str(path) for path in (zip_path, stage) for char in ',)('):
