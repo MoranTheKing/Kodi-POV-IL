@@ -115,11 +115,15 @@ def _pov_host_migration() -> dict:
     with open(POV_HOST_MIGRATION, 'r', encoding='utf-8') as source:
         entry = json.load(source)
     expected = ('id', 'version', 'filename', 'zip', 'size', 'sha256')
-    if (set(entry) != set(expected) or entry['id'] != 'plugin.video.pov' or
+    official_urls = tuple('https://{}.github.io/repo/plugin.video.pov/'.format(host)
+                          + str(entry.get('filename', '')) for host in ('kodifitzwell', 'kodiyashimaru'))
+    mirror = ('https://github.com/' + REPO + '/releases/download/addons-latest/official-'
+              + str(entry.get('filename', '')))
+    if (set(entry) not in (set(expected), set(expected) | {'upstream_zip'}) or entry['id'] != 'plugin.video.pov' or
             not re.fullmatch(r'[0-9]+(?:\.[0-9]+)+', str(entry['version'])) or
             entry['filename'] != 'plugin.video.pov-{}.zip'.format(entry['version']) or
-            entry['zip'] not in tuple('https://{}.github.io/repo/plugin.video.pov/'.format(host)
-                                     + entry['filename'] for host in ('kodifitzwell', 'kodiyashimaru')) or
+            entry['zip'] not in official_urls + (mirror,) or
+            (entry['zip'] == mirror and entry.get('upstream_zip') not in official_urls) or
             not isinstance(entry['size'], int) or not 0 < entry['size'] <= 25 * 1024 * 1024 or
             not re.fullmatch(r'[0-9a-f]{64}', str(entry['sha256']))):
         raise ValueError('invalid pinned official POV migration package')

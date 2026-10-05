@@ -174,7 +174,10 @@ class Config:
         self.MASTERPROFILE = xbmcvfs.translatePath('special://masterprofile/')
         self.PROFILE = xbmcvfs.translatePath('special://profile/')
         self.SUBTITLES = xbmcvfs.translatePath('special://subtitles/')
-        self.USERDATA = xbmcvfs.translatePath('special://userdata/')
+        # Kodi's userdata alias always points to the master profile. Build
+        # configuration, favourites and update receipts belong to the active
+        # profile; only profiles.xml is shared by Kodi itself.
+        self.USERDATA = self.PROFILE
         self.DATABASE = xbmcvfs.translatePath('special://database/')
         self.THUMBNAILS = xbmcvfs.translatePath('special://thumbnails/')
         self.RECORDINGS = xbmcvfs.translatePath('special://recordings/')
@@ -207,7 +210,7 @@ class Config:
         self.SOURCES = os.path.join(self.USERDATA, 'sources.xml')
         self.GUISETTINGS = os.path.join(self.USERDATA, 'guisettings.xml')
         self.FAVOURITES = os.path.join(self.USERDATA, 'favourites.xml')
-        self.PROFILES = os.path.join(self.USERDATA, 'profiles.xml')
+        self.PROFILES = os.path.join(self.MASTERPROFILE, 'profiles.xml')
         self.WIZLOG = os.path.join(self.PLUGIN_DATA, 'wizard.log')
         self.WHITELIST = os.path.join(self.PLUGIN_DATA, 'whitelist.txt')
         

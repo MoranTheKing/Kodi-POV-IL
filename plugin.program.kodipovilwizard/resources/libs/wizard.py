@@ -1127,6 +1127,12 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
 
 AF3_TOOLS = [
     {
+        'id': 'profiles',
+        'label': 'מי צופה? — פרופילים',
+        'icon': 'DefaultUser.png',
+        'builtin': 'RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profiles)',
+    },
+    {
         'id': 'connect_services',
         'label': 'חיבור שירותים',
         'icon': 'special://home/media/povil_icons/Connect_Services.png',
@@ -1233,7 +1239,7 @@ def af3_tool_action(tool_id):
 def switch_skin_in_gui_settings(gotoskin):
     try:
         import xbmcvfs
-        guisettings_file_path = xbmcvfs.translatePath("special://userdata/guisettings.xml")
+        guisettings_file_path = xbmcvfs.translatePath("special://profile/guisettings.xml")
         import xml.etree.ElementTree as ET
         tree = ET.parse(guisettings_file_path)
         root = tree.getroot()

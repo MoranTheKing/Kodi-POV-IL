@@ -44,6 +44,7 @@
 	<!-- ANONYMOUS TV -->
 	<include file="anonymous.xml" />
 	<include file="Home_nox.xml" />
+	<include file="Home_child.xml" />
 	<include file="Home_fentastic.xml" />
 	<include file="Home_aura.xml" />
 	<include file="Home_simple.xml" />

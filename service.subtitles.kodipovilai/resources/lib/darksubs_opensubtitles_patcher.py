@@ -82,7 +82,7 @@ def _clear_darksubs_subtitle_cache():
         return
     try:
         profile_dir = xbmcvfs.translatePath(
-            'special://home/userdata/addon_data/{0}/'.format(DARKSUBS_ADDON_ID))
+            'special://profile/addon_data/{0}/'.format(DARKSUBS_ADDON_ID))
         cache_db = os.path.join(profile_dir, 'cache_f', 'sources.db')
         if os.path.isfile(cache_db):
             try:

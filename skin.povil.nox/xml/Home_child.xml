@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+  <include name="skin_home_child">
+    <defaultcontrol always="true">9000</defaultcontrol>
+    <controls>
+      <control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture colordiffuse="FF163452">colors/white.png</texture></control>
+      <control type="label"><left>150</left><top>170</top><width>1620</width><height>100</height><font>font45</font><align>center</align><label>מה רואים היום?</label><textcolor>FFFFFFFF</textcolor></control>
+      <control type="label"><left>150</left><top>280</top><width>1620</width><height>60</height><font>font13</font><align>center</align><label>המסך של $INFO[System.ProfileName]</label><textcolor>FFB8D6ED</textcolor></control>
+      <control type="button" id="9000"><left>220</left><top>420</top><width>450</width><height>210</height><label>סרטים</label><font>font45</font><align>center</align><onleft>9002</onleft><onright>9001</onright><onup>9003</onup><ondown>9003</ondown><texturefocus colordiffuse="FF429CC4">colors/white.png</texturefocus><texturenofocus colordiffuse="FF28678B">colors/white.png</texturenofocus><onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profile_child_open&amp;kind=movie)</onclick></control>
+      <control type="button" id="9001"><left>735</left><top>420</top><width>450</width><height>210</height><label>סדרות</label><font>font45</font><align>center</align><onleft>9000</onleft><onright>9002</onright><onup>9003</onup><ondown>9003</ondown><texturefocus colordiffuse="FF63B99C">colors/white.png</texturefocus><texturenofocus colordiffuse="FF307760">colors/white.png</texturenofocus><onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profile_child_open&amp;kind=tv)</onclick></control>
+      <control type="button" id="9002"><left>1250</left><top>420</top><width>450</width><height>210</height><label>חיפוש</label><font>font45</font><align>center</align><onleft>9001</onleft><onright>9000</onright><onup>9003</onup><ondown>9003</ondown><texturefocus colordiffuse="FFAA8CD4">colors/white.png</texturefocus><texturenofocus colordiffuse="FF684A95">colors/white.png</texturenofocus><onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profile_child_open&amp;kind=search)</onclick></control>
+      <control type="button" id="9003"><left>735</left><top>770</top><width>450</width><height>90</height><label>מי צופה? — החלפת פרופיל</label><font>font13</font><align>center</align><onleft>9003</onleft><onright>9003</onright><onup>9000</onup><ondown>9000</ondown><texturefocus colordiffuse="FF429CC4">colors/white.png</texturefocus><texturenofocus colordiffuse="FF244F70">colors/white.png</texturenofocus><onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profiles)</onclick></control>
+      <control type="label"><left>150</left><top>935</top><width>1620</width><height>50</height><font>font12</font><align>center</align><label>רואים רק תוכן שמתאים לגיל או שההורה אישר</label><textcolor>FFB8D6ED</textcolor></control>
+    </controls>
+  </include>
+</includes>

@@ -4,6 +4,8 @@ import importlib.util
 import hashlib
 import json
 import tempfile
+import sys
+import types
 import unittest
 import zipfile
 from pathlib import Path
@@ -19,6 +21,16 @@ ADDON = 'service.subtitles.kodipovilai'
 
 
 class StagedInstallTests(unittest.TestCase):
+    def test_non_windows_uses_verified_reader_without_native_extract(self):
+        fake = types.SimpleNamespace(
+            getCondVisibility=lambda condition: False,
+            executebuiltin=mock.Mock(side_effect=AssertionError('native Extract on Android')))
+        self.bundle_with()
+        with mock.patch.dict(sys.modules, xbmc=fake):
+            self.assertEqual(self.install(), 2)
+        fake.executebuiltin.assert_not_called()
+        self.assertEqual((self.old / 'service.py').read_text(), 'new code')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addons = Path(self.tmp.name) / 'addons'
