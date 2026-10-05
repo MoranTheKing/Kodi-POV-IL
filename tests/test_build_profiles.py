@@ -96,11 +96,14 @@ class ProfileStoreTests(unittest.TestCase):
         self.seed()
         self.assertGreater(len(ET.parse(self.target / 'favourites.xml').getroot()), 5)
         self.assertNotIn('MASTER_PRIVATE_TOKEN', (self.target / 'addon_data/plugin.video.pov/settings.xml').read_text())
-        self.assertFalse(list(self.target.rglob('*.db')))
+        # Only the verified shipped layout DB; never account/watch/history DBs.
+        self.assertEqual([p.relative_to(self.target).as_posix() for p in self.target.rglob('*.db')],
+                         ['addon_data/script.fentastic.helper/cpath_cache.db'])
         self.assertEqual(ET.parse(self.target / 'guisettings.xml').findtext('setting'), 'skin.estuary')
         self.assertEqual((self.target / 'kodipovil.provisioned').read_text(), '2.0.9')
 
     def test_repeat_repair_preserves_target_preferences_accounts_and_deletions(self):
+        (self.target / 'kodipovil.profile_addons_ready').write_text('1')
         values = {'favourites.xml': b'<favourites/>',
                   'addon_data/plugin.video.pov/settings.xml': b'<settings>GUEST_TOKEN</settings>',
                   'addon_data/skin.fentastic/settings.xml': b'<settings>GUEST_PREF</settings>'}
@@ -112,6 +115,19 @@ class ProfileStoreTests(unittest.TestCase):
         self.seed()
         for name, data in values.items():
             self.assertEqual((self.target / name).read_bytes(), data)
+        self.assertFalse((self.target / 'kodipovil.profile_gui_defaults.xml').exists())
+
+    def test_native_copy_settings_and_empty_favourites_still_receive_build_defaults(self):
+        (self.target / 'favourites.xml').write_text('<favourites/>')
+        wizard = self.target / 'addon_data/plugin.program.kodipovilwizard/settings.xml'
+        wizard.parent.mkdir(parents=True)
+        wizard.write_text('<settings><setting id="installed">false</setting><setting id="buildname"/></settings>')
+        self.seed()
+        self.assertTrue((self.target / 'kodipovil.profile_gui_defaults.xml').exists())
+        self.assertGreater(len(ET.parse(self.target / 'favourites.xml').getroot()), 5)
+        settings = ET.parse(wizard)
+        self.assertEqual(settings.findtext("setting[@id='installed']"), 'true')
+        self.assertTrue(settings.findtext("setting[@id='buildname']"))
 
     def test_native_start_fresh_has_no_gui_file_before_first_login(self):
         (self.target / 'guisettings.xml').unlink()
@@ -252,11 +268,40 @@ class FirstLoginTests(unittest.TestCase):
             getCondVisibility=lambda _: True)
         fake_threads = types.SimpleNamespace(Event=threading.Event,
             Thread=lambda **_: types.SimpleNamespace(start=lambda: None, join=lambda _: None))
-        fn = _load_function(LIBS / 'fresh_install.py', 'apply_live_defaults',
-            {'ET': ET, 'xbmc': kodi, '_rpc': rpc, 'threading': fake_threads,
-             '_accept_initial_skin_confirmation': lambda: False})
-        self.assertTrue(fn(str(defaults)))
+        fn = _load_function(LIBS / 'build_skin.py', 'activate',
+            {'xbmc': kodi, 'rpc': rpc, 'threading': fake_threads,
+             'SKINS': ['skin.povil.nox'], 'enable_skin': lambda _: True,
+             'confirm_requested_skin': lambda _: False, 'persist_live_settings': lambda: True})
+        self.assertTrue(fn('skin.povil.nox'))
         self.assertEqual(changes, ['skin.estuary', 'skin.povil.nox'])
+
+    def test_first_login_does_not_start_arbitrary_user_services(self):
+        ident = 'service.custom.disabled'
+        folder = self.addons / ident; folder.mkdir()
+        (folder / 'addon.xml').write_text('<addon id="{}"/>'.format(ident))
+        manager, calls = self.load_manager(self.target, self.addons, set())
+        self.assertTrue(manager.prepare_first_login())
+        self.assertNotIn(ident, calls)
+
+    def test_profile_loader_returns_after_native_message_without_waiting_on_departing_services(self):
+        calls = []
+        def rpc(method, params=None):
+            calls.append((method, params))
+            if method == 'Profiles.GetProfiles':
+                return dict(profiles=[dict(label='Master'), dict(label='Guest')])
+            if method == 'Profiles.GetCurrentProfile':
+                return dict(label='Master')
+            return 'OK'
+        fn = _load_function(LIBS / 'build_profiles.py', 'load_profile',
+            dict(_rpc=rpc, is_master=lambda: False, _wait_dialogs=lambda: True,
+                 xbmc=types.SimpleNamespace(getCondVisibility=lambda _: False)))
+        libs = types.SimpleNamespace(build_skin=types.SimpleNamespace(
+            persist_live_settings=lambda: calls.append(('save', None)) or True))
+        with mock.patch.dict('sys.modules', {'resources.libs': libs}):
+            fn('Guest')
+        self.assertEqual(calls[-1], ('Profiles.LoadProfile', dict(profile='Guest', prompt=True)))
+        self.assertEqual(calls[-2], ('save', None))
+        self.assertEqual(len(calls), 4)
 
 
 if __name__ == '__main__':

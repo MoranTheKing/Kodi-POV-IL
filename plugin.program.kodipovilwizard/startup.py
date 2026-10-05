@@ -71,7 +71,7 @@ def show_notification():
 
 
 # Polite Hebrew wait message shown for the whole provisioning run.
-PROVISION_WAIT_MSG_HE = 'אנא המתינו מספר דקות עד לסיום ההתקנה וסגירת קודי.'
+PROVISION_WAIT_MSG_HE = 'אנא המתינו עד להשלמת ההתקנה וטעינת מסך הבית.'
 
 
 def _make_provisioning_banner():
@@ -592,9 +592,21 @@ try:
         from resources.libs import fresh_install
         if fresh_install.apply_live_defaults(defaults_path=profile_defaults):
             os.remove(profile_defaults)
-            xbmc.executebuiltin('ReloadSkin()')
+            from resources.libs import build_skin
+            if build_skin.refresh_home() and fresh_install.live_favourites_ready():
+                build_profiles.profile_store.write_missing(CONFIG.USERDATA, 'kodipovil.profile_home_ready', b'1')
+    elif not build_profiles.is_master():
+        from resources.libs import build_skin, fresh_install
+        if not os.path.isfile(os.path.join(CONFIG.USERDATA, 'kodipovil.profile_home_ready')) and build_skin.refresh_home() and fresh_install.live_favourites_ready():
+            build_profiles.profile_store.write_missing(CONFIG.USERDATA, 'kodipovil.profile_home_ready', b'1')
 except Exception as profile_err:
     logging.log('[Profiles] login repair failed: {}'.format(type(profile_err).__name__), level=xbmc.LOGERROR)
+
+if not build_profiles.is_master() and not os.path.isfile(os.path.join(CONFIG.USERDATA, 'kodipovil.profile_home_ready')):
+    # Native profile refresh is asynchronous and stops this interpreter.
+    # Let destination startup finish before showing normal boot dialogs.
+    logging.log('[Profiles] home completion pending; deferring dialogs', level=xbmc.LOGINFO)
+    sys.exit()
 
 # FIRST-BOOT STABILIZER (race shield). Runs ONLY when the one-shot marker from a
 # just-completed install is present. Warms POV up (user-visible countdown) and

@@ -1,0 +1,172 @@
+"""Activate a complete build skin through Kodi's live settings API."""
+import importlib.util
+import json
+import os
+import threading
+import hashlib
+import uuid
+import zipfile
+import xml.etree.ElementTree as ET
+
+import xbmc
+import xbmcvfs
+import xbmcgui
+
+SKINS = ('skin.estuary', 'skin.fentastic', 'skin.povil.nox', 'skin.arctic.fuse.3')
+
+
+def rpc(method, params):
+    reply = json.loads(xbmc.executeJSONRPC(json.dumps(dict(
+        jsonrpc='2.0', id=1, method=method, params=params))))
+    if 'error' in reply or 'result' not in reply:
+        raise RuntimeError('Build skin API failed: ' + method)
+    return reply['result']
+
+
+def enable_skin(ident, visiting=None):
+    """Enable installed dependencies first; never clone an add-on database."""
+    visiting = set() if visiting is None else visiting
+    if ident in visiting:
+        return False
+    visiting.add(ident)
+    try:
+        path = xbmcvfs.translatePath('special://home/addons/' + ident + '/addon.xml')
+        if os.path.isfile(path):
+            for row in ET.parse(path).getroot().findall('requires/import'):
+                dependency = row.get('addon', '')
+                if row.get('optional') != 'true' and not dependency.startswith('xbmc.'):
+                    if not enable_skin(dependency, visiting):
+                        return False
+        details = rpc('Addons.GetAddonDetails', dict(addonid=ident, properties=['enabled']))['addon']
+        if details['enabled'] is not True:
+            rpc('Addons.SetAddonEnabled', dict(addonid=ident, enabled=True))
+        return rpc('Addons.GetAddonDetails', dict(addonid=ident, properties=['enabled']))['addon']['enabled'] is True
+    except (OSError, ET.ParseError, RuntimeError, KeyError):
+        return False
+    finally:
+        visiting.remove(ident)
+
+
+def confirm_requested_skin(target):
+    """Accept only the retention question for the explicitly requested skin."""
+    if (xbmc.getSkinDir() != target or
+            not xbmc.getCondVisibility('Window.IsVisible(yesnodialog)')):
+        return False
+    if (xbmc.getInfoLabel('Control.GetLabel(1)') != xbmc.getLocalizedString(13123) or
+            xbmc.getInfoLabel('Control.GetLabel(9)') != xbmc.getLocalizedString(13111)):
+        return False
+    xbmc.executebuiltin('SendClick(10100,11)')
+    return True
+
+
+def persist_live_settings():
+    """Use Kodi's native save path before a profile unload discards live values."""
+    # Settings.SetSettingValue changes memory only in Kodi 21. Skin.SetBool
+    # calls CSettings::Save on the GUI thread, preserving all current values.
+    xbmc.executebuiltin('Skin.SetBool(POVIL.SettingsCommitted,true)', True)
+    try:
+        path = xbmcvfs.translatePath('special://profile/guisettings.xml')
+        saved = ET.parse(path).getroot().find("setting[@id='lookandfeel.skin']")
+        return saved is not None and saved.text == xbmc.getSkinDir()
+    except (OSError, ET.ParseError):
+        return False
+
+
+def activate(target):
+    if target not in SKINS or not enable_skin(target):
+        return False
+    monitor = xbmc.Monitor()
+    if monitor.abortRequested():
+        return False
+    changed = xbmc.getSkinDir() != target
+    if changed:
+        selected = rpc('Settings.GetSettingValue', dict(setting='lookandfeel.skin'))['value']
+        if selected == target:
+            # Force a genuine change after native loading fell back from a
+            # disabled skin, even if settings still name the desired skin.
+            if rpc('Settings.SetSettingValue', dict(setting='lookandfeel.skin', value=xbmc.getSkinDir())) is not True:
+                return False
+        finished = threading.Event()
+        def observe():
+            for _ in range(100):
+                if finished.is_set() or monitor.abortRequested():
+                    return
+                if confirm_requested_skin(target):
+                    return
+                finished.wait(0.2)
+        observer = threading.Thread(target=observe, daemon=True)
+        observer.start()
+        try:
+            if rpc('Settings.SetSettingValue', dict(setting='lookandfeel.skin', value=target)) is not True:
+                return False
+            for _ in range(12):
+                if monitor.waitForAbort(1):
+                    return False
+                confirm_requested_skin(target)
+        finally:
+            finished.set()
+            observer.join(1)
+    return xbmc.getSkinDir() == target and persist_live_settings()
+
+
+def prepare_layout():
+    """Seed shipped layout only when absent; use the active profile's paths."""
+    from resources.libs import profile_store, fentastic_widgets
+    archive = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/bootstrap/config.zip')
+    with open(archive, 'rb') as handle:
+        if hashlib.sha256(handle.read()).hexdigest() != profile_store.BOOTSTRAP_SHA256:
+            raise RuntimeError('Build layout defaults failed integrity verification')
+    profile = xbmcvfs.translatePath('special://profile/')
+    with zipfile.ZipFile(archive) as source:
+        for name in ('addon_data/script.fentastic.helper/cpath_cache.db',
+                     'addon_data/skin.fentastic/settings.xml',
+                     'addon_data/skin.arctic.fuse.3/settings.xml'):
+            if name in source.namelist():
+                profile_store.write_missing(profile, name, source.read(name))
+    fentastic_widgets.repair(reload_skin=False)
+    if xbmc.getSkinDir() != 'skin.arctic.fuse.3':
+        return True
+    # Keep the subtitle add-on's resources namespace in its own interpreter.
+    key = 'POVIL.BuildSkin.' + uuid.uuid4().hex
+    home = xbmcgui.Window(10000)
+    home.clearProperty(key)
+    xbmc.executebuiltin('RunScript(service.subtitles.kodipovilai,action=prepare_build_skin,request={})'.format(key))
+    monitor = xbmc.Monitor()
+    try:
+        for _ in range(120):
+            result = home.getProperty(key)
+            if result:
+                return result == 'ready'
+            if monitor.waitForAbort(0.5):
+                return False
+        return False
+    finally:
+        home.clearProperty(key)
+
+
+def refresh_home():
+    """Refresh the active skin's tiles and media without provider requests."""
+    path = xbmcvfs.translatePath('special://home/addons/plugin.program.orderfavourites-hebrew/resources/lib/media_installer.py')
+    spec = importlib.util.spec_from_file_location('povil_skin_media', path)
+    media = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(media)
+    if not media.install_and_verify_global_media_assets():
+        return False
+    if not prepare_layout():
+        return False
+    xbmc.executebuiltin('ActivateWindow(home)')
+    xbmc.executebuiltin('ReloadSkin()')
+    return True
+
+
+def switch(target):
+    from resources.libs.patches import profile_age_guard
+    if profile_age_guard.active_policy() is not None or xbmc.getCondVisibility('Player.Playing'):
+        return False
+    # FENtastic's helper starts at skin activation. Seed its layout first.
+    if target == 'skin.fentastic':
+        if not prepare_layout():
+            return False
+    if not activate(target):
+        return False
+    return refresh_home()

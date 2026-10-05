@@ -4016,6 +4016,22 @@ def _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=False):
     return 'ok'
 
 
+def _handle_prepare_build_skin(params):
+    import re
+    key = params.get('request', '')
+    if not re.fullmatch(r'POVIL\.BuildSkin\.[0-9a-f]{32}', key):
+        return
+    state = 'failed'
+    try:
+        if xbmc.getSkinDir() == 'skin.arctic.fuse.3':
+            from resources.lib import af3_home_patcher
+            result = af3_home_patcher.ensure_patched()
+            if result in ('patched_rebuilt', 'already_patched'):
+                state = 'ready'
+    finally:
+        xbmcgui.Window(10000).setProperty(key, state)
+
+
 def main():
     if xbmc is None:
         _safe_log('default.py invoked outside Kodi -- nothing to do',
@@ -4031,7 +4047,9 @@ def main():
     action = (params.get('action') or 'search').lower()
 
     try:
-        if action == 'tonight':
+        if action == 'prepare_build_skin':
+            _handle_prepare_build_skin(params)
+        elif action == 'tonight':
             from resources.lib.tonight.ui import run
             run()
         elif action == 'search':
