@@ -62,12 +62,28 @@ class FreshHomeReadinessTests(unittest.TestCase):
             fn = _load_function(FRESH, 'live_favourites_ready', {
                 'CONFIG': types.SimpleNamespace(USERDATA=raw), 'ET': ET, 'os': os,
                 '_rpc': lambda *_a: {'favourites': cached},
+                'xbmcvfs': types.SimpleNamespace(translatePath=lambda _p: raw),
                 'xbmc': types.SimpleNamespace(getInfoLabel=lambda _k: 'Master user',
                                               executebuiltin=calls.append)})
             self.assertFalse(fn()); self.assertFalse(fn()); self.assertFalse(fn())
             self.assertEqual(calls, ['LoadProfile("Master user")'] * 2)
             cached.append({'title': 'Tonight'})
             self.assertTrue(fn()); self.assertEqual(len(calls), 2)
+
+    def test_secondary_cache_miss_never_reloads_the_active_profile(self):
+        with tempfile.TemporaryDirectory() as raw:
+            Path(raw, 'favourites.xml').write_text(
+                '<favourites><favourite name="Tonight">RunScript(tonight)</favourite></favourites>')
+            calls = []
+            fn = _load_function(FRESH, 'live_favourites_ready', {
+                'CONFIG': types.SimpleNamespace(USERDATA=raw), 'ET': ET, 'os': os,
+                '_rpc': lambda *_a: {'favourites': []},
+                'xbmcvfs': types.SimpleNamespace(translatePath=lambda _p: raw + '-master'),
+                'xbmc': types.SimpleNamespace(executebuiltin=calls.append)})
+            self.assertFalse(fn())
+            self.assertFalse(fn())
+            self.assertEqual(calls, [])
+            self.assertFalse(Path(raw, 'kodipovil.fresh_profile_reload').exists())
 
     def test_exact_skin_question_uses_native_heading(self):
         sent = []
