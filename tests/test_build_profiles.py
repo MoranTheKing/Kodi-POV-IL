@@ -38,42 +38,72 @@ class ProfileStoreTests(unittest.TestCase):
         finally:
             sys.path[:] = original
 
-    def test_login_hook_preserves_existing_layout_and_is_idempotent(self):
+    def test_login_design_preserves_native_loader_and_skin_actions(self):
         import os
         with tempfile.TemporaryDirectory() as raw:
-            path = Path(raw) / 'skin.example/xml/LoginScreen.xml'
-            path.parent.mkdir(parents=True)
-            path.write_text('<window><onload>OriginalAction</onload><controls><control id="52"/></controls></window>')
-            fn = _load_function(LIBS / 'build_profiles.py', 'install_login_hooks',
-                dict(os=os, ET=ET, SKINS=[('skin.example', 'QA')],
-                     xbmcvfs=types.SimpleNamespace(translatePath=lambda _p: raw),
-                     xbmc=types.SimpleNamespace(LOGWARNING=2, log=lambda *_a: None)))
-            fn()
+            path = Path(raw) / 'LoginScreen.xml'
+            path.write_text('<window><onload>OriginalAction</onload><onload>RunScript(single_profile_login.py)</onload>'
+                            '<controls><control id="52"/></controls></window>')
+            fn = _load_function(LIBS / 'build_profiles.py', 'install_login_design',
+                dict(os=os, ET=ET, WIZARD='QA', xbmcaddon=types.SimpleNamespace(Addon=lambda _:
+                     types.SimpleNamespace(getAddonInfo=lambda _: str(ROOT / 'plugin.program.kodipovilwizard')))))
+            self.assertTrue(fn(str(path)))
             first = path.read_bytes()
             xml = ET.fromstring(first)
-            self.assertEqual(len(xml.findall('onload')), 2)
-            self.assertIn('OriginalAction', first.decode())
-            fn()
+            self.assertEqual([a.text for a in xml.findall('onload')], ['OriginalAction'])
+            self.assertIsNotNone(xml.find(".//control[@id='52']"))
+            self.assertEqual(xml.findtext(".//control[@id='20']/onclick"), 'ActivateWindow(ShutdownMenu)')
+            self.assertNotIn('Profiles.LoadProfile', first.decode())
+            self.assertFalse(fn(str(path)))
             self.assertEqual(first, path.read_bytes())
 
-    def test_login_window_resumes_only_completely_unlocked_sole_master(self):
-        import json
+    def test_old_login_hook_never_bypasses_selection_or_locks(self):
+        fn = _load_function(ROOT / 'plugin.program.kodipovilwizard/single_profile_login.py', 'resume', {})
+        self.assertFalse(fn())
+
+    def test_copy_defaults_only_handles_the_two_native_questions(self):
+        values = {1:'L20058',9:'L20048',11:'L20064'}
+        sdk = types.SimpleNamespace(getInfoLabel=lambda key: values[int(key.split('(')[1].split(')')[0])],
+            getLocalizedString=lambda ident: 'L'+str(ident), executebuiltin=mock.Mock())
+        gui = types.SimpleNamespace(getCurrentWindowDialogId=lambda:10100)
+        fn = _load_function(LIBS / 'build_profiles.py','copy_native_profile_defaults',
+            dict(xbmc=sdk, xbmcgui=gui, is_master=lambda:True))
+        self.assertTrue(fn()); values[9]='L20071'; self.assertTrue(fn())
+        # Existing-settings overwrite, master PIN and unrelated questions are left alone.
+        for body in ('L20104','PIN','L20118','L13111'):
+            values[9]=body;self.assertFalse(fn())
+        values[9]='L20048'; values[11]='Wrong button'; self.assertFalse(fn())
+        self.assertEqual(sdk.executebuiltin.call_args_list,
+                         [mock.call('SendClick(10100,11)',True)]*2)
+
+    def test_login_default_is_once_and_keeps_manual_off(self):
+        import os
         with tempfile.TemporaryDirectory() as raw:
-            path = Path(raw) / 'profiles.xml'
-            requests = []
-            sdk = types.SimpleNamespace(getCondVisibility=lambda _c: True,
-                executeJSONRPC=lambda data: requests.append(json.loads(data)) or '{"result":"OK"}')
-            fn = _load_function(ROOT / 'plugin.program.kodipovilwizard/single_profile_login.py',
-                'resume', dict(xbmc=sdk, xbmcvfs=types.SimpleNamespace(translatePath=lambda _p: str(path)),
-                               json=json, ET=ET))
-            for lockmode, lockcode, extra, expected in (
-                    ('0', '-', '', True), ('1', 'PIN_HASH', '', False),
-                    ('0', 'PIN_HASH', '', False), ('0', '-', '<profile><id>1</id></profile>', False)):
-                path.write_text('<profiles><profile><id>0</id><name>Master</name><lockmode>' + lockmode +
-                    '</lockmode><lockcode>' + lockcode + '</lockcode></profile>' + extra + '</profiles>')
-                self.assertEqual(fn(), expected)
-            self.assertEqual(len(requests), 1)
-            self.assertEqual(requests[0]['params'], dict(profile='Master', prompt=True))
+            state={'login':False}
+            def visible(cond):
+                return state['login'] if cond=='System.HasLoginScreen' else cond in ('Window.IsActive(home)','Window.IsActive(10034)')
+            def builtin(action,*_):
+                if action=='SendClick(10034,4)':state['login']=True
+            sdk=types.SimpleNamespace(getCondVisibility=visible,executebuiltin=mock.Mock(side_effect=builtin))
+            fn=_load_function(LIBS/'build_profiles.py','repair_single_login',dict(os=os,
+                _master_path=lambda:raw,is_master=lambda:True,xbmc=sdk,
+                xbmcgui=types.SimpleNamespace(getCurrentWindowDialogId=lambda:0),
+                _native_settings=lambda:True,profile_store=store))
+            self.assertTrue(fn());self.assertTrue(state['login'])
+            self.assertTrue((Path(raw)/'kodipovil.login_default_v2').exists())
+            state['login']=False;sdk.executebuiltin.reset_mock()
+            self.assertFalse(fn());self.assertFalse(state['login']);sdk.executebuiltin.assert_not_called()
+
+    def test_login_default_defers_if_native_toggle_not_confirmed(self):
+        import os
+        with tempfile.TemporaryDirectory() as raw:
+            sdk=types.SimpleNamespace(getCondVisibility=lambda c:c in ('Window.IsActive(home)','Window.IsActive(10034)'),executebuiltin=mock.Mock())
+            fn=_load_function(LIBS/'build_profiles.py','repair_single_login',dict(os=os,
+                _master_path=lambda:raw,is_master=lambda:True,xbmc=sdk,
+                xbmcgui=types.SimpleNamespace(getCurrentWindowDialogId=lambda:0),
+                _native_settings=lambda:True,profile_store=store))
+            self.assertFalse(fn())
+            self.assertFalse((Path(raw)/'kodipovil.login_default_v2').exists())
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

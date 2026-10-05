@@ -81,7 +81,9 @@ class SkinProfileCompletionTests(unittest.TestCase):
             custom.parent.mkdir(parents=True)
             custom.write_text('<settings><setting id="custom">KEEP</setting></settings>')
             calls = []
+            login_hooks = []
             libs = types.SimpleNamespace(profile_store=store,
+                build_profiles=types.SimpleNamespace(install_login_hooks=lambda: login_hooks.append(True)),
                 fentastic_widgets=types.SimpleNamespace(repair=lambda **kwargs: calls.append(kwargs)))
             def translate(path):
                 return str(ARCHIVE if 'bootstrap' in path else profile)
@@ -97,6 +99,7 @@ class SkinProfileCompletionTests(unittest.TestCase):
             self.assertTrue((profile / 'addon_data/script.fentastic.helper/cpath_cache.db').exists())
             self.assertFalse((profile / 'Database').exists())
             self.assertEqual(calls, [{'reload_skin': False}] * 2)
+            self.assertEqual(login_hooks, [True, True])
 
     def test_bootstrap_does_not_reenable_established_users_disabled_wizard(self):
         with tempfile.TemporaryDirectory() as raw:
