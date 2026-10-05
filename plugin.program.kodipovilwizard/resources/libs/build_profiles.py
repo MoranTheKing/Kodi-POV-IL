@@ -49,7 +49,7 @@ def _require_master():
 def _seed(profile):
     archive = os.path.join(xbmcaddon.Addon(WIZARD).getAddonInfo('path'),
                            'resources', 'bootstrap', 'config.zip')
-    return profile_store.seed_profile(_master_path(), profile, archive)
+    return profile_store.seed_profile(_master_path(), profile, archive, prepare_login=is_master())
 
 
 def repair_active():
@@ -277,20 +277,12 @@ def choose_skin():
     if xbmc.getCondVisibility('Player.Playing'):
         xbmcgui.Dialog().ok('סקין הפרופיל', 'יש לעצור את הניגון לפני החלפת סקין.')
         return
-    available = [(key, label) for key, label in SKINS
-                 if xbmc.getCondVisibility('System.HasAddon({})'.format(key))]
-    current = xbmc.getSkinDir()
-    choice = xbmcgui.Dialog().select('הסקין של הפרופיל הזה', [v for _, v in available],
-                                    preselect=next((i for i, (k, _) in enumerate(available) if k == current), 0))
-    if choice < 0 or choice >= len(available) or available[choice][0] == current:
-        return
     if not _wait_dialogs():
         return
-    # Kodi owns the setting and its normal keep/revert confirmation. Do not
-    # edit active guisettings.xml or terminate Kodi for a skin preference.
-    from resources.libs import build_skin
-    if not build_skin.switch(available[choice][0]):
-        xbmcgui.Dialog().ok('סקין הפרופיל', 'לא ניתן להשלים את החלפת הסקין. נסה שוב דרך הוויזרד.')
+    # The same picker/install path as the master includes on-demand AF3.
+    # An installed-only menu made secondary profiles look like another build.
+    from resources.libs import wizard
+    wizard.build_switch_skin()
 
 
 def add_profile():

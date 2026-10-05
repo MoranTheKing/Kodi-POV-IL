@@ -93,7 +93,7 @@ def write_missing(root, relative, content):
         os.unlink(tmp)
 
 
-def seed_profile(master, profile, archive):
+def seed_profile(master, profile, archive, prepare_login=False):
     """Repair a secondary profile using shipped defaults, never master tokens.
 
     Excludes watched/history/cache DBs and per-device advancedsettings. The
@@ -110,6 +110,7 @@ def seed_profile(master, profile, archive):
             raise ValueError('Profile defaults failed integrity verification')
     os.makedirs(target, exist_ok=True)
     initializing = not os.path.isfile(os.path.join(target, 'kodipovil.profile_addons_ready'))
+    completing_home = not os.path.isfile(os.path.join(target, 'kodipovil.profile_home_ready'))
     with zipfile.ZipFile(archive) as zf:
         version = json.loads(zf.read('config_policy.json')).get('config_version', '')
         # Keep installed device settings supplied by native "copy from master";
@@ -147,10 +148,29 @@ def seed_profile(master, profile, archive):
         # Seed the verified build defaults before that login, so the new
         # profile starts in NOX with Hebrew/subtitles instead of bare Kodi.
         # Existing native/user settings are never replaced.
-        if initializing:
+        if completing_home:
             write_missing(target, 'kodipovil.profile_gui_defaults.xml', zf.read('guisettings.xml'))
         write_missing(target, 'guisettings.xml', zf.read('guisettings.xml'))
         ET.parse(_inside(target, 'guisettings.xml'))
+        if completing_home and prepare_login:
+            # Only the master calls this before native LoadProfile. Set the
+            # inactive profile's initial skin before Kodi reads its settings,
+            # instead of first showing the copied/stock Estuary interface.
+            path = _inside(target, 'guisettings.xml')
+            root = ET.parse(path).getroot()
+            row = root.find("setting[@id='lookandfeel.skin']")
+            if row is None:
+                row = ET.SubElement(root, 'setting', {'id': 'lookandfeel.skin'})
+            row.text = 'skin.povil.nox'
+            row.attrib.pop('default', None)
+            fd, temporary = tempfile.mkstemp(prefix='.profile-', dir=target)
+            try:
+                with os.fdopen(fd, 'wb') as output:
+                    output.write(ET.tostring(root, encoding='utf-8', xml_declaration=True))
+                os.replace(temporary, path)
+            finally:
+                if os.path.exists(temporary):
+                    os.unlink(temporary)
     # Kodi uses the target add-on settings on next LoadProfile. Do not clone
     # the master's complete wizard settings (queues, update receipts, flags).
     defaults = dict(buildname='Kodi POV IL - FENtastic', installed='true',
