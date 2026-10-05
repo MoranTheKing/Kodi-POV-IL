@@ -87,23 +87,8 @@ def _rpc(method, params):
 
 
 def _accept_initial_skin_confirmation():
-    """The fresh-install request already selected Nox as its default.
-
-    Accept only Kodi's exact skin-retention question after Nox has loaded;
-    unrelated dialogs are never clicked. Normal manual skin changes retain
-    Kodi's confirmation behavior.
-    """
-    if (xbmc.getSkinDir() != 'skin.povil.nox' or
-            not xbmc.getCondVisibility('Window.IsVisible(yesnodialog)')):
-        return False
-    try:
-        if (xbmc.getInfoLabel('Control.GetLabel(1)') != xbmc.getLocalizedString(13123) or
-                xbmc.getInfoLabel('Control.GetLabel(9)') != xbmc.getLocalizedString(13111)):
-            return False
-        xbmc.executebuiltin('SendClick(10100,11)')
-        return True
-    except (RuntimeError, AttributeError):
-        return False
+    from resources.libs.build_skin import confirm_requested_skin
+    return confirm_requested_skin('skin.povil.nox')
 
 
 def apply_live_defaults(defaults_path=None):
@@ -114,7 +99,7 @@ def apply_live_defaults(defaults_path=None):
     reverted skin is not reported as a successfully activated build.
     """
     root = ET.parse(defaults_path or os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')).getroot()
-    target_skin = 'skin.povil.nox'
+    target_skin = root.findtext("setting[@id='lookandfeel.skin']", 'skin.povil.nox')
     monitor = xbmc.Monitor()
     for setting in root.findall('setting'):
         key = setting.get('id', '')
@@ -146,43 +131,8 @@ def apply_live_defaults(defaults_path=None):
         if current != value and _rpc('Settings.SetSettingValue',
                                       {'setting': key, 'value': value}) is not True:
             raise RuntimeError('Fresh setting was rejected: ' + key)
-    skin_changed = xbmc.getSkinDir() != target_skin
-    if skin_changed:
-        # Native profile loading can fall back to Estuary while leaving NOX
-        # selected in settings (third-party add-ons were initially disabled).
-        # Setting NOX to its existing value emits no change event. Reconcile
-        # the setting with the actual fallback before requesting NOX again.
-        selected = _rpc('Settings.GetSettingValue', {'setting': 'lookandfeel.skin'})['value']
-        if selected == target_skin:
-            if _rpc('Settings.SetSettingValue', {'setting': 'lookandfeel.skin',
-                                                'value': xbmc.getSkinDir()}) is not True:
-                return False
-        finished = threading.Event()
-        def confirm_requested_skin():
-            # SetSettingValue can wait for its GUI confirmation. Start this
-            # observer before the RPC, rather than after its ten-second timeout.
-            for _ in range(100):
-                if finished.is_set() or monitor.abortRequested():
-                    return
-                if _accept_initial_skin_confirmation():
-                    return
-                finished.wait(0.2)
-        observer = threading.Thread(target=confirm_requested_skin, daemon=True)
-        observer.start()
-        try:
-            if _rpc('Settings.SetSettingValue', {'setting': 'lookandfeel.skin',
-                                                'value': target_skin}) is not True:
-                return False
-        finally:
-            finished.set()
-            observer.join(1)
-    # The skin-confirmation timeout is ten seconds. Wait beyond that before
-    # certifying activation, and never certify merely from the RPC reply.
-    for _ in range(16 if skin_changed else 0):
-        if monitor.waitForAbort(1):
-            return False
-        _accept_initial_skin_confirmation()
-    if xbmc.getSkinDir() != target_skin:
+    from resources.libs import build_skin
+    if not build_skin.activate(target_skin):
         return False
     # A manual completion runs inside the Wizard menu. That is not evidence
     # of a failed home: show the verified home instead of requiring a restart.
@@ -250,12 +200,12 @@ def finalize():
     required = ModularUpdater.CORE_PROVISION_IDS + (
         'skin.povil.nox', 'script.fentastic.helper',
         'plugin.program.orderfavourites-hebrew', 'service.subtitles.kodipovilai')
+    from resources.libs.build_profiles import addon_enabled
     db.addon_database(list(required), 1, True)
     xbmc.executebuiltin('UpdateLocalAddons')
     monitor = xbmc.Monitor()
     for _ in range(20):
-        missing = [aid for aid in required if not xbmc.getCondVisibility(
-            'System.HasAddon({0})'.format(aid))]
+        missing = [aid for aid in required if not addon_enabled(aid)]
         if not missing:
             break
         for aid in missing:

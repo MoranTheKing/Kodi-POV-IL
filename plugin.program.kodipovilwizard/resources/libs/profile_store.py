@@ -109,6 +109,7 @@ def seed_profile(master, profile, archive):
         if hashlib.sha256(fh.read()).hexdigest() != BOOTSTRAP_SHA256:
             raise ValueError('Profile defaults failed integrity verification')
     os.makedirs(target, exist_ok=True)
+    initializing = not os.path.isfile(os.path.join(target, 'kodipovil.profile_addons_ready'))
     with zipfile.ZipFile(archive) as zf:
         version = json.loads(zf.read('config_policy.json')).get('config_version', '')
         # Keep installed device settings supplied by native "copy from master";
@@ -116,6 +117,7 @@ def seed_profile(master, profile, archive):
         for name in zf.namelist():
             allowed = (name == 'favourites.xml' or name == 'sources.xml' or
                        name.startswith('keymaps/') or
+                       name == 'addon_data/script.fentastic.helper/cpath_cache.db' or
                        (name.startswith('addon_data/') and name.endswith('/settings.xml')))
             if allowed:
                 content = zf.read(name)
@@ -128,12 +130,24 @@ def seed_profile(master, profile, archive):
                     if not any('mode=profiles' in (row.text or '') for row in favourites):
                         favourites.insert(1, tile)
                     content = ET.tostring(favourites, encoding='utf-8', xml_declaration=True)
+                    existing = _inside(target, name)
+                    # Kodi can create an empty file before our first seed.
+                    # An established profile's deliberate deletions remain intact.
+                    if initializing and os.path.isfile(existing) and not ET.parse(existing).getroot().findall('favourite'):
+                        fd, temporary = tempfile.mkstemp(prefix='.profile-', dir=target)
+                        try:
+                            with os.fdopen(fd, 'wb') as output:
+                                output.write(content)
+                            os.replace(temporary, existing)
+                        finally:
+                            if os.path.exists(temporary):
+                                os.unlink(temporary)
                 write_missing(target, name, content)
         # Native "start fresh" does not save guisettings until first login.
         # Seed the verified build defaults before that login, so the new
         # profile starts in NOX with Hebrew/subtitles instead of bare Kodi.
         # Existing native/user settings are never replaced.
-        if not os.path.isfile(_inside(target, 'guisettings.xml')):
+        if initializing:
             write_missing(target, 'kodipovil.profile_gui_defaults.xml', zf.read('guisettings.xml'))
         write_missing(target, 'guisettings.xml', zf.read('guisettings.xml'))
         ET.parse(_inside(target, 'guisettings.xml'))
@@ -145,8 +159,26 @@ def seed_profile(master, profile, archive):
     settings = ET.Element('settings', {'version': '2'})
     for key, value in defaults.items():
         ET.SubElement(settings, 'setting', {'id': key}).text = value
-    write_missing(target, 'addon_data/' + WIZARD + '/settings.xml',
-                  ET.tostring(settings, encoding='utf-8', xml_declaration=True))
+    relative = 'addon_data/' + WIZARD + '/settings.xml'
+    existing = _inside(target, relative)
+    if initializing and os.path.isfile(existing):
+        root = ET.parse(existing).getroot()
+        for key, value in defaults.items():
+            row = root.find("setting[@id='{}']".format(key))
+            if row is None:
+                row = ET.SubElement(root, 'setting', {'id': key})
+            row.text = value
+        # Only small build bootstrap flags, never accounts or preferences.
+        fd, temporary = tempfile.mkstemp(prefix='.profile-', dir=os.path.dirname(existing))
+        try:
+            with os.fdopen(fd, 'wb') as output:
+                output.write(ET.tostring(root, encoding='utf-8', xml_declaration=True))
+            os.replace(temporary, existing)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+    else:
+        write_missing(target, relative, ET.tostring(settings, encoding='utf-8', xml_declaration=True))
     write_missing(target, 'kodipovil.provisioned', str(version).encode('utf-8'))
     return True
 
