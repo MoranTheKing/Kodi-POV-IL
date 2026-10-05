@@ -13,6 +13,29 @@ LIBS = ROOT / 'plugin.program.kodipovilwizard/resources/libs'
 
 
 class SkinProfileCompletionTests(unittest.TestCase):
+    def test_arctic_resource_capability_is_not_enabled_as_an_addon(self):
+        with tempfile.TemporaryDirectory() as raw:
+            addons = Path(raw)
+            for ident, dependency in (('skin.arctic.fuse.3', 'resource.font.robotocjksc'),
+                                       ('resource.font.robotocjksc', 'kodi.resource')):
+                folder = addons / ident; folder.mkdir()
+                (folder / 'addon.xml').write_text(
+                    '<addon><requires><import addon="' + dependency + '" /></requires></addon>')
+            enabled = set(); calls = []
+            def rpc(method, params):
+                ident = params['addonid']; calls.append(ident)
+                self.assertNotEqual(ident, 'kodi.resource')
+                if method == 'Addons.SetAddonEnabled':
+                    enabled.add(ident); return 'OK'
+                return {'addon': {'enabled': ident in enabled}}
+            scope = dict(os=__import__('os'), ET=ET, rpc=rpc,
+                         xbmcvfs=types.SimpleNamespace(translatePath=lambda path:
+                             str(addons / path.split('special://home/addons/')[1])))
+            fn = _load_function(LIBS / 'build_skin.py', 'enable_skin', scope)
+            fn.__globals__['enable_skin'] = fn
+            self.assertTrue(fn('skin.arctic.fuse.3'))
+            self.assertEqual(enabled, {'skin.arctic.fuse.3', 'resource.font.robotocjksc'})
+
     def test_estuary_sidebar_initialized_per_profile_once(self):
         flags = set(); calls = []
         def builtin(command, wait):
@@ -25,17 +48,21 @@ class SkinProfileCompletionTests(unittest.TestCase):
         fn = _load_function(LIBS / 'build_skin.py', 'prepare_active_skin_defaults', dict(
             xbmc=types.SimpleNamespace(getSkinDir=lambda: 'skin.estuary', executebuiltin=builtin,
                 getCondVisibility=lambda condition: condition[16:-1] in flags)))
-        self.assertTrue(fn())
+        with patch.dict('sys.modules', {'resources.libs': types.SimpleNamespace(
+                child_profiles=types.SimpleNamespace(sync_active=lambda:False))}):
+            self.assertTrue(fn())
         self.assertIn('HomeMenuNoMusicButton', flags)
         self.assertIn('HomeMenuNoPicturesButton', flags)
         self.assertNotIn('HomeMenuNoMovieButton', flags)
         count = len(calls)
         flags.remove('HomeMenuNoMusicButton')  # user later re-enables Music
-        self.assertFalse(fn())
+        with patch.dict('sys.modules', {'resources.libs': types.SimpleNamespace(
+                child_profiles=types.SimpleNamespace(sync_active=lambda:False))}):
+            self.assertFalse(fn())
         self.assertEqual(len(calls), count)
         self.assertNotIn('HomeMenuNoMusicButton', flags)
 
-    def test_regular_profile_uses_master_picker_and_child_cannot_change_skin(self):
+    def test_regular_and_child_use_same_picker_but_incomplete_policy_cannot(self):
         dialog = unittest.mock.Mock(); picker = unittest.mock.Mock()
         policy = [None]
         fn = _load_function(LIBS / 'build_profiles.py', 'choose_skin', dict(
@@ -46,7 +73,9 @@ class SkinProfileCompletionTests(unittest.TestCase):
                 wizard=types.SimpleNamespace(build_switch_skin=picker))}):
             fn(); picker.assert_called_once()
             policy[0] = {'age': 7}; fn()
-            picker.assert_called_once(); dialog.ok.assert_called_once()
+            self.assertEqual(picker.call_count, 2)
+            policy[0] = {'blocked': True}; fn()
+            self.assertEqual(picker.call_count, 2); dialog.ok.assert_called_once()
 
     def test_live_settings_save_uses_native_path_and_verifies_profile_skin(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -112,6 +141,7 @@ class SkinProfileCompletionTests(unittest.TestCase):
                 dict(os=__import__('os'), xbmcvfs=types.SimpleNamespace(translatePath=translate),
                      xbmc=types.SimpleNamespace(executeJSONRPC=lambda _q: self.fail('Must not modify established choices'))))
             with patch.dict('sys.modules', {'resources.libs': types.SimpleNamespace(
+                    child_profiles=types.SimpleNamespace(focus_home=lambda:None),
                     build_skin=types.SimpleNamespace(prepare_active_skin_defaults=lambda: False))}):
                 self.assertFalse(fn())
 

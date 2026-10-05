@@ -1262,9 +1262,9 @@ def switch_skin_in_gui_settings(gotoskin):
 
 def build_switch_skin():
     from resources.libs.patches import profile_age_guard
-    if profile_age_guard.active_policy() is not None:
-        xbmcgui.Dialog().ok('סקין פרופיל הילדים',
-            'פרופיל ילדים משתמש ב־NOX עם מסך ילדים וסינון גיל. שאר הסקינים זמינים בפרופילים רגילים.')
+    policy = profile_age_guard.active_policy()
+    if policy is not None and policy.get('blocked'):
+        xbmcgui.Dialog().ok('סקין פרופיל הילדים', 'יש להשלים את בקרת ההורים במשתמש הראשי.')
         return
     if not CONFIG.get_setting('buildname'):
         logging.log_notify(CONFIG.ADDONTITLE,
@@ -1274,7 +1274,8 @@ def build_switch_skin():
 
     from resources.libs.gui import window
     msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין NOX"
-    window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
+    if policy is None:
+        window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
 
     skin_mapping = {
         'סקין Estuary - מראה פשוט עם כפתורים': 'skin.estuary',

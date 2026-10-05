@@ -72,8 +72,7 @@
       <onleft>100</onleft>
       <onright>100</onright>
       <onup>204</onup>
-      <ondown condition="String.IsEqual(Window.Property(child),true)">204</ondown>
-      <ondown condition="!String.IsEqual(Window.Property(child),true)">202</ondown>
+      <ondown>202</ondown>
       <itemlayout width="360" height="392">
         <control type="image">
           <left>20</left>
@@ -176,7 +175,7 @@
       <top>838</top>
       <width>440</width>
       <height>68</height>
-      <label>סקין וחיבורים</label>
+      <label>$INFO[Window.Property(settings_label)]</label>
       <font>font13</font>
       <align>center</align>
       <textcolor>FFABBBCC</textcolor>
@@ -187,7 +186,6 @@
       <onleft>204</onleft>
       <onright condition="String.IsEqual(Window.Property(master),true)">201</onright>
       <ondown condition="String.IsEqual(Window.Property(master),true)">205</ondown>
-      <visible>!String.IsEqual(Window.Property(child),true)</visible>
       <onright condition="!String.IsEqual(Window.Property(master),true)">204</onright>
       <ondown condition="!String.IsEqual(Window.Property(master),true)">100</ondown>
     </control>
@@ -241,11 +239,9 @@
       <texturenofocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button.png</texturenofocus>
       <onup>100</onup>
       <onleft condition="String.IsEqual(Window.Property(master),true)">203</onleft>
-      <onright condition="!String.IsEqual(Window.Property(child),true)">202</onright>
+      <onright>202</onright>
       <ondown condition="String.IsEqual(Window.Property(master),true)">205</ondown>
-      <onleft condition="!String.IsEqual(Window.Property(master),true) + !String.IsEqual(Window.Property(child),true)">202</onleft>
-      <onleft condition="String.IsEqual(Window.Property(child),true)">100</onleft>
-      <onright condition="String.IsEqual(Window.Property(child),true)">100</onright>
+      <onleft condition="!String.IsEqual(Window.Property(master),true)">202</onleft>
       <ondown condition="!String.IsEqual(Window.Property(master),true)">100</ondown>
     </control>
     <control type="button" id="205">

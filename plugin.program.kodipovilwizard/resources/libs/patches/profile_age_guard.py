@@ -135,7 +135,8 @@ def host_integrity(addons):
         'plugin.video.umbrella': [('resources/lib/modules/control.py', 'WIZARD_UMBRELLA_PROFILE_DIRECTORY_v1'),
                                   ('resources/lib/modules/router.py', 'WIZARD_UMBRELLA_PROFILE_ROUTE_v1'),
                                   ('resources/lib/modules/player.py', 'WIZARD_UMBRELLA_PROFILE_PLAY_v1'),
-                                  ('resources/lib/modules/control.py', 'WIZARD_UMBRELLA_PROFILE_META_v1')]}
+                                  ('resources/lib/modules/control.py', 'WIZARD_UMBRELLA_PROFILE_META_v1')],
+        'plugin.video.idanplus': [('default.py', 'WIZARD_IDANPLUS_CHILD_SOURCE_v1')]}
     for addon, rows in required.items():
         directory = os.path.join(addons, addon)
         if not os.path.isdir(directory):
@@ -269,3 +270,20 @@ def route_allowed(params, host):
         except (IndexError, ValueError):
             pass
     return not deny
+
+
+def unclassified_source_allowed():
+    """Live broadcasts/catalogs without classifications cannot be age-filtered."""
+    if active_policy() is None:
+        return True
+    import sys
+    import xbmcgui
+    import xbmcplugin
+    xbmcgui.Dialog().notification('פרופיל ילדים', 'עידן פלוס ושידורים ללא דירוג גיל חסומים בפרופיל ילדים.', time=4000)
+    try:
+        handle = int(sys.argv[1])
+        if handle >= 0:
+            xbmcplugin.endOfDirectory(handle, succeeded=False)
+    except (ValueError, IndexError):
+        pass
+    return False

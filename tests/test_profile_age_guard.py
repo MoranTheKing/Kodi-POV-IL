@@ -109,6 +109,8 @@ class ProfilePolicyTests(unittest.TestCase):
             'resources.libs': types.SimpleNamespace(profile_store=store),
             'resources.libs.patches': types.SimpleNamespace(profile_age_guard=guard)})
         self.modules.start(); self.addCleanup(self.modules.stop)
+        self.child_ui = load('child_profiles_test', LIBS / 'child_profiles.py')
+        sys.modules['resources.libs'].child_profiles = self.child_ui
         self.parent = load('parental_profile_test', LIBS / 'parental_profiles.py')
         connections = load('profile_connections_test', LIBS / 'profile_connections.py')
         self.account_modules = patch.dict(sys.modules, {
@@ -126,6 +128,34 @@ class ProfilePolicyTests(unittest.TestCase):
         self.assertTrue(guard.allows(policy, {'mediatype': 'episode', 'tmdb_id': 15}))
         self.parent.set_child(str(self.master), self.profile, 9)
         self.assertIn('tv:15', guard.policy_for(str(self.master), str(self.child))['approved'])
+
+    def test_age_change_retains_chosen_skin_and_guards_all_skin_settings(self):
+        from xml.etree import ElementTree as ET
+        self.parent.set_child(str(self.master), self.profile, 7)
+        path=self.child/'guisettings.xml'
+        gui=ET.parse(path)
+        self.assertEqual(gui.findtext("setting[@id='lookandfeel.skin']"),'skin.povil.nox')
+        gui.find("setting[@id='lookandfeel.skin']").text='skin.fentastic'
+        gui.write(path)
+        self.parent.set_child(str(self.master), self.profile, 9)
+        self.assertEqual(ET.parse(path).findtext("setting[@id='lookandfeel.skin']"),'skin.fentastic')
+        for skin in self.child_ui.SKINS:
+            self.assertEqual(ET.parse(self.child/'addon_data'/skin/'settings.xml').findtext("setting[@id='POVILChild']"),'true')
+
+    def test_unapproved_audio_is_stopped_as_well_as_video(self):
+        window=Mock(); properties={}
+        window.setProperty.side_effect=lambda k,v:properties.update({k:v})
+        window.getProperty.side_effect=lambda k:properties.get(k,'')
+        monitor=types.SimpleNamespace(waitForAbort=Mock(side_effect=[False,True]))
+        player=Mock();player.isPlaying.return_value=True;player.isPlayingVideo.return_value=False
+        player.getPlayingFile.return_value='test://radio'
+        kodi=types.SimpleNamespace(Monitor=lambda:monitor,Player=lambda:player)
+        with patch.dict(sys.modules,{'xbmc':kodi,
+                'xbmcgui':types.SimpleNamespace(Window=lambda _:window,Dialog=lambda:Mock()),
+                'xbmcvfs':types.SimpleNamespace(translatePath=lambda _:'child')}):
+            service=load('profile_audio_test',LIBS.parents[1]/'profile_service.py')
+        with patch.object(guard,'active_policy',return_value={'age':7}):service.run()
+        player.stop.assert_called_once()
 
     def test_missing_corrupt_policy_and_unlocked_parent_fail_closed(self):
         self.parent.set_child(str(self.master), self.profile, 7)
@@ -169,7 +199,7 @@ class ProfilePolicyTests(unittest.TestCase):
         receipts = iter([json.dumps(current), json.dumps(upcoming)])
         window.getProperty.side_effect = lambda k: next(receipts) if k == 'POVIL.ChildPlay' else properties.get(k, '')
         monitor = types.SimpleNamespace(waitForAbort=Mock(side_effect=[False, False, True]))
-        player = Mock(); player.isPlayingVideo.return_value = True; player.getPlayingFile.return_value = 'test://current'
+        player = Mock(); player.isPlaying.return_value = True; player.getPlayingFile.return_value = 'test://current'
         kodi = types.SimpleNamespace(Monitor=lambda: monitor, Player=lambda: player)
         with patch.dict(sys.modules, {'xbmc': kodi,
                 'xbmcgui': types.SimpleNamespace(Window=lambda _: window, Dialog=lambda: Mock()),
