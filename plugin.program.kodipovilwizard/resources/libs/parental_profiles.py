@@ -82,24 +82,8 @@ def set_child(master, target, age):
 
 def copy_debrid(master, target):
     """Only after the parent elects to share these connections, no watch lists."""
-    dest = profile_store.profile_path(master, target)
-    for addon, prefixes in (
-            ('plugin.video.pov', ('rd.', 'ad.', 'pm.', 'tb.')),
-            ('plugin.video.umbrella', ('realdebrid.', 'alldebrid.', 'premiumize.', 'torbox.'))):
-        source = os.path.join(master, 'addon_data', addon, 'settings.xml')
-        destination = os.path.join(dest, 'addon_data', addon, 'settings.xml')
-        if not os.path.isfile(source):
-            continue
-        settings = ET.parse(destination).getroot() if os.path.isfile(destination) else ET.Element('settings', {'version': '2'})
-        for row in ET.parse(source).getroot().findall('setting'):
-            ident = row.get('id', '')
-            if not ident.startswith(prefixes):
-                continue
-            old = settings.find("setting[@id='{}']".format(ident))
-            if old is not None:
-                settings.remove(old)
-            settings.append(ET.fromstring(ET.tostring(row)))
-        atomic_write(destination, ET.tostring(settings, encoding='utf-8', xml_declaration=True))
+    from resources.libs.profile_connections import copy_selected
+    copy_selected(master, target, ['realdebrid', 'alldebrid', 'premiumize', 'torbox'])
 
 
 def approve(master, profile, kind, ident, label):

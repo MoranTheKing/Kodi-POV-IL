@@ -12,6 +12,13 @@ from unittest.mock import patch
 from test_provisioning_gate import _load_function, ROOT
 
 FRESH = ROOT / 'plugin.program.kodipovilwizard/resources/libs/fresh_install.py'
+SKIN = ROOT / 'plugin.program.kodipovilwizard/resources/libs/build_skin.py'
+
+def skin_modules(activate):
+    libs = types.ModuleType('resources.libs')
+    libs.build_skin = types.SimpleNamespace(activate=activate)
+    return {'resources': types.ModuleType('resources'), 'resources.libs': libs,
+            'resources.libs.build_skin': libs.build_skin}
 
 
 class FreshHomeReadinessTests(unittest.TestCase):
@@ -72,10 +79,10 @@ class FreshHomeReadinessTests(unittest.TestCase):
             executebuiltin=sent.append)
         textbox = types.SimpleNamespace(getText=lambda: 'Keep this skin?', getLabel=lambda: '')
         gui = types.SimpleNamespace(Window=lambda _id: types.SimpleNamespace(getControl=lambda _id: textbox))
-        fn = _load_function(FRESH, '_accept_initial_skin_confirmation', {'xbmc': xbmc, 'xbmcgui': gui})
-        self.assertTrue(fn()); self.assertEqual(sent, ['SendClick(10100,11)'])
+        fn = _load_function(SKIN, 'confirm_requested_skin', {'xbmc': xbmc})
+        self.assertTrue(fn('skin.povil.nox')); self.assertEqual(sent, ['SendClick(10100,11)'])
         xbmc.getInfoLabel = lambda _c: 'Security warning'
-        self.assertFalse(fn()); self.assertEqual(len(sent), 1)
+        self.assertFalse(fn('skin.povil.nox')); self.assertEqual(len(sent), 1)
 
     def test_live_defaults_are_typed_and_skin_is_last(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -104,13 +111,19 @@ class FreshHomeReadinessTests(unittest.TestCase):
             fn = _load_function(FRESH, 'apply_live_defaults', {
                 'ET': ET, 'os': os, 're': re, 'threading': threading, 'CONFIG': types.SimpleNamespace(USERDATA=raw),
                 'xbmc': xbmc, '_rpc': rpc, '_accept_initial_skin_confirmation': lambda: False})
-            self.assertTrue(fn())
+            activate = _load_function(SKIN, 'activate', {'SKINS': ('skin.povil.nox',),
+                'enable_skin': lambda _target: True, 'xbmc': xbmc, 'rpc': rpc,
+                'threading': threading, 'confirm_requested_skin': lambda _target: False,
+                'persist_live_settings': lambda: True})
+            with patch.dict('sys.modules', skin_modules(activate)):
+                self.assertTrue(fn())
             self.assertEqual(calls[-1], {'setting': 'lookandfeel.skin', 'value': 'skin.povil.nox'})
             self.assertIs(calls[1]['value'], False)
             self.assertEqual(calls[2]['value'], ['English', 'Hebrew'])
             self.assertGreater(sum(waits), 10)
             xbmc.getSkinDir = lambda: 'skin.estuary'
-            self.assertFalse(fn(), 'RPC success cannot certify a reverted skin')
+            with patch.dict('sys.modules', skin_modules(activate)):
+                self.assertFalse(fn(), 'RPC success cannot certify a reverted skin')
 
     def test_manual_resume_with_loaded_skin_shows_home_without_confirmation_wait(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -125,7 +138,8 @@ class FreshHomeReadinessTests(unittest.TestCase):
                 executebuiltin=builtin)
             fn = _load_function(FRESH, 'apply_live_defaults', {'ET': ET, 'os': os,
                 'CONFIG': types.SimpleNamespace(USERDATA=raw), 'xbmc': xbmc})
-            self.assertTrue(fn())
+            with patch.dict('sys.modules', skin_modules(lambda _target: True)):
+                self.assertTrue(fn())
             self.assertEqual(calls, ['ActivateWindow(Home)'])
             self.assertEqual(waits, [])
 
@@ -168,6 +182,7 @@ class FreshHomeReadinessTests(unittest.TestCase):
             'resources', 'resources.libs', 'resources.libs.modular_updater',
             'resources.libs.patch_engine')}
         modules['resources.libs'].db = types.SimpleNamespace(fix_metas=lambda: None, addon_database=lambda *_a: None)
+        modules['resources.libs.build_profiles'] = types.SimpleNamespace(addon_enabled=lambda _ident: True)
         modules['resources.libs.modular_updater'].ModularUpdater = types.SimpleNamespace(
             is_provisioned=lambda: True, CORE_PROVISION_IDS=())
         modules['resources.libs.patch_engine'].PatchEngine = lambda: types.SimpleNamespace(

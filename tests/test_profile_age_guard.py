@@ -110,6 +110,11 @@ class ProfilePolicyTests(unittest.TestCase):
             'resources.libs.patches': types.SimpleNamespace(profile_age_guard=guard)})
         self.modules.start(); self.addCleanup(self.modules.stop)
         self.parent = load('parental_profile_test', LIBS / 'parental_profiles.py')
+        connections = load('profile_connections_test', LIBS / 'profile_connections.py')
+        self.account_modules = patch.dict(sys.modules, {
+            'resources.libs.profile_connections': connections,
+            'resources.libs.parental_profiles': self.parent})
+        self.account_modules.start(); self.addCleanup(self.account_modules.stop)
         self.profile = store.registered_profiles(str(self.master))[1]
 
     def test_child_setup_approvals_and_settings_are_profile_local(self):
