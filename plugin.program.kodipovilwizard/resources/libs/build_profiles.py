@@ -79,16 +79,10 @@ def repair_active():
 
 
 def install_login_hooks():
-    """Add a no-op-unless-sole-master hook to installed build login screens.
-
-    The owned NOX skin ships it directly. Other installed skins receive the
-    same small additive XML hook, without replacing their custom layout.
-    Built-in/read-only skins are left to the post-login settings repair.
-    """
+    """Keep profile bootstrap and the native branded picker in build skins."""
     import re
     import tempfile
     addons = xbmcvfs.translatePath('special://home/addons/')
-    hook = '<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/single_profile_login.py)</onload>'
     for ident, _label in SKINS:
         for folder in ('xml', '1080i', '720p'):
             path = os.path.join(addons, ident, folder, 'Home.xml')
@@ -117,24 +111,44 @@ def install_login_hooks():
             if not os.path.isfile(path):
                 continue
             try:
-                with open(path, encoding='utf-8-sig') as source:
-                    text = source.read()
-                if 'single_profile_login.py' in text:
-                    continue
-                changed, count = re.subn(r'(<window(?:\s[^>]*)?>)', r'\1\n    ' + hook, text, count=1)
-                if count != 1:
-                    continue
-                ET.fromstring(changed)
-                fd, temporary = tempfile.mkstemp(prefix='.povil-login-', dir=os.path.dirname(path))
-                try:
-                    with os.fdopen(fd, 'w', encoding='utf-8') as output:
-                        output.write(changed)
-                    os.replace(temporary, path)
-                finally:
-                    if os.path.exists(temporary):
-                        os.unlink(temporary)
+                install_login_design(path)
             except (OSError, ValueError, ET.ParseError):
                 xbmc.log('[Profiles] login hook deferred for ' + ident, xbmc.LOGWARNING)
+
+
+def install_login_design(path):
+    """Replace presentation only; native list 52 still owns loading and PINs."""
+    import tempfile
+    original = ET.parse(path).getroot()
+    if original.find(".//control[@id='52']") is None:
+        return False  # unknown third-party login contract
+    source = os.path.join(xbmcaddon.Addon(WIZARD).getAddonInfo('path'),
+                          'resources', 'skins', 'Default', '1080i', 'ProfileLogin.xml')
+    design = ET.parse(source).getroot()
+    # Keep skin-owned startup actions, excluding the obsolete auto-login hook.
+    actions = [action for action in original.findall('onload')
+               if 'single_profile_login.py' not in (action.text or '')]
+    for index, action in enumerate(actions):
+        design.insert(index, action)
+    fonts_path = os.path.join(os.path.dirname(path), 'Font.xml')
+    if os.path.isfile(fonts_path):
+        fonts = ET.parse(fonts_path).findall('fontset')[0].findall('font')
+        sizes = [(f.findtext('name'), float(f.findtext('size', '30'))) for f in fonts]
+        for element in design.iter('font'):
+            wanted = {'font60': 60, 'font37': 37, 'font13': 30, 'font12': 25}[element.text]
+            element.text = min(sizes, key=lambda f: abs(f[1] - wanted))[0]
+    changed = ET.tostring(design, encoding='utf-8', xml_declaration=True)
+    if ET.tostring(original) == ET.tostring(design):
+        return False
+    fd, temporary = tempfile.mkstemp(prefix='.povil-login-', dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, 'wb') as output:
+            output.write(changed)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    return True
 
 
 def addon_enabled(ident):
@@ -237,36 +251,50 @@ def _native_settings():
 
 
 def repair_single_login():
-    """Use Kodi's native toggle so its cached state and XML stay in agreement.
-
-    Never bypass a master lock, playback, a setup dialog or explicit multi-user
-    selection. Runs after Home is ready; next boot opens Home directly.
-    """
+    """Enable login once for this rollout; retain later manual OFF choices."""
+    receipt = 'kodipovil.login_default_v2'
+    master = _master_path()
+    if os.path.isfile(os.path.join(master, receipt)):
+        return False
     if (not is_master() or xbmc.getCondVisibility('Player.Playing') or
-            not xbmc.getCondVisibility('System.HasLoginScreen') or
             not xbmc.getCondVisibility('Window.IsActive(home)') or
             xbmcgui.getCurrentWindowDialogId() not in (0, 9999, 10000)):
         return False
-    if not profile_store.lone_unlocked(profile_store.registered_profiles(_master_path())):
-        return False
+    if xbmc.getCondVisibility('System.HasLoginScreen'):
+        profile_store.write_missing(master, receipt, b'1')
+        return True
     if not _native_settings():
         return False
-    # Recheck after activation: user input may have changed the profile list.
-    if (is_master() and profile_store.lone_unlocked(profile_store.registered_profiles(_master_path()))
-            and xbmc.getCondVisibility('System.HasLoginScreen')):
-        xbmc.executebuiltin('SendClick(10034,4)')
+    # Native control 4 updates both ProfileManager memory and profiles.xml.
+    if (is_master() and xbmc.getCondVisibility('Window.IsActive(10034)') and
+            xbmcgui.getCurrentWindowDialogId() in (0, 9999, 10000) and
+            not xbmc.getCondVisibility('System.HasLoginScreen')):
+        xbmc.executebuiltin('SendClick(10034,4)', True)
+    ready = xbmc.getCondVisibility('System.HasLoginScreen')
+    if ready:
+        profile_store.write_missing(master, receipt, b'1')
     xbmc.executebuiltin('ActivateWindow(home)')
-    return True
+    return ready
 
 
 def resume_single_login():
-    """Enter a sole unlocked master through Kodi's normal profile loader."""
-    if not is_master() or not xbmc.getCondVisibility('Window.IsActive(loginscreen)'):
+    """Compatibility with older startup scripts; never skip explicit login."""
+    return False
+
+
+def copy_native_profile_defaults():
+    """Answer only Kodi's two copy-default questions during add_profile()."""
+    if not is_master() or xbmcgui.getCurrentWindowDialogId() != 10100:
         return False
-    profiles = profile_store.registered_profiles(_master_path())
-    if not profile_store.lone_unlocked(profiles):
+    if xbmc.getInfoLabel('Control.GetLabel(1)') != xbmc.getLocalizedString(20058):
         return False
-    _rpc('Profiles.LoadProfile', dict(profile=profiles[0]['name'], prompt=True))
+    if xbmc.getInfoLabel('Control.GetLabel(9)') not in (
+            xbmc.getLocalizedString(20048), xbmc.getLocalizedString(20071)):
+        return False
+    if xbmc.getInfoLabel('Control.GetLabel(11)') != xbmc.getLocalizedString(20064):
+        return False
+    # Kodi ShowForProfile: no=20044 (start fresh), yes=20064 (copy default).
+    xbmc.executebuiltin('SendClick(10100,11)', True)
     return True
 
 
@@ -332,6 +360,7 @@ def add_profile():
         if dialog not in (0, 9999, 10034, 10000):
             saw_dialog = True
             idle_since = None
+            copy_native_profile_defaults()
         elif saw_dialog:
             idle_since = idle_since or time.monotonic()
             if time.monotonic() - idle_since > 0.8:
