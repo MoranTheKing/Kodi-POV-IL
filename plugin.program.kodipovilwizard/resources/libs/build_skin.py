@@ -132,12 +132,14 @@ def prepare_active_skin_defaults():
 
 def prepare_layout():
     """Seed shipped layout only when absent; use the active profile's paths."""
-    from resources.libs import profile_store, fentastic_widgets
+    from resources.libs import profile_store, fentastic_widgets, build_profiles
     archive = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/bootstrap/config.zip')
     with open(archive, 'rb') as handle:
         if hashlib.sha256(handle.read()).hexdigest() != profile_store.BOOTSTRAP_SHA256:
             raise RuntimeError('Build layout defaults failed integrity verification')
     profile = xbmcvfs.translatePath('special://profile/')
+    # Include skins installed on demand before their first profile logout.
+    build_profiles.install_login_hooks()
     prepare_active_skin_defaults()
     with zipfile.ZipFile(archive) as source:
         for name in ('addon_data/script.fentastic.helper/cpath_cache.db',

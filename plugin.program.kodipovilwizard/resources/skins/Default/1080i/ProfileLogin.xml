@@ -1,0 +1,215 @@
+<?xml version='1.0' encoding='utf-8'?>
+<window>
+  <!--POVIL Profile UI v1: native control 52 owns profile selection and locks.-->
+  <defaultcontrol always="true">52</defaultcontrol>
+  <controls>
+    <control type="image">
+      <left>0</left>
+      <top>0</top>
+      <width>1920</width>
+      <height>1080</height>
+      <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/background.jpg</texture>
+    </control>
+    <control type="image">
+      <left>96</left>
+      <top>67</top>
+      <width>310</width>
+      <height>99</height>
+      <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/logo.png</texture>
+      <aspectratio>keep</aspectratio>
+    </control>
+    <control type="label">
+      <left>1370</left>
+      <top>70</top>
+      <width>454</width>
+      <height>48</height>
+      <font>font37</font>
+      <label>קודי ישראל</label>
+      <textcolor>FFE2BD6F</textcolor>
+      <align>right</align>
+      <aligny>center</aligny>
+    </control>
+    <control type="label">
+      <left>1370</left>
+      <top>116</top>
+      <width>454</width>
+      <height>32</height>
+      <font>font12</font>
+      <label>הסיפורים שלכם. המקום שלכם.</label>
+      <textcolor>FF9BABB9</textcolor>
+      <align>right</align>
+      <aligny>center</aligny>
+    </control>
+    <control type="label">
+      <left>120</left>
+      <top>224</top>
+      <width>1680</width>
+      <height>92</height>
+      <font>font60</font>
+      <label>[B]מי צופה?[/B]</label>
+      <textcolor>FFECF1F6</textcolor>
+      <align>center</align>
+      <aligny>center</aligny>
+    </control>
+    <control type="label">
+      <left>120</left>
+      <top>324</top>
+      <width>1680</width>
+      <height>48</height>
+      <font>font13</font>
+      <label>בחרו את הפרופיל שלכם ונתחיל לצפות</label>
+      <textcolor>FFA5B4C5</textcolor>
+      <align>center</align>
+      <aligny>center</aligny>
+    </control>
+    <control type="fixedlist" id="52">
+      <left>60</left>
+      <top>405</top>
+      <width>1800</width>
+      <height>392</height>
+      <orientation>horizontal</orientation>
+      <focusposition>2</focusposition>
+      <scrolltime>240</scrolltime>
+      <onleft>52</onleft>
+      <onright>52</onright>
+      <onup>20</onup>
+      <ondown>20</ondown>
+      <itemlayout width="360" height="392">
+        <control type="image">
+          <left>20</left>
+          <top>14</top>
+          <width>320</width>
+          <height>335</height>
+          <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/card.png</texture>
+        </control>
+        <control type="image">
+          <left>100</left>
+          <top>47</top>
+          <width>160</width>
+          <height>160</height>
+          <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/avatar.png</texture>
+          <visible>String.IsEmpty(ListItem.Icon) | String.IsEqual(ListItem.Icon,DefaultUser.png)</visible>
+        </control>
+        <control type="image">
+          <left>100</left>
+          <top>47</top>
+          <width>160</width>
+          <height>160</height>
+          <texture>$INFO[ListItem.Icon]</texture>
+          <visible>![String.IsEmpty(ListItem.Icon) | String.IsEqual(ListItem.Icon,DefaultUser.png)]</visible>
+          <aspectratio>keep</aspectratio>
+        </control>
+        <control type="label">
+          <left>43</left>
+          <top>230</top>
+          <width>274</width>
+          <height>54</height>
+          <font>font37</font>
+          <label>[B]$INFO[ListItem.Label][/B]</label>
+          <textcolor>FFB0BED0</textcolor>
+          <align>center</align>
+          <aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>43</left>
+          <top>293</top>
+          <width>274</width>
+          <height>34</height>
+          <font>font12</font>
+          <label>בחירה ולצפייה</label>
+          <textcolor>FF76879C</textcolor>
+          <align>center</align>
+          <aligny>center</aligny>
+        </control>
+      </itemlayout>
+      <focusedlayout width="360" height="392">
+        <control type="image">
+          <left>20</left>
+          <top>14</top>
+          <width>320</width>
+          <height>335</height>
+          <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/card-focus.png</texture>
+        </control>
+        <control type="image">
+          <left>100</left>
+          <top>47</top>
+          <width>160</width>
+          <height>160</height>
+          <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/avatar.png</texture>
+          <visible>String.IsEmpty(ListItem.Icon) | String.IsEqual(ListItem.Icon,DefaultUser.png)</visible>
+        </control>
+        <control type="image">
+          <left>100</left>
+          <top>47</top>
+          <width>160</width>
+          <height>160</height>
+          <texture>$INFO[ListItem.Icon]</texture>
+          <visible>![String.IsEmpty(ListItem.Icon) | String.IsEqual(ListItem.Icon,DefaultUser.png)]</visible>
+          <aspectratio>keep</aspectratio>
+        </control>
+        <control type="label">
+          <left>43</left>
+          <top>230</top>
+          <width>274</width>
+          <height>54</height>
+          <font>font37</font>
+          <label>[B]$INFO[ListItem.Label][/B]</label>
+          <textcolor>FFECF1F6</textcolor>
+          <align>center</align>
+          <aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>43</left>
+          <top>293</top>
+          <width>274</width>
+          <height>34</height>
+          <font>font12</font>
+          <label>בחירה ולצפייה</label>
+          <textcolor>FFE2BD6F</textcolor>
+          <align>center</align>
+          <aligny>center</aligny>
+        </control>
+      </focusedlayout>
+    </control>
+    <control type="label">
+      <left>120</left>
+      <top>826</top>
+      <width>1680</width>
+      <height>42</height>
+      <font>font12</font>
+      <label>$INFO[Container(52).ListItem.Label2]</label>
+      <textcolor>FF8497AE</textcolor>
+      <align>center</align>
+      <aligny>center</aligny>
+    </control>
+    <control type="label">
+      <left>120</left>
+      <top>874</top>
+      <width>1680</width>
+      <height>38</height>
+      <font>font12</font>
+      <label>ניווט בחצים  •  אישור לבחירה</label>
+      <textcolor>FF8497AE</textcolor>
+      <align>center</align>
+      <aligny>center</aligny>
+    </control>
+    <control type="button" id="20">
+      <left>820</left>
+      <top>948</top>
+      <width>280</width>
+      <height>62</height>
+      <label>אפשרויות כיבוי</label>
+      <font>font13</font>
+      <align>center</align>
+      <textcolor>FFABBBCC</textcolor>
+      <focusedcolor>FFF0D394</focusedcolor>
+      <texturefocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button-focus.png</texturefocus>
+      <texturenofocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button.png</texturenofocus>
+      <onup>52</onup>
+      <onleft>52</onleft>
+      <onright>52</onright>
+      <ondown>52</ondown>
+      <onclick>ActivateWindow(ShutdownMenu)</onclick>
+    </control>
+  </controls>
+</window>
