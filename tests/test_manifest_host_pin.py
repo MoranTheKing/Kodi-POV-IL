@@ -16,6 +16,22 @@ spec.loader.exec_module(generator)
 
 
 class ManifestHostPinTests(unittest.TestCase):
+    def test_mirror_requires_owned_release_and_official_provenance(self):
+        pin = generator._pov_host_migration()
+        pin['zip'] = ('https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/'
+                      'addons-latest/official-' + pin['filename'])
+        pin['upstream_zip'] = 'https://kodifitzwell.github.io/repo/plugin.video.pov/' + pin['filename']
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'pin.json'
+            with mock.patch.object(generator, 'POV_HOST_MIGRATION', str(path)):
+                path.write_text(json.dumps(pin))
+                self.assertEqual(generator._pov_host_migration()['sha256'], pin['sha256'])
+                for invalid in (dict(pin, zip=pin['zip'].replace('MoranTheKing', 'other')),
+                                dict(pin, upstream_zip='https://example.org/host.zip')):
+                    path.write_text(json.dumps(invalid))
+                    with self.assertRaises(ValueError):
+                        generator._pov_host_migration()
+
     def test_official_pin_is_emitted_and_bad_hash_is_rejected(self):
         official = generator._pov_host_migration()
         self.assertEqual(official['id'], 'plugin.video.pov')
