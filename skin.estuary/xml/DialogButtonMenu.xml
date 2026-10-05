@@ -17,6 +17,11 @@
 			<control type="panel" id="9000">
 				<include>ButtonMenuList</include>
 				<content>
+					<item><label>מי צופה? — פרופילים</label><onclick>Dialog.Close(all)</onclick><onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profiles)</onclick></item>
+					<item><label>החלף סקין</label><onclick>Dialog.Close(all)</onclick><onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=build_switch_skin)</onclick></item>
+					<item><label>חיבור שירותים</label><onclick>Dialog.Close(all)</onclick><onclick>RunPlugin(plugin://plugin.video.pov/?mode=myservices)</onclick></item>
+					<item><label>עדכון מהיר</label><onclick>Dialog.Close(all)</onclick><onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=quick_update&amp;auto_quick_update=false)</onclick></item>
+					<item><label>שליחת לוג</label><onclick>Dialog.Close(all)</onclick><onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=uploadlog)</onclick></item>
 					<!-- KODI-RD-IL CHANGES -->
 					<item>
 						<!-- CoreELEC only - Reboot to Android TV -->
@@ -46,7 +51,7 @@
 						<!-- KODI ANDORID/WINDOWS Update Check -->
 						<label>[B][COLOR blue]$LOCALIZE[700044][/COLOR][/B]</label>
 						<onclick>Dialog.Close(all)</onclick>
-						<onclick>PlayMedia(&quot;plugin://plugin.program.kodirealdebridisraelwizard/?mode=install&amp;action=kodi_version_update_check&amp;kodi_version_update_check_manual=true&quot;)</onclick>
+						<onclick>PlayMedia(&quot;plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=kodi_version_update_check&amp;kodi_version_update_check_manual=true&quot;)</onclick>
 						<!-- Android/Windows only -->
 						<visible>System.Platform.Android | System.Platform.Windows</visible>
 					</item>
