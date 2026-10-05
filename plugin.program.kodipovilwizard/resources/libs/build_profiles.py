@@ -49,7 +49,11 @@ def _require_master():
 def _seed(profile):
     archive = os.path.join(xbmcaddon.Addon(WIZARD).getAddonInfo('path'),
                            'resources', 'bootstrap', 'config.zip')
-    return profile_store.seed_profile(_master_path(), profile, archive, prepare_login=is_master())
+    result = profile_store.seed_profile(_master_path(), profile, archive, prepare_login=is_master())
+    if is_master():
+        from resources.libs import profile_home
+        profile_home.prepare(_master_path(), profile)
+    return result
 
 
 def repair_active():
@@ -76,6 +80,24 @@ def repair_active():
                                       'config_applied_version', 'build_skin_switch_notifcation_dismiss'):
                     addon.setSetting(item.get('id'), item.text or '')
         return
+
+
+def prepare_inactive():
+    """Repair unfinished existing profiles before the next native login."""
+    if not is_master():
+        return
+    master = _master_path()
+    if not os.path.isfile(os.path.join(master, 'kodipovil.provisioned')):
+        return
+    for profile in profile_store.registered_profiles(master):
+        if profile['id'] == 0:
+            continue
+        try:
+            path = profile_store.profile_path(master, profile)
+            if not os.path.isfile(os.path.join(path, 'kodipovil.profile_home_ready')):
+                _seed(profile)
+        except (OSError, ValueError, ET.ParseError, zipfile.BadZipFile):
+            xbmc.log('[Profiles] inactive home preparation deferred', xbmc.LOGWARNING)
 
 
 def install_login_hooks():
