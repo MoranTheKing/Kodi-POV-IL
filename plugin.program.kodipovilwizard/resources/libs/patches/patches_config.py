@@ -2,6 +2,11 @@
 
 # Registry schema for Engine v2 patches
 PATCH_CONFIG = [
+    {'id': 'idanplus_child_source', 'name': 'Child profile unclassified live source guard',
+     'addon_id': 'plugin.video.idanplus', 'enabled': True, 'target_file': 'default.py',
+     'marker': '# WIZARD_IDANPLUS_CHILD_SOURCE_v1',
+     'anchor': 'from resources.main import route', 'action': 'prepend_before',
+     'hook': "import sys, xbmcvfs\n_povil_guards = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\nif _povil_guards not in sys.path: sys.path.append(_povil_guards)\nimport profile_age_guard\nif not profile_age_guard.unclassified_source_allowed(): raise SystemExit()\n"},
     {'id': 'pov_profile_movie_metadata', 'name': 'Child movie classification', 'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/menus/movies.py', 'marker': '# WIZARD_POV_PROFILE_MOVIE_META_v1',
      'anchor': '\t\t\tself.append((url_params, listitem, False))', 'action': 'prepend_before',
