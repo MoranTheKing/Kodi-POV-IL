@@ -12,7 +12,12 @@ import xbmcvfs
 def resume():
     master = os.path.realpath(xbmcvfs.translatePath('special://masterprofile/'))
     active = os.path.realpath(xbmcvfs.translatePath('special://profile/'))
-    if active == master or not os.path.isfile(os.path.join(master, 'kodipovil.provisioned')):
+    if not os.path.isfile(os.path.join(master, 'kodipovil.provisioned')):
+        return False
+    from resources.libs import build_skin
+    if build_skin.prepare_active_skin_defaults():
+        xbmc.executebuiltin('ReloadSkin()')
+    if active == master:
         return False
     if os.path.isfile(os.path.join(active, 'kodipovil.profile_home_ready')):
         return False  # preserve intentional disabling after setup

@@ -104,6 +104,7 @@ class ProfileStoreTests(unittest.TestCase):
 
     def test_repeat_repair_preserves_target_preferences_accounts_and_deletions(self):
         (self.target / 'kodipovil.profile_addons_ready').write_text('1')
+        (self.target / 'kodipovil.profile_home_ready').write_text('1')
         values = {'favourites.xml': b'<favourites/>',
                   'addon_data/plugin.video.pov/settings.xml': b'<settings>GUEST_TOKEN</settings>',
                   'addon_data/skin.fentastic/settings.xml': b'<settings>GUEST_PREF</settings>'}
@@ -116,6 +117,27 @@ class ProfileStoreTests(unittest.TestCase):
         for name, data in values.items():
             self.assertEqual((self.target / name).read_bytes(), data)
         self.assertFalse((self.target / 'kodipovil.profile_gui_defaults.xml').exists())
+
+    def test_old_addon_receipt_without_complete_home_still_queues_nox(self):
+        (self.target / 'kodipovil.profile_addons_ready').write_text('1')
+        self.seed()
+        queue = ET.parse(self.target / 'kodipovil.profile_gui_defaults.xml')
+        self.assertEqual(queue.findtext("setting[@id='lookandfeel.skin']"), 'skin.povil.nox')
+        self.assertFalse((self.target / 'kodipovil.profile_home_ready').exists())
+
+    def test_master_prepares_initial_nox_before_load_but_keeps_completed_skin(self):
+        gui = self.target / 'guisettings.xml'
+        gui.write_text('<settings><setting id="lookandfeel.skin" default="true">skin.estuary</setting>'
+                       '<setting id="device.preference">KEEP</setting></settings>')
+        store.seed_profile(str(self.master), self.profile, str(ARCHIVE), prepare_login=True)
+        root = ET.parse(gui)
+        self.assertEqual(root.findtext("setting[@id='lookandfeel.skin']"), 'skin.povil.nox')
+        self.assertIsNone(root.find("setting[@id='lookandfeel.skin']").get('default'))
+        self.assertEqual(root.findtext("setting[@id='device.preference']"), 'KEEP')
+        (self.target / 'kodipovil.profile_home_ready').write_text('1')
+        gui.write_text('<settings><setting id="lookandfeel.skin">skin.fentastic</setting></settings>')
+        store.seed_profile(str(self.master), self.profile, str(ARCHIVE), prepare_login=True)
+        self.assertEqual(ET.parse(gui).findtext("setting[@id='lookandfeel.skin']"), 'skin.fentastic')
 
     def test_native_copy_settings_and_empty_favourites_still_receive_build_defaults(self):
         (self.target / 'favourites.xml').write_text('<favourites/>')
