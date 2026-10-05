@@ -429,7 +429,7 @@ def update_favourites_xml_file(gotoskin):
 # from Switch Skin, so it never bloats the base build. Its only hard dependency,
 # script.fentastic.helper, already ships in the build.
 NOX_PACK_BASE_URL = "https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist"
-NOX_SKIN_VERSION = '1.0.10'
+NOX_SKIN_VERSION = '1.0.17'
 NOX_PACKS = [
     {
         'name': 'סקין NOX',
@@ -933,11 +933,30 @@ def ensure_arctic_fuse_3_installed():
 
 
 def ensure_nox_installed():
-    """Download + extract the NOX skin pack on demand (see _ensure_packs_installed)."""
-    return _ensure_packs_installed(
-        NOX_PACKS,
-        '[COLOR {0}][B]מוריד את סקין NOX[/B][/COLOR]'.format(CONFIG.COLOR2),
-        '[COLOR {0}][B]סקין NOX מוכן לשימוש[/B][/COLOR]'.format(CONFIG.COLOR1))
+    """Use the verified modular skin, never the obsolete static pack."""
+    from resources.libs.modular_updater import ModularUpdater
+    from resources.libs import build_skin
+    updater = ModularUpdater(background=True)
+    ident = 'skin.povil.nox'
+    if updater._version_tuple(updater.get_local_version(ident)) >= updater._version_tuple(NOX_SKIN_VERSION):
+        return build_skin.enable_skin(ident)
+    manifest = updater._load_manifest() or {}
+    entry = (manifest.get('addons') or {}).get(ident)
+    if not entry or updater._version_tuple(entry.get('version')) < updater._version_tuple(NOX_SKIN_VERSION):
+        return False
+    entry = dict(entry, id=ident)
+    tools.ensure_folders(CONFIG.PACKAGES)
+    package = os.path.join(CONFIG.PACKAGES, 'nox-modular.zip')
+    try:
+        updater._download_background_zip(entry['zip'], package, entry)
+        updater._install_verified_module(package, entry, entry['sha256'])
+        xbmc.executebuiltin('UpdateLocalAddons')
+        xbmc.Monitor().waitForAbort(0.5)
+        return (updater.get_local_version(ident) == entry['version'] and
+                build_skin.enable_skin(ident))
+    except Exception as err:
+        logging.log('[NOX] modular installation failed: {}'.format(type(err).__name__), level=xbmc.LOGERROR)
+        return False
 
 
 def auto_update_active_skin_pack():
@@ -1237,28 +1256,9 @@ def af3_tool_action(tool_id):
 
 
 def switch_skin_in_gui_settings(gotoskin):
-    try:
-        import xbmcvfs
-        guisettings_file_path = xbmcvfs.translatePath("special://profile/guisettings.xml")
-        import xml.etree.ElementTree as ET
-        tree = ET.parse(guisettings_file_path)
-        root = tree.getroot()
-        # Find the setting with id="lookandfeel.skin"
-        for setting in root.iter('setting'):
-            if setting.get('id') == 'lookandfeel.skin':
-                # Remove default attribute, if present
-                if 'default' in setting.attrib:
-                    del setting.attrib['default']
-                # Change the value to gotoskin
-                setting.text = gotoskin
-        # Write the modified tree back to the file
-        tree.write(guisettings_file_path)
-        return True
-    except Exception as e:
-        logging.log_notify(CONFIG.ADDONTITLE,
-                           '[COLOR {0}]שגיאה בהחלפת סקין![/COLOR]'.format(CONFIG.COLOR2))
-        logging.log(f"DEBUG | switch_skin_in_gui_settings | Exception: {str(e)}")
-        return False
+    from resources.libs import build_skin
+    return build_skin.switch(gotoskin)
+
 
 def build_switch_skin():
 
@@ -1287,12 +1287,12 @@ def build_switch_skin():
     # user can pick a known skin to recover.
     current_skin_name = next(
         (skin_name for skin_name, skin_addon_name in
-         skin_mapping.items() if skin_addon_name in CONFIG.SKIN),
+         skin_mapping.items() if skin_addon_name == xbmc.getSkinDir()),
         'סקין לא מזוהה'
     )
 
     # Filter out the current active skin from the list
-    skins_list = [skin_name for skin_name, skin_addon_name in skin_mapping.items() if skin_addon_name not in CONFIG.SKIN]
+    skins_list = [skin_name for skin_name, skin_addon_name in skin_mapping.items() if skin_addon_name != xbmc.getSkinDir()]
 
     # Create a dialog window
     dialog = xbmcgui.Dialog()
@@ -1337,16 +1337,13 @@ def build_switch_skin():
             dialogProgress.update(int((3 - s) / 3.0 * 100), dialog_text)
             xbmc.sleep(1000)
 
-        # guisettings.xml | Configure lookandfeel.skin setting
-        if not switch_skin_in_gui_settings(gotoskin): return
-
-        xbmc.sleep(500)
-
-        # favourites.xml | Switch to selected build's skin favourites.xml
-        if not update_favourites_xml_file(gotoskin): return
-
         dialogProgress.close()
-        Wizard().force_close_kodi_in_5_seconds(dialog_header="סקין הוחלף בהצלחה!")
+        from resources.libs import build_profiles
+        if not build_profiles._wait_dialogs():
+            return
+        if not switch_skin_in_gui_settings(gotoskin):
+            dialog.ok(CONFIG.ADDONTITLE, 'לא ניתן להשלים את החלפת הסקין. אפשר לנסות שוב דרך הוויזרד.')
+
     else:
         return
 

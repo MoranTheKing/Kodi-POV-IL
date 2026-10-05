@@ -64,7 +64,7 @@ def repair_active():
             continue
         if profile['id'] == 0 or target != active:
             continue
-        was_ready = os.path.isfile(os.path.join(active, 'kodipovil.provisioned'))
+        was_ready = os.path.isfile(os.path.join(active, 'kodipovil.profile_addons_ready'))
         _seed(profile)
         if not was_ready:
             # Addon settings may have been cached before the missing file was
@@ -90,6 +90,28 @@ def install_login_hooks():
     addons = xbmcvfs.translatePath('special://home/addons/')
     hook = '<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/single_profile_login.py)</onload>'
     for ident, _label in SKINS:
+        for folder in ('xml', '1080i', '720p'):
+            path = os.path.join(addons, ident, folder, 'Home.xml')
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path, encoding='utf-8-sig') as source:
+                    text = source.read()
+                if 'profile_bootstrap.py' not in text:
+                    bootstrap = '<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/profile_bootstrap.py)</onload>'
+                    changed, count = re.subn(r'(<window(?:\s[^>]*)?>)', r'\1\n    ' + bootstrap, text, count=1)
+                    if count == 1:
+                        ET.fromstring(changed)
+                        fd, temporary = tempfile.mkstemp(prefix='.povil-profile-', dir=os.path.dirname(path))
+                        try:
+                            with os.fdopen(fd, 'w', encoding='utf-8') as output:
+                                output.write(changed)
+                            os.replace(temporary, path)
+                        finally:
+                            if os.path.exists(temporary):
+                                os.unlink(temporary)
+            except (OSError, ValueError, ET.ParseError):
+                xbmc.log('[Profiles] startup hook deferred for ' + ident, xbmc.LOGWARNING)
         for folder in ('xml', '1080i', '720p'):
             path = os.path.join(addons, ident, folder, 'LoginScreen.xml')
             if not os.path.isfile(path):
@@ -140,9 +162,6 @@ def prepare_first_login():
     required = (WIZARD, 'plugin.video.pov', 'skin.povil.nox',
                 'script.fentastic.helper', 'service.subtitles.kodipovilai',
                 'plugin.program.orderfavourites-hebrew')
-    if all(addon_enabled(ident) for ident in required):
-        profile_store.write_missing(active, 'kodipovil.profile_addons_ready', b'1')
-        return True
     addons = xbmcvfs.translatePath('special://home/addons/')
     graph = {}
     for name in os.listdir(addons):
@@ -157,6 +176,16 @@ def prepare_first_login():
                            if row.get('optional') != 'true']
         except (OSError, ET.ParseError):
             continue
+    # Enable the installed build and its dependency closure, not arbitrary
+    # third-party services the master may have intentionally disabled.
+    build_addons = ('script.module.acctmgr', 'plugin.video.umbrella',
+                    'plugin.video.idanplus', 'plugin.video.youtube',
+                    'plugin.video.themoviedb.helper', 'resource.language.he_il',
+                    'skin.estuary', 'skin.fentastic', 'repository.kodipovil')
+    required += tuple(ident for ident in build_addons if ident in graph)
+    if all(addon_enabled(ident) for ident in required):
+        profile_store.write_missing(active, 'kodipovil.profile_addons_ready', b'1')
+        return True
     xbmc.executebuiltin('UpdateLocalAddons')
     monitor = xbmc.Monitor()
     if monitor.waitForAbort(0.5):
@@ -170,11 +199,12 @@ def prepare_first_login():
             enable(dependency)
         visiting.remove(ident)
         try:
-            _rpc('Addons.SetAddonEnabled', dict(addonid=ident, enabled=True))
+            if not addon_enabled(ident):
+                _rpc('Addons.SetAddonEnabled', dict(addonid=ident, enabled=True))
         except RuntimeError:
             return  # failed dependencies can be retried on the next pass
         done.add(ident)
-    for ident in graph:
+    for ident in required:
         enable(ident)
     for _ in range(15):
         if all(addon_enabled(ident) for ident in required):
@@ -258,7 +288,9 @@ def choose_skin():
         return
     # Kodi owns the setting and its normal keep/revert confirmation. Do not
     # edit active guisettings.xml or terminate Kodi for a skin preference.
-    _rpc('Settings.SetSettingValue', dict(setting='lookandfeel.skin', value=available[choice][0]))
+    from resources.libs import build_skin
+    if not build_skin.switch(available[choice][0]):
+        xbmcgui.Dialog().ok('סקין הפרופיל', 'לא ניתן להשלים את החלפת הסקין. נסה שוב דרך הוויזרד.')
 
 
 def add_profile():
@@ -272,9 +304,13 @@ def add_profile():
     kind = xbmcgui.Dialog().select('איזה פרופיל להוסיף?', ['פרופיל רגיל', 'פרופיל ילדים עם הגבלת גיל'])
     if kind < 0:
         return
+    from resources.libs import profile_connections
+    connections = profile_connections.choose(master)
+    if connections is None:
+        return
     xbmcgui.Dialog().ok('הוספת פרופיל',
         'בחר שם ושמור את הפרופיל בחלון שייפתח. אפשר להשאיר את תיקיית הפרופיל המוצעת.\n'
-        'המועדפים והבילד יתווספו אוטומטית. חיבורי השירותים אישיים לכל פרופיל.')
+        'המועדפים והבילד יתווספו אוטומטית, יחד עם החיבורים שסימנת.')
     if not _native_settings():
         return
     # Nox and Estuary show the profile list only on the second left-hand
@@ -311,6 +347,7 @@ def add_profile():
                     return
                 try:
                     _seed(new[0])
+                    profile_connections.copy_selected(master, new[0], connections)
                 except (OSError, ValueError, ET.ParseError, zipfile.BadZipFile):
                     xbmcgui.Dialog().ok('פרופילים', 'לא ניתן להשלים את הפרופיל. חזור למשתמש הראשי ונסה שוב.')
                     return
@@ -356,22 +393,14 @@ def load_profile(name):
                 break
     if not _wait_dialogs():
         return
+    from resources.libs import build_skin
+    if not build_skin.persist_live_settings():
+        xbmcgui.Dialog().notification('החלפת פרופיל', 'שמירת ההגדרות לא הושלמה. נסה שוב.')
+        return
     _rpc('Profiles.LoadProfile', dict(profile=name, prompt=True))
-    # A brand-new profile can initially disable the Wizard itself. This
-    # plugin invocation survives Kodi's service stop, so enable its startup
-    # service after the native loader actually selects the target profile.
-    monitor = xbmc.Monitor()
-    deadline = time.monotonic() + 30
-    while time.monotonic() < deadline and not monitor.abortRequested():
-        try:
-            if _rpc('Profiles.GetCurrentProfile')['label'] == name:
-                _rpc('Addons.SetAddonEnabled', dict(addonid=WIZARD, enabled=True))
-                if addon_enabled(WIZARD):
-                    return
-        except RuntimeError:
-            pass
-        if monitor.waitForAbort(0.2):
-            return
+    # Profiles.LoadProfile posts a native GUI message. Return immediately:
+    # waiting here races Kodi's shutdown of the departing Python services.
+    # The skin's bootstrap hook enables startup in the destination profile.
 
 
 def _wait_dialogs():
