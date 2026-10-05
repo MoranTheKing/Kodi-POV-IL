@@ -39,6 +39,16 @@ def notify_unavailable():
 
 
 def cache_list(function, string, url):
+    """Support both constructor-opened and context-managed native caches."""
+    from caches import mdbl_cache
+    cache = mdbl_cache.MDBLCache()
+    if hasattr(type(cache), '__enter__'):
+        with cache as opened:
+            return _cache_list_with_cursor(function, string, url, opened.dbcur)
+    return _cache_list_with_cursor(function, string, url, cache.dbcur)
+
+
+def _cache_list_with_cursor(function, string, url, cur):
     """Keep native keys/invalidation; invalidate poisoned legacy reads once.
 
     The epoch also isolates account changes. Do not touch watched/progress
@@ -64,7 +74,6 @@ def cache_list(function, string, url):
             cur.execute('DELETE FROM mdbl_data')
             cur.execute(mdbl_cache.MC_BASE_SET, ('povil_mdbl_cache_epoch', value))
         return value
-    cur = mdbl_cache.MDBLCache().dbcur
     prepare(cur)
     if string == 'mdbl_collection':
         # Earlier cached snapshots discarded the seasons bucket. Refresh only
