@@ -515,7 +515,11 @@ class ProfileCards(xbmcgui.WindowXMLDialog):
 
 def show():
     home = xbmcgui.Window(10000)
-    if home.getProperty('POVIL.ProfilesBusy'):
+    # A skin reload/profile transition can abort the previous interpreter
+    # before its finally block. A leftover property alone cannot lock the
+    # picker forever when no dialog is actually open.
+    if (home.getProperty('POVIL.ProfilesBusy') and
+            xbmcgui.getCurrentWindowDialogId() not in (0, 9999, 10000)):
         return
     home.setProperty('POVIL.ProfilesBusy', 'true')
     try:
@@ -525,6 +529,9 @@ def show():
         dialog.doModal()
         result = dialog.result
         del dialog
+        # Native loading stops this interpreter. Release ownership before
+        # posting that message, rather than relying on finally after loading.
+        home.clearProperty('POVIL.ProfilesBusy')
         if xbmc.Monitor().waitForAbort(0.2) or not result:
             return
         action, name = result
