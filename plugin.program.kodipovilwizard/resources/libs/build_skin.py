@@ -34,7 +34,10 @@ def enable_skin(ident, visiting=None):
         if os.path.isfile(path):
             for row in ET.parse(path).getroot().findall('requires/import'):
                 dependency = row.get('addon', '')
-                if row.get('optional') != 'true' and not dependency.startswith('xbmc.'):
+                # kodi.resource is a native API capability, not an installed
+                # add-on returned by JSON-RPC (used by Arctic's font package).
+                if (row.get('optional') != 'true' and dependency != 'kodi.resource'
+                        and not dependency.startswith('xbmc.')):
                     if not enable_skin(dependency, visiting):
                         return False
         details = rpc('Addons.GetAddonDetails', dict(addonid=ident, properties=['enabled']))['addon']
@@ -111,10 +114,12 @@ def activate(target):
 
 def prepare_active_skin_defaults():
     """Initialize the build's Estuary sidebar once in each native profile."""
+    from resources.libs import child_profiles
+    child_changed = child_profiles.sync_active()
     if xbmc.getSkinDir() != 'skin.estuary':
-        return False
+        return child_changed
     if xbmc.getCondVisibility('Skin.HasSetting(POVIL.BuildSidebarReady)'):
-        return False
+        return child_changed
     # The config pack contains no Estuary settings.xml. New native profiles
     # therefore inherit Kodi's unrelated sidebar items unless initialized
     # through the skin API after activation. Keep later user choices intact.
@@ -185,8 +190,15 @@ def refresh_home():
 
 def switch(target):
     from resources.libs.patches import profile_age_guard
-    if profile_age_guard.active_policy() is not None or xbmc.getCondVisibility('Player.Playing'):
+    policy = profile_age_guard.active_policy()
+    if xbmc.getCondVisibility('Player.Playing') or (policy is not None and policy.get('blocked')):
         return False
+    if policy is not None:
+        from resources.libs import child_profiles, build_profiles
+        if not profile_age_guard.host_integrity(xbmcvfs.translatePath('special://home/addons/')):
+            return False
+        child_profiles.seed_skin_flags(xbmcvfs.translatePath('special://profile/'))
+        build_profiles.install_login_hooks()
     # FENtastic's helper starts at skin activation. Seed its layout first.
     if target == 'skin.fentastic':
         if not prepare_layout():

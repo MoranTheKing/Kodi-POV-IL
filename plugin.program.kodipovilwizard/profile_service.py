@@ -37,7 +37,7 @@ def run():
         policy = guard.active_policy()
         profile = xbmcvfs.translatePath('special://profile/')
         window.setProperty('POVIL.ChildProfile', 'true' if policy is not None else 'false')
-        if policy is None or not player.isPlayingVideo():
+        if policy is None or not player.isPlaying():
             last = None
             continue
         if policy.get('blocked'):
