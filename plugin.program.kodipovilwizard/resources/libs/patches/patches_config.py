@@ -1137,6 +1137,7 @@ PATCH_CONFIG = [
         "target_file": "resources/lib/caches/mdbl_cache.py",
         "marker": "# WIZARD_POV_MDBL_CACHE_READS_v1",
         "anchor": "\tdbcur = MDBLCache().dbcur",
+        "alternatives": [{"anchor": "\twith MDBLCache() as mc:\n\t\tmc.dbcur.execute(MC_BASE_GET, (string,))"}],
         "action": "prepend_before",
         "hook": "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n\treturn pov_mdblist_patch_logic.cache_list(function, string, url)\n"
     },
