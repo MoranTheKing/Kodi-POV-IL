@@ -1,212 +1,281 @@
 <?xml version='1.0' encoding='utf-8'?>
 <window type="dialog">
   <defaultcontrol always="true">100</defaultcontrol>
-  <coordinates>
-    <system>1</system>
-    <posx>0</posx>
-    <posy>0</posy>
-  </coordinates>
   <controls>
     <control type="image">
       <left>0</left>
       <top>0</top>
       <width>1920</width>
       <height>1080</height>
-      <texture colordiffuse="F0161C26">white.png</texture>
+      <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/background.jpg</texture>
+    </control>
+    <control type="image">
+      <left>96</left>
+      <top>67</top>
+      <width>310</width>
+      <height>99</height>
+      <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/logo.png</texture>
+      <aspectratio>keep</aspectratio>
+    </control>
+    <control type="label">
+      <left>1370</left>
+      <top>70</top>
+      <width>454</width>
+      <height>48</height>
+      <font>font37</font>
+      <label>קודי ישראל</label>
+      <textcolor>FFE2BD6F</textcolor>
+      <align>right</align>
+      <aligny>center</aligny>
+    </control>
+    <control type="label">
+      <left>1370</left>
+      <top>116</top>
+      <width>454</width>
+      <height>32</height>
+      <font>font12</font>
+      <label>הסיפורים שלכם. המקום שלכם.</label>
+      <textcolor>FF9BABB9</textcolor>
+      <align>right</align>
+      <aligny>center</aligny>
     </control>
     <control type="label">
       <left>120</left>
-      <top>98</top>
+      <top>224</top>
       <width>1680</width>
-      <height>98</height>
+      <height>92</height>
+      <font>font60</font>
+      <label>[B]מי צופה?[/B]</label>
+      <textcolor>FFECF1F6</textcolor>
       <align>center</align>
-      <font>font27</font>
-      <label>מי צופה?</label>
-      <textcolor>FFFFFFFF</textcolor>
+      <aligny>center</aligny>
     </control>
     <control type="label">
       <left>120</left>
-      <top>202</top>
+      <top>324</top>
       <width>1680</width>
-      <height>60</height>
-      <align>center</align>
+      <height>48</height>
       <font>font13</font>
-      <label>בחר פרופיל להמשך — המעבר מתבצע בתוך Kodi</label>
-      <textcolor>FFB9C2D4</textcolor>
+      <label>כל אחד והסיפורים שלו</label>
+      <textcolor>FFA5B4C5</textcolor>
+      <align>center</align>
+      <aligny>center</aligny>
     </control>
-    <control type="panel" id="100">
-      <left>150</left>
-      <top>322</top>
-      <width>1620</width>
-      <height>435</height>
+    <control type="fixedlist" id="100">
+      <left>60</left>
+      <top>405</top>
+      <width>1800</width>
+      <height>392</height>
       <orientation>horizontal</orientation>
-      <onup>204</onup>
-      <ondown condition="String.IsEqual(Window.Property(child),true)">204</ondown>
+      <focusposition>2</focusposition>
+      <scrolltime>240</scrolltime>
       <onleft>100</onleft>
       <onright>100</onright>
-      <itemlayout width="405" height="412">
+      <onup>204</onup>
+      <ondown condition="String.IsEqual(Window.Property(child),true)">204</ondown>
+      <ondown condition="!String.IsEqual(Window.Property(child),true)">202</ondown>
+      <itemlayout width="360" height="392">
         <control type="image">
-          <left>52</left>
-          <top>22</top>
-          <width>300</width>
-          <height>270</height>
-          <aspectratio>keep</aspectratio>
+          <left>20</left>
+          <top>14</top>
+          <width>320</width>
+          <height>335</height>
+          <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/card.png</texture>
+        </control>
+        <control type="image">
+          <left>100</left>
+          <top>47</top>
+          <width>160</width>
+          <height>160</height>
+          <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/avatar.png</texture>
+          <visible>String.IsEmpty(ListItem.Art(thumb)) | String.IsEqual(ListItem.Art(thumb),DefaultUser.png)</visible>
+        </control>
+        <control type="image">
+          <left>100</left>
+          <top>47</top>
+          <width>160</width>
+          <height>160</height>
           <texture>$INFO[ListItem.Art(thumb)]</texture>
+          <visible>![String.IsEmpty(ListItem.Art(thumb)) | String.IsEqual(ListItem.Art(thumb),DefaultUser.png)]</visible>
+          <aspectratio>keep</aspectratio>
         </control>
         <control type="label">
-          <left>15</left>
-          <top>304</top>
-          <width>375</width>
-          <height>52</height>
+          <left>43</left>
+          <top>230</top>
+          <width>274</width>
+          <height>54</height>
+          <font>font37</font>
+          <label>[B]$INFO[ListItem.Label][/B]</label>
+          <textcolor>FFB0BED0</textcolor>
           <align>center</align>
-          <font>font13</font>
-          <label>$INFO[ListItem.Label]</label>
-          <textcolor>FFDAE1ED</textcolor>
+          <aligny>center</aligny>
         </control>
         <control type="label">
-          <left>15</left>
-          <top>364</top>
-          <width>375</width>
-          <height>38</height>
-          <align>center</align>
+          <left>43</left>
+          <top>293</top>
+          <width>274</width>
+          <height>34</height>
           <font>font12</font>
           <label>$INFO[ListItem.Property(status)]</label>
-          <textcolor>FF99A5B8</textcolor>
+          <textcolor>FF76879C</textcolor>
+          <align>center</align>
+          <aligny>center</aligny>
         </control>
       </itemlayout>
-      <focusedlayout width="405" height="412">
+      <focusedlayout width="360" height="392">
         <control type="image">
-          <left>18</left>
-          <top>0</top>
-          <width>369</width>
-          <height>410</height>
-          <texture colordiffuse="FF365B81">white.png</texture>
+          <left>20</left>
+          <top>14</top>
+          <width>320</width>
+          <height>335</height>
+          <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/card-focus.png</texture>
         </control>
         <control type="image">
-          <left>52</left>
-          <top>22</top>
-          <width>300</width>
-          <height>270</height>
-          <aspectratio>keep</aspectratio>
+          <left>100</left>
+          <top>47</top>
+          <width>160</width>
+          <height>160</height>
+          <texture>special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/avatar.png</texture>
+          <visible>String.IsEmpty(ListItem.Art(thumb)) | String.IsEqual(ListItem.Art(thumb),DefaultUser.png)</visible>
+        </control>
+        <control type="image">
+          <left>100</left>
+          <top>47</top>
+          <width>160</width>
+          <height>160</height>
           <texture>$INFO[ListItem.Art(thumb)]</texture>
+          <visible>![String.IsEmpty(ListItem.Art(thumb)) | String.IsEqual(ListItem.Art(thumb),DefaultUser.png)]</visible>
+          <aspectratio>keep</aspectratio>
         </control>
         <control type="label">
-          <left>15</left>
-          <top>304</top>
-          <width>375</width>
-          <height>52</height>
+          <left>43</left>
+          <top>230</top>
+          <width>274</width>
+          <height>54</height>
+          <font>font37</font>
+          <label>[B]$INFO[ListItem.Label][/B]</label>
+          <textcolor>FFECF1F6</textcolor>
           <align>center</align>
-          <font>font13</font>
-          <label>$INFO[ListItem.Label]</label>
-          <textcolor>FFFFFFFF</textcolor>
+          <aligny>center</aligny>
         </control>
         <control type="label">
-          <left>15</left>
-          <top>364</top>
-          <width>375</width>
-          <height>38</height>
-          <align>center</align>
+          <left>43</left>
+          <top>293</top>
+          <width>274</width>
+          <height>34</height>
           <font>font12</font>
           <label>$INFO[ListItem.Property(status)]</label>
-          <textcolor>FFFFFFFF</textcolor>
+          <textcolor>FFE2BD6F</textcolor>
+          <align>center</align>
+          <aligny>center</aligny>
         </control>
       </focusedlayout>
-      <ondown condition="!String.IsEqual(Window.Property(child),true)">202</ondown>
     </control>
     <control type="button" id="202">
-      <left>158</left>
-      <top>825</top>
-      <width>390</width>
-      <height>90</height>
-      <label>סקין וחיבורים אישיים</label>
+      <left>120</left>
+      <top>838</top>
+      <width>440</width>
+      <height>68</height>
+      <label>סקין וחיבורים</label>
       <font>font13</font>
       <align>center</align>
+      <textcolor>FFABBBCC</textcolor>
+      <focusedcolor>FFF0D394</focusedcolor>
+      <texturefocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button-focus.png</texturefocus>
+      <texturenofocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button.png</texturenofocus>
       <onup>100</onup>
-      <ondown condition="String.IsEqual(Window.Property(master),true)">205</ondown>
-      <ondown condition="!String.IsEqual(Window.Property(master),true)">100</ondown>
       <onleft>204</onleft>
       <onright condition="String.IsEqual(Window.Property(master),true)">201</onright>
-      <onright condition="!String.IsEqual(Window.Property(master),true)">204</onright>
-      <texturefocus colordiffuse="FF365B81">white.png</texturefocus>
-      <texturenofocus colordiffuse="FF252F40">white.png</texturenofocus>
+      <ondown condition="String.IsEqual(Window.Property(master),true)">205</ondown>
       <visible>!String.IsEqual(Window.Property(child),true)</visible>
+      <onright condition="!String.IsEqual(Window.Property(master),true)">204</onright>
+      <ondown condition="!String.IsEqual(Window.Property(master),true)">100</ondown>
     </control>
     <control type="button" id="201">
-      <left>578</left>
-      <top>825</top>
+      <left>580</left>
+      <top>838</top>
       <width>360</width>
-      <height>90</height>
+      <height>68</height>
       <label>+ הוספת פרופיל</label>
       <font>font13</font>
       <align>center</align>
-      <visible>String.IsEqual(Window.Property(master),true)</visible>
+      <textcolor>FFABBBCC</textcolor>
+      <focusedcolor>FFF0D394</focusedcolor>
+      <texturefocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button-focus.png</texturefocus>
+      <texturenofocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button.png</texturenofocus>
       <onup>100</onup>
-      <ondown>205</ondown>
       <onleft>202</onleft>
       <onright>203</onright>
-      <texturefocus colordiffuse="FF365B81">white.png</texturefocus>
-      <texturenofocus colordiffuse="FF252F40">white.png</texturenofocus>
+      <ondown>205</ondown>
+      <visible>String.IsEqual(Window.Property(master),true)</visible>
     </control>
     <control type="button" id="203">
-      <left>968</left>
-      <top>825</top>
-      <width>360</width>
-      <height>90</height>
-      <label>ניהול ובחירה בהפעלה</label>
+      <left>960</left>
+      <top>838</top>
+      <width>400</width>
+      <height>68</height>
+      <label>ניהול פרופילים</label>
       <font>font13</font>
       <align>center</align>
-      <visible>String.IsEqual(Window.Property(master),true)</visible>
+      <textcolor>FFABBBCC</textcolor>
+      <focusedcolor>FFF0D394</focusedcolor>
+      <texturefocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button-focus.png</texturefocus>
+      <texturenofocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button.png</texturenofocus>
       <onup>100</onup>
-      <ondown>205</ondown>
       <onleft>201</onleft>
       <onright>204</onright>
-      <texturefocus colordiffuse="FF365B81">white.png</texturefocus>
-      <texturenofocus colordiffuse="FF252F40">white.png</texturenofocus>
+      <ondown>205</ondown>
+      <visible>String.IsEqual(Window.Property(master),true)</visible>
     </control>
     <control type="button" id="204">
-      <left>1358</left>
-      <top>825</top>
-      <width>360</width>
-      <height>90</height>
+      <left>1380</left>
+      <top>838</top>
+      <width>420</width>
+      <height>68</height>
       <label>חזרה למסך הבית</label>
       <font>font13</font>
       <align>center</align>
+      <textcolor>FFABBBCC</textcolor>
+      <focusedcolor>FFF0D394</focusedcolor>
+      <texturefocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button-focus.png</texturefocus>
+      <texturenofocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button.png</texturenofocus>
       <onup>100</onup>
-      <ondown condition="String.IsEqual(Window.Property(master),true)">205</ondown>
-      <ondown condition="!String.IsEqual(Window.Property(master),true)">100</ondown>
       <onleft condition="String.IsEqual(Window.Property(master),true)">203</onleft>
+      <onright condition="!String.IsEqual(Window.Property(child),true)">202</onright>
+      <ondown condition="String.IsEqual(Window.Property(master),true)">205</ondown>
       <onleft condition="!String.IsEqual(Window.Property(master),true) + !String.IsEqual(Window.Property(child),true)">202</onleft>
       <onleft condition="String.IsEqual(Window.Property(child),true)">100</onleft>
-      <onright condition="!String.IsEqual(Window.Property(child),true)">202</onright>
       <onright condition="String.IsEqual(Window.Property(child),true)">100</onright>
-      <texturefocus colordiffuse="FF365B81">white.png</texturefocus>
-      <texturenofocus colordiffuse="FF252F40">white.png</texturenofocus>
+      <ondown condition="!String.IsEqual(Window.Property(master),true)">100</ondown>
+    </control>
+    <control type="button" id="205">
+      <left>660</left>
+      <top>925</top>
+      <width>600</width>
+      <height>62</height>
+      <label>בקרת הורים</label>
+      <font>font13</font>
+      <align>center</align>
+      <textcolor>FFABBBCC</textcolor>
+      <focusedcolor>FFF0D394</focusedcolor>
+      <texturefocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button-focus.png</texturefocus>
+      <texturenofocus border="24">special://home/addons/plugin.program.kodipovilwizard/resources/media/profile-ui/button.png</texturenofocus>
+      <onup>201</onup>
+      <onleft>204</onleft>
+      <onright>202</onright>
+      <ondown>100</ondown>
+      <visible>String.IsEqual(Window.Property(master),true)</visible>
     </control>
     <control type="label">
       <left>120</left>
-      <top>1020</top>
+      <top>1010</top>
       <width>1680</width>
-      <height>52</height>
-      <align>center</align>
+      <height>42</height>
       <font>font12</font>
       <label>פרופיל פעיל: $INFO[Window.Property(current)]</label>
-      <textcolor>FF99A5B8</textcolor>
-    </control>
-    <control type="button" id="205">
-      <left>600</left>
-      <top>933</top>
-      <width>720</width>
-      <height>68</height>
-      <label>בקרת הורים — גיל ואישור תוכן</label>
-      <font>font13</font>
+      <textcolor>FF8497AE</textcolor>
       <align>center</align>
-      <visible>String.IsEqual(Window.Property(master),true)</visible>
-      <onup>201</onup>
-      <ondown>100</ondown>
-      <onleft>204</onleft>
-      <onright>202</onright>
-      <texturefocus colordiffuse="FF365B81">white.png</texturefocus>
-      <texturenofocus colordiffuse="FF252F40">white.png</texturenofocus>
+      <aligny>center</aligny>
     </control>
   </controls>
 </window>
