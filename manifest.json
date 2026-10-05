@@ -3,16 +3,16 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-10-05T18:21:17Z",
+  "generated": "2026-10-05T20:43:37Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
-    "version": "6.10.01",
-    "filename": "plugin.video.pov-6.10.01.zip",
-    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.pov-6.10.01.zip",
-    "size": 1701873,
-    "sha256": "e32ddc048e6bb27e4b5a539439b1c75f9434a50ff82dcd1eef01953de3c8f31b",
-    "upstream_zip": "https://kodifitzwell.github.io/repo/plugin.video.pov/plugin.video.pov-6.10.01.zip"
+    "version": "6.10.04",
+    "filename": "plugin.video.pov-6.10.04.zip",
+    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.pov-6.10.04.zip",
+    "size": 1684832,
+    "sha256": "3f69f9d744724f4a00cca6fe617b3f98cdef94abc41e04ed9f1c321a382089c7",
+    "upstream_zip": "https://kodifitzwell.github.io/repo/plugin.video.pov/plugin.video.pov-6.10.04.zip"
   },
   "config": {
     "config_version": "2.0.9",
@@ -37,13 +37,13 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.4.31",
+      "version": "0.4.32",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.4.31.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.31.zip",
-      "size": 2412937,
-      "sha256": "71cb496b37cd0bdaefe0cd9734ac57ceeefa77a63f588f394ebc7f97b8a6fed4",
-      "updated": "2026-10-05T18:21:17Z"
+      "filename": "plugin.program.kodipovilwizard-0.4.32.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.32.zip",
+      "size": 2413019,
+      "sha256": "509f289a2b1661c9f6bc83b27a299e05e8d6e6d03ad70280c83630c724280bb2",
+      "updated": "2026-10-05T20:43:37Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
