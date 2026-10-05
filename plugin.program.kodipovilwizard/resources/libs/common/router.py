@@ -46,7 +46,7 @@ class Router:
         name = self.params['name'] if 'name' in self.params else None
         action = self.params['action'] if 'action' in self.params else None
         from resources.libs.patches import profile_age_guard
-        if profile_age_guard.active_policy() is not None and mode not in ('profiles', 'profile_child_open'):
+        if profile_age_guard.active_policy() is not None and mode not in ('profiles', 'profile_child_open', 'profile_skin'):
             xbmcgui.Dialog().ok('פרופיל ילדים', 'ניהול הבילד זמין במשתמש הראשי.')
             if handle >= 0:
                 xbmcplugin.endOfDirectory(handle, succeeded=False)

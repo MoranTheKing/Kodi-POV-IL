@@ -63,18 +63,14 @@ def set_child(master, target, age):
     skin = gui.getroot().find("setting[@id='lookandfeel.skin']")
     if skin is None:
         skin = ET.SubElement(gui.getroot(), 'setting', {'id': 'lookandfeel.skin'})
-    skin.text = 'skin.povil.nox'
+    if key not in data['children']:
+        skin.text = 'skin.povil.nox'
     skin.attrib.pop('default', None)
     atomic_write(os.path.join(path, 'guisettings.xml'), ET.tostring(gui.getroot(), encoding='utf-8', xml_declaration=True))
     atomic_write(os.path.join(path, 'kodipovil.profile_gui_defaults.xml'),
                  ET.tostring(gui.getroot(), encoding='utf-8', xml_declaration=True))
-    skin_path = os.path.join(path, 'addon_data', 'skin.povil.nox', 'settings.xml')
-    skin_settings = ET.parse(skin_path).getroot() if os.path.isfile(skin_path) else ET.Element('settings')
-    flag = skin_settings.find("setting[@id='POVILChild']")
-    if flag is None:
-        flag = ET.SubElement(skin_settings, 'setting', {'id': 'POVILChild', 'type': 'bool'})
-    flag.text = 'true'
-    atomic_write(skin_path, ET.tostring(skin_settings, encoding='utf-8', xml_declaration=True))
+    from resources.libs import child_profiles
+    child_profiles.seed_skin_flags(path)
     previous = data['children'].get(key, {})
     data['children'][key] = dict(age=age, approved=previous.get('approved', {}))
     atomic_write(os.path.join(master, guard.POLICY_FILE), json.dumps(data, ensure_ascii=False).encode('utf-8'))

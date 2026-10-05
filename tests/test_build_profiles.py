@@ -71,14 +71,18 @@ class ProfileStoreTests(unittest.TestCase):
             fn = _load_function(LIBS / 'build_profiles.py', 'install_login_design',
                 dict(os=os, ET=ET, WIZARD='QA', xbmcaddon=types.SimpleNamespace(Addon=lambda _:
                      types.SimpleNamespace(getAddonInfo=lambda _: str(ROOT / 'plugin.program.kodipovilwizard')))))
-            self.assertTrue(fn(str(path)))
+            with mock.patch.dict('sys.modules', {'resources.libs': types.SimpleNamespace(
+                    child_profiles=types.SimpleNamespace(adapt_fonts=lambda *_: None))}):
+                self.assertTrue(fn(str(path)))
             first = path.read_bytes()
             xml = ET.fromstring(first)
             self.assertEqual([a.text for a in xml.findall('onload')], ['OriginalAction'])
             self.assertIsNotNone(xml.find(".//control[@id='52']"))
             self.assertEqual(xml.findtext(".//control[@id='20']/onclick"), 'ActivateWindow(ShutdownMenu)')
             self.assertNotIn('Profiles.LoadProfile', first.decode())
-            self.assertFalse(fn(str(path)))
+            with mock.patch.dict('sys.modules', {'resources.libs': types.SimpleNamespace(
+                    child_profiles=types.SimpleNamespace(adapt_fonts=lambda *_: None))}):
+                self.assertFalse(fn(str(path)))
             self.assertEqual(first, path.read_bytes())
 
     def test_old_login_hook_never_bypasses_selection_or_locks(self):
