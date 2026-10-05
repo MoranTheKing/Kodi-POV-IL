@@ -17,6 +17,8 @@ def resume():
     from resources.libs import build_skin
     if build_skin.prepare_active_skin_defaults():
         xbmc.executebuiltin('ReloadSkin()')
+    from resources.libs import child_profiles
+    child_profiles.focus_home()
     if active == master:
         return False
     if os.path.isfile(os.path.join(active, 'kodipovil.profile_home_ready')):

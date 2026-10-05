@@ -105,12 +105,16 @@ def install_login_hooks():
     import re
     import tempfile
     addons = xbmcvfs.translatePath('special://home/addons/')
+    active_home_changed = False
     for ident, _label in SKINS:
         for folder in ('xml', '1080i', '720p'):
             path = os.path.join(addons, ident, folder, 'Home.xml')
             if not os.path.isfile(path):
                 continue
             try:
+                from resources.libs import child_profiles
+                if child_profiles.install_home(path) and ident == xbmc.getSkinDir():
+                    active_home_changed = True
                 with open(path, encoding='utf-8-sig') as source:
                     text = source.read()
                 if 'profile_bootstrap.py' not in text:
@@ -136,6 +140,8 @@ def install_login_hooks():
                 install_login_design(path)
             except (OSError, ValueError, ET.ParseError):
                 xbmc.log('[Profiles] login hook deferred for ' + ident, xbmc.LOGWARNING)
+    if active_home_changed and profile_age_guard.active_policy() is not None:
+        xbmc.executebuiltin('ReloadSkin()')
 
 
 def install_login_design(path):
@@ -152,13 +158,8 @@ def install_login_design(path):
                if 'single_profile_login.py' not in (action.text or '')]
     for index, action in enumerate(actions):
         design.insert(index, action)
-    fonts_path = os.path.join(os.path.dirname(path), 'Font.xml')
-    if os.path.isfile(fonts_path):
-        fonts = ET.parse(fonts_path).findall('fontset')[0].findall('font')
-        sizes = [(f.findtext('name'), float(f.findtext('size', '30'))) for f in fonts]
-        for element in design.iter('font'):
-            wanted = {'font60': 60, 'font37': 37, 'font13': 30, 'font12': 25}[element.text]
-            element.text = min(sizes, key=lambda f: abs(f[1] - wanted))[0]
+    from resources.libs import child_profiles
+    child_profiles.adapt_fonts(design, path)
     changed = ET.tostring(design, encoding='utf-8', xml_declaration=True)
     if ET.tostring(original) == ET.tostring(design):
         return False
@@ -321,8 +322,9 @@ def copy_native_profile_defaults():
 
 
 def choose_skin():
-    if profile_age_guard.active_policy() is not None:
-        xbmcgui.Dialog().ok('סקין הפרופיל', 'מסך הילדים מנוהל דרך בקרת ההורים במשתמש הראשי.')
+    policy = profile_age_guard.active_policy()
+    if policy is not None and policy.get('blocked'):
+        xbmcgui.Dialog().ok('סקין הפרופיל', 'יש להשלים קודם את בקרת ההורים במשתמש הראשי.')
         return
     if xbmc.getCondVisibility('Player.Playing'):
         xbmcgui.Dialog().ok('סקין הפרופיל', 'יש לעצור את הניגון לפני החלפת סקין.')
@@ -373,6 +375,7 @@ def add_profile():
     xbmc.executebuiltin('Action(Select,10034)')
     deadline = time.monotonic() + 600
     saw_dialog = False
+    child_locks = {}
     started = time.monotonic()
     idle_since = None
     while not monitor.abortRequested() and time.monotonic() < deadline:
@@ -383,6 +386,9 @@ def add_profile():
             saw_dialog = True
             idle_since = None
             copy_native_profile_defaults()
+            if kind == 1:
+                from resources.libs import child_profiles
+                child_profiles.preset_native_locks(child_locks)
         elif saw_dialog:
             idle_since = idle_since or time.monotonic()
             if time.monotonic() - idle_since > 0.8:
@@ -482,7 +488,9 @@ class ProfileCards(xbmcgui.WindowXMLDialog):
         self.profiles = _rpc('Profiles.GetProfiles', dict(properties=['thumbnail', 'lockmode']))['profiles']
         self.setProperty('master', 'true' if is_master() else 'false')
         self.setProperty('current', current)
-        self.setProperty('child', 'true' if profile_age_guard.active_policy() is not None else 'false')
+        child = profile_age_guard.active_policy() is not None
+        self.setProperty('child', 'true' if child else 'false')
+        self.setProperty('settings_label', 'בחירת סקין' if child else 'סקין וחיבורים')
         items = []
         for profile in self.profiles:
             item = xbmcgui.ListItem(label=profile['label'])
@@ -546,6 +554,7 @@ def show():
             parental_profiles.setup()
         elif action == 'settings':
             if profile_age_guard.active_policy() is not None:
+                choose_skin()
                 return
             choice = xbmcgui.Dialog().select('הפרופיל הזה', ['בחירת סקין', 'חיבור שירותים', 'הגדרות כתוביות'])
             if choice == 0:
