@@ -91,6 +91,39 @@ class MDBListRecoveryTests(unittest.TestCase):
             reason='Unauthorized' if status == 401 else 'API error', url='https://api.mdblist.com/lists/user',
             json=lambda: body, text='')
 
+    def test_context_cache_new_host_opens_closes_and_preserves_verified_reads(self):
+        events = []
+        database = self.db
+        class ContextCache:
+            def __enter__(self):
+                events.append('open')
+                self.dbcur = database.cursor()
+                return self
+            def __exit__(self, *args):
+                events.append('close')
+                self.dbcur.close()
+        self.cache.MDBLCache = ContextCache
+        engine = load('qa_context_cache_engine', WIZ / 'patch_engine.py').PatchEngine([])
+        entry = next(p for p in runpy.run_path(str(WIZ / 'patches/patches_config.py'))['PATCH_CONFIG']
+                     if p['id'] == 'mdblist_cache_verified_reads')
+        source = ('def unrelated():\n\twith MDBLCache() as mc:\n\t\treturn None\n\n'
+                  'def cache_mdbl_object(function, string, url):\n\twith MDBLCache() as mc:\n'
+                  '\t\tmc.dbcur.execute(MC_BASE_GET, (string,))\n\t\treturn function(url)\n')
+        changed, ok, status = engine._apply_single_patch(source, entry, '\n')
+        self.assertTrue(ok)
+        self.assertEqual(status, 'applied')
+        self.assertEqual(engine._apply_single_patch(changed, entry, '\n'), (changed, False, 'skipped_current'))
+        exec(compile(changed, 'context_cache.py', 'exec'), vars(self.cache))
+        read = Mock(return_value={'items': [{'id': 7}]})
+        for _ in range(2):
+            self.assertEqual(self.cache.cache_mdbl_object(read, 'context-fixture', '/list')['items'], [{'id': 7}])
+        read.assert_called_once_with('/list')
+        self.assertEqual(events, ['open', 'close', 'open', 'close'])
+        with self.assertRaises(self.logic.MDBListUnavailable):
+            self.cache.cache_mdbl_object(lambda _: None, 'failed-context', '/bad')
+        self.assertEqual(events[-2:], ['open', 'close'])
+        self.assertIsNone(self.db.execute("SELECT data FROM mdbl_data WHERE id='failed-context'").fetchone())
+
     def test_real_generic_exception_401_refreshes_once_then_reads_lists(self):
         self.api.session.request.side_effect = [self.response(401, {}),
             self.response(200, {'expires_in': 3600, 'access_token': 'new-fixture', 'refresh_token': 'new-refresh'}),
