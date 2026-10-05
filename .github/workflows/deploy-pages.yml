@@ -31,6 +31,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
 
 concurrency:
   group: pages-sync
@@ -103,8 +104,11 @@ jobs:
           git add -A
           if git diff --cached --quiet; then
             echo "Nothing to publish; gh-pages already matches main."
-            exit 0
+          else
+            SHORT_SHA="$(echo "$PUSHED_SHA" | cut -c1-7)"
+            git commit -q -m "Publish main@${SHORT_SHA}"
+            git push "$REMOTE" gh-pages
           fi
-          SHORT_SHA="$(echo "$PUSHED_SHA" | cut -c1-7)"
-          git commit -q -m "Publish main@${SHORT_SHA}"
-          git push "$REMOTE" gh-pages
+          # GITHUB_TOKEN pushes do not trigger a branch-based Pages build.
+          # Request it explicitly, including when retrying an unchanged tree.
+          gh api --method POST "repos/$REPO_SLUG/pages/builds" --jq '.status'
