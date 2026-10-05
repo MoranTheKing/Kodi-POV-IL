@@ -1261,7 +1261,11 @@ def switch_skin_in_gui_settings(gotoskin):
 
 
 def build_switch_skin():
-
+    from resources.libs.patches import profile_age_guard
+    if profile_age_guard.active_policy() is not None:
+        xbmcgui.Dialog().ok('סקין פרופיל הילדים',
+            'פרופיל ילדים משתמש ב־NOX עם מסך ילדים וסינון גיל. שאר הסקינים זמינים בפרופילים רגילים.')
+        return
     if not CONFIG.get_setting('buildname'):
         logging.log_notify(CONFIG.ADDONTITLE,
                            '[COLOR {0}]לא מותקן בילד![/COLOR]'.format(CONFIG.COLOR2))
