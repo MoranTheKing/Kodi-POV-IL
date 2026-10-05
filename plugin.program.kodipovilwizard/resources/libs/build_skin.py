@@ -109,6 +109,27 @@ def activate(target):
     return xbmc.getSkinDir() == target and persist_live_settings()
 
 
+def prepare_active_skin_defaults():
+    """Initialize the build's Estuary sidebar once in each native profile."""
+    if xbmc.getSkinDir() != 'skin.estuary':
+        return False
+    if xbmc.getCondVisibility('Skin.HasSetting(POVIL.BuildSidebarReady)'):
+        return False
+    # The config pack contains no Estuary settings.xml. New native profiles
+    # therefore inherit Kodi's unrelated sidebar items unless initialized
+    # through the skin API after activation. Keep later user choices intact.
+    for name in ('HomeMenuNoMusicButton', 'HomeMenuNoMusicVideoButton',
+                 'HomeMenuNoTVButton', 'HomeMenuNoRadioButton',
+                 'HomeMenuNoGamesButton', 'HomeMenuNoPicturesButton',
+                 'HomeMenuNoVideosButton', 'HomeMenuNoWeatherButton'):
+        xbmc.executebuiltin('Skin.SetBool({})'.format(name), True)
+    for name in ('HomeMenuNoMovieButton', 'HomeMenuNoTVShowButton',
+                 'HomeMenuNoFavButton', 'HomeMenuNoProgramsButton'):
+        xbmc.executebuiltin('Skin.Reset({})'.format(name), True)
+    xbmc.executebuiltin('Skin.SetBool(POVIL.BuildSidebarReady)', True)
+    return True
+
+
 def prepare_layout():
     """Seed shipped layout only when absent; use the active profile's paths."""
     from resources.libs import profile_store, fentastic_widgets
@@ -117,6 +138,7 @@ def prepare_layout():
         if hashlib.sha256(handle.read()).hexdigest() != profile_store.BOOTSTRAP_SHA256:
             raise RuntimeError('Build layout defaults failed integrity verification')
     profile = xbmcvfs.translatePath('special://profile/')
+    prepare_active_skin_defaults()
     with zipfile.ZipFile(archive) as source:
         for name in ('addon_data/script.fentastic.helper/cpath_cache.db',
                      'addon_data/skin.fentastic/settings.xml',
