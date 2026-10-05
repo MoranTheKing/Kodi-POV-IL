@@ -587,6 +587,7 @@ if not wait_for_gui_ready():
 
 try:
     build_profiles.repair_single_login()
+    build_profiles.prepare_inactive()
     profile_defaults = os.path.join(CONFIG.USERDATA, 'kodipovil.profile_gui_defaults.xml')
     if not build_profiles.is_master() and os.path.isfile(profile_defaults):
         from resources.libs import fresh_install
@@ -603,8 +604,7 @@ except Exception as profile_err:
     logging.log('[Profiles] login repair failed: {}'.format(type(profile_err).__name__), level=xbmc.LOGERROR)
 
 if not build_profiles.is_master() and not os.path.isfile(os.path.join(CONFIG.USERDATA, 'kodipovil.profile_home_ready')):
-    # Native profile refresh is asynchronous and stops this interpreter.
-    # Let destination startup finish before showing normal boot dialogs.
+    # Keep normal boot dialogs deferred until the live home is verified.
     logging.log('[Profiles] home completion pending; deferring dialogs', level=xbmc.LOGINFO)
     sys.exit()
 
