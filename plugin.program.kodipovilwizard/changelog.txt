@@ -1,3 +1,6 @@
+0.4.32
+- Verify all modular hooks against official POV 6.10.04 and move the legacy host handoff forward without downgrading existing installations. Refresh the legacy bridge to recover interrupted Wizard migration and FENtastic personal folders.
+
 0.4.23
 - Include parent shows of collected seasons/episodes in MDBList personal lists, retain season pages and refresh legacy collection snapshots once. Log counts without account or title details.
 
