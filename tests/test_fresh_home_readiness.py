@@ -86,7 +86,8 @@ class FreshHomeReadinessTests(unittest.TestCase):
                 <setting id="test.list">English|Hebrew</setting>
                 <setting id="test.default" default="true">ignored</setting>
                 </settings>''', encoding='utf8')
-            current = {'locale.language': 'en', 'test.bool': True, 'test.list': []}
+            current = {'locale.language': 'en', 'test.bool': True, 'test.list': [],
+                       'lookandfeel.skin': 'skin.estuary'}
             calls, waits = [], []
             skin = ['skin.estuary']
             def rpc(method, params):

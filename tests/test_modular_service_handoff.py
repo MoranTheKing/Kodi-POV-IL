@@ -34,7 +34,7 @@ class ServiceHandoffTests(unittest.TestCase):
                     'created': 1000, 'expires': 2000, 'creator_pid': 11}
             request.write_text(json.dumps(plan), encoding='utf-8')
             vfs = types.SimpleNamespace(translatePath=lambda uri: str(
-                userdata if uri.endswith('/userdata') else root))
+                userdata if uri == 'special://profile/' else root))
             with mock.patch.dict(sys.modules, {'xbmcvfs': vfs}), \
                     mock.patch.object(handoff.time, 'time', return_value=1500), \
                     mock.patch.object(handoff.os, 'getpid', return_value=11):

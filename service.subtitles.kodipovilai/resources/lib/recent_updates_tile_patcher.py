@@ -453,7 +453,7 @@ def _favourites_path():
     if xbmcvfs is None:
         return ''
     try:
-        return xbmcvfs.translatePath('special://userdata/' + FAVOURITES_REL)
+        return xbmcvfs.translatePath('special://profile/' + FAVOURITES_REL)
     except Exception:
         return ''
 

@@ -45,6 +45,12 @@ class Router:
         url = self.params['url'] if 'url' in self.params else None
         name = self.params['name'] if 'name' in self.params else None
         action = self.params['action'] if 'action' in self.params else None
+        from resources.libs.patches import profile_age_guard
+        if profile_age_guard.active_policy() is not None and mode not in ('profiles', 'profile_child_open'):
+            xbmcgui.Dialog().ok('פרופיל ילדים', 'ניהול הבילד זמין במשתמש הראשי.')
+            if handle >= 0:
+                xbmcplugin.endOfDirectory(handle, succeeded=False)
+            return
         #####################################################
         # KODI-RD-IL
         auto_quick_update = self.params['auto_quick_update'] if 'auto_quick_update' in self.params else None
@@ -70,6 +76,17 @@ class Router:
             MainMenu().get_listing()
             self._finish(handle)
 
+        elif mode == 'profiles':
+            if handle >= 0:
+                xbmcplugin.endOfDirectory(handle, succeeded=False)
+            from resources.libs import build_profiles
+            build_profiles.show()
+        elif mode == 'profile_child_open':
+            from resources.libs import build_profiles
+            build_profiles.open_child_content(self.params.get('kind'))
+        elif mode == 'profile_skin':
+            from resources.libs import build_profiles
+            build_profiles.choose_skin()
         elif mode in ('choose_player_style', 'player_settings', 'player_change_source', 'player_episodes'):
             from resources.libs import player_styles
             {'choose_player_style': player_styles.choose,

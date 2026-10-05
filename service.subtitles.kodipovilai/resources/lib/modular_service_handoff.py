@@ -35,7 +35,7 @@ def maybe_yield():
     """Return True only after writing an acknowledgement for a staged update."""
     try:
         import xbmcvfs
-        userdata = xbmcvfs.translatePath('special://home/userdata')
+        userdata = xbmcvfs.translatePath('special://profile/')
         addons_parent = xbmcvfs.translatePath('special://home')
         request_path = os.path.join(userdata, REQUEST)
         with open(request_path, 'rb') as source:

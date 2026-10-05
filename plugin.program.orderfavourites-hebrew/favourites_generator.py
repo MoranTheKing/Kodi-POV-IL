@@ -36,7 +36,7 @@ except Exception:
     xbmc = None
 
 
-FAVOURITES_PATH = 'special://userdata/favourites.xml'
+FAVOURITES_PATH = 'special://profile/favourites.xml'
 STATE_PATH = ('special://profile/addon_data/'
               'plugin.program.orderfavourites-hebrew/favourites_state.json')
 DEFAULT_SKIN_KEY = 'default'
@@ -432,7 +432,7 @@ def generate_favourites_xml(skin_id, merge=True, write=True, config_path=None):
 
     merge=True preserves user order, edits, additions and deletions by
     comparing against the last generated defaults. New defaults are appended.
-    write=True writes the result to special://userdata/favourites.xml.
+    write=True writes the result to special://profile/favourites.xml.
     Returns the XML string on success, or None when the installed file was
     invalid or the requested write failed. A rejected write leaves it intact.
     """

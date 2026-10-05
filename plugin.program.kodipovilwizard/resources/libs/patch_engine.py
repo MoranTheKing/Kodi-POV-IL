@@ -347,7 +347,12 @@ class PatchEngine(object):
                 "[PatchEngine] Addon '{0}' not found on disk; skipping {1} patch(es) for {2}.".format(
                     addon_id, len(patch_list), target_file),
                 level=xbmc.LOGWARNING)
-            self._stats['missing'] += len(patch_list)
+            # Optional hosts need no repair until they are installed. A file
+            # missing inside an installed host still fails the integrity pass.
+            if addon_id == 'plugin.video.umbrella':
+                self._stats['optional_absent'] = self._stats.get('optional_absent', 0) + len(patch_list)
+            else:
+                self._stats['missing'] += len(patch_list)
             return
 
         if not os.path.isfile(target_path):
