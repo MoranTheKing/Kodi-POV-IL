@@ -25,7 +25,7 @@ import xbmc, xbmcgui, xbmcplugin, xbmcvfs
 from xbmcaddon import Addon
 
 
-FAVOURITES_PATH = 'special://userdata/favourites.xml'
+FAVOURITES_PATH = 'special://profile/favourites.xml'
 THUMBNAILS_PATH_FORMAT = 'special://thumbnails/{folder}/{file}'
 
 PROPERTY_FAVOURITES_RESULT = 'ordfav.result'
