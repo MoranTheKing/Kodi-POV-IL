@@ -19,6 +19,30 @@ spec.loader.exec_module(store)
 
 
 class ProfileStoreTests(unittest.TestCase):
+    def test_picker_recovers_stale_ownership_and_releases_before_loading(self):
+        values = {'POVIL.ProfilesBusy': 'true'}
+        home = types.SimpleNamespace(getProperty=lambda key: values.get(key, ''),
+            setProperty=lambda key, value: values.update({key: value}),
+            clearProperty=lambda key: values.pop(key, None))
+        class Cards:
+            def __init__(self, *_a): pass
+            def doModal(self): self.result = ('load', 'Guest')
+        loaded = []
+        def load(name):
+            self.assertNotIn('POVIL.ProfilesBusy', values)
+            loaded.append(name)
+        gui = types.SimpleNamespace(Window=lambda _: home, getCurrentWindowDialogId=lambda: 9999)
+        sdk = types.SimpleNamespace(Monitor=lambda: types.SimpleNamespace(waitForAbort=lambda _: False))
+        fn = _load_function(LIBS / 'build_profiles.py', 'show', dict(
+            xbmcgui=gui, xbmc=sdk, WIZARD='QA', ProfileCards=Cards, load_profile=load,
+            xbmcaddon=types.SimpleNamespace(Addon=lambda _: types.SimpleNamespace(getAddonInfo=lambda _: 'QA'))))
+        fn()
+        self.assertEqual(loaded, ['Guest'])
+        values['POVIL.ProfilesBusy'] = 'true'
+        gui.getCurrentWindowDialogId = lambda: 13000
+        fn()
+        self.assertEqual(loaded, ['Guest'])
+
     def test_parent_title_search_uses_actual_host_client_and_encoded_query(self):
         from urllib.parse import urlencode, parse_qs, urlparse
         import os

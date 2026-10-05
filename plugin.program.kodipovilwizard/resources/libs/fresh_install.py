@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 
 import xbmc
 import xbmcgui
+import xbmcvfs
 from resources.libs.common.config import CONFIG
 from resources.libs.common import logging, tools
 
@@ -153,6 +154,12 @@ def live_favourites_ready():
     actual = {item.get('title') for item in (_rpc('Favourites.GetFavourites', {}).get('favourites') or [])}
     if expected and expected.issubset(actual):
         return True
+    # Loading the already active secondary profile stops Kodi services without
+    # restarting them (native LoadProfile returns early for this index).
+    # The master prepares its complete favourites before the real switch.
+    master = xbmcvfs.translatePath('special://masterprofile/')
+    if os.path.normcase(os.path.realpath(CONFIG.USERDATA)) != os.path.normcase(os.path.realpath(master)):
+        return False
     # First-time subtitle-service migrations can add home tiles after the
     # first profile refresh. Permit one further refresh, then retain the
     # pending marker on failure. This never closes Kodi or loops indefinitely.
