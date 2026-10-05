@@ -591,10 +591,10 @@ try:
     if not build_profiles.is_master() and os.path.isfile(profile_defaults):
         from resources.libs import fresh_install
         if fresh_install.apply_live_defaults(defaults_path=profile_defaults):
-            os.remove(profile_defaults)
             from resources.libs import build_skin
             if build_skin.refresh_home() and fresh_install.live_favourites_ready():
                 build_profiles.profile_store.write_missing(CONFIG.USERDATA, 'kodipovil.profile_home_ready', b'1')
+                os.remove(profile_defaults)
     elif not build_profiles.is_master():
         from resources.libs import build_skin, fresh_install
         if not os.path.isfile(os.path.join(CONFIG.USERDATA, 'kodipovil.profile_home_ready')) and build_skin.refresh_home() and fresh_install.live_favourites_ready():
