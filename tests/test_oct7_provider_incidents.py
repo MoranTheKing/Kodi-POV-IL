@@ -70,6 +70,8 @@ class ProviderIncidents(unittest.TestCase):
             response = target.session.request('get', path)
             return {'saved': 'show'} if response.ok else None
         target.call_trakt = original
+        target.fixture_shared_session = target.session
+        target.fixture_original_request = request
         module.run(target)
         return target, settings, requests, properties, notifications
 
@@ -100,6 +102,17 @@ class ProviderIncidents(unittest.TestCase):
         self.assertIsNone(target.call_trakt('/shows/trending', with_auth=False))
         self.assertEqual(len(requests), 1)
         self.assertEqual(settings['trakt.token'], 'old')
+
+    def test_refresh_wrapper_does_not_modify_other_providers_shared_session(self):
+        target, settings, requests, _, _ = self.auth(
+            {'access_token': 'new', 'refresh_token': 'refresh-new', 'expires_in': 3600})
+        self.assertIs(target.fixture_shared_session.request, target.fixture_original_request)
+        self.assertIsNot(target.session, target.fixture_shared_session)
+        target.session.headers = {'X-Trakt-Fixture': 'value'}
+        self.assertEqual(target.fixture_shared_session.headers, {'X-Trakt-Fixture': 'value'})
+        self.assertEqual(target.call_trakt('/sync/watchlist'), {'saved': 'show'})
+        self.assertIs(target.fixture_shared_session.request, target.fixture_original_request)
+        self.assertEqual(len(requests), 3)
 
     def test_invoker_mismatch_never_unloads_profile_or_opens_modal(self):
         with tempfile.TemporaryDirectory() as raw:

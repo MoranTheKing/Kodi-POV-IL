@@ -119,6 +119,8 @@ def adapt_fonts(layout, path):
 def focus_home():
     # Several skins set their adult defaultcontrol after onload actions.
     # The short bootstrap invocation places child focus after that step.
+    if not xbmc.getCondVisibility('Skin.HasSetting(POVILChild)'):
+        return
     if xbmc.Monitor().waitForAbort(0.2):
         return
     if (xbmc.getCondVisibility('Skin.HasSetting(POVILChild)') and
