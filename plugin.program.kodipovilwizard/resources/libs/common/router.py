@@ -132,6 +132,10 @@ class Router:
                 Wizard().quick_update(name, auto_quick_update)
             # KODI-RD-IL
             elif action == 'build_switch_skin':
+                # This is an action, not a folder. Release Kodi's directory
+                # busy dialog before the picker/settings retention windows.
+                if handle >= 0:
+                    xbmcplugin.endOfDirectory(handle, succeeded=False)
                 from resources.libs.wizard import build_switch_skin
                 build_switch_skin()
             elif action == 'install_af3_ce':

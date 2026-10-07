@@ -1,5 +1,6 @@
 """Native dependency eligibility and scoped GUI retention hooks."""
 import importlib.util
+import ast
 import json
 import os
 import re
@@ -16,6 +17,41 @@ LIBS = ROOT / 'plugin.program.kodipovilwizard/resources/libs'
 
 
 class PlatformSkinIncidents(unittest.TestCase):
+    def test_skin_picker_closes_only_its_power_menu_and_waits_for_gui_release(self):
+        visible = [True]; calls = []
+        def builtin(command):
+            calls.append(command);visible[0]=False
+        kodi=types.SimpleNamespace(getCondVisibility=lambda c:visible[0],executebuiltin=builtin,
+            Monitor=lambda:types.SimpleNamespace(waitForAbort=lambda _:False))
+        fn=_load_function(LIBS/'build_skin.py','close_switch_menu',dict(xbmc=kodi))
+        self.assertTrue(fn()); self.assertEqual(calls,['Dialog.Close(10111,true)'])
+        self.assertTrue(fn()); self.assertEqual(len(calls),1)
+
+    def test_skin_picker_does_not_continue_during_shutdown(self):
+        kodi=types.SimpleNamespace(getCondVisibility=lambda _:True,executebuiltin=lambda _:None,
+            Monitor=lambda:types.SimpleNamespace(waitForAbort=lambda _:True))
+        fn=_load_function(LIBS/'build_skin.py','close_switch_menu',dict(xbmc=kodi))
+        self.assertFalse(fn())
+
+    def test_folder_skin_action_releases_directory_before_picker_but_runplugin_has_no_handle(self):
+        calls=[]
+        tree=ast.parse((LIBS/'common/router.py').read_text('utf8'))
+        method=next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='dispatch')
+        scope=dict(
+            xbmcplugin=types.SimpleNamespace(endOfDirectory=lambda h,**kw:calls.append(('finish',h,kw))),
+            logging=types.SimpleNamespace(),xbmcgui=types.SimpleNamespace())
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[method],type_ignores=[])),'dispatch','exec'),scope)
+        fn=scope['dispatch']
+        owner=types.SimpleNamespace(params={'mode':'install','action':'build_switch_skin'},
+                                   _log_params=lambda _:None)
+        mods={'resources.libs.patches':types.SimpleNamespace(
+                    profile_age_guard=types.SimpleNamespace(active_policy=lambda:None)),
+              'resources.libs.wizard':types.SimpleNamespace(Wizard=object,
+                    build_switch_skin=lambda:calls.append(('picker',)))}
+        with patch.dict('sys.modules',mods):
+            fn(owner,42,''); self.assertEqual(calls,[('finish',42,{'succeeded':False}),('picker',)])
+            calls.clear();fn(owner,-1,'');self.assertEqual(calls,[('picker',)])
+
     def test_home_bootstrap_cannot_interrupt_pending_skin_confirmation(self):
         kodi = types.SimpleNamespace(executebuiltin=lambda _: self.fail('unexpected reload'))
         requested = ['skin.povil.nox']

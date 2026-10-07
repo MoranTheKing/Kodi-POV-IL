@@ -15,6 +15,21 @@ import xbmcgui
 SKINS = ('skin.estuary', 'skin.fentastic', 'skin.povil.nox', 'skin.arctic.fuse.3')
 
 
+def close_switch_menu():
+    """Dismiss our power-menu entry point before opening the skin picker."""
+    if not xbmc.getCondVisibility('Window.IsVisible(10111)'):
+        return True
+    xbmc.executebuiltin('Dialog.Close(10111,true)')
+    monitor = xbmc.Monitor()
+    for _ in range(20):
+        if not xbmc.getCondVisibility('Window.IsVisible(10111)'):
+            return True
+        if monitor.waitForAbort(0.1):
+            return False
+    xbmc.log('[POV IL] Skin switch deferred: power menu did not close', xbmc.LOGWARNING)
+    return False
+
+
 def rpc(method, params):
     reply = json.loads(xbmc.executeJSONRPC(json.dumps(dict(
         jsonrpc='2.0', id=1, method=method, params=params))))
@@ -44,7 +59,9 @@ def enable_skin(ident, visiting=None):
         if details['enabled'] is not True:
             rpc('Addons.SetAddonEnabled', dict(addonid=ident, enabled=True))
         return rpc('Addons.GetAddonDetails', dict(addonid=ident, properties=['enabled']))['addon']['enabled'] is True
-    except (OSError, ET.ParseError, RuntimeError, KeyError):
+    except (OSError, ET.ParseError, RuntimeError, KeyError) as exc:
+        xbmc.log('[POV IL] Skin dependency unavailable: %s (%s)' %
+                 (ident, type(exc).__name__), xbmc.LOGWARNING)
         return False
     finally:
         visiting.remove(ident)

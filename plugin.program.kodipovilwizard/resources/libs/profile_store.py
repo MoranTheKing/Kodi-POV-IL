@@ -5,8 +5,11 @@ that file: native creation/deletion/locks remain authoritative. Only missing
 build files are seeded, and only beneath the registered profile directory.
 """
 import hashlib
+import ast
+from contextlib import closing
 import json
 import os
+import sqlite3
 import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
@@ -14,6 +17,92 @@ import zipfile
 
 BOOTSTRAP_SHA256 = '20f3f23b5571bc48be7313096e144fd01e903b346b050ca9a7a2899a92963f85'
 WIZARD = 'plugin.program.kodipovilwizard'
+
+
+def _shortcut_items(value):
+    try:
+        result = json.loads(value)
+    except (ValueError, TypeError):
+        result = ast.literal_eval(value)
+    return result if isinstance(result, list) and all(isinstance(i, dict) for i in result) else None
+
+
+def _seed_shortcuts(profile, source):
+    """Seed build menu records only; never copy accounts, history or whole DBs."""
+    relative = 'addon_data/plugin.video.pov/povil-shortcuts-defaults-v1.json'
+    receipt = _inside(profile, relative)
+    if os.path.isfile(receipt):
+        return 0
+    database = _inside(profile, 'addon_data/plugin.video.pov/navigator.db')
+    os.makedirs(os.path.dirname(database), exist_ok=True)
+    pending = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=os.path.dirname(database), suffix='.db', delete=False) as handle:
+            pending = handle.name
+            handle.write(source.read('addon_data/plugin.video.pov/navigator.db'))
+        with closing(sqlite3.connect(pending)) as conn:
+            defaults = conn.execute('SELECT list_name,list_type,list_contents FROM navigator '
+                                    'WHERE list_type=?', ('shortcut_folder',)).fetchall()
+        existed = os.path.isfile(database)
+        folders, personal = [], []
+        with closing(sqlite3.connect(database, timeout=1)) as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            if os.path.isfile(receipt):
+                return 0
+            conn.execute('CREATE TABLE IF NOT EXISTS navigator (list_name text, list_type text, '
+                         'list_contents text, UNIQUE(list_name,list_type))')
+            if [r[1] for r in conn.execute('PRAGMA table_info(navigator)')] != [
+                    'list_name', 'list_type', 'list_contents']:
+                raise ValueError('Unknown POV navigator schema')
+            current = {(r[0], r[1]): r[2] for r in conn.execute(
+                'SELECT list_name,list_type,list_contents FROM navigator')}
+            updates = []
+            for name, kind, contents in defaults:
+                if (name, kind) not in current:
+                    updates.append((name, kind, contents));folders.append(name)
+                    continue
+                if name not in ('FENtastic - סרטים - איזור אישי', 'FENtastic - סדרות - איזור אישי'):
+                    continue
+                # Restore the old build's missing MDBList row only once in a
+                # recognizable personal folder. Explicit empty/custom rows stay.
+                try:
+                    expected = _shortcut_items(contents)
+                    items = _shortcut_items(current[(name, kind)])
+                except (ValueError, SyntaxError, TypeError):
+                    continue
+                identity = lambda i: tuple(i.get(k) for k in ('mode','action','name'))
+                mdblist = [i for i in (expected or []) if str(i.get('action','')).startswith('mdblist_')]
+                if (not expected or not items or len(items) < 2 or len(mdblist) != 1 or
+                        any(str(i.get('action','')).startswith('mdblist_') for i in items) or
+                        any(identity(i) not in [identity(e) for e in expected] for i in items)):
+                    continue
+                updates.append((name, kind, json.dumps(items + mdblist, ensure_ascii=False)))
+                personal.append(name)
+            if updates and existed:
+                backup = _inside(profile, 'addon_data/plugin.video.pov/navigator.before-build-shortcuts-v1.db')
+                if not os.path.isfile(backup):
+                    with closing(sqlite3.connect(database)) as reader:
+                        with closing(sqlite3.connect(backup)) as dest:
+                            reader.backup(dest)
+            conn.executemany('INSERT OR REPLACE INTO navigator VALUES (?,?,?)', updates)
+            conn.commit()
+        write_missing(profile, relative, json.dumps(dict(version=1, folders=folders,
+                      mdblist=personal), ensure_ascii=False).encode('utf8'))
+        return len(updates)
+    finally:
+        if pending and os.path.isfile(pending):
+            os.remove(pending)
+
+
+def repair_build_shortcuts(addons, profile):
+    if os.path.isfile(_inside(profile, 'addon_data/plugin.video.pov/povil-shortcuts-defaults-v1.json')):
+        return 0
+    archive = os.path.join(addons, WIZARD, 'resources', 'bootstrap', 'config.zip')
+    with open(archive, 'rb') as handle:
+        if hashlib.sha256(handle.read()).hexdigest() != BOOTSTRAP_SHA256:
+            raise ValueError('Profile defaults failed integrity verification')
+    with zipfile.ZipFile(archive) as source:
+        return _seed_shortcuts(profile, source)
 
 
 def registered_profiles(master):
@@ -171,6 +260,7 @@ def seed_profile(master, profile, archive, prepare_login=False):
             finally:
                 if os.path.exists(temporary):
                     os.unlink(temporary)
+        _seed_shortcuts(target, zf)
     # Kodi uses the target add-on settings on next LoadProfile. Do not clone
     # the master's complete wizard settings (queues, update receipts, flags).
     defaults = dict(buildname='Kodi POV IL - FENtastic', installed='true',
