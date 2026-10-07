@@ -1272,6 +1272,9 @@ def build_switch_skin():
         return
 
 
+    from resources.libs import build_skin
+    if not build_skin.close_switch_menu():
+        return
     from resources.libs.gui import window
     msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין NOX"
     if policy is None:
@@ -1345,8 +1348,12 @@ def build_switch_skin():
         dialogProgress.close()
         from resources.libs import build_profiles
         if not build_profiles._wait_dialogs():
+            logging.log('[Skin Switch] Deferred by dialog %s' % xbmcgui.getCurrentWindowDialogId(),
+                        level=xbmc.LOGWARNING)
+            dialog.ok(CONFIG.ADDONTITLE, 'סגור את החלון הפתוח ונסה להחליף סקין שוב.')
             return
         if not switch_skin_in_gui_settings(gotoskin):
+            logging.log('[Skin Switch] Activation failed: ' + gotoskin, level=xbmc.LOGWARNING)
             dialog.ok(CONFIG.ADDONTITLE, 'לא ניתן להשלים את החלפת הסקין. אפשר לנסות שוב דרך הוויזרד.')
 
     else:
