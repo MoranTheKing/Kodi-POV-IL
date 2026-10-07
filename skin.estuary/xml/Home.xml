@@ -53,19 +53,6 @@
 					<control type="grouplist" id="5001">
 						<include>WidgetGroupListCommon</include>
 						<pagecontrol>5010</pagecontrol>
-                        <include content="WidgetListCategories" condition="System.AddonIsEnabled(plugin.video.pov)">
-                            <param name="content_path" value="plugin://plugin.video.pov/?mode=navigator.main&amp;action=MovieList" />
-                            <param name="widget_header" value="קטגוריות הבילד" />
-                            <param name="widget_target" value="videos" />
-                            <param name="item_limit" value="100" />
-                            <param name="list_id" value="5910" />
-                        </include>
-                        <include content="WidgetListPoster" condition="System.AddonIsEnabled(plugin.video.pov)">
-                            <param name="content_path" value="plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_popular" />
-                            <param name="widget_header" value="פופולריים" />
-                            <param name="widget_target" value="videos" />
-                            <param name="list_id" value="5911" />
-                        </include>
 
 						<include content="WidgetListCategories" condition="Library.HasContent(movies) + !Skin.HasSetting(home_no_categories_widget)">
 							<param name="content_path" value="library://video/movies/"/>
@@ -136,19 +123,6 @@
 					<control type="grouplist" id="6001">
 						<include>WidgetGroupListCommon</include>
 						<pagecontrol>6010</pagecontrol>
-                        <include content="WidgetListCategories" condition="System.AddonIsEnabled(plugin.video.pov)">
-                            <param name="content_path" value="plugin://plugin.video.pov/?mode=navigator.main&amp;action=TVShowList" />
-                            <param name="widget_header" value="קטגוריות הבילד" />
-                            <param name="widget_target" value="videos" />
-                            <param name="item_limit" value="100" />
-                            <param name="list_id" value="6910" />
-                        </include>
-                        <include content="WidgetListPoster" condition="System.AddonIsEnabled(plugin.video.pov)">
-                            <param name="content_path" value="plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_tv_popular" />
-                            <param name="widget_header" value="פופולריים" />
-                            <param name="widget_target" value="videos" />
-                            <param name="list_id" value="6911" />
-                        </include>
 
 						<include content="WidgetListCategories" condition="Library.HasContent(tvshows) + !Skin.HasSetting(home_no_categories_widget)">
 							<param name="content_path" value="library://video/tvshows/"/>
@@ -969,20 +943,13 @@
 					<content>
 						<item>
 							<label>מסך הבית</label>
-							<onclick>SetFocus(2000)</onclick>
-							<property name="menu_id">$NUMBER[14000]</property>
-							<thumb>icons/sidemenu/favourites.png</thumb>
-							<property name="id">favorites</property>
-							<visible>System.AddonIsEnabled(plugin.program.kodipovilwizard)</visible>
-						</item>
-<item>
-							<label>$LOCALIZE[10134]</label>
-							<onclick>ActivateWindow(favouritesbrowser)</onclick>
+							<onclick>SetFocus(14100)</onclick>
 							<property name="menu_id">$NUMBER[14000]</property>
 							<thumb>icons/sidemenu/favourites.png</thumb>
 							<property name="id">favorites</property>
 							<visible>!Skin.HasSetting(HomeMenuNoFavButton)</visible>
 						</item>
+
 						<item>
 							<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.main&amp;action=MovieList",return)</onclick>
 <label>$LOCALIZE[342]</label>

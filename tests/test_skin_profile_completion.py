@@ -53,7 +53,8 @@ class SkinProfileCompletionTests(unittest.TestCase):
             self.assertTrue(fn())
         self.assertIn('HomeMenuNoMusicButton', flags)
         self.assertIn('HomeMenuNoPicturesButton', flags)
-        self.assertNotIn('HomeMenuNoMovieButton', flags)
+        self.assertIn('HomeMenuNoMovieButton', flags)
+        self.assertIn('HomeMenuNoTVShowButton', flags)
         count = len(calls)
         flags.remove('HomeMenuNoMusicButton')  # user later re-enables Music
         with patch.dict('sys.modules', {'resources.libs': types.SimpleNamespace(
@@ -95,6 +96,10 @@ class SkinProfileCompletionTests(unittest.TestCase):
         root = ET.parse(ROOT / 'skin.estuary/xml/Home.xml').getroot()
         items = root.findall('.//control[@id="9000"]/content/item')
         self.assertEqual(items[0].findtext('label'), 'מסך הבית')
+        self.assertEqual(items[0].findtext('onclick'), 'SetFocus(14100)')
+        self.assertEqual(sum(v.findtext("property[@name='id']")=='favorites' for v in items), 1)
+        self.assertFalse(any(n.findtext("param[@name='list_id']") in ('5910','5911','6910','6911')
+                             for n in root.findall('.//include')))
         for kind, action in (('movies', 'MovieList'), ('tvshows', 'TVShowList')):
             item = next(v for v in items if v.findtext("property[@name='id']") == kind)
             self.assertIn('plugin.video.pov', item.findtext('onclick'))
@@ -102,6 +107,22 @@ class SkinProfileCompletionTests(unittest.TestCase):
         power = (ROOT / 'skin.estuary/xml/DialogButtonMenu.xml').read_text('utf8')
         for route in ('mode=profiles', 'action=build_switch_skin', 'mode=myservices'):
             self.assertIn(route, power)
+
+    def test_existing_estuary_v1_only_corrects_movie_and_tv_flags_once(self):
+        flags={'POVIL.BuildSidebarReady'}; calls=[]
+        def builtin(command, wait):
+            calls.append(command)
+            if command.startswith('Skin.SetBool('): flags.add(command[13:-1])
+        fn=_load_function(LIBS/'build_skin.py', 'prepare_active_skin_defaults', dict(
+            xbmc=types.SimpleNamespace(getSkinDir=lambda:'skin.estuary', executebuiltin=builtin,
+                getCondVisibility=lambda condition:condition[16:-1] in flags)))
+        with patch.dict('sys.modules', {'resources.libs':types.SimpleNamespace(
+                child_profiles=types.SimpleNamespace(sync_active=lambda:False))}):
+            self.assertTrue(fn())
+            self.assertFalse(any('HomeMenuNoMusicButton' in c or 'Skin.Reset' in c for c in calls))
+            flags.discard('HomeMenuNoMovieButton'); count=len(calls)
+            self.assertFalse(fn()); self.assertEqual(len(calls),count)
+            self.assertNotIn('HomeMenuNoMovieButton', flags)
 
     def test_layout_defaults_restore_missing_helper_db_without_overwriting_custom_skin(self):
         with tempfile.TemporaryDirectory() as raw:

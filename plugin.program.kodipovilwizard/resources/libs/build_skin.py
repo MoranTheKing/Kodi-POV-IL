@@ -167,20 +167,25 @@ def prepare_active_skin_defaults():
     child_changed = child_profiles.sync_active()
     if xbmc.getSkinDir() != 'skin.estuary':
         return child_changed
-    if xbmc.getCondVisibility('Skin.HasSetting(POVIL.BuildSidebarReady)'):
+    if xbmc.getCondVisibility('Skin.HasSetting(POVIL.BuildSidebarReadyV2)'):
         return child_changed
     # The config pack contains no Estuary settings.xml. New native profiles
     # therefore inherit Kodi's unrelated sidebar items unless initialized
     # through the skin API after activation. Keep later user choices intact.
-    for name in ('HomeMenuNoMusicButton', 'HomeMenuNoMusicVideoButton',
-                 'HomeMenuNoTVButton', 'HomeMenuNoRadioButton',
-                 'HomeMenuNoGamesButton', 'HomeMenuNoPicturesButton',
-                 'HomeMenuNoVideosButton', 'HomeMenuNoWeatherButton'):
+    if not xbmc.getCondVisibility('Skin.HasSetting(POVIL.BuildSidebarReady)'):
+        for name in ('HomeMenuNoMusicButton', 'HomeMenuNoMusicVideoButton',
+                     'HomeMenuNoTVButton', 'HomeMenuNoRadioButton',
+                     'HomeMenuNoGamesButton', 'HomeMenuNoPicturesButton',
+                     'HomeMenuNoVideosButton', 'HomeMenuNoWeatherButton'):
+            xbmc.executebuiltin('Skin.SetBool({})'.format(name), True)
+        for name in ('HomeMenuNoFavButton', 'HomeMenuNoProgramsButton'):
+            xbmc.executebuiltin('Skin.Reset({})'.format(name), True)
+    # Restore the simple tile-based build home. V1 incorrectly enabled stock
+    # movie/TV library pages; correct those two flags once in existing profiles.
+    for name in ('HomeMenuNoMovieButton', 'HomeMenuNoTVShowButton'):
         xbmc.executebuiltin('Skin.SetBool({})'.format(name), True)
-    for name in ('HomeMenuNoMovieButton', 'HomeMenuNoTVShowButton',
-                 'HomeMenuNoFavButton', 'HomeMenuNoProgramsButton'):
-        xbmc.executebuiltin('Skin.Reset({})'.format(name), True)
     xbmc.executebuiltin('Skin.SetBool(POVIL.BuildSidebarReady)', True)
+    xbmc.executebuiltin('Skin.SetBool(POVIL.BuildSidebarReadyV2)', True)
     return True
 
 
