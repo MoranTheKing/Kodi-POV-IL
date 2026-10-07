@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-10-07T12:34:57Z",
+  "generated": "2026-10-07T18:34:17Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -37,13 +37,13 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.4.38",
+      "version": "0.4.39",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.4.38.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.38.zip",
-      "size": 2423822,
-      "sha256": "61da8e55c6433e08e0c18063d4881674a80db6a172b654f5904b5b92c20d3a93",
-      "updated": "2026-10-07T12:34:57Z"
+      "filename": "plugin.program.kodipovilwizard-0.4.39.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.39.zip",
+      "size": 2425602,
+      "sha256": "280c28cd47e89813367faa00ecdfefb2f0f39cb529d30b2c8c92a616dfe7e6ae",
+      "updated": "2026-10-07T18:34:17Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
@@ -147,13 +147,13 @@
     "skin.estuary": {
       "id": "skin.estuary",
       "name": "Estuary (Kodi + Real Debrid Israel)",
-      "version": "4.0.5",
+      "version": "4.0.6",
       "type": "skin",
-      "filename": "skin.estuary-4.0.5.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.estuary-4.0.5.zip",
-      "size": 6817898,
-      "sha256": "f46f8ae94043326ce8196332afaaa5a947dcca15adad3277ac4d21714b93b4e8",
-      "updated": "2026-10-05T16:18:11Z"
+      "filename": "skin.estuary-4.0.6.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.estuary-4.0.6.zip",
+      "size": 6817647,
+      "sha256": "8dd8d48d566ce75935f696db75219bb50df8f35e194c2ac708c2c44bfa3a9f80",
+      "updated": "2026-10-07T18:34:17Z"
     },
     "skin.fentastic": {
       "id": "skin.fentastic",
