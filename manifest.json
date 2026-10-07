@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-10-07T00:53:44Z",
+  "generated": "2026-10-07T10:22:56Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -37,24 +37,24 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.4.33.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.33.zip",
-      "size": 2418682,
-      "sha256": "75fdd5447625d5bc4b30606050aeb3a93197d51673e4b8ddecad3eb6cc4febdf",
-      "updated": "2026-10-07T00:53:44Z"
+      "filename": "plugin.program.kodipovilwizard-0.4.34.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.34.zip",
+      "size": 2420675,
+      "sha256": "3fc8b8572b3da99f7d7f7f17c9cad32bb259a447a9f59079094f03ca4a0487fc",
+      "updated": "2026-10-07T10:22:56Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
       "name": "מועדפים ואייקונים",
-      "version": "1.4.9",
+      "version": "1.4.10",
       "type": "plugin",
-      "filename": "plugin.program.orderfavourites-hebrew-1.4.9.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.9.zip",
-      "size": 13336097,
-      "sha256": "c351017bd7e10024e9e5639b672bb1f4f242021d25acec1ea938903977ecb7c7",
-      "updated": "2026-10-05T12:44:41Z"
+      "filename": "plugin.program.orderfavourites-hebrew-1.4.10.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.10.zip",
+      "size": 13336741,
+      "sha256": "c4bccf4fcd3b31e2fefcdcd9a9024e0f1e4790d1169728ce2ef5b6faca57be12",
+      "updated": "2026-10-07T10:22:56Z"
     },
     "repository.709": {
       "id": "repository.709",
