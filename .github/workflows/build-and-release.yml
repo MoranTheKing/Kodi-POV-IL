@@ -101,7 +101,9 @@ jobs:
           PY
 
       - name: Verify modular migration and update rules
-        run: python -m unittest discover -s tests
+        run: |
+          python -m pip install -q -r tests/requirements.txt
+          python -m unittest discover -s tests
 
       - name: Verify hooks against the pinned official POV before publishing
         run: python .github/scripts/verify_pov_patches.py

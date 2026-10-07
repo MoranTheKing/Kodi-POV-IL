@@ -30,6 +30,22 @@ class ChildProfilesTests(unittest.TestCase):
         self.modules.start(); self.addCleanup(self.modules.stop)
         self.child = load('child_ui_test', LIBS/'child_profiles.py')
 
+    def test_adult_home_does_not_wait_for_child_focus(self):
+        self.kodi.Monitor = Mock()
+        self.child.focus_home()
+        self.kodi.Monitor.assert_not_called()
+        self.kodi.executebuiltin.assert_not_called()
+
+    def test_child_focus_rechecks_profile_after_skin_settles(self):
+        self.kodi.Monitor = Mock(return_value=types.SimpleNamespace(waitForAbort=Mock(return_value=False)))
+        self.kodi.getCondVisibility.side_effect = [True,False]
+        self.child.focus_home()
+        self.kodi.Monitor.return_value.waitForAbort.assert_called_once_with(.2)
+        self.kodi.executebuiltin.assert_not_called()
+        self.kodi.getCondVisibility.side_effect = [True,True,True]
+        self.child.focus_home()
+        self.kodi.executebuiltin.assert_called_once_with('SetFocus(9500)')
+
     def test_each_skin_home_keeps_adult_controls_and_hooks_and_is_idempotent(self):
         with tempfile.TemporaryDirectory() as raw:
             for skin in self.child.SKINS:

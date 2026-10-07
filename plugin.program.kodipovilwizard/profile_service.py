@@ -31,12 +31,16 @@ def run():
     token = uuid.uuid4().hex
     window.setProperty('POVIL.ProfileGuardOwner', token)
     last = None
+    published = None
     while not monitor.waitForAbort(0.5):
         if window.getProperty('POVIL.ProfileGuardOwner') != token:
             return
         policy = guard.active_policy()
         profile = xbmcvfs.translatePath('special://profile/')
-        window.setProperty('POVIL.ChildProfile', 'true' if policy is not None else 'false')
+        state = (profile, 'true' if policy is not None else 'false')
+        if state != published:
+            window.setProperty('POVIL.ChildProfile', state[1])
+            published = state
         if policy is None or not player.isPlaying():
             last = None
             continue
