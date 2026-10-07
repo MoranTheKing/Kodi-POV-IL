@@ -178,6 +178,127 @@ def align_default_order(addons, userdata, archive=None, expected_sha=None):
     return len(aligned)
 
 
+def _catalogue_identity(path):
+    identity = _path_identity(path)
+    # The public legacy 0.1.179 build spelled these two shipped genre folders
+    # without an apostrophe. Keep their URLs/data, but recognize the same role.
+    if identity and identity[:4] == ('plugin', 'plugin.video.pov', '/', 'navigator.build_shortcut_folder_list'):
+        aliases = {'FENtastic - סרטים - זאנרים': "FENtastic - סרטים - ז'אנרים",
+                   'FENtastic - סדרות - זאנרים': "FENtastic - סדרות - ז'אנרים"}
+        if identity[5] in aliases:
+            identity = identity[:5] + (aliases[identity[5]],) + identity[6:]
+    return identity
+
+
+def _restore_legacy_genre_folders(rows, userdata):
+    """Keep exact shipped old genre links working, preserving existing folders."""
+    database = os.path.join(userdata, 'addon_data', 'plugin.video.pov', 'navigator.db')
+    if not os.path.isfile(database):
+        return
+    aliases = set()
+    for row in rows:
+        original, canonical = _path_identity(row[1]), _catalogue_identity(row[1])
+        if original and canonical != original:
+            aliases.add((original[5], canonical[5]))
+    if not aliases:
+        return
+    with closing(sqlite3.connect(database, timeout=1)) as connection:
+        connection.execute('BEGIN IMMEDIATE')
+        for old, new in aliases:
+            if connection.execute('SELECT 1 FROM navigator WHERE list_name=? AND list_type=?',
+                                  (old, 'shortcut_folder')).fetchone():
+                continue
+            contents = connection.execute('SELECT list_contents FROM navigator '
+                'WHERE list_name=? AND list_type=?', (new, 'shortcut_folder')).fetchone()
+            if contents is not None:
+                _backup_database(database, os.path.join(os.path.dirname(database),
+                                                       'navigator.before-catalogue-v2.db'))
+                connection.execute('INSERT INTO navigator VALUES (?,?,?)',
+                                   (old, 'shortcut_folder', contents[0]))
+        connection.commit()
+
+
+def restore_catalogue_pair(addons, userdata, archive=None, expected_sha=None):
+    """Upgrade the old four-row build layout, without replacing custom groups.
+
+    Old layouts have personal, one catalogue, networks and genres. Their slots
+    are compacted, so the missing catalogue's default slot is already occupied.
+    A previous no-op popular/order receipt must not certify this layout complete.
+    """
+    folder = os.path.join(userdata, 'addon_data', 'script.fentastic.helper')
+    database = os.path.join(folder, 'cpath_cache.db')
+    receipt = os.path.join(folder, 'povil-catalogue-pair-v2.json')
+    if os.path.isfile(receipt) or not os.path.isfile(database):
+        return 0
+    defaults = _load_defaults(addons, folder, archive, expected_sha)
+    previous = {}
+    for name in ('povil-popular-defaults-v1.json', 'povil-new-before-popular-v1.json'):
+        path = os.path.join(folder, name)
+        if os.path.isfile(path):
+            with open(path, encoding='utf8') as handle:
+                previous[name] = json.load(handle)
+    restored, decisions = [], {}
+    with closing(sqlite3.connect(database, timeout=1)) as connection:
+        connection.execute('BEGIN IMMEDIATE')
+        if os.path.isfile(receipt):
+            return 0
+        rows = connection.execute('SELECT ' + FIELDS + ' FROM custom_paths').fetchall()
+        for media in POPULAR:
+            prefix = media + '.widget.'
+            expected = sorted([r for r in defaults if r[0].startswith(prefix)],
+                              key=lambda r: int(r[0].rsplit('.', 1)[1]))
+            decisions[media] = 'preserved'
+            try:
+                current = sorted([r for r in rows if r[0].startswith(prefix)],
+                                 key=lambda r: int(r[0].rsplit('.', 1)[1]))
+            except (ValueError, TypeError):
+                continue
+            if len(expected) != 5 or len(current) != 4:
+                continue
+            routes = [_catalogue_identity(r[1]) for r in expected]
+            catalogues = [i for i, route in enumerate(routes) if route and
+                          route[3:5] in (NEW_RELEASES[media], POPULAR[media])]
+            if catalogues != [1, 2] or not all(routes) or len(set(routes)) != 5:
+                continue
+            identities = [_catalogue_identity(r[1]) for r in current]
+            missing = [i for i, identity in enumerate(routes) if identity not in identities]
+            if len(missing) != 1 or missing[0] not in catalogues:
+                continue
+            remaining = [r for i, r in enumerate(expected) if i != missing[0]]
+            if (identities != [_catalogue_identity(r[1]) for r in remaining] or
+                    any(r[3] != default[3] or 'Stacked' in (r[4] or '')
+                        for r, default in zip(current, remaining))):
+                continue
+            indices = [int(r[0].rsplit('.', 1)[1]) for r in current]
+            if indices != [1, 2, 3, 4] and [r[0] for r in current] != [r[0] for r in remaining]:
+                continue
+            # A successful older repair proves both rows existed. Respect
+            # subsequent removal instead of treating it as a legacy layout.
+            if (media in previous.get('povil-new-before-popular-v1.json', {}).get('aligned', []) or
+                    any(key.startswith(prefix) for key in previous.get(
+                        'povil-popular-defaults-v1.json', {}).get('restored', []))):
+                decisions[media] = 'removed_after_previous_repair'
+                continue
+            payloads = {_catalogue_identity(r[1]): r[1:] for r in current}
+            payloads[routes[missing[0]]] = expected[missing[0]][1:]
+            ordered = list(expected)
+            if routes[1][3:5] == POPULAR[media]:
+                ordered[1], ordered[2] = ordered[2], ordered[1]
+            _restore_legacy_genre_folders(current, userdata)
+            _backup_database(database, os.path.join(folder, 'cpath_cache.before-catalogue-v2.db'))
+            connection.executemany('DELETE FROM custom_paths WHERE cpath_setting=?',
+                                   [(r[0],) for r in current])
+            connection.executemany('INSERT INTO custom_paths VALUES (?,?,?,?,?)',
+                [(prefix + str(i),) + payloads[_catalogue_identity(r[1])]
+                 for i, r in enumerate(ordered, 1)])
+            restored.append(media)
+            decisions[media] = 'restored_pair'
+        connection.commit()
+    _write(receipt, json.dumps({'version': 2, 'restored': restored,
+                               'groups': decisions}).encode('utf8'))
+    return len(restored)
+
+
 def _write(path, payload):
     pending = None
     try:
@@ -336,11 +457,15 @@ def repair(reload_skin=True):
         except Exception as exc:
             xbmc.log('[POV IL] Build shortcut repair deferred: ' + type(exc).__name__, xbmc.LOGWARNING)
         repair_helper(addons)
+        paired = restore_catalogue_pair(addons, userdata)
         restored = restore_popular_defaults(addons, userdata)
         aligned = align_default_order(addons, userdata)
         changed = repair_saved_widgets(addons, userdata)
         if restored:
             xbmc.log('[POV IL] Restored %s missing FENtastic popular default paths' % restored,
+                     xbmc.LOGINFO)
+        if paired:
+            xbmc.log('[POV IL] Restored new/popular pairs in %s legacy FENtastic groups' % paired,
                      xbmc.LOGINFO)
         if changed:
             xbmc.log('[POV IL] Restored %s saved FENtastic widget includes' % changed,
@@ -351,9 +476,9 @@ def repair(reload_skin=True):
         if shortcuts:
             xbmc.log('[POV IL] Restored %s build shortcut folders/rows in active profile' % shortcuts,
                      xbmc.LOGINFO)
-        if (changed or aligned or shortcuts) and reload_skin and xbmc.getSkinDir() == 'skin.fentastic' and not xbmc.Player().isPlayingVideo():
+        if (changed or aligned or shortcuts or paired) and reload_skin and xbmc.getSkinDir() == 'skin.fentastic' and not xbmc.Player().isPlayingVideo():
             xbmc.executebuiltin('ReloadSkin()')
-        return changed or aligned or shortcuts
+        return changed or aligned or shortcuts or paired
     except Exception as exc:
         xbmc.log('[POV IL] FENtastic widget repair deferred: %s' % exc, xbmc.LOGWARNING)
         return 0
@@ -373,7 +498,26 @@ def diagnostics():
             rows = conn.execute('SELECT ' + FIELDS + ' FROM custom_paths').fetchall()
         home_active = xbmc.getCondVisibility('Window.IsActive(home)')
         report = {'home_active': home_active}
+        report['pair_v2'] = os.path.isfile(os.path.join(
+            os.path.dirname(database), 'povil-catalogue-pair-v2.json'))
+        report['layout'] = {}
         for media, route in POPULAR.items():
+            layout = []
+            for row in rows:
+                if not row[0].startswith(media + '.widget.'):
+                    continue
+                slot = row[0].rsplit('.', 1)[1]
+                identity = _path_identity(row[1])
+                role = 'custom'
+                if identity:
+                    if identity[3:5] == NEW_RELEASES[media]:
+                        role = 'new'
+                    elif identity[3:5] == route:
+                        role = 'popular'
+                    elif identity[3] == 'navigator.build_shortcut_folder_list':
+                        role = 'shortcut_folder'
+                layout.append({'slot': int(slot) if slot.isdigit() else None, 'role': role})
+            report['layout'][media] = layout
             saved = [r for r in rows if r[0].startswith(media + '.widget.') and
                      _path_identity(r[1]) and _path_identity(r[1])[3:5] == route]
             summary = {'saved': len(saved), 'generated': 0, 'items': []}
