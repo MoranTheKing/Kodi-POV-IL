@@ -6,6 +6,7 @@ and existing saved paths are preserved. No provider fetch is needed.
 """
 import ast
 from contextlib import closing
+from copy import deepcopy
 import html
 import hashlib
 import json
@@ -30,6 +31,8 @@ NEW = ('            # POV IL: retain rows containing existing XML entities.\n'
 FIELDS = 'cpath_setting, cpath_path, cpath_header, cpath_type, cpath_label'
 POPULAR = {'movie': ('build_movie_list', 'tmdb_movies_popular'),
            'tvshow': ('build_tvshow_list', 'trakt_tv_trending')}
+NEW_RELEASES = {'movie': ('build_movie_list', 'tmdb_movies_latest_releases'),
+                'tvshow': ('build_tvshow_list', 'tmdb_tv_premieres')}
 
 
 def _path_identity(path):
@@ -73,13 +76,8 @@ def _missing_popular(rows, defaults):
     return result
 
 
-def restore_popular_defaults(addons, userdata, archive=None, expected_sha=None):
-    """Migrate missing default DB rows; preserve later deliberate removals."""
-    folder = os.path.join(userdata, 'addon_data', 'script.fentastic.helper')
-    database = os.path.join(folder, 'cpath_cache.db')
-    receipt = os.path.join(folder, 'povil-popular-defaults-v1.json')
-    if os.path.isfile(receipt) or not os.path.isfile(database):
-        return 0
+def _load_defaults(addons, folder, archive=None, expected_sha=None):
+    """Read only integrity-verified shipped widget defaults."""
     if archive is None:
         from resources.libs.profile_store import BOOTSTRAP_SHA256
         expected_sha = BOOTSTRAP_SHA256
@@ -96,25 +94,88 @@ def restore_popular_defaults(addons, userdata, archive=None, expected_sha=None):
             pending = handle.name
             handle.write(payload)
         with closing(sqlite3.connect(pending)) as connection:
-            defaults = connection.execute('SELECT ' + FIELDS + ' FROM custom_paths').fetchall()
-        with closing(sqlite3.connect(database, timeout=1)) as connection:
-            connection.execute('BEGIN IMMEDIATE')
-            rows = connection.execute('SELECT ' + FIELDS + ' FROM custom_paths').fetchall()
-            missing = _missing_popular(rows, defaults)
-            if missing:
-                backup = os.path.join(folder, 'cpath_cache.before-popular-v1.db')
-                if not os.path.isfile(backup):
-                    # A separate reader avoids backup() waiting on our writer.
-                    with closing(sqlite3.connect(database)) as reader:
-                        with closing(sqlite3.connect(backup)) as dest:
-                            reader.backup(dest)
-                connection.executemany('INSERT INTO custom_paths VALUES (?,?,?,?,?)', missing)
-            connection.commit()
-        _write(receipt, json.dumps({'version': 1, 'restored': [r[0] for r in missing]}).encode('utf8'))
-        return len(missing)
+            return connection.execute('SELECT ' + FIELDS + ' FROM custom_paths').fetchall()
     finally:
         if pending and os.path.isfile(pending):
             os.remove(pending)
+
+
+def _backup_database(database, backup):
+    if not os.path.isfile(backup):
+        # A separate reader avoids backup() waiting on our writer.
+        with closing(sqlite3.connect(database)) as reader:
+            with closing(sqlite3.connect(backup)) as dest:
+                reader.backup(dest)
+
+
+def restore_popular_defaults(addons, userdata, archive=None, expected_sha=None):
+    """Migrate missing default DB rows; preserve later deliberate removals."""
+    folder = os.path.join(userdata, 'addon_data', 'script.fentastic.helper')
+    database = os.path.join(folder, 'cpath_cache.db')
+    receipt = os.path.join(folder, 'povil-popular-defaults-v1.json')
+    if os.path.isfile(receipt) or not os.path.isfile(database):
+        return 0
+    defaults = _load_defaults(addons, folder, archive, expected_sha)
+    with closing(sqlite3.connect(database, timeout=1)) as connection:
+        connection.execute('BEGIN IMMEDIATE')
+        rows = connection.execute('SELECT ' + FIELDS + ' FROM custom_paths').fetchall()
+        missing = _missing_popular(rows, defaults)
+        if missing:
+            _backup_database(database, os.path.join(folder, 'cpath_cache.before-popular-v1.db'))
+            connection.executemany('INSERT INTO custom_paths VALUES (?,?,?,?,?)', missing)
+        connection.commit()
+    _write(receipt, json.dumps({'version': 1, 'restored': [r[0] for r in missing]}).encode('utf8'))
+    return len(missing)
+
+
+def align_default_order(addons, userdata, archive=None, expected_sha=None):
+    """Once per profile, place new before popular in recognizable build groups.
+
+    Store the change in the helper's database so its regeneration and profile
+    switches retain the order. Custom/moved/filtered groups are left intact.
+    """
+    folder = os.path.join(userdata, 'addon_data', 'script.fentastic.helper')
+    database = os.path.join(folder, 'cpath_cache.db')
+    receipt = os.path.join(folder, 'povil-new-before-popular-v1.json')
+    if os.path.isfile(receipt) or not os.path.isfile(database):
+        return 0
+    defaults = _load_defaults(addons, folder, archive, expected_sha)
+    aligned = []
+    with closing(sqlite3.connect(database, timeout=1)) as connection:
+        connection.execute('BEGIN IMMEDIATE')
+        if os.path.isfile(receipt):
+            return 0  # Another interpreter completed the migration while waiting.
+        rows = connection.execute('SELECT ' + FIELDS + ' FROM custom_paths').fetchall()
+        for media in POPULAR:
+            expected = {r[0]: r for r in defaults if r[0].startswith(media + '.widget.')}
+            current = {r[0]: r for r in rows if r[0].startswith(media + '.widget.')}
+            if not current or any(key not in expected or
+                    _path_identity(row[1]) != _path_identity(expected[key][1])
+                    for key, row in current.items()):
+                continue
+            pair = []
+            for route in (POPULAR[media], NEW_RELEASES[media]):
+                matches = [r for r in expected.values() if _path_identity(r[1]) and
+                           _path_identity(r[1])[3:5] == route]
+                if len(matches) != 1 or matches[0][0] not in current:
+                    break
+                pair.append(current[matches[0][0]])
+            if len(pair) != 2:
+                continue
+            popular, new = pair
+            if (int(new[0].rsplit('.', 1)[1]) != int(popular[0].rsplit('.', 1)[1]) + 1 or
+                    any('Stacked' in (r[4] or '') or not (r[3] or '').startswith('WidgetList')
+                        for r in pair)):
+                continue
+            _backup_database(database, os.path.join(folder, 'cpath_cache.before-order-v1.db'))
+            # Swap payloads, not unique keys; keep headers, styles and labels.
+            connection.executemany('UPDATE custom_paths SET cpath_path=?, cpath_header=?, '
+                'cpath_type=?, cpath_label=? WHERE cpath_setting=?',
+                [new[1:] + (popular[0],), popular[1:] + (new[0],)])
+            aligned.append(media)
+        connection.commit()
+    _write(receipt, json.dumps({'version': 1, 'aligned': aligned}).encode('utf8'))
+    return len(aligned)
 
 
 def _write(path, payload):
@@ -214,6 +275,7 @@ def repair_saved_widgets(addons, userdata):
             root = ET.Element('includes')
             group = ET.SubElement(root, 'include', {'name': include_name})
         changed = False
+        originals = list(group.findall('include'))
         for index, url, header, kind, stacked in sorted(saved):
             list_id = base + index
             expected = [_block('WidgetListCategoryStacked' if stacked else kind,
@@ -233,10 +295,15 @@ def repair_saved_widgets(addons, userdata):
                 if old is not None and old.get('content') == node.get('content') and all(
                         _params(old).get(k) == v for k, v in params.items()):
                     continue
-                if old is not None:
-                    for extra in old.findall('param'):
+                # A one-time DB reorder moves row options with their route.
+                matches = [n for n in originals if n.get('content') == node.get('content') and
+                    _path_identity(_params(n).get('content_path')) == _path_identity(params['content_path'])]
+                options = matches[0] if len(matches) == 1 else old
+                if options is not None:
+                    for extra in options.findall('param'):
                         if extra.get('name') not in params:
-                            node.append(extra)  # Preserve limit/sort/custom options.
+                            node.append(deepcopy(extra))  # Preserve limit/sort/custom options.
+                if old is not None:
                     position = list(group).index(old)
                     group.remove(old)
                 else:
@@ -264,6 +331,7 @@ def repair(reload_skin=True):
         userdata = xbmcvfs.translatePath('special://profile/')
         repair_helper(addons)
         restored = restore_popular_defaults(addons, userdata)
+        aligned = align_default_order(addons, userdata)
         changed = repair_saved_widgets(addons, userdata)
         if restored:
             xbmc.log('[POV IL] Restored %s missing FENtastic popular default paths' % restored,
@@ -271,9 +339,12 @@ def repair(reload_skin=True):
         if changed:
             xbmc.log('[POV IL] Restored %s saved FENtastic widget includes' % changed,
                      xbmc.LOGINFO)
-            if reload_skin and xbmc.getSkinDir() == 'skin.fentastic' and not xbmc.Player().isPlayingVideo():
-                xbmc.executebuiltin('ReloadSkin()')
-        return changed
+        if aligned:
+            xbmc.log('[POV IL] Aligned %s FENtastic groups: new before popular' % aligned,
+                     xbmc.LOGINFO)
+        if (changed or aligned) and reload_skin and xbmc.getSkinDir() == 'skin.fentastic' and not xbmc.Player().isPlayingVideo():
+            xbmc.executebuiltin('ReloadSkin()')
+        return changed or aligned
     except Exception as exc:
         xbmc.log('[POV IL] FENtastic widget repair deferred: %s' % exc, xbmc.LOGWARNING)
         return 0
