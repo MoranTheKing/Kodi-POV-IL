@@ -1,5 +1,6 @@
 """A saved widget must survive regeneration and an addon replacement."""
 import ast
+import hashlib
 from contextlib import closing
 import importlib.util
 import sqlite3
@@ -7,6 +8,7 @@ import tempfile
 import types
 import unittest
 import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -121,6 +123,87 @@ class WidgetRecoveryTests(unittest.TestCase):
         self.assertEqual(widgets._params(node)['content_path'],'plugin://test/?a=1&b=2')
         self.assertEqual(widgets._params(node)['widget_header'],'A & "B"')
         self.assertFalse(widgets.repair_helper(str(self.addons)))
+
+
+class PopularDefaultsTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
+        root = Path(self.temp.name)
+        self.addons = root/'addons'; self.userdata = root/'userdata'
+        self.db = self.userdata/'addon_data/script.fentastic.helper/cpath_cache.db'
+        self.db.parent.mkdir(parents=True)
+        self.defaults = []
+        for media, actions in (('movie', ('new', 'tmdb_movies_popular', 'networks')),
+                               ('tvshow', ('new', 'trakt_tv_trending', 'networks'))):
+            for index, action in enumerate(actions, 1):
+                mode = 'build_movie_list' if media == 'movie' else 'build_tvshow_list'
+                self.defaults.append((media+'.widget.'+str(index),
+                    'plugin://plugin.video.pov/?mode='+mode+'&action='+action,
+                    'Popular' if index == 2 else action, 'WidgetListBigPoster', 'BigPoster'))
+        seed = root/'seed.db'
+        self.write_database(seed, self.defaults)
+        self.archive = root/'defaults.zip'
+        with zipfile.ZipFile(self.archive, 'w') as z:
+            z.writestr('addon_data/script.fentastic.helper/cpath_cache.db', seed.read_bytes())
+        self.digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+
+    def write_database(self, path, rows):
+        with closing(sqlite3.connect(path)) as conn:
+            conn.execute('CREATE TABLE IF NOT EXISTS custom_paths (cpath_setting text unique, '
+                         'cpath_path text, cpath_header text, cpath_type text, cpath_label text)')
+            conn.execute('DELETE FROM custom_paths')
+            conn.executemany('INSERT INTO custom_paths VALUES (?,?,?,?,?)', rows);conn.commit()
+
+    def repair(self, digest=None):
+        return widgets.restore_popular_defaults(str(self.addons), str(self.userdata),
+            str(self.archive), digest or self.digest)
+
+    def rows(self):
+        with closing(sqlite3.connect(self.db)) as conn:
+            return conn.execute('SELECT '+widgets.FIELDS+' FROM custom_paths ORDER BY cpath_setting').fetchall()
+
+    def test_missing_movie_and_tv_defaults_restored_once_with_original_backup(self):
+        existing = [r for r in self.defaults if not r[0].endswith('.2')]
+        self.write_database(self.db, existing)
+        self.assertEqual(self.repair(), 2)
+        self.assertEqual(self.rows(), sorted(self.defaults))
+        with closing(sqlite3.connect(self.db.with_name('cpath_cache.before-popular-v1.db'))) as conn:
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM custom_paths').fetchone()[0], 4)
+        before = self.db.read_bytes()
+        self.assertEqual(self.repair(), 0); self.assertEqual(self.db.read_bytes(), before)
+        # A user may remove these rows after the migration without resurrection.
+        self.write_database(self.db, existing)
+        self.assertEqual(self.repair(), 0); self.assertEqual(self.rows(), sorted(existing))
+
+    def test_empty_and_custom_layouts_preserved(self):
+        for rows in ([], [('movie.widget.1', 'plugin://other/custom', 'Mine', 'WidgetListPoster', '')]):
+            self.write_database(self.db, rows)
+            self.assertEqual(self.repair(), 0);self.assertEqual(self.rows(), rows)
+
+    def test_existing_custom_or_moved_popular_slot_not_overwritten(self):
+        for scenario in ('custom', 'moved'):
+            receipt=self.db.with_name('povil-popular-defaults-v1.json')
+            if receipt.exists(): receipt.unlink()
+            rows=list(self.defaults)
+            if scenario == 'custom':
+                rows[1]=('movie.widget.2', 'plugin://other/custom', 'Mine', 'WidgetListPoster', '')
+            else:
+                rows[1]=('movie.widget.8',)+rows[1][1:]
+            self.write_database(self.db, rows)
+            self.assertEqual(self.repair(), 0);self.assertEqual(self.rows(), sorted(rows))
+
+    def test_changed_filter_is_a_custom_route_and_prevents_reseeding(self):
+        rows=[r for r in self.defaults if r[0].startswith('movie') and not r[0].endswith('.2')]
+        rows[0]=(rows[0][0], rows[0][1]+'&genre=family')+rows[0][2:]
+        self.write_database(self.db, rows)
+        self.assertEqual(self.repair(),0);self.assertEqual(self.rows(),sorted(rows))
+
+    def test_failed_integrity_check_does_not_modify_database_or_create_receipt(self):
+        self.write_database(self.db, self.defaults)
+        before=self.db.read_bytes()
+        with self.assertRaises(ValueError): self.repair('0'*64)
+        self.assertEqual(self.db.read_bytes(),before)
+        self.assertFalse(self.db.with_name('povil-popular-defaults-v1.json').exists())
 
 
 class BuildIdentityTests(unittest.TestCase):

@@ -164,6 +164,11 @@ def grab_log(file=False, old=False, wizard=False):
 
 
 def upload_log():
+    try:
+        from resources.libs import fentastic_widgets
+        fentastic_widgets.diagnostics()
+    except Exception:
+        pass
     files = get_files()
     for item in files:
         filetype = item[0]
