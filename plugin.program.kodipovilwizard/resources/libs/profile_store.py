@@ -20,11 +20,15 @@ WIZARD = 'plugin.program.kodipovilwizard'
 
 
 def _shortcut_items(value):
-    try:
-        result = json.loads(value)
-    except (ValueError, TypeError):
-        result = ast.literal_eval(value)
-    return result if isinstance(result, list) and all(isinstance(i, dict) for i in result) else None
+    # Shipped/POV rows use Python literals. On embedded Kodi, JSONDecodeError
+    # can itself fail after unloading another profile's interpreter.
+    for parser in (ast.literal_eval, json.loads):
+        try:
+            result = parser(value)
+        except (ValueError, TypeError, SyntaxError, NameError):
+            continue
+        return result if isinstance(result, list) and all(isinstance(i, dict) for i in result) else None
+    return None
 
 
 def _seed_shortcuts(profile, source):
