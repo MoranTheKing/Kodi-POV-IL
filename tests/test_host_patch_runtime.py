@@ -39,7 +39,8 @@ class HostPatchRuntimeTests(unittest.TestCase):
         window = types.SimpleNamespace(getProperty=lambda key:props.get(key, ''),
             setProperty=lambda key,value:props.__setitem__(key,value),
             clearProperty=lambda key:props.pop(key,None))
-        monitor = types.SimpleNamespace(waitForAbort=Mock(side_effect=[False]*6+[True]))
+        monitor = types.SimpleNamespace(waitForAbort=Mock(side_effect=[False]*6+[True]),
+                                        abortRequested=lambda:False)
         old = (('plugin.video.pov',1,1),('plugin.video.umbrella',None,None))
         new = (('plugin.video.pov',2,1),('plugin.video.umbrella',None,None))
         self.xbmc.Monitor=lambda:monitor
@@ -51,6 +52,31 @@ class HostPatchRuntimeTests(unittest.TestCase):
             watch.run()
         self.assertEqual(repair.call_count,2)
         self.assertEqual(props,{})
+
+    def test_profile_watch_unload_never_reads_gui_lock_and_cannot_block_another_profile(self):
+        watch = load('watch_unload_test', LIBS / 'host_patch_watch.py')
+        props={};state={'aborted':False};queued=[]
+        def read(key):
+            self.assertFalse(state['aborted'],'GUI getter reached during native interpreter unload')
+            return props.get(key,'')
+        window=types.SimpleNamespace(getProperty=read,
+            setProperty=lambda key,value:props.__setitem__(key,value),
+            clearProperty=lambda key:self.fail('Synchronous GUI cleanup'))
+        def wait(delay):
+            state['aborted']=True
+            return True
+        self.xbmc.Monitor=lambda:types.SimpleNamespace(waitForAbort=wait,abortRequested=lambda:state['aborted'])
+        self.xbmc.executebuiltin=lambda action:queued.append(action)
+        with patch.dict(sys.modules,{'xbmcgui':types.SimpleNamespace(Window=lambda n:window)}), \
+             patch.object(watch,'signature',return_value=()):
+            for profile in ('master','secondary'):
+                state['aborted']=False
+                self.vfs.translatePath=lambda path:profile if path=='special://profile/' else 'addons'
+                watch.run()
+        self.assertEqual(len(props),2)  # queued cleanup has not run; neither profile is blocked
+        self.assertEqual(len(queued),2)
+        self.assertNotEqual(queued[0],queued[1])
+        self.assertTrue(all(a.startswith('ClearProperty(kodipovil.host_patch_watch.v2.') for a in queued))
 
     def test_update_watch_requires_umbrella_ack_and_rejects_timeout(self):
         watch = load('watch_ack_test', LIBS / 'host_patch_watch.py')
