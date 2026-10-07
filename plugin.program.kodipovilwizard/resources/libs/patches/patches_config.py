@@ -983,6 +983,44 @@ PATCH_CONFIG = [
         )
     },
     {
+        "id": "pov_shared_http_tmdb",
+        "name": "Defer verified shared HTTP clients (TMDB)",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/tmdb_api.py",
+        "marker": "# WIZARD_POV_SHARED_HTTP_TMDB_v1",
+        "anchor": "from session import session, HTTPAdapter, Retry",
+        "alternatives": [{"anchor": "import requests", "superseded": True}],
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs, xbmcaddon\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "sys.path.append(p) if p not in sys.path else None\n"
+            "import pov_http_session\n"
+            "pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/session.py'), "
+            "xbmcaddon.Addon('plugin.video.pov').getAddonInfo('version'))\n"
+        )
+    },
+    {
+        "id": "pov_shared_http_trakt",
+        "name": "Defer verified shared HTTP clients (Trakt)",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/trakt_api.py",
+        "marker": "# WIZARD_POV_SHARED_HTTP_TRAKT_v1",
+        "anchor": "from session import session, HTTPAdapter, Retry",
+        "alternatives": [{"anchor": "import requests", "superseded": True}],
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs, xbmcaddon\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "sys.path.append(p) if p not in sys.path else None\n"
+            "import pov_http_session\n"
+            "pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/session.py'), "
+            "xbmcaddon.Addon('plugin.video.pov').getAddonInfo('version'))\n"
+        )
+    },
+    {
         "id": "pov_http_lazy_tmdb",
         "name": "TMDb HTTP Lazy Import",
         "description": "Defers requests module initialization on cold boot to speed up widgets.",
