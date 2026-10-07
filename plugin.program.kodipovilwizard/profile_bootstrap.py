@@ -6,10 +6,17 @@ service; the departing profile's Python invocation never owns initialization.
 import json
 import os
 import xbmc
+import xbmcgui
 import xbmcvfs
 
 
 def resume():
+    # A Home onload runs before Kodi's skin retention dialog. Reloading here
+    # closes that dialog and silently reverts the user's requested skin.
+    # The switch owner initializes this same layout after native confirmation.
+    if (xbmcgui.Window(10000).getProperty('POVIL.RequestedSkin') or
+            xbmcgui.getCurrentWindowDialogId() == 10100):
+        return False
     master = os.path.realpath(xbmcvfs.translatePath('special://masterprofile/'))
     active = os.path.realpath(xbmcvfs.translatePath('special://profile/'))
     if not os.path.isfile(os.path.join(master, 'kodipovil.provisioned')):

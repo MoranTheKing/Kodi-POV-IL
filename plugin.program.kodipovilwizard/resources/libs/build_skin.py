@@ -51,13 +51,32 @@ def enable_skin(ident, visiting=None):
 
 
 def confirm_requested_skin(target):
-    """Accept only the retention question for the explicitly requested skin."""
-    if (xbmc.getSkinDir() != target or
+    """Accept the exact native retention question only during our own request."""
+    if target not in SKINS:
+        return False
+    home = xbmcgui.Window(10000)
+    if (home.getProperty('POVIL.RequestedSkin') != target or
+            home.getProperty('POVIL.SkinConfirmed') == target or
+            xbmcgui.getCurrentWindowDialogId() != 10100 or
             not xbmc.getCondVisibility('Window.IsVisible(yesnodialog)')):
         return False
-    if (xbmc.getInfoLabel('Control.GetLabel(1)') != xbmc.getLocalizedString(13123) or
-            xbmc.getInfoLabel('Control.GetLabel(9)') != xbmc.getLocalizedString(13111)):
+    try:
+        # Kodi's label wrapper returns its Python-side strText, which is empty
+        # for native headings. The textbox API reads the real text under the
+        # native GUI lock. Discard wrappers before clicking/unloading anything.
+        dialog = xbmcgui.Window(10100)
+        control = dialog.getControl(9)
+        body = control.getText()
+        del control, dialog
+    except (RuntimeError, AttributeError):
         return False
+    if body != xbmc.getLocalizedString(13111):
+        return False
+    if (xbmcgui.getCurrentWindowDialogId() != 10100 or
+            home.getProperty('POVIL.RequestedSkin') != target or
+            home.getProperty('POVIL.SkinConfirmed') == target):
+        return False
+    home.setProperty('POVIL.SkinConfirmed', target)
     xbmc.executebuiltin('SendClick(10100,11)')
     return True
 
@@ -89,6 +108,9 @@ def activate(target):
             # disabled skin, even if settings still name the desired skin.
             if rpc('Settings.SetSettingValue', dict(setting='lookandfeel.skin', value=xbmc.getSkinDir())) is not True:
                 return False
+        home = xbmcgui.Window(10000)
+        home.clearProperty('POVIL.SkinConfirmed')
+        home.setProperty('POVIL.RequestedSkin', target)
         finished = threading.Event()
         def observe():
             for _ in range(100):
@@ -102,13 +124,23 @@ def activate(target):
         try:
             if rpc('Settings.SetSettingValue', dict(setting='lookandfeel.skin', value=target)) is not True:
                 return False
-            for _ in range(12):
-                if monitor.waitForAbort(1):
+            # JSON-RPC updates the setting before the GUI processes ReloadSkin.
+            # Keep the scoped request alive until the native window acknowledges
+            # and closes its exact retention question, then verify the result.
+            for _ in range(100):
+                if monitor.waitForAbort(0.2):
                     return False
                 confirm_requested_skin(target)
+                if (home.getProperty('POVIL.SkinConfirmed') == target and xbmc.getSkinDir() == target
+                        and not xbmc.getCondVisibility('Window.IsVisible(yesnodialog)')):
+                    break
+            else:
+                return False
         finally:
             finished.set()
             observer.join(1)
+            home.clearProperty('POVIL.RequestedSkin')
+            home.clearProperty('POVIL.SkinConfirmed')
     return xbmc.getSkinDir() == target and persist_live_settings()
 
 

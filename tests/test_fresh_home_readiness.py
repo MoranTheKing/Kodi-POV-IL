@@ -85,20 +85,25 @@ class FreshHomeReadinessTests(unittest.TestCase):
             self.assertEqual(calls, [])
             self.assertFalse(Path(raw, 'kodipovil.fresh_profile_reload').exists())
 
-    def test_exact_skin_question_uses_native_heading(self):
-        sent = []
-        # Native controls expose no heading through the Python wrapper's label.
-        xbmc = types.SimpleNamespace(getSkinDir=lambda: 'skin.povil.nox',
-            getCondVisibility=lambda _c: True, getInfoLabel=lambda key:
-                'Keep this skin?' if key == 'Control.GetLabel(9)' else 'Skin',
-            getLocalizedString=lambda i: {13123: 'Skin', 13111: 'Keep this skin?'}[i],
-            executebuiltin=sent.append)
-        textbox = types.SimpleNamespace(getText=lambda: 'Keep this skin?', getLabel=lambda: '')
-        gui = types.SimpleNamespace(Window=lambda _id: types.SimpleNamespace(getControl=lambda _id: textbox))
-        fn = _load_function(SKIN, 'confirm_requested_skin', {'xbmc': xbmc})
-        self.assertTrue(fn('skin.povil.nox')); self.assertEqual(sent, ['SendClick(10100,11)'])
-        xbmc.getInfoLabel = lambda _c: 'Security warning'
-        self.assertFalse(fn('skin.povil.nox')); self.assertEqual(len(sent), 1)
+    def test_exact_native_textbox_and_scoped_request_are_required(self):
+        properties = {'POVIL.RequestedSkin': 'skin.estuary'}
+        body = ['Keep this skin?']; clicks = []; dialogid = [10100]
+        home = types.SimpleNamespace(getProperty=lambda key: properties.get(key, ''),
+            setProperty=properties.__setitem__)
+        native = types.SimpleNamespace(getControl=lambda _: types.SimpleNamespace(getText=lambda: body[0]))
+        gui = types.SimpleNamespace(Window=lambda ident: home if ident == 10000 else native,
+            getCurrentWindowDialogId=lambda: dialogid[0])
+        kodi = types.SimpleNamespace(getSkinDir=lambda: 'skin.estuary', getCondVisibility=lambda _: True,
+            getLocalizedString=lambda _: 'Keep this skin?', executebuiltin=clicks.append)
+        fn = _load_function(SKIN, 'confirm_requested_skin',
+            dict(xbmcgui=gui, xbmc=kodi, SKINS=('skin.estuary','skin.povil.nox')))
+        self.assertTrue(fn('skin.estuary'))
+        self.assertEqual(clicks, ['SendClick(10100,11)'])
+        self.assertFalse(fn('skin.povil.nox'))
+        body[0] = 'Allow unknown sources?';self.assertFalse(fn('skin.estuary'))
+        body[0] = 'Keep this skin?';dialogid[0] = 10101;self.assertFalse(fn('skin.estuary'))
+        dialogid[0] = 10100;properties.clear();self.assertFalse(fn('skin.estuary'))
+        self.assertEqual(len(clicks),1)
 
     def test_live_defaults_are_typed_and_skin_is_last(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -123,20 +128,21 @@ class FreshHomeReadinessTests(unittest.TestCase):
             xbmc = types.SimpleNamespace(
                 Monitor=lambda: types.SimpleNamespace(abortRequested=lambda: False,
                     waitForAbort=lambda seconds: waits.append(seconds) or False),
-                getSkinDir=lambda: skin[0], getCondVisibility=lambda _cond: True)
+                getSkinDir=lambda: skin[0], getCondVisibility=lambda _cond: _cond != 'Window.IsVisible(yesnodialog)')
             fn = _load_function(FRESH, 'apply_live_defaults', {
                 'ET': ET, 'os': os, 're': re, 'threading': threading, 'CONFIG': types.SimpleNamespace(USERDATA=raw),
                 'xbmc': xbmc, '_rpc': rpc, '_accept_initial_skin_confirmation': lambda: False})
             activate = _load_function(SKIN, 'activate', {'SKINS': ('skin.povil.nox',),
                 'enable_skin': lambda _target: True, 'xbmc': xbmc, 'rpc': rpc,
                 'threading': threading, 'confirm_requested_skin': lambda _target: False,
-                'persist_live_settings': lambda: True})
+                'persist_live_settings': lambda: True, 'prepare_skin_confirmation': lambda _: True,
+                'xbmcgui': types.SimpleNamespace(Window=lambda _: types.SimpleNamespace(getProperty=lambda _: 'skin.povil.nox', setProperty=lambda *a:None, clearProperty=lambda *a:None))})
             with patch.dict('sys.modules', skin_modules(activate)):
                 self.assertTrue(fn())
             self.assertEqual(calls[-1], {'setting': 'lookandfeel.skin', 'value': 'skin.povil.nox'})
             self.assertIs(calls[1]['value'], False)
             self.assertEqual(calls[2]['value'], ['English', 'Hebrew'])
-            self.assertGreater(sum(waits), 10)
+            self.assertLess(sum(waits), 10)  # no polling native dialog controls
             xbmc.getSkinDir = lambda: 'skin.estuary'
             with patch.dict('sys.modules', skin_modules(activate)):
                 self.assertFalse(fn(), 'RPC success cannot certify a reverted skin')
