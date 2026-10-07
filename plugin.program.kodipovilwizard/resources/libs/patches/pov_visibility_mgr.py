@@ -80,7 +80,7 @@ _SOURCES = (
 	}),
 )
 
-_WIN_PROP = 'WIZARD.VisibilityMgr.v3'
+_WIN_PROP = 'WIZARD.VisibilityMgr.v4'
 _L1_TTL = 10.0          # seconds a process trusts its own snapshot
 _L2_TTL_NOFP = 60.0     # seconds L2 is trusted when no settings.xml can be stat()ed
 _mem = {}
@@ -189,6 +189,13 @@ def _fingerprint():
 	return '' if all(p == '-' for p in parts) else '|'.join(parts)
 
 
+def _profile_key():
+	try:
+		return os.path.normcase(os.path.realpath(xbmcvfs.translatePath('special://profile/')))
+	except Exception:
+		return ''
+
+
 def _read_states():
 	"""One Addon() instantiation per source add-on. Never called per item."""
 	states = {
@@ -225,8 +232,9 @@ def _is_fresh(cached, fp, now):
 
 def _snapshot():
 	now = time.time()
+	profile = _profile_key()
 	mem = _mem.get('snap')
-	if mem and (now - mem['checked']) < _L1_TTL:
+	if mem and mem.get('profile') == profile and (now - mem['checked']) < _L1_TTL:
 		return mem
 	fp = _fingerprint()
 	win = _home()
@@ -237,7 +245,7 @@ def _snapshot():
 		try:
 			raw = win.getProperty(_WIN_PROP)
 			cached = json.loads(raw) if raw else None
-			if cached:
+			if cached and cached.get('profile') == profile:
 				old_svc = cached.get('svc')
 				if _is_fresh(cached, fp, now):
 					snap = cached
@@ -245,7 +253,7 @@ def _snapshot():
 			snap = None
 	if snap is None:
 		new_svc = _read_states()
-		snap = {'fp': fp, 'ts': now, 'svc': new_svc}
+		snap = {'fp': fp, 'ts': now, 'svc': new_svc, 'profile': profile}
 		_log('state rebuilt: %s' % (snap['svc'],), getattr(xbmc, 'LOGINFO', None))
 		if win is not None:
 			try:
