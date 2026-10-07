@@ -4,6 +4,7 @@ import xbmcgui
 import json
 
 from resources.libs.common.config import CONFIG
+from resources.libs import youtube_platform
 from resources.libs.common import logging
 from resources.libs.common import tools
 # Download/extraction and config modules are imported at their call sites.
@@ -637,7 +638,7 @@ class ModularUpdater:
         # 2. Third-party CONTENT addons (provisioned via native InstallAddon).
         #    post_install_provisioning is idempotent -- present addons are
         #    skipped -- so this re-attempts ONLY what is genuinely missing.
-        missing_provision = [a for a in self.PROVISION_IDS
+        missing_provision = [a for a in youtube_platform.eligible(self.PROVISION_IDS)
                              if not xbmc.getCondVisibility('System.HasAddon({0})'.format(a))]
         if missing_provision:
             logging.log("[OTA-Heal] Missing content addons -> provisioning: {0}".format(
@@ -708,6 +709,7 @@ class ModularUpdater:
             """
         import xbmc
         provision_ids = list(ids) if ids is not None else list(self.PROVISION_IDS)
+        provision_ids = youtube_platform.eligible(provision_ids)
 
         logging.log("[Provisioning] HEADLESS provisioning of {0} addons".format(
             len(provision_ids)), level=xbmc.LOGINFO)
@@ -783,6 +785,9 @@ class ModularUpdater:
         import xbmc
         import xbmcgui
         monitor = xbmc.Monitor()
+        ids = youtube_platform.eligible(ids)
+        if not ids:
+            return
 
         # Make sure repo indexes are fresh so InstallAddon can find the addons.
         try:
@@ -881,7 +886,7 @@ class ModularUpdater:
                     self._version_tuple(actual) < self._version_tuple(expected)):
                 missing.append('{0} ({1}, expected {2})'.format(
                     addon_id, actual or 'missing', expected or 'unspecified'))
-        for addon_id in self.CORE_PROVISION_IDS + ('skin.povil.nox', 'script.fentastic.helper'):
+        for addon_id in youtube_platform.eligible(self.CORE_PROVISION_IDS) + ['skin.povil.nox', 'script.fentastic.helper']:
             try:
                 enabled = xbmc.getCondVisibility(
                     'System.HasAddon({0})'.format(addon_id))
@@ -919,7 +924,7 @@ class ModularUpdater:
             try:
                 from resources.libs.headless_installer import HeadlessInstaller
                 result['jobs'] = HeadlessInstaller().resolve_and_prepare(
-                    tuple(self.PROVISION_IDS))
+                    tuple(youtube_platform.eligible(self.PROVISION_IDS)))
             except Exception as error:
                 result['error'] = error
 
@@ -1196,7 +1201,7 @@ class ModularUpdater:
         # addons were previously omitted from native fallback because only
         # resolution failures populated this list.
         if fresh:
-            for addon_id in self.CORE_PROVISION_IDS:
+            for addon_id in youtube_platform.eligible(self.CORE_PROVISION_IDS):
                 if (addon_id not in extracted_addons and
                         addon_id not in self._missing_native and
                         not xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id))):
@@ -1243,7 +1248,7 @@ class ModularUpdater:
             for _ in range(20):
                 if self._fresh_install_complete(manifest):
                     break
-                for addon_id in self.CORE_PROVISION_IDS + ('skin.povil.nox', 'script.fentastic.helper'):
+                for addon_id in youtube_platform.eligible(self.CORE_PROVISION_IDS) + ['skin.povil.nox', 'script.fentastic.helper']:
                     if not xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
                         self._enable_addon(addon_id)
                 if monitor.waitForAbort(1):

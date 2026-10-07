@@ -74,13 +74,22 @@ class AccountInheritanceTests(unittest.TestCase):
 
 
 class RetentionTests(unittest.TestCase):
-    def test_only_requested_skin_and_exact_retention_dialog_are_accepted(self):
-        current = ['skin.estuary']; visible = [True]; labels = ['Skin', 'Keep this skin?']; clicks = []
-        kodi = types.SimpleNamespace(getSkinDir=lambda: current[0], getCondVisibility=lambda _: visible[0],
-            getLocalizedString=lambda key: 'Skin' if key == 13123 else 'Keep this skin?',
-            getInfoLabel=lambda key: labels[0] if key.endswith('(1)') else labels[1], executebuiltin=clicks.append)
-        fn = _load_function(LIBS / 'build_skin.py', 'confirm_requested_skin', dict(xbmc=kodi))
+    def test_exact_native_textbox_and_scoped_request_are_required(self):
+        properties = {'POVIL.RequestedSkin': 'skin.estuary'}
+        body = ['Keep this skin?']; clicks = []; dialogid = [10100]
+        home = types.SimpleNamespace(getProperty=lambda key: properties.get(key, ''),
+            setProperty=properties.__setitem__)
+        native = types.SimpleNamespace(getControl=lambda _: types.SimpleNamespace(getText=lambda: body[0]))
+        gui = types.SimpleNamespace(Window=lambda ident: home if ident == 10000 else native,
+            getCurrentWindowDialogId=lambda: dialogid[0])
+        kodi = types.SimpleNamespace(getSkinDir=lambda: 'skin.estuary', getCondVisibility=lambda _: True,
+            getLocalizedString=lambda _: 'Keep this skin?', executebuiltin=clicks.append)
+        fn = _load_function(LIBS / 'build_skin.py', 'confirm_requested_skin',
+            dict(xbmcgui=gui, xbmc=kodi, SKINS=('skin.estuary','skin.povil.nox')))
         self.assertTrue(fn('skin.estuary'))
-        current[0] = 'skin.povil.nox'; self.assertFalse(fn('skin.estuary'))
-        current[0] = 'skin.estuary'; labels[1] = 'Allow unknown sources?'; self.assertFalse(fn('skin.estuary'))
         self.assertEqual(clicks, ['SendClick(10100,11)'])
+        self.assertFalse(fn('skin.povil.nox'))
+        body[0] = 'Allow unknown sources?';self.assertFalse(fn('skin.estuary'))
+        body[0] = 'Keep this skin?';dialogid[0] = 10101;self.assertFalse(fn('skin.estuary'))
+        dialogid[0] = 10100;properties.clear();self.assertFalse(fn('skin.estuary'))
+        self.assertEqual(len(clicks),1)

@@ -24,6 +24,7 @@ def _load_function(path, name, globals_dict, class_name=None):
     fn = next(n for n in nodes if isinstance(n, ast.FunctionDef) and n.name == name)
     module = ast.fix_missing_locations(ast.Module(body=[fn], type_ignores=[]))
     namespace = dict(globals_dict)
+    namespace.setdefault("youtube_platform", types.SimpleNamespace(eligible=list))
     exec(compile(module, str(path), 'exec'), namespace)
     return namespace[name]
 

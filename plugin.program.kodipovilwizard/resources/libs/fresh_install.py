@@ -10,6 +10,7 @@ import xbmc
 import xbmcgui
 import xbmcvfs
 from resources.libs.common.config import CONFIG
+from resources.libs import youtube_platform
 from resources.libs.common import logging, tools
 
 PENDING = 'kodipovil.modular_install_started'
@@ -204,7 +205,7 @@ def finalize():
     from resources.libs import db
     if not ModularUpdater.is_provisioned():
         return False
-    required = ModularUpdater.CORE_PROVISION_IDS + (
+    required = tuple(youtube_platform.eligible(ModularUpdater.CORE_PROVISION_IDS)) + (
         'skin.povil.nox', 'script.fentastic.helper',
         'plugin.program.orderfavourites-hebrew', 'service.subtitles.kodipovilai')
     from resources.libs.build_profiles import addon_enabled
