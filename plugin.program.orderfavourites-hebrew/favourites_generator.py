@@ -22,6 +22,9 @@ import json
 import os
 import re
 import tempfile
+import sqlite3
+import uuid
+from contextlib import closing, contextmanager
 from urllib.parse import parse_qsl, urlsplit
 from xml.etree import ElementTree as ET
 
@@ -34,6 +37,11 @@ try:
     import xbmc
 except Exception:
     xbmc = None
+
+try:
+    import xbmcgui
+except Exception:
+    xbmcgui = None
 
 
 FAVOURITES_PATH = 'special://profile/favourites.xml'
@@ -219,7 +227,7 @@ def _save_state(baseline, deleted):
         os.makedirs(folder, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix='.favourites-', dir=folder)
         with os.fdopen(fd, 'w', encoding='utf-8') as fh:
-            json.dump({'version': 1, 'layout_version': 2, 'baseline': baseline,
+            json.dump({'version': 1, 'layout_version': 3, 'baseline': baseline,
                        'deleted': sorted(deleted)}, fh, ensure_ascii=False)
         os.replace(tmp, path)
         return True
@@ -355,9 +363,9 @@ def _merge_favourites(existing, previous, desired, deleted, repair_tail=False):
         _, old_by_name = _parse_favourites(previous, 'previous default')
     deleted = set(deleted)
     for name in old_by_name:
-        if name not in user_by_name:
+        if name not in user_by_name and name in desired_by_name:
             deleted.add(name)
-        else:
+        elif name in user_by_name:
             deleted.discard(name)
     for item in list(user_root):
         name = item.get('name')
@@ -427,7 +435,40 @@ def _write_favourites(text):
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+@contextmanager
+def _refresh_lock():
+    """Serialize the XML and baseline pair across Kodi script interpreters."""
+    path = _state_file()
+    if not path:
+        raise OSError('Favourites state path unavailable')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    window = None
+    token = uuid.uuid4().hex
+    with closing(sqlite3.connect(path + '.lock.db', timeout=3)) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        try:
+            if xbmcgui is not None:
+                window = xbmcgui.Window(10000)
+                window.setProperty('POVIL.FavouritesRefresh', token)
+            yield
+        finally:
+            if window is not None and window.getProperty('POVIL.FavouritesRefresh') == token:
+                window.clearProperty('POVIL.FavouritesRefresh')
+            conn.rollback()
+
+
 def generate_favourites_xml(skin_id, merge=True, write=True, config_path=None):
+    if not write:
+        return _generate_favourites_xml(skin_id, merge, write, config_path)
+    try:
+        with _refresh_lock():
+            return _generate_favourites_xml(skin_id, merge, write, config_path)
+    except (OSError, sqlite3.Error) as exc:
+        _log('favourites refresh deferred: ' + type(exc).__name__, error=True)
+        return None
+
+
+def _generate_favourites_xml(skin_id, merge=True, write=True, config_path=None):
     """Build favourites.xml for skin_id from favourites_config.json.
 
     merge=True preserves user order, edits, additions and deletions by
@@ -457,18 +498,36 @@ def generate_favourites_xml(skin_id, merge=True, write=True, config_path=None):
     existing = None
     if merge:
         previous, previous_deleted = _load_state()
+        layout_version = _layout_version()
+        if layout_version < 3:
+            # Older refreshes could record a temporarily hidden service tile
+            # as deleted forever. Restore the reported Umbrella/Trakt defaults
+            # once; explicit removals after this migration remain authoritative.
+            recover = {tile.get('name') for tile in config.get('tiles', {}).values()
+                       if tile.get('condition') in ('umbrella', 'trakt')}
+            previous_deleted -= recover
+            if previous:
+                try:
+                    root, _ = _parse_favourites(previous, 'previous default')
+                except ValueError as exc:
+                    _log('leaving existing favourites untouched: ' + str(exc), error=True)
+                    return None
+                for item in list(root):
+                    if item.get('name') in recover:
+                        root.remove(item)
+                previous = ET.tostring(root, encoding='unicode')
         existing = _read_existing()
         try:
             xml, deleted = _merge_favourites(
                 existing, previous, desired, previous_deleted,
-                repair_tail=_layout_version() < 2)
+                repair_tail=layout_version < 2)
         except ValueError as exc:
             _log('leaving existing favourites untouched: {0}'.format(exc), error=True)
             return None
 
     if write:
         if existing == xml:
-            if previous != desired or previous_deleted != deleted or _layout_version() < 2:
+            if previous != desired or previous_deleted != deleted or _layout_version() < 3:
                 if not _save_state(desired, deleted):
                     return None
             return xml

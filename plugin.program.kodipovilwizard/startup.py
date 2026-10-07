@@ -723,6 +723,14 @@ except Exception as _autoset_err:
 # that are missing -- e.g. a YouTube that timed out during a previous provisioning
 # pass and was skipped. This is what makes a half-provisioned build self-complete
 # on the very next launch instead of staying broken.
+try:
+    # Heal the current layout before network provisioning can delay startup.
+    from resources.libs import fentastic_widgets
+    fentastic_widgets.repair()
+except Exception as _early_widget_error:
+    logging.log('[FENtastic widgets] early repair deferred: ' + type(_early_widget_error).__name__,
+                level=xbmc.LOGWARNING)
+
 if CONFIG.get_setting('buildname'):
     logging.log('[Startup] entering modular update gate', level=xbmc.LOGINFO)
     try:
