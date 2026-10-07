@@ -329,6 +329,12 @@ def repair(reload_skin=True):
     try:
         addons = xbmcvfs.translatePath('special://home/addons/')
         userdata = xbmcvfs.translatePath('special://profile/')
+        from resources.libs import profile_store
+        shortcuts = 0
+        try:
+            shortcuts = profile_store.repair_build_shortcuts(addons, userdata)
+        except Exception as exc:
+            xbmc.log('[POV IL] Build shortcut repair deferred: ' + type(exc).__name__, xbmc.LOGWARNING)
         repair_helper(addons)
         restored = restore_popular_defaults(addons, userdata)
         aligned = align_default_order(addons, userdata)
@@ -342,9 +348,12 @@ def repair(reload_skin=True):
         if aligned:
             xbmc.log('[POV IL] Aligned %s FENtastic groups: new before popular' % aligned,
                      xbmc.LOGINFO)
-        if (changed or aligned) and reload_skin and xbmc.getSkinDir() == 'skin.fentastic' and not xbmc.Player().isPlayingVideo():
+        if shortcuts:
+            xbmc.log('[POV IL] Restored %s build shortcut folders/rows in active profile' % shortcuts,
+                     xbmc.LOGINFO)
+        if (changed or aligned or shortcuts) and reload_skin and xbmc.getSkinDir() == 'skin.fentastic' and not xbmc.Player().isPlayingVideo():
             xbmc.executebuiltin('ReloadSkin()')
-        return changed or aligned
+        return changed or aligned or shortcuts
     except Exception as exc:
         xbmc.log('[POV IL] FENtastic widget repair deferred: %s' % exc, xbmc.LOGWARNING)
         return 0
