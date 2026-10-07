@@ -211,6 +211,13 @@ class ProfileStoreTests(unittest.TestCase):
         self.assertEqual(ET.parse(self.target / 'guisettings.xml').findtext('setting'), 'skin.estuary')
         self.assertEqual((self.target / 'kodipovil.provisioned').read_text(), '2.0.9')
 
+    def test_pov_literal_shortcuts_survive_embedded_json_decoder_unload_failure(self):
+        expected=[dict(mode='build_movie_list',action='mdblist_watchlist',name='MDBList')]
+        with mock.patch.object(store.json,'loads',side_effect=NameError('ValueError is not defined')):
+            self.assertEqual(store._shortcut_items(repr(expected)),expected)
+            self.assertIsNone(store._shortcut_items('invalid'))
+        self.assertEqual(store._shortcut_items('[{"enabled":true}]'),[{'enabled':True}])
+
     def test_existing_shortcuts_recover_missing_build_folders_without_touching_history(self):
         path = self.target / 'addon_data/plugin.video.pov/navigator.db'
         path.parent.mkdir(parents=True)
