@@ -137,6 +137,42 @@ class ProfileStoreTests(unittest.TestCase):
             self.assertFalse(fn())
             self.assertFalse((Path(raw)/'kodipovil.login_default_v2').exists())
 
+    def test_native_profile_authorization_can_take_longer_than_five_seconds(self):
+        for auth_dialog in (10103, 10109, 10110):
+            clock={'now':0.0,'opened':False}
+            def dialog():
+                return auth_dialog if clock['opened'] and clock['now']<8 else 0
+            def wait(seconds):
+                clock['now']+=seconds
+                return False
+            sdk=types.SimpleNamespace(
+                Monitor=lambda:types.SimpleNamespace(waitForAbort=wait),
+                executebuiltin=lambda *args:clock.__setitem__('opened',True),
+                getCondVisibility=lambda cond:clock['opened'] and clock['now']>=8)
+            fn=_load_function(LIBS/'build_profiles.py','_native_settings',dict(
+                time=types.SimpleNamespace(monotonic=lambda:clock['now']),xbmc=sdk,
+                xbmcgui=types.SimpleNamespace(getCurrentWindowDialogId=dialog)))
+            self.assertTrue(fn())
+            self.assertGreaterEqual(clock['now'],8)
+
+    def test_native_profile_authorization_keeps_cancel_abort_and_timeout(self):
+        for case in ('cancel','abort','timeout'):
+            clock={'now':0.0,'opened':False}
+            def dialog():
+                return 10109 if clock['opened'] and (case!='cancel' or clock['now']<8) else 0
+            def wait(seconds):
+                clock['now']+=seconds
+                return case=='abort'
+            sdk=types.SimpleNamespace(
+                Monitor=lambda:types.SimpleNamespace(waitForAbort=wait),
+                executebuiltin=lambda *args:clock.__setitem__('opened',True),
+                getCondVisibility=lambda cond:False)
+            fn=_load_function(LIBS/'build_profiles.py','_native_settings',dict(
+                time=types.SimpleNamespace(monotonic=lambda:clock['now']),xbmc=sdk,
+                xbmcgui=types.SimpleNamespace(getCurrentWindowDialogId=dialog)))
+            self.assertFalse(fn())
+            self.assertLess(clock['now'],601)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
