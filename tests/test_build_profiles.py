@@ -1,10 +1,14 @@
 """Profile repair preserves accounts, preferences and native lock semantics."""
 import importlib.util
+from contextlib import closing
+import json
+import sqlite3
 import sys
 import tempfile
 import threading
 import types
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 from xml.etree import ElementTree as ET
@@ -154,11 +158,90 @@ class ProfileStoreTests(unittest.TestCase):
         self.seed()
         self.assertGreater(len(ET.parse(self.target / 'favourites.xml').getroot()), 5)
         self.assertNotIn('MASTER_PRIVATE_TOKEN', (self.target / 'addon_data/plugin.video.pov/settings.xml').read_text())
-        # Only the verified shipped layout DB; never account/watch/history DBs.
-        self.assertEqual([p.relative_to(self.target).as_posix() for p in self.target.rglob('*.db')],
-                         ['addon_data/script.fentastic.helper/cpath_cache.db'])
+        # Only layout and menu records; never account/watch/history DBs.
+        self.assertEqual(sorted(p.relative_to(self.target).as_posix() for p in self.target.rglob('*.db')),
+                         ['addon_data/plugin.video.pov/navigator.db',
+                          'addon_data/script.fentastic.helper/cpath_cache.db'])
+        with closing(sqlite3.connect(self.target / 'addon_data/plugin.video.pov/navigator.db')) as conn:
+            rows = conn.execute('SELECT list_name,list_type,list_contents FROM navigator').fetchall()
+            self.assertEqual(len(rows), 8)
+            self.assertEqual({r[1] for r in rows}, {'shortcut_folder'})
+            for name in ('FENtastic - סרטים - איזור אישי', 'FENtastic - סדרות - איזור אישי'):
+                items = store._shortcut_items(next(r[2] for r in rows if r[0] == name))
+                self.assertTrue(any(i.get('action') == 'mdblist_watchlist' for i in items))
+            for name in ('סרטים - לפי רשתות', 'סדרות - לפי רשתות'):
+                items = store._shortcut_items(next(r[2] for r in rows if r[0] == name))
+                self.assertGreater(len(items), 5)
         self.assertEqual(ET.parse(self.target / 'guisettings.xml').findtext('setting'), 'skin.estuary')
         self.assertEqual((self.target / 'kodipovil.provisioned').read_text(), '2.0.9')
+
+    def test_existing_shortcuts_recover_missing_build_folders_without_touching_history(self):
+        path = self.target / 'addon_data/plugin.video.pov/navigator.db'
+        path.parent.mkdir(parents=True)
+        custom = '[{"mode":"custom","action":"custom","name":"Personal choice"}]'
+        with closing(sqlite3.connect(path)) as conn, conn:
+            conn.execute('CREATE TABLE navigator (list_name text, list_type text, list_contents text, UNIQUE(list_name,list_type))')
+            conn.executemany('INSERT INTO navigator VALUES (?,?,?)', [
+                ('My custom folder', 'shortcut_folder', custom),
+                ('FENtastic - סרטים - איזור אישי', 'shortcut_folder', '[]'),
+                ('History sentinel', 'history', 'PRIVATE_HISTORY')])
+        self.seed()
+        with closing(sqlite3.connect(path)) as conn:
+            self.assertEqual(conn.execute('SELECT list_contents FROM navigator WHERE list_name=?',
+                             ('My custom folder',)).fetchone()[0], custom)
+            self.assertEqual(conn.execute('SELECT list_contents FROM navigator WHERE list_name=?',
+                             ('FENtastic - סרטים - איזור אישי',)).fetchone()[0], '[]')
+            self.assertEqual(conn.execute('SELECT list_contents FROM navigator WHERE list_name=?',
+                             ('History sentinel',)).fetchone()[0], 'PRIVATE_HISTORY')
+            self.assertIsNotNone(conn.execute('SELECT list_contents FROM navigator WHERE list_name=?',
+                                 ('סדרות - לפי רשתות',)).fetchone())
+        backup = path.with_name('navigator.before-build-shortcuts-v1.db')
+        with closing(sqlite3.connect(backup)) as conn:
+            self.assertEqual(conn.execute('SELECT count(*) FROM navigator').fetchone()[0], 3)
+
+    def test_old_build_personal_folders_receive_mdblist_once_and_keep_later_removal(self):
+        path = self.target / 'addon_data/plugin.video.pov/navigator.db'
+        path.parent.mkdir(parents=True)
+        temporary = self.master / 'defaults.db'
+        with zipfile.ZipFile(ARCHIVE) as source:
+            temporary.write_bytes(source.read('addon_data/plugin.video.pov/navigator.db'))
+        with closing(sqlite3.connect(temporary)) as defaults, closing(sqlite3.connect(path)) as conn, conn:
+            conn.execute('CREATE TABLE navigator (list_name text, list_type text, list_contents text, UNIQUE(list_name,list_type))')
+            for name in ('FENtastic - סרטים - איזור אישי', 'FENtastic - סדרות - איזור אישי'):
+                items = store._shortcut_items(defaults.execute(
+                    'SELECT list_contents FROM navigator WHERE list_name=?', (name,)).fetchone()[0])
+                old = [i for i in items if not i.get('action', '').startswith('mdblist_')]
+                conn.execute('INSERT INTO navigator VALUES (?,?,?)', (name, 'shortcut_folder', json.dumps(old)))
+        self.seed()
+        with closing(sqlite3.connect(path)) as conn, conn:
+            rows = conn.execute('SELECT list_name,list_contents FROM navigator WHERE list_name LIKE ?',
+                                ('FENtastic - % - איזור אישי',)).fetchall()
+            self.assertEqual(len(rows), 2)
+            for name, contents in rows:
+                items = store._shortcut_items(contents)
+                self.assertEqual(sum(i.get('action', '').startswith('mdblist_') for i in items), 1)
+                conn.execute('UPDATE navigator SET list_contents=? WHERE list_name=?',
+                             (json.dumps([i for i in items if not i.get('action', '').startswith('mdblist_')]), name))
+            conn.execute('DELETE FROM navigator WHERE list_name=?', ('סדרות - לפי רשתות',))
+        self.seed()
+        with closing(sqlite3.connect(path)) as conn:
+            self.assertEqual(conn.execute('SELECT count(*) FROM navigator WHERE list_name=?',
+                             ('סדרות - לפי רשתות',)).fetchone()[0], 0)
+            self.assertFalse(any(i.get('action', '').startswith('mdblist_') for name, content in conn.execute(
+                'SELECT list_name,list_contents FROM navigator WHERE list_name LIKE ?',
+                ('FENtastic - % - איזור אישי',)) for i in store._shortcut_items(content)))
+
+    def test_unknown_navigator_schema_is_preserved_and_does_not_certify_repair(self):
+        path = self.target / 'addon_data/plugin.video.pov/navigator.db'
+        path.parent.mkdir(parents=True)
+        with closing(sqlite3.connect(path)) as conn, conn:
+            conn.execute('CREATE TABLE navigator (private_schema text)')
+            conn.execute('INSERT INTO navigator VALUES (?)', ('KEEP',))
+        with self.assertRaisesRegex(ValueError, 'Unknown POV navigator schema'):
+            self.seed()
+        with closing(sqlite3.connect(path)) as conn:
+            self.assertEqual(conn.execute('SELECT * FROM navigator').fetchall(), [('KEEP',)])
+        self.assertFalse(path.with_name('povil-shortcuts-defaults-v1.json').exists())
 
     def test_repeat_repair_preserves_target_preferences_accounts_and_deletions(self):
         (self.target / 'kodipovil.profile_addons_ready').write_text('1')
