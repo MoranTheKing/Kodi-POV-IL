@@ -345,13 +345,14 @@ class FirstLoginTests(unittest.TestCase):
             return True
         kodi = types.SimpleNamespace(getSkinDir=lambda: actual[0],
             Monitor=lambda: types.SimpleNamespace(abortRequested=lambda: False, waitForAbort=lambda _: False),
-            getCondVisibility=lambda _: True)
+            getCondVisibility=lambda _: False)
         fake_threads = types.SimpleNamespace(Event=threading.Event,
             Thread=lambda **_: types.SimpleNamespace(start=lambda: None, join=lambda _: None))
         fn = _load_function(LIBS / 'build_skin.py', 'activate',
             {'xbmc': kodi, 'rpc': rpc, 'threading': fake_threads,
              'SKINS': ['skin.povil.nox'], 'enable_skin': lambda _: True,
-             'confirm_requested_skin': lambda _: False, 'persist_live_settings': lambda: True})
+             'confirm_requested_skin': lambda _: False, 'persist_live_settings': lambda: True, 'prepare_skin_confirmation': lambda _: True,
+                'xbmcgui': types.SimpleNamespace(Window=lambda _: types.SimpleNamespace(getProperty=lambda _: 'skin.povil.nox', setProperty=lambda *a:None, clearProperty=lambda *a:None))})
         self.assertTrue(fn('skin.povil.nox'))
         self.assertEqual(changes, ['skin.estuary', 'skin.povil.nox'])
 

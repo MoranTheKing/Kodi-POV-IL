@@ -31,4 +31,9 @@ def run(local_vars):
 
     except Exception as e:
         xbmc.log(f"[Wizard Addon] Error in pov_fav_refresh_manage: {e}", xbmc.LOGERROR)
+        try:
+            from modules import kodi_utils
+            kodi_utils.notify_failed()
+        except Exception:
+            pass
         return None
