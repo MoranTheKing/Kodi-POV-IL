@@ -206,6 +206,101 @@ class PopularDefaultsTests(unittest.TestCase):
         self.assertFalse(self.db.with_name('povil-popular-defaults-v1.json').exists())
 
 
+class DefaultOrderTests(unittest.TestCase):
+    write_database = PopularDefaultsTests.write_database
+    rows = PopularDefaultsTests.rows
+
+    def setUp(self):
+        PopularDefaultsTests.setUp(self)
+        self.defaults = []
+        for media in ('movie', 'tvshow'):
+            mode, new = widgets.NEW_RELEASES[media]
+            popular = widgets.POPULAR[media][1]
+            actions = ('personal', new, popular, 'networks') if media == 'movie' else (
+                'personal', popular, new, 'networks')
+            for index, action in enumerate(actions, 1):
+                self.defaults.append((media+'.widget.'+str(index),
+                    'plugin://plugin.video.pov/?mode='+mode+'&action='+action,
+                    action, 'WidgetListBigPoster', 'BigPoster'))
+        seed = self.db.with_name('seed.db'); self.write_database(seed, self.defaults)
+        with zipfile.ZipFile(self.archive, 'w') as z:
+            z.writestr('addon_data/script.fentastic.helper/cpath_cache.db', seed.read_bytes())
+        self.digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+
+    def align(self):
+        return widgets.align_default_order(str(self.addons), str(self.userdata),
+            str(self.archive), self.digest)
+
+    def test_fresh_and_existing_profiles_have_new_then_popular_and_keep_movie_rows(self):
+        for old_receipt in (False, True):
+            receipt = self.db.with_name('povil-new-before-popular-v1.json')
+            if receipt.exists(): receipt.unlink()
+            self.write_database(self.db, self.defaults)
+            if old_receipt:
+                self.db.with_name('povil-popular-defaults-v1.json').write_text('{}', 'utf8')
+            self.assertEqual(self.align(), 1)
+            rows = self.rows()
+            for media in ('movie', 'tvshow'):
+                group = [r for r in rows if r[0].startswith(media+'.widget.')]
+                self.assertEqual(widgets._path_identity(group[1][1])[3:5], widgets.NEW_RELEASES[media])
+                self.assertEqual(widgets._path_identity(group[2][1])[3:5], widgets.POPULAR[media])
+            self.assertEqual(rows[:4], self.defaults[:4])
+            with closing(sqlite3.connect(self.db.with_name('cpath_cache.before-order-v1.db'))) as c:
+                self.assertEqual(c.execute('SELECT '+widgets.FIELDS+' FROM custom_paths').fetchall(), self.defaults)
+            before = self.db.read_bytes()
+            self.assertEqual(self.align(), 0); self.assertEqual(self.db.read_bytes(), before)
+
+    def test_custom_moved_filtered_and_empty_groups_are_preserved(self):
+        for case in ('custom', 'moved', 'filtered', 'empty', 'missing', 'stacked'):
+            receipt = self.db.with_name('povil-new-before-popular-v1.json')
+            if receipt.exists(): receipt.unlink()
+            rows = [r for r in self.defaults if r[0].startswith('tvshow.')]
+            if case == 'empty': rows = []
+            elif case == 'missing': rows.pop(1)
+            elif case == 'moved': rows[1] = ('tvshow.widget.8',) + rows[1][1:]
+            elif case == 'stacked': rows[1] = rows[1][:4] + ('Poster | Stacked',)
+            else:
+                rows[0] = (rows[0][0], 'plugin://other/custom' if case == 'custom' else
+                           rows[0][1]+'&genre=family') + rows[0][2:]
+            self.write_database(self.db, rows)
+            self.assertEqual(self.align(), 0); self.assertEqual(self.rows(), sorted(rows))
+
+    def test_later_deliberate_order_and_removal_are_not_reset(self):
+        self.write_database(self.db, self.defaults); self.assertEqual(self.align(), 1)
+        self.write_database(self.db, self.defaults[:-1])
+        self.assertEqual(self.align(), 0); self.assertEqual(self.rows(), sorted(self.defaults[:-1]))
+
+    def test_generated_row_options_follow_the_route_after_database_reorder(self):
+        self.write_database(self.db, self.defaults)
+        xml = self.addons/'skin.fentastic/xml/script-fentastic-widget_tvshows.xml'
+        xml.parent.mkdir(parents=True)
+        root = ET.Element('includes'); group = ET.SubElement(root,'include',name='TVShowWidgets')
+        for index, row in enumerate(self.defaults[4:], 1):
+            node = widgets._block(row[3], row[1], row[2], 22010+index)
+            ET.SubElement(node, 'param', name='limit', value=str(index*10))
+            ET.SubElement(node, 'param', name='sortorder', value='option-'+str(index))
+            group.append(node)
+        xml.write_bytes(ET.tostring(root))
+        self.assertEqual(self.align(), 1)
+        self.assertEqual(widgets.repair_saved_widgets(str(self.addons), str(self.userdata)), 2)
+        nodes = ET.parse(xml).findall('include/include')
+        new, popular = [widgets._params(n) for n in nodes[1:3]]
+        self.assertEqual(new['limit'], '30'); self.assertEqual(new['sortorder'], 'option-3')
+        self.assertEqual(popular['limit'], '20'); self.assertEqual(popular['sortorder'], 'option-2')
+        self.assertEqual(new['list_id'], '22012'); self.assertEqual(popular['list_id'], '22013')
+        # Regenerating directly from the saved DB uses the same ordered routes.
+        rows = [r for r in self.rows() if r[0].startswith('tvshow.')]
+        self.assertEqual([widgets._params(n)['content_path'] for n in nodes], [r[1] for r in rows])
+        self.assertEqual(widgets.repair_saved_widgets(str(self.addons), str(self.userdata)), 0)
+
+    def test_bad_defaults_digest_preserves_database_and_does_not_mark_migration(self):
+        self.write_database(self.db, self.defaults); before = self.db.read_bytes()
+        with self.assertRaises(ValueError):
+            widgets.align_default_order(str(self.addons), str(self.userdata), str(self.archive), '0'*64)
+        self.assertEqual(self.db.read_bytes(), before)
+        self.assertFalse(self.db.with_name('povil-new-before-popular-v1.json').exists())
+
+
 class BuildIdentityTests(unittest.TestCase):
     def run_case(self, version='0.4.14', pending=False, config_pending=False):
         tree=ast.parse((LIB/'modular_updater.py').read_text('utf8'))
