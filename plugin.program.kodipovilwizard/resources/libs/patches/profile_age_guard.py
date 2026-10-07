@@ -178,8 +178,11 @@ def item_meta(item):
 
 
 def stamp_item(item, meta):
-    if active_policy() is None:
-        return
+    # Capture classification without consulting Kodi's GUI for every row.
+    # The directory/playback boundary still reads the current policy. Keeping
+    # metadata even for an adult-built row also covers a profile change before
+    # publication; this is not a cached decision to allow that row.
+    meta = meta or {}
     values = {key: meta.get(key) for key in ('mpaa', 'certification', 'mediatype', 'adult')}
     values['tmdb_id'] = meta.get('tmdb_id') or meta.get('tmdb')
     item.setProperty('POVIL.AgeMetadata', json.dumps(values))

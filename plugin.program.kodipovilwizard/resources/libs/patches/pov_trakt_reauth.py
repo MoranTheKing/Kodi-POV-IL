@@ -6,6 +6,22 @@ import xbmcgui
 
 _AI_TRAKT_REFRESH_LOCK = 'pov_ai_trakt_refreshing'
 
+
+class _SessionView:
+    """Observe Trakt requests without wrapping other providers' shared client."""
+    def __init__(self, session, request):
+        object.__setattr__(self, '_session', session)
+        object.__setattr__(self, 'request', request)
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    def __setattr__(self, name, value):
+        if name in ('_session', 'request'):
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._session, name, value)
+
 def run(target_module):
     """
     Applies non-destructive namespace proxy patches to Trakt API module
@@ -134,6 +150,6 @@ def run(target_module):
         )
 
     # 4. Apply non-destructive variable shadowing overrides
-    target_module.session.request = _wrapper_request
+    target_module.session = _SessionView(target_module.session, _wrapper_request)
     target_module.call_trakt = _wrapper_call_trakt
     target_module.trakt_refresh = _ai_trakt_refresh_once
