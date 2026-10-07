@@ -4,6 +4,7 @@ Idle polling only stats addon.xml. It does no network work and never replaces
 an addon, restarts Kodi, or edits a playing video's code.
 """
 import os
+import hashlib
 import json
 import time
 
@@ -60,7 +61,8 @@ def run():
     import xbmc
     import xbmcgui
     import xbmcvfs
-    prop = 'kodipovil.host_patch_watch'
+    profile = os.path.normcase(os.path.realpath(xbmcvfs.translatePath('special://profile/')))
+    prop = 'kodipovil.host_patch_watch.v2.' + hashlib.sha256(profile.encode('utf8')).hexdigest()
     window = xbmcgui.Window(10000)
     if window.getProperty(prop):
         return
@@ -108,5 +110,10 @@ def run():
                 retry_at = time.monotonic() + (10 if attempts == 1 else 30 if attempts == 2 else 300)
                 xbmc.log('[POV IL] Host-update repair pending; attempt {}'.format(attempts), xbmc.LOGWARNING)
     finally:
-        if window.getProperty(prop) == token:
+        if monitor.abortRequested():
+            # Kodi's GUI thread waits for this interpreter during unload.
+            # Window property getters acquire its GUI lock and can deadlock.
+            # Queue cleanup without reading that lock; the key is profile-local.
+            xbmc.executebuiltin('ClearProperty({},home)'.format(prop))
+        elif window.getProperty(prop) == token:
             window.clearProperty(prop)
