@@ -71,6 +71,31 @@ class AgeGuardTests(unittest.TestCase):
         self.assertTrue(guard.visible(item, False, {'age': 7}))
         self.assertFalse(guard.visible(item, False, {'age': -1}))
 
+    def test_metadata_capture_does_not_read_gui_or_retain_an_adult_permission(self):
+        rows = []
+        for ident, rating in [('1', 'G'), ('2', 'R'), ('3', '')]:
+            values = {}
+            item = types.SimpleNamespace(
+                setProperty=lambda k,v,values=values: values.update({k:v}),
+                getProperty=lambda k,values=values: values.get(k, ''),
+                getVideoInfoTag=lambda ident=ident: types.SimpleNamespace(
+                    getMediaType=lambda:'movie', getUniqueID=lambda _k:ident))
+            with patch.object(guard, 'active_policy', side_effect=AssertionError('per-row GUI query')):
+                guard.stamp_item(item, {'mpaa':rating, 'mediatype':'movie', 'tmdb_id':ident})
+            rows.append(('url', item, False))
+        api = types.SimpleNamespace(addDirectoryItem=Mock(), addDirectoryItems=Mock(return_value=True))
+        api.addDirectoryItem._povil_age_guard = False
+        original = api.addDirectoryItems
+        with patch.dict(sys.modules, {'xbmcplugin':api}):
+            guard.install_directory_guard()
+            with patch.object(guard, 'active_policy', side_effect=[None, {'age':7}, {'blocked':True}]):
+                api.addDirectoryItems(1, rows)
+                api.addDirectoryItems(1, rows)
+                api.addDirectoryItems(1, rows)
+        self.assertEqual(original.call_args_list[0].args[1], rows)
+        self.assertEqual(original.call_args_list[1].args[1], rows[:1])
+        self.assertEqual(original.call_args_list[2].args[1], [])
+
     def test_reused_directory_wrapper_rereads_policy_for_each_profile(self):
         api = types.SimpleNamespace(addDirectoryItem=Mock(return_value=True), addDirectoryItems=Mock(return_value=True))
         api.addDirectoryItem._povil_age_guard = False
@@ -156,6 +181,25 @@ class ProfilePolicyTests(unittest.TestCase):
             service=load('profile_audio_test',LIBS.parents[1]/'profile_service.py')
         with patch.object(guard,'active_policy',return_value={'age':7}):service.run()
         player.stop.assert_called_once()
+
+    def test_idle_guard_keeps_policy_fresh_without_rewriting_unchanged_gui_state(self):
+        properties = {}
+        window = Mock()
+        window.setProperty.side_effect = lambda k,v:properties.update({k:v})
+        window.getProperty.side_effect = lambda k:properties.get(k,'')
+        monitor = types.SimpleNamespace(waitForAbort=Mock(side_effect=[False]*5+[True]))
+        player = Mock(); player.isPlaying.return_value = False
+        kodi = types.SimpleNamespace(Monitor=lambda:monitor, Player=lambda:player)
+        paths = iter(['adult','adult','child','child','adult'])
+        with patch.dict(sys.modules, {'xbmc':kodi,
+                'xbmcgui':types.SimpleNamespace(Window=lambda _:window, Dialog=lambda:Mock()),
+                'xbmcvfs':types.SimpleNamespace(translatePath=lambda _:next(paths))}):
+            service = load('profile_idle_test', LIBS.parents[1]/'profile_service.py')
+        with patch.object(guard, 'active_policy', side_effect=[None,None,{'age':7},{'age':7},None]) as policies:
+            service.run()
+        self.assertEqual(policies.call_count, 5)
+        flags = [call.args[1] for call in window.setProperty.call_args_list if call.args[0]=='POVIL.ChildProfile']
+        self.assertEqual(flags, ['false','true','false'])
 
     def test_missing_corrupt_policy_and_unlocked_parent_fail_closed(self):
         self.parent.set_child(str(self.master), self.profile, 7)
