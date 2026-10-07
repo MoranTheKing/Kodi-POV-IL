@@ -265,8 +265,15 @@ def _native_settings():
             return False
     xbmc.executebuiltin('ActivateWindow(10034)')
     deadline = time.monotonic() + 5
+    lock_deadline = time.monotonic() + 600
     while time.monotonic() < deadline:
-        if xbmc.getCondVisibility('Window.IsActive(10034)'):
+        if xbmcgui.getCurrentWindowDialogId() in (10103, 10109, 10110):
+            # Native profile locks can need more than five seconds of human
+            # input. Wait for Kodi's own authorization without answering it.
+            if time.monotonic() >= lock_deadline:
+                return False
+            deadline = time.monotonic() + 5
+        elif xbmc.getCondVisibility('Window.IsActive(10034)'):
             return True
         if monitor.waitForAbort(0.1):
             break
