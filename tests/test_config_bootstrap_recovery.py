@@ -124,7 +124,7 @@ class ConfigBootstrapRecoveryTests(unittest.TestCase):
         manager=types.SimpleNamespace(append_to_queue=lambda _:None,wait_for_queue_empty=lambda:None,
             get_installed=lambda:[],pause_for_resolution=lambda:None,remove_resolution_pause=lambda:None,mark_all_jobs_added=lambda:None)
         def run_manager(orchestrator_func):orchestrator_func(manager);return []
-        libs=types.ModuleType('resources.libs');libs.config_apply=types.SimpleNamespace(apply_config_pack=apply)
+        libs=types.ModuleType('resources.libs');libs.youtube_platform=types.SimpleNamespace(eligible=list);libs.config_apply=types.SimpleNamespace(apply_config_pack=apply)
         libs.fentastic_widgets=types.SimpleNamespace(repair=lambda **kw:False)
         monitor=types.SimpleNamespace(abortRequested=lambda:False,waitForAbort=lambda t:waits.append(t) or False)
         config=types.SimpleNamespace(PACKAGES='unused')

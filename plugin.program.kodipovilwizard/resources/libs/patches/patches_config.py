@@ -1467,3 +1467,45 @@ PATCH_CONFIG = [
         )
     }
 ]
+
+# Provider IDs cannot be derived from labels after interface localization.
+for _provider, _file in (('tmdb', 'menus/tmdb.py'), ('trakt', 'menus/trakt.py')):
+    PATCH_CONFIG.append({
+        'id': 'pov_' + _provider + '_stable_list_actions',
+        'name': 'Stable provider action IDs: ' + _provider,
+        'addon_id': 'plugin.video.pov', 'enabled': True,
+        'target_file': 'resources/lib/' + _file,
+        'marker': '# WIZARD_POV_' + _provider.upper() + '_LIST_ACTIONS_v1',
+        'anchor': ("\t\treturn [(i.lower(), i, '', self.icon) for i in (watchl_str, fav_str)]" if _provider == 'tmdb'
+                   else "\t\tchoices = [(i.lower(), i, '', self.icon) for i in (watchl_str, fav_str, coll_str)]"),
+        'action': 'prepend_before',
+        'hook': ("\timport sys, xbmcvfs\n"
+                 "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+                 "\tsys.path.append(p) if p not in sys.path else None\n"
+                 "\timport pov_list_actions\n"
+                 "\treturn pov_list_actions.default_choices(self, globals(), '%s')\n" % _provider),
+    })
+PATCH_CONFIG.extend([
+    {'id': 'pov_cache_encoding_compat', 'name': 'Read legacy and JSON caches', 'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/caches/__init__.py', 'marker': '# WIZARD_POV_CACHE_ENCODING_v1',
+     'anchor': '\t\treturn json.loads(data_str) if data_str else None', 'action': 'prepend_before',
+     'hook': ("import sys, xbmcvfs\n"
+              "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+              "sys.path.append(p) if p not in sys.path else None\n"
+              "from pov_cache_read import loads\nreturn loads(data_str)\n")},
+    {'id': 'pov_safe_invoker_check', 'name': 'Safe interpreter reconciliation', 'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/entry.py', 'marker': '# WIZARD_POV_SAFE_INVOKER_CHECK_v1',
+     'anchor': "\tlogger('POV', 'ReuseLanguageInvokerCheck Service Starting')", 'action': 'prepend_before',
+     'hook': ("\timport sys, xbmcvfs\n"
+              "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+              "\tsys.path.append(p) if p not in sys.path else None\n"
+              "\timport pov_invoker_safe\n\treturn pov_invoker_safe.check()\n")},
+    {'id': 'pov_safe_invoker_toggle', 'name': 'Defer interpreter toggle until restart', 'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/modules/kodi_utils.py', 'marker': '# WIZARD_POV_SAFE_INVOKER_TOGGLE_v1',
+     'anchor': "\tok_dialog(text=32981)",
+     'action': 'prepend_before',
+     'hook': ("\timport sys, xbmcvfs\n"
+              "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+              "\tsys.path.append(p) if p not in sys.path else None\n"
+              "\timport pov_invoker_safe\n\treturn pov_invoker_safe.manual_toggle_applied(new_value)\n")},
+])
