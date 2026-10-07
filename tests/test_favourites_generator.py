@@ -106,6 +106,58 @@ class FavouritesGeneratorTests(unittest.TestCase):
         visible = self._refresh()
         self.assertEqual(sum('Umbrella' in i.get('name') for i in _items(visible)), 2)
 
+    def test_already_hidden_service_tiles_are_not_recorded_as_user_deletions(self):
+        first = self._refresh()
+        root = ET.fromstring(first)
+        for item in list(root):
+            if 'Umbrella' in item.get('name') or '(Trakt)' in item.get('name'):
+                root.remove(item)
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        self.visibility.active -= {'umbrella', 'trakt'}
+        self._refresh()
+        self.visibility.active |= {'umbrella', 'trakt'}
+        restored = _items(self._refresh())
+        self.assertEqual(sum('Umbrella' in i.get('name') for i in restored), 2)
+        self.assertEqual(sum('(Trakt)' in i.get('name') for i in restored), 2)
+
+    def test_legacy_poisoned_deletion_flags_repaired_once(self):
+        import json
+        first = self._refresh(); root = ET.fromstring(first)
+        names = {i.get('name') for i in root if 'Umbrella' in i.get('name') or '(Trakt)' in i.get('name')}
+        for item in list(root):
+            if item.get('name') in names: root.remove(item)
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        state_path=Path(generator._state_file());state=json.loads(state_path.read_text('utf8'))
+        state['layout_version']=2;state['deleted']=sorted(names)
+        state_path.write_text(json.dumps(state), 'utf8')
+        restored=self._refresh()
+        self.assertTrue(names <= {i.get('name') for i in _items(restored)})
+        # Deliberate removals following migration stay removed on later boots.
+        root=ET.fromstring(restored)
+        for item in list(root):
+            if item.get('name') in names: root.remove(item)
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        self.assertFalse(names & {i.get('name') for i in _items(self._refresh())})
+        self.assertFalse(names & {i.get('name') for i in _items(self._refresh())})
+
+    def test_concurrent_refreshes_serialize_xml_and_baseline(self):
+        import threading, time
+        original=generator._generate_favourites_xml
+        active=[0]; peak=[0]; results=[]
+        def run(*args):
+            active[0]+=1;peak[0]=max(peak[0],active[0]);time.sleep(.08)
+            try: return original(*args)
+            finally: active[0]-=1
+        with mock.patch.object(generator, '_generate_favourites_xml', side_effect=run):
+            threads=[threading.Thread(target=lambda:results.append(self._refresh())) for _ in range(2)]
+            for thread in threads: thread.start()
+            for thread in threads: thread.join(5)
+        self.assertEqual(peak[0],1);self.assertEqual(len(results),2)
+        self.assertTrue(all(result for result in results))
+        baseline,_=generator._load_state()
+        self.assertEqual({i.get('name') for i in _items(baseline)},
+                         {i.get('name') for i in _items(self._installed().read_text('utf8'))})
+
     def test_connecting_mdblist_inserts_each_tile_in_its_personal_group(self):
         self.visibility.active.remove('mdblist')
         first = self._refresh('skin.povil.nox')

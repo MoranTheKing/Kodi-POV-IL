@@ -70,7 +70,7 @@ _SOURCES = (
 		'torbox': ('torbox.token',),
 	}),
 	('plugin.video.pov', {
-		'trakt': ('trakt_user',),
+		'trakt': ('trakt.token', 'trakt_user'),
 		'tmdb': ('tmdb.account_id',),
 		'mdblist': ('mdblist.token',),
 		'real_debrid': ('rd.auth',),
@@ -80,7 +80,7 @@ _SOURCES = (
 	}),
 )
 
-_WIN_PROP = 'WIZARD.VisibilityMgr.v2'
+_WIN_PROP = 'WIZARD.VisibilityMgr.v3'
 _L1_TTL = 10.0          # seconds a process trusts its own snapshot
 _L2_TTL_NOFP = 60.0     # seconds L2 is trusted when no settings.xml can be stat()ed
 _mem = {}
@@ -130,6 +130,10 @@ def _trigger_favourites_refresh():
 	try:
 		import os
 		import importlib.util
+		# This writer already consumes the new snapshot. Avoid a nested refresh.
+		window = _home()
+		if window and window.getProperty('POVIL.FavouritesRefresh'):
+			return
 
 		current_skin = xbmc.getSkinDir()
 
