@@ -1,15 +1,20 @@
 """Keep helper-generated widgets consistent with the user's saved paths.
 
-The paths database is authoritative. Never seed an empty database, change a
-saved path, or fetch provider results to repair a generated skin include.
+The paths database is authoritative. A one-time migration restores missing
+popular defaults in an otherwise unchanged build layout. Empty/custom layouts
+and existing saved paths are preserved. No provider fetch is needed.
 """
 import ast
 from contextlib import closing
 import html
+import hashlib
+import json
 import os
 import sqlite3
 import tempfile
 import xml.etree.ElementTree as ET
+import zipfile
+from urllib.parse import parse_qsl, urlsplit
 
 GROUPS = {'movie': ('MovieWidgets', 19010),
           'tvshow': ('TVShowWidgets', 22010),
@@ -22,6 +27,94 @@ NEW = ('            # POV IL: retain rows containing existing XML entities.\n'
        '            final_format += __import__("re").sub(\n'
        '                r"&(?!amp;|lt;|gt;|quot;|apos;|#[0-9]+;|#x[0-9a-fA-F]+;)",\n'
        '                "&amp;", body)')
+FIELDS = 'cpath_setting, cpath_path, cpath_header, cpath_type, cpath_label'
+POPULAR = {'movie': ('build_movie_list', 'tmdb_movies_popular'),
+           'tvshow': ('build_tvshow_list', 'trakt_tv_trending')}
+
+
+def _path_identity(path):
+    """Compare routing only; labels/icons never identify a custom route."""
+    try:
+        uri = urlsplit(html.unescape(path or ''))
+        params = dict(parse_qsl(uri.query))
+        mode = params.get('mode', '')
+        return (uri.scheme, uri.netloc, uri.path, mode,
+                params.get('action', ''),
+                params.get('name', '') if 'shortcut_folder' in mode else '',
+                tuple(sorted((k, v) for k, v in params.items() if k not in
+                    ('mode', 'action', 'name', 'iconImage', 'external_list_item',
+                     'shortcut_folder'))))
+    except (TypeError, ValueError):
+        return None
+
+
+def _missing_popular(rows, defaults):
+    """Restore only a gap between recognizable shipped rows, once per profile."""
+    result = []
+    for media, route in POPULAR.items():
+        prefix = media + '.widget.'
+        expected = {r[0]: r for r in defaults if r[0].startswith(prefix)}
+        current = {r[0]: r for r in rows if r[0].startswith(prefix)}
+        popular = [r for r in expected.values()
+                   if _path_identity(r[1]) and _path_identity(r[1])[3:5] == route]
+        if len(popular) != 1 or not current:
+            continue
+        missing = popular[0]
+        if missing[0] in current or any(_path_identity(r[1]) ==
+                _path_identity(missing[1]) for r in current.values()):
+            continue
+        # Any custom path, moved row or unknown slot means this is a personal
+        # layout. Do not invent a default position within it.
+        if len(current) < 2 or any(key not in expected or
+                _path_identity(row[1]) != _path_identity(expected[key][1])
+                for key, row in current.items()):
+            continue
+        result.append(missing)
+    return result
+
+
+def restore_popular_defaults(addons, userdata, archive=None, expected_sha=None):
+    """Migrate missing default DB rows; preserve later deliberate removals."""
+    folder = os.path.join(userdata, 'addon_data', 'script.fentastic.helper')
+    database = os.path.join(folder, 'cpath_cache.db')
+    receipt = os.path.join(folder, 'povil-popular-defaults-v1.json')
+    if os.path.isfile(receipt) or not os.path.isfile(database):
+        return 0
+    if archive is None:
+        from resources.libs.profile_store import BOOTSTRAP_SHA256
+        expected_sha = BOOTSTRAP_SHA256
+        archive = os.path.join(addons, 'plugin.program.kodipovilwizard',
+                               'resources', 'bootstrap', 'config.zip')
+    with open(archive, 'rb') as handle:
+        if not expected_sha or hashlib.sha256(handle.read()).hexdigest() != expected_sha:
+            raise ValueError('FENtastic layout defaults failed integrity verification')
+    pending = None
+    try:
+        with zipfile.ZipFile(archive) as source:
+            payload = source.read('addon_data/script.fentastic.helper/cpath_cache.db')
+        with tempfile.NamedTemporaryFile(dir=folder, suffix='.db', delete=False) as handle:
+            pending = handle.name
+            handle.write(payload)
+        with closing(sqlite3.connect(pending)) as connection:
+            defaults = connection.execute('SELECT ' + FIELDS + ' FROM custom_paths').fetchall()
+        with closing(sqlite3.connect(database, timeout=1)) as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            rows = connection.execute('SELECT ' + FIELDS + ' FROM custom_paths').fetchall()
+            missing = _missing_popular(rows, defaults)
+            if missing:
+                backup = os.path.join(folder, 'cpath_cache.before-popular-v1.db')
+                if not os.path.isfile(backup):
+                    # A separate reader avoids backup() waiting on our writer.
+                    with closing(sqlite3.connect(database)) as reader:
+                        with closing(sqlite3.connect(backup)) as dest:
+                            reader.backup(dest)
+                connection.executemany('INSERT INTO custom_paths VALUES (?,?,?,?,?)', missing)
+            connection.commit()
+        _write(receipt, json.dumps({'version': 1, 'restored': [r[0] for r in missing]}).encode('utf8'))
+        return len(missing)
+    finally:
+        if pending and os.path.isfile(pending):
+            os.remove(pending)
 
 
 def _write(path, payload):
@@ -170,7 +263,11 @@ def repair(reload_skin=True):
         addons = xbmcvfs.translatePath('special://home/addons/')
         userdata = xbmcvfs.translatePath('special://profile/')
         repair_helper(addons)
+        restored = restore_popular_defaults(addons, userdata)
         changed = repair_saved_widgets(addons, userdata)
+        if restored:
+            xbmc.log('[POV IL] Restored %s missing FENtastic popular default paths' % restored,
+                     xbmc.LOGINFO)
         if changed:
             xbmc.log('[POV IL] Restored %s saved FENtastic widget includes' % changed,
                      xbmc.LOGINFO)
@@ -180,3 +277,40 @@ def repair(reload_skin=True):
     except Exception as exc:
         xbmc.log('[POV IL] FENtastic widget repair deferred: %s' % exc, xbmc.LOGWARNING)
         return 0
+
+
+def diagnostics():
+    """Log only route names and counts, never custom URLs or account values."""
+    import xbmc
+    import xbmcvfs
+    if xbmc.getSkinDir() != 'skin.fentastic':
+        return
+    userdata = xbmcvfs.translatePath('special://profile/')
+    addons = xbmcvfs.translatePath('special://home/addons/')
+    database = os.path.join(userdata, 'addon_data', 'script.fentastic.helper', 'cpath_cache.db')
+    try:
+        with closing(sqlite3.connect('file:' + database.replace('\\', '/') + '?mode=ro', uri=True)) as conn:
+            rows = conn.execute('SELECT ' + FIELDS + ' FROM custom_paths').fetchall()
+        home_active = xbmc.getCondVisibility('Window.IsActive(home)')
+        report = {'home_active': home_active}
+        for media, route in POPULAR.items():
+            saved = [r for r in rows if r[0].startswith(media + '.widget.') and
+                     _path_identity(r[1]) and _path_identity(r[1])[3:5] == route]
+            summary = {'saved': len(saved), 'generated': 0, 'items': []}
+            path = os.path.join(addons, 'skin.fentastic', 'xml', 'script-fentastic-widget_' +
+                                ('movies' if media == 'movie' else 'tvshows') + '.xml')
+            for node in ET.parse(path).findall('include/include'):
+                values = _params(node)
+                identity = _path_identity(values.get('content_path', ''))
+                if not identity or identity[3:5] != route:
+                    continue
+                summary['generated'] += 1
+                ident = values.get('list_id', '')
+                if ident.isdigit():
+                    summary['items'].append({'id': ident,
+                        'count': xbmc.getInfoLabel('Container(%s).NumItems' % ident) if home_active else None,
+                        'updating': xbmc.getCondVisibility('Container(%s).IsUpdating' % ident) if home_active else None})
+            report[media] = summary
+        xbmc.log('[POV IL] FENtastic popular widgets: ' + json.dumps(report, sort_keys=True), xbmc.LOGINFO)
+    except Exception as exc:
+        xbmc.log('[POV IL] FENtastic widget diagnostics unavailable: ' + type(exc).__name__, xbmc.LOGWARNING)
