@@ -6,7 +6,6 @@ its timeouts, retry classes, default headers and low-level pool. All other
 attributes immediately delegate to that same native implementation.
 """
 import hashlib
-import importlib.util
 import sys
 import threading
 import types
@@ -113,6 +112,7 @@ class _SessionModule(types.ModuleType):
     def load(self):
         with self.lock:
             if self._native is None:
+                import importlib.util
                 # A distinct name leaves the shared proxy stable while worker
                 # threads import it. Execute the original file, not a copied
                 # HTTP implementation or a modified requests namespace.
