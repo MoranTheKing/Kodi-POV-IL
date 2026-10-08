@@ -33,6 +33,7 @@ POPULAR = {'movie': ('build_movie_list', 'tmdb_movies_popular'),
            'tvshow': ('build_tvshow_list', 'trakt_tv_trending')}
 NEW_RELEASES = {'movie': ('build_movie_list', 'tmdb_movies_latest_releases'),
                 'tvshow': ('build_tvshow_list', 'tmdb_tv_premieres')}
+NEXT_EPISODES = 'plugin://plugin.video.pov/?mode=build_next_episode&name=32483&iconImage=next_episodes&widget_limit=12'
 
 
 def _path_identity(path):
@@ -299,6 +300,63 @@ def restore_catalogue_pair(addons, userdata, archive=None, expected_sha=None):
     return len(restored)
 
 
+def seed_next_episode_default(addons, userdata, archive=None, expected_sha=None):
+    """Add native episode previews once, only in an intact build TV layout.
+
+    The provider remains POV's selected local/Trakt/MDBList history. Its native
+    episode builder retains sorting, resume points and age classification.
+    Custom routes, reordered/removed rows and an existing next row are kept.
+    """
+    folder = os.path.join(userdata, 'addon_data', 'script.fentastic.helper')
+    database = os.path.join(folder, 'cpath_cache.db')
+    receipt = os.path.join(folder, 'povil-next-episode-v1.json')
+    if os.path.isfile(receipt) or not os.path.isfile(database):
+        return 0
+    defaults = _load_defaults(addons, folder, archive, expected_sha)
+    expected = sorted((r for r in defaults if r[0].startswith('tvshow.widget.')),
+                      key=lambda r: int(r[0].rsplit('.', 1)[1]))
+    inserted = False
+    with closing(sqlite3.connect(database, timeout=1)) as connection:
+        connection.execute('BEGIN IMMEDIATE')
+        if os.path.isfile(receipt):
+            return 0
+        rows = connection.execute('SELECT ' + FIELDS + ' FROM custom_paths').fetchall()
+        current = [r for r in rows if r[0].startswith('tvshow.widget.')]
+        # Accept only the five shipped routes, with the established new/popular
+        # order. Do not interpret a custom sixth row or a gap as a build default.
+        try:
+            current.sort(key=lambda r: int(r[0].rsplit('.', 1)[1]))
+            identities = [_catalogue_identity(r[1]) for r in current]
+            known = [_catalogue_identity(r[1]) for r in expected]
+            if (len(current) == len(expected) == 5 and
+                    [r[0] for r in current] == ['tvshow.widget.' + str(i) for i in range(1, 6)] and
+                    all(known) and len(set(known)) == 5 and
+                    identities[0] == known[0] and identities[3:] == known[3:] and
+                    {identities[1], identities[2]} == {known[1], known[2]} and
+                    identities[1][3:5] == NEW_RELEASES['tvshow'] and
+                    identities[2][3:5] == POPULAR['tvshow'] and
+                    all(r[3] == default[3] and 'Stacked' not in (r[4] or '')
+                        for r, default in zip(current, [expected[0]] +
+                            sorted(expected[1:3], key=lambda r:
+                                _catalogue_identity(r[1])[3:5] != NEW_RELEASES['tvshow']) + expected[3:]))):
+                _backup_database(database, os.path.join(folder, 'cpath_cache.before-next-episode-v1.db'))
+                next_row = ('tvshow.widget.2', NEXT_EPISODES,
+                            '[B][COLOR yellow]הפרק הבא[/COLOR][/B]',
+                            'WidgetListBigEpisodes', 'BigEpisodes')
+                updated = [current[0], next_row] + [
+                    ('tvshow.widget.' + str(i + 1),) + row[1:]
+                    for i, row in enumerate(current[1:], 2)]
+                connection.executemany('DELETE FROM custom_paths WHERE cpath_setting=?',
+                                       [(r[0],) for r in current])
+                connection.executemany('INSERT INTO custom_paths VALUES (?,?,?,?,?)', updated)
+                inserted = True
+        except (ValueError, TypeError, IndexError):
+            pass  # Unknown saved layout: leave it intact.
+        connection.commit()
+    _write(receipt, json.dumps({'version': 1, 'inserted': inserted}).encode('utf8'))
+    return int(inserted)
+
+
 def _write(path, payload):
     pending = None
     try:
@@ -420,6 +478,10 @@ def repair_saved_widgets(addons, userdata):
                 matches = [n for n in originals if n.get('content') == node.get('content') and
                     _path_identity(_params(n).get('content_path')) == _path_identity(params['content_path'])]
                 options = matches[0] if len(matches) == 1 else old
+                if not matches and old is not None and any(
+                        _path_identity(url) == _path_identity(_params(old).get('content_path'))
+                        and base + slot != list_id for slot, url, *_ in saved):
+                    options = None  # An inserted row must not inherit the moved row's options.
                 if options is not None:
                     for extra in options.findall('param'):
                         if extra.get('name') not in params:
@@ -460,6 +522,7 @@ def repair(reload_skin=True):
         paired = restore_catalogue_pair(addons, userdata)
         restored = restore_popular_defaults(addons, userdata)
         aligned = align_default_order(addons, userdata)
+        episodes = seed_next_episode_default(addons, userdata)
         changed = repair_saved_widgets(addons, userdata)
         if restored:
             xbmc.log('[POV IL] Restored %s missing FENtastic popular default paths' % restored,
@@ -473,12 +536,14 @@ def repair(reload_skin=True):
         if aligned:
             xbmc.log('[POV IL] Aligned %s FENtastic groups: new before popular' % aligned,
                      xbmc.LOGINFO)
+        if episodes:
+            xbmc.log('[POV IL] Added native next-episode previews to FENtastic TV defaults', xbmc.LOGINFO)
         if shortcuts:
             xbmc.log('[POV IL] Restored %s build shortcut folders/rows in active profile' % shortcuts,
                      xbmc.LOGINFO)
-        if (changed or aligned or shortcuts or paired) and reload_skin and xbmc.getSkinDir() == 'skin.fentastic' and not xbmc.Player().isPlayingVideo():
+        if (changed or aligned or shortcuts or paired or episodes) and reload_skin and xbmc.getSkinDir() == 'skin.fentastic' and not xbmc.Player().isPlayingVideo():
             xbmc.executebuiltin('ReloadSkin()')
-        return changed or aligned or shortcuts or paired
+        return changed or aligned or shortcuts or paired or episodes
     except Exception as exc:
         xbmc.log('[POV IL] FENtastic widget repair deferred: %s' % exc, xbmc.LOGWARNING)
         return 0

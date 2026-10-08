@@ -543,7 +543,7 @@ else:
 
 # KODI-RD-IL - Auto force addon updates on Kodi startup
 if getattr(CONFIG, 'FORCEUPDATEFAST_ONSTARTUP', 'false') == "true":
-    db.forceUpdate()
+    db.forceUpdate(startup=True)
 
 # KODI-POV-IL - Clean APK/IPK/Windows/wizard first launch hydration.
 # This is intentionally before notifications and quick_update: a clean profile

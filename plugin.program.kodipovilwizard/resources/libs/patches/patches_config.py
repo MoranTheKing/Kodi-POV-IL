@@ -1453,6 +1453,24 @@ PATCH_CONFIG = [
         )
     },
     {
+        "id": "pov_next_episode_widget_budget",
+        "name": "POV Next Episode Widget Budget",
+        "description": "Bounds metadata for recent-history previews while keeping full directories and other sorting modes native.",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/episodes.py",
+        "marker": "# WIZARD_POV_NEXT_EPISODE_BUDGET_v1",
+        "anchor": "if self.list: kodi_utils.add_items(__handle__, self.worker())",
+        "action": "prepend_before",
+        "hook": (
+            "\t\timport sys, xbmcvfs;\n"
+            "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
+            "\t\tsys.path.append(p) if p not in sys.path else None;\n"
+            "\t\timport pov_widget_budget;\n"
+            "\t\tself.worker = pov_widget_budget.wrap_next_episode_worker(self, self.worker)"
+        )
+    },
+    {
         "id": "pov_bookmark_refresh_order",
         "name": "Fix Bookmark UI Refresh Race Condition",
         "description": "Reorders playback stopping behavior so network syncs complete before the UI refreshes, preventing empty directories.",
