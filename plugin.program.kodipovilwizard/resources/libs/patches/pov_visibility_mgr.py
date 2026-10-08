@@ -25,7 +25,6 @@ Design notes
         automatically. xbmcaddon.Addon() is instantiated at most once per
         source add-on per rebuild, never per item.
 """
-import ast
 import json
 import os
 import re
@@ -320,11 +319,12 @@ def is_service_active(service):
 # ---------------------------------------------------------------------------
 def _loads(text):
 	try:
-		return ast.literal_eval(text)
+		return json.loads(text)
 	except Exception:
 		pass
 	try:
-		return json.loads(text)
+		import ast
+		return ast.literal_eval(text)
 	except Exception:
 		return None
 
