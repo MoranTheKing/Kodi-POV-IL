@@ -378,20 +378,20 @@ def _maybe_repair_addon_settings_integrity():
 
 
 def _maybe_optimize_32bit_artwork():
-    """Undo only the build's original-size image policy on 32-bit boxes."""
+    """Undo only the build's original-size image policy on both architectures."""
     try:
         from resources.lib import kodi_32bit_artwork, kodi_utils
-        status = kodi_32bit_artwork.ensure_optimized()
+        status = kodi_32bit_artwork.ensure_build_default()
         if status in ('invalid_xml', 'wrong_root', 'unmatched',
                       'invalid_result', 'write_failed', 'failed'):
             kodi_utils.log(
-                '32-bit artwork optimisation needs attention: {0}'.format(
+                'Build artwork optimisation needs attention: {0}'.format(
                     status), level='WARNING')
     except Exception as exc:
         try:
             from resources.lib import kodi_utils
             kodi_utils.log(
-                '32-bit artwork optimisation unavailable: {0}'.format(exc),
+                'Build artwork optimisation unavailable: {0}'.format(exc),
                 level='WARNING')
         except Exception:
             pass
