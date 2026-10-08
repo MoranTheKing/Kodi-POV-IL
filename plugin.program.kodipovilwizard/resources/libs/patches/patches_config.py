@@ -2,6 +2,12 @@
 
 # Registry schema for Engine v2 patches
 PATCH_CONFIG = [
+    {'id': 'pov_linear_tv_history', 'name': 'Linear native TV history grouping',
+     'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/caches/watched_cache.py',
+     'marker': '# WIZARD_POV_LINEAR_TV_HISTORY_v1',
+     'anchor': "\t\tcommand = GET_MOVIE_SHOW % ('media_id, title, last_played, season, episode')", 'action': 'prepend_before',
+     'hook': "\timport sys, xbmcvfs\n\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif p not in sys.path: sys.path.append(p)\n\timport pov_watch_history\n\treturn pov_watch_history.tv_history(globals(), watched_indicators)\n"},
     {'id': 'idanplus_child_source', 'name': 'Child profile unclassified live source guard',
      'addon_id': 'plugin.video.idanplus', 'enabled': True, 'target_file': 'default.py',
      'marker': '# WIZARD_IDANPLUS_CHILD_SOURCE_v1',
