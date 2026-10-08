@@ -1,4 +1,4 @@
-"""Stop the build's original-size artwork policy on 32-bit Kodi only.
+"""Bound build-owned artwork caching without deleting existing thumbnails.
 
 The full build historically ships ``<imageres>9999</imageres>``. That tells
 Kodi to cache source artwork at its original dimensions. It is especially
@@ -7,7 +7,6 @@ of posters and fanart into a much smaller skin control.
 
 This migration is deliberately narrow:
 
-* only a 32-bit Python/Kodi process is eligible;
 * only the exact build-owned value 9999 is changed to Kodi's normal 720;
 * a missing value or any user-selected value is left alone;
 * no thumbnail is deleted, so an update cannot trigger a redownload storm.
@@ -80,12 +79,17 @@ def _atomic_write(path, body):
 
 
 def ensure_optimized(path='', is_32bit=None):
-    """Return a status string and never discard a valid custom file."""
+    """Compatibility entry point for the original 32-bit migration."""
+    if is_32bit is None:
+        is_32bit = sys.maxsize <= 2 ** 32
+    if not is_32bit:
+        return 'not_32bit'
+    return ensure_build_default(path)
+
+
+def ensure_build_default(path=''):
+    """Use Kodi's normal image budget on both architectures, preserving custom values."""
     try:
-        if is_32bit is None:
-            is_32bit = sys.maxsize <= 2 ** 32
-        if not is_32bit:
-            return 'not_32bit'
         path = path or _profile_path()
         if not path or not os.path.isfile(path):
             return 'no_file'
@@ -120,7 +124,7 @@ def ensure_optimized(path='', is_32bit=None):
             return 'invalid_result'
         if not _atomic_write(path, updated):
             return 'write_failed'
-        _log('bounded future artwork cache entries to 720 on 32-bit; existing '
+        _log('bounded future artwork cache entries to 720; existing '
              'thumbnails were kept and the setting takes effect next restart')
         return 'patched'
     except Exception as exc:
