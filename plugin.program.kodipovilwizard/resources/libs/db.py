@@ -91,13 +91,17 @@ def latest_db(db):
         
         
 # KODI-RD-IL - Force addon updates FAST method
-def forceUpdate():
+def forceUpdate(startup=False):
     if CONFIG.FORCEUPDATEFAST_ONSTARTUP_NOTIFY == "true":
         xbmc.sleep(4000)
         logging.log_notify(CONFIG.ADDONTITLE,
                            '[COLOR {0}]מחפש עדכוני הרחבות...[/COLOR]'.format(CONFIG.COLOR2))
     xbmc.executebuiltin('UpdateAddonRepos()')
-    xbmc.executebuiltin('UpdateLocalAddons()')
+    # Kodi already discovers the local addon graph while starting. Scanning it
+    # again competes with the first widget wave. Install/update/repair paths
+    # still scan explicitly when they actually change files or enable addons.
+    if not startup:
+        xbmc.executebuiltin('UpdateLocalAddons()')
 ############################################################################
 
 def force_check_updates(auto=False, over=False):
