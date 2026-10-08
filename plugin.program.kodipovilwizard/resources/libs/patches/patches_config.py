@@ -250,13 +250,16 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/tmdb_api.py",
-        "marker": "# WIZARD_POV_MOVIE_NETWORKS_v4",
+        "marker": "# WIZARD_POV_MOVIE_NETWORKS_v5",
         "anchor": "\turl += '&sort_by=popularity.desc&certification_country=US&with_companies=%s' % network_id",
         "action": "append_after",
         "hook": (
-            "\t# Shadow variable to override 'with_companies' to 'watch_providers'\n"
-            "\turl = '%s/3/discover/movie?language=en-US&region=US&page=%s' % (base_url, page_no)\n"
-            "\turl += '&sort_by=popularity.desc&certification_country=US&with_watch_providers=%s&watch_region=US&with_watch_monetization_types=flatrate' % network_id\n"
+            "\t# Current get_tmdb prepends base_url; legacy requests accepts full URLs.\n"
+            "\tendpoint = '/discover/movie?language=en-US&region=US&page=%s' % page_no\n"
+            "\tendpoint += '&sort_by=popularity.desc&certification_country=US&with_watch_providers=%s&watch_region=US&with_watch_monetization_types=flatrate' % network_id\n"
+            "\turl = ((base_url if base_url.endswith('/3') else base_url + '/3') + endpoint\n"
+            "\t       if 'requests' in globals() else '/3' + endpoint)\n"
+            "\tstring = 'tmdb_movie_providers_v5_US_%s_%s' % (network_id, page_no)\n"
         )
     },
     {
