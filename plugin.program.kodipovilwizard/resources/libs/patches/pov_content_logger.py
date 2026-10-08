@@ -37,7 +37,7 @@ except Exception:
 
 _LOG_PREFIX = '[POV Wizard][ContentLogger]'
 
-# Only these call frames are traced line-by-line; everything else returns
+# Only these call frames report exceptions; everything else returns
 # None immediately at the 'call' event, which tells the tracer to stop
 # descending into that frame. This keeps overhead limited to POV's own
 # item-building code instead of every stdlib/requests call underneath it.
@@ -76,6 +76,8 @@ def _local_tracer(frame, event, arg):
 
 def _global_tracer(frame, event, arg):
 	if event == 'call' and frame.f_code.co_name in TRACE_TARGETS:
+		# Keep exception events without a callback at every item-building line.
+		frame.f_trace_lines = False
 		return _local_tracer
 	return None  # prune: don't trace unrelated frames at all
 
