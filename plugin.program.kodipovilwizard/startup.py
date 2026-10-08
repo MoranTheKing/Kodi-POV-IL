@@ -555,7 +555,7 @@ if getattr(CONFIG, 'FORCEUPDATEFAST_ONSTARTUP', 'false') == "true":
 if os.path.isfile(os.path.join(CONFIG.ADDONS, 'plugin.video.pov', 'addon.xml')):
     try:
         from resources.libs.patch_engine import PatchEngine
-        PatchEngine().run()
+        PatchEngine().run_if_changed()
     except Exception as _early_patch_err:
         logging.log('[PatchEngine] Early boot run failed: {0}'.format(
             _early_patch_err), level=xbmc.LOGERROR)
@@ -753,7 +753,7 @@ if CONFIG.get_setting('buildname'):
     # the network is down; patching must not depend on OTA success.
     try:
         from resources.libs.patch_engine import PatchEngine
-        PatchEngine().run()
+        PatchEngine().run_if_changed()
     except Exception as _patch_err:
         logging.log("[PatchEngine] Boot-cycle run failed: {0}".format(_patch_err),
                     level=xbmc.LOGERROR)

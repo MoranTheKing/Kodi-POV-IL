@@ -160,6 +160,7 @@ class SkinProfileCompletionTests(unittest.TestCase):
                 return str(master if 'masterprofile' in path else active)
             fn = _load_function(ROOT / 'plugin.program.kodipovilwizard/profile_bootstrap.py', 'resume',
                 dict(os=__import__('os'), xbmcvfs=types.SimpleNamespace(translatePath=translate),
+                     _settled_adult=lambda *_args: False,
                      xbmcgui=types.SimpleNamespace(Window=lambda _: types.SimpleNamespace(getProperty=lambda _: ''),
                          getCurrentWindowDialogId=lambda: 9999),
                      xbmc=types.SimpleNamespace(executeJSONRPC=lambda _q: self.fail('Must not modify established choices'))))

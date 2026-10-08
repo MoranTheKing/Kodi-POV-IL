@@ -53,7 +53,7 @@ class StartupParityTests(unittest.TestCase):
     def test_wizard_owns_three_removed_pov_service_patchers(self):
         # The Wizard startup actually invokes the patch engine on each boot.
         startup = (WIZARD / 'startup.py').read_text('utf-8')
-        self.assertIn('PatchEngine().run()', startup)
+        self.assertIn('PatchEngine().run_if_changed()', startup)
         spec = importlib.util.spec_from_file_location('candidate_patches', CONFIG)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
