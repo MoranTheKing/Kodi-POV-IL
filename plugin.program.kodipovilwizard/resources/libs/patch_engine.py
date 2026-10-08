@@ -112,6 +112,7 @@ class PatchEngine(object):
         """`config` is normally omitted -- it's exposed mainly so unit tests
         can hand in a synthetic PATCH_CONFIG list without touching disk."""
         self._raw_config = config if config is not None else self._load_default_config()
+        self._addon_settings = None
         self._stats = {
             'applied': 0,        # fresh block injected for the first time
             'upgraded': 0,       # stale block (older marker) replaced
@@ -127,11 +128,12 @@ class PatchEngine(object):
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
-    def run(self):
+    def run(self, _normalized=None):
         """Apply every configured patch. Returns the internal stats dict.
         Guaranteed not to raise."""
         try:
-            patches = self._normalize_patches(self._raw_config)
+            patches = (_normalized if _normalized is not None else
+                       self._normalize_patches(self._raw_config))
             if not patches:
                 logging.log('[PatchEngine] No valid patches configured; nothing to do.',
                             level=xbmc.LOGDEBUG)
@@ -191,6 +193,80 @@ class PatchEngine(object):
         level = xbmc.LOGWARNING if failed else (xbmc.LOGINFO if (applied or upgraded or removed) else xbmc.LOGDEBUG)
         logging.log('[PatchEngine] Run complete: {0}'.format(self._stats), level=level)
         return self._stats
+
+    def run_if_changed(self):
+        """Boot-only fast path after a successful, write-free full verification.
+
+        Explicit repairs still use run(). A changed host file, schema, config,
+        patch override or installation path always falls back to that full pass.
+        This receipt is scheduling information; child guards never trust it.
+        """
+        import hashlib
+        import json
+
+        def fingerprint(patches):
+            paths = {os.path.realpath(__file__)}
+            for patch in patches:
+                _, target = self._resolve_paths(patch['addon_id'], patch['target_file'])
+                directory, manifest = self._resolve_paths(patch['addon_id'], 'addon.xml')
+                paths.update((target, directory, manifest))
+            _, schema = self._resolve_paths(DEFAULT_ADDON_ID, 'resources/settings.xml')
+            _, wizard = self._resolve_paths('plugin.program.kodipovilwizard', 'addon.xml')
+            paths.update((schema, wizard))
+            state = []
+            for path in sorted(paths):
+                try:
+                    stat = os.stat(path)
+                    value = (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns,
+                             stat.st_ino, stat.st_dev)
+                except FileNotFoundError:
+                    value = None
+                state.append((os.path.realpath(path), value))
+            raw = json.dumps((patches, state), sort_keys=True,
+                             separators=(',', ':')).encode('utf-8')
+            return hashlib.sha256(raw).hexdigest()
+
+        try:
+            patches = self._normalize_patches(self._raw_config)
+            signature = fingerprint(patches)
+            path = xbmcvfs.translatePath(
+                'special://masterprofile/addon_data/plugin.program.kodipovilwizard/patch-receipt.json')
+            try:
+                with open(path, encoding='utf-8') as source:
+                    receipt = json.loads(source.read(4096))
+                if (patches and not self._stats['malformed'] and
+                        receipt == {'schema': 1, 'signature': signature}):
+                    self._stats['unchanged_targets'] = len(self._group_patches(patches))
+                    logging.log('[PatchEngine] Verified target identities unchanged; '
+                                'full repair not needed.', level=xbmc.LOGDEBUG)
+                    return self._stats
+            except (OSError, ValueError, TypeError):
+                pass
+        except Exception:
+            return self.run()
+
+        result = self.run(_normalized=patches)
+        # Do not certify a file changed by this pass or during verification.
+        # The next full, idempotent pass verifies the resulting bytes first.
+        unsafe = ('applied', 'upgraded', 'removed', 'settings_expanded', 'failed',
+                  'malformed', 'missing', 'anchor_missing', 'legacy_host_deferred')
+        if patches and not any(result.get(key, 0) for key in unsafe):
+            try:
+                if fingerprint(patches) == signature:
+                    import tempfile
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    fd, temporary = tempfile.mkstemp(prefix='.patch-receipt-',
+                                                      dir=os.path.dirname(path))
+                    try:
+                        with os.fdopen(fd, 'w', encoding='utf-8') as out:
+                            json.dump({'schema': 1, 'signature': signature}, out)
+                        os.replace(temporary, path)
+                    finally:
+                        if os.path.exists(temporary):
+                            os.unlink(temporary)
+            except Exception:
+                pass  # A read-only receipt location still gets normal repairs.
+        return result
 
     @classmethod
     def _has_legacy_pov_edits(cls, patches):
@@ -284,7 +360,9 @@ class PatchEngine(object):
             # User Kodi setting overrides the JSON/config 'enabled' property.
             patch_id = entry['id']
             try:
-                override = xbmcaddon.Addon().getSetting('patch_enabled_' + patch_id)
+                if self._addon_settings is None:
+                    self._addon_settings = xbmcaddon.Addon()
+                override = self._addon_settings.getSetting('patch_enabled_' + patch_id)
                 if override == 'true':
                     is_enabled = True
                 elif override == 'false':

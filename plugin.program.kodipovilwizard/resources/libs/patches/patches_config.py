@@ -2,6 +2,16 @@
 
 # Registry schema for Engine v2 patches
 PATCH_CONFIG = [
+    {'id': 'pov_directory_clock', 'name': 'Directory entry latency clock',
+     'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/entry.py', 'marker': '# WIZARD_POV_DIRECTORY_CLOCK_v1',
+     'anchor': 'from threading import Thread', 'action': 'prepend_before',
+     'hook': "import time as _povil_clock\n_povil_entry_started = _povil_clock.perf_counter()\n"},
+    {'id': 'pov_directory_latency', 'name': 'Slow catalogue route measurements',
+     'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/entry.py', 'marker': '# WIZARD_POV_DIRECTORY_LATENCY_v1',
+     'anchor': 'class Router:', 'action': 'prepend_before',
+     'hook': "import pov_directory_latency\npov_directory_latency.install(globals())\n"},
     {'id': 'pov_linear_tv_history', 'name': 'Linear native TV history grouping',
      'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/caches/watched_cache.py',
