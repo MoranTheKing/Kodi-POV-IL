@@ -1,5 +1,4 @@
 """Read caches written by both POV's repr and JSON serializers."""
-import ast
 import json
 
 
@@ -11,4 +10,5 @@ def loads(raw):
     except (ValueError, TypeError):
         # This parses data literals only. Never evaluate source or discard
         # favourites/watched data to migrate an encoding.
+        import ast
         return ast.literal_eval(raw)

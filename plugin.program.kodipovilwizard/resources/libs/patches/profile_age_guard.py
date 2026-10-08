@@ -9,10 +9,12 @@ import json
 import os
 import re
 from urllib.parse import urlparse, parse_qs
+from contextvars import ContextVar
 
 POLICY_FILE = 'povil_profiles.json'
 CHILD_MARKER = 'povil.child-profile'
 _cache = {}
+_work_policy = ContextVar('povil_candidate_work_policy', default=None)
 CLASSIFICATIONS = {'G': 0, 'TV-Y': 0, 'TV-G': 0, 'TV-Y7': 7,
                    'TV-Y7-FV': 7, 'PG': 10, 'TV-PG': 10, 'PG-13': 13,
                    'TV-14': 14, 'R': 17, 'NC-17': 18, 'TV-MA': 18,
@@ -252,8 +254,26 @@ def permit_play(meta, host, url=''):
     return True
 
 
+def work_policy(params):
+    """Reuse this route's policy only to choose how many candidates to build.
+
+    This snapshot grants no viewing or playback permission. Publication and
+    playback still read the current policy. A different route object or profile
+    must obtain a fresh decision, including manually enabled reused invokers.
+    """
+    import xbmcvfs
+    snapshot = _work_policy.get()
+    if (snapshot is not None and snapshot[0] is params and
+            snapshot[1] == xbmcvfs.translatePath('special://profile/')):
+        return snapshot[2]
+    return active_policy()
+
+
 def route_allowed(params, host):
-    if active_policy() is None:
+    import xbmcvfs
+    policy = active_policy()
+    _work_policy.set((params, xbmcvfs.translatePath('special://profile/'), policy))
+    if policy is None:
         return True
     mode = params.get('mode', '') if host == 'pov' else params.get('action', '')
     # Child profiles cannot open account/settings editors or cloud/file
