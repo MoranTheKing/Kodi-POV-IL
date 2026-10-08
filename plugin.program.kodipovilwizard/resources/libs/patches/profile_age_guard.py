@@ -8,7 +8,6 @@ remote-control access to Kodi itself.
 import json
 import os
 import re
-import xml.etree.ElementTree as ET
 from urllib.parse import urlparse, parse_qs
 
 POLICY_FILE = 'povil_profiles.json'
@@ -98,6 +97,9 @@ def policy_for(master, active):
 
 
 def locks_ready(master, active, children):
+    # Adult catalogue/navigation routes do not parse profiles.xml. Avoid
+    # importing the XML parser in every parallel widget interpreter.
+    import xml.etree.ElementTree as ET
     try:
         profiles = ET.parse(os.path.join(master, 'profiles.xml')).getroot().findall('profile')
         found = False
