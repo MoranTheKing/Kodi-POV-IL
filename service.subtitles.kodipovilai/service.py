@@ -3855,6 +3855,10 @@ def main():
     if xbmc is None:
         return
 
+    # Register before startup repairs. A monitor created after Kodi starts
+    # stopping this service can miss the earlier abort notification.
+    monitor = xbmc.Monitor()
+
     # First-run handshake: if a quick_update patch dropped the
     # disable marker, opt the user back out so they can review
     # before activating. The marker is consumed on first read so
@@ -4179,6 +4183,9 @@ def main():
     # OAuth flows -- POV does.
     # POV's modular debrid hook handles the build's startup status popups.
 
+    if monitor.abortRequested():
+        return
+
     # Spin up the SubsFilenamePublisher player monitor. It needs to
     # outlive this function's local scope -- xbmc.Player subclasses
     # only receive callbacks while a strong reference exists. Pinning
@@ -4202,7 +4209,8 @@ def main():
     # built-in engine + autosub are on). The loop below keeps us alive.
     _maybe_start_autosub_player()
 
-    monitor = xbmc.Monitor()
+    if monitor.abortRequested():
+        return
 
     # Drain the persistent pool upload queue here, on the long-lived service.
     # Shared Ktuvit subtitles are queued to disk the moment they're downloaded
