@@ -49,6 +49,7 @@ class MDBListRecoveryTests(unittest.TestCase):
         self.api.session = types.SimpleNamespace(request=Mock())
         self.api.base_url, self.api.timeout = 'https://api.mdblist.com', 10
         self.api.MAX_LIST_ITEMS = 250000
+        self.api.settings = types.SimpleNamespace(trakt_sync_interval=lambda:(0,1800))
         self.api.kodi_utils = self.kodi
         self.api.get_setting, self.api.set_setting, self.api.logger = self.kodi.get_setting, self.kodi.set_setting, self.kodi.logger
         self.api.mdbl_cache = self.cache
@@ -68,7 +69,8 @@ class MDBListRecoveryTests(unittest.TestCase):
         config = runpy.run_path(str(WIZ / 'patches/patches_config.py'))['PATCH_CONFIG']
         ids = {'mdblist_api_redact_and_reauth_prep', 'mdblist_api_reauth_retry',
                'mdblist_cache_verified_reads', 'mdblist_complete_pagination', 'mdblist_manager_read_failure',
-               'mdblist_activity_failed_read', 'mdblist_response_pagination', 'mdblist_collection_parent_projection'}
+               'mdblist_activity_failed_read', 'mdblist_response_pagination', 'mdblist_collection_parent_projection',
+               'mdblist_expiry_auth_mode_guard'}
         def patched(filename, target):
             source = (FIX / filename).read_text('utf8')
             for entry in config:
@@ -90,6 +92,82 @@ class MDBListRecoveryTests(unittest.TestCase):
         return types.SimpleNamespace(status_code=status, ok=status < 400, headers=dict({'Content-Type': 'application/json'}, **(headers or {})),
             reason='Unauthorized' if status == 401 else 'API error', url='https://api.mdblist.com/lists/user',
             json=lambda: body, text='')
+
+    def test_existing_api_key_with_old_oauth_fields_recovers_after_cache_clear(self):
+        self.values.update({'mdblist.token':'valid-api-key','mdblist.refresh':'old-oauth-refresh','mdblist.expires':'123'})
+        self.db.execute('CREATE TABLE watched_status(id TEXT)')
+        self.db.execute('CREATE TABLE progress(id TEXT)')
+        self.db.execute('INSERT INTO watched_status VALUES("keep watched")')
+        self.db.execute('INSERT INTO progress VALUES("keep resume")')
+        self.api.session.request.side_effect=[self.response(401,{}),
+            self.response(200,{'username':'fixture-user'}),
+            self.response(200,{'movies':[{'id':42}],'shows':[],'pagination':{'has_more':False}})]
+        result=self.api.mdbl_collection_watchlist_items('watchlist','movies')
+        self.assertEqual(result,[{'id':42}])
+        calls=self.api.session.request.call_args_list
+        self.assertTrue(calls[1].args[1].endswith('/user'))
+        self.assertEqual(calls[1].kwargs['params'],{'apikey':'valid-api-key'})
+        self.assertEqual(calls[2].kwargs['params']['apikey'],'valid-api-key')
+        self.assertFalse(calls[2].kwargs.get('headers'))
+        self.assertEqual(self.values['mdblist.token'],'valid-api-key')
+        self.assertEqual(self.values['mdblist.refresh'],'')
+        self.assertEqual(self.db.execute('SELECT * FROM watched_status').fetchall(),[('keep watched',)])
+        self.assertEqual(self.db.execute('SELECT * FROM progress').fetchall(),[('keep resume',)])
+
+    def test_api_key_recovery_never_overwrites_an_account_changed_during_verification(self):
+        before=dict(self.values)
+        def changed(*a,**kw):
+            self.values['mdblist.token']='different-account'
+            return self.response(200,{'username':'fixture-user'})
+        self.api.session.request.side_effect=changed
+        self.assertFalse(self.logic.repair_api_key_auth())
+        self.assertEqual(self.values['mdblist.token'],'different-account')
+        self.assertEqual(self.values['mdblist.refresh'],before['mdblist.refresh'])
+
+    def test_unverified_api_probe_never_clears_oauth_or_changes_username(self):
+        for status,data in ((401,{}),(429,{}),(200,{}),(200,{'username':'another-user'})):
+            with self.subTest(status=status,data=data):
+                before=dict(self.values)
+                self.api.session.request.return_value=self.response(status,data)
+                self.assertFalse(self.logic.repair_api_key_auth())
+                self.assertEqual(self.values,before)
+
+    def test_profile_change_during_api_probe_keeps_existing_credentials(self):
+        profile=['first-profile']
+        self.kodi.translate_path=lambda path:profile[0]
+        before=dict(self.values)
+        def response(*args,**kwargs):
+            profile[0]='second-profile'
+            return self.response(200,{'username':'fixture-user'})
+        self.api.session.request.side_effect=response
+        self.assertFalse(self.logic.repair_api_key_auth())
+        self.assertEqual(self.values,before)
+
+    def test_expiry_does_not_replace_a_verified_api_key_with_an_old_oauth_account(self):
+        self.values.update({'mdblist.token':'valid-api-key','mdblist.expires':'0'})
+        self.api.session.request.return_value=self.response(200,{'username':'fixture-user'})
+        self.api.mdbl_expires()
+        self.assertEqual(self.values['mdblist.token'],'valid-api-key')
+        self.assertEqual(self.values['mdblist.refresh'],'')
+        self.api.session.request.assert_called_once()
+        self.assertEqual(self.api.session.request.call_args.args[0],'get')
+
+    def test_healthy_oauth_before_expiry_performs_no_probe_or_changes(self):
+        self.values['mdblist.expires']=str(2**40)
+        before=dict(self.values)
+        self.api.mdbl_expires()
+        self.api.session.request.assert_not_called()
+        self.assertEqual(self.values,before)
+
+    def test_expired_oauth_preserves_native_refresh_and_rotates_the_same_connection(self):
+        self.values['mdblist.expires']='0'
+        self.api.session.request.side_effect=[self.response(401,{}),
+            self.response(200,{'access_token':'new-oauth','refresh_token':'new-refresh','expires_in':3600})]
+        self.api.mdbl_expires()
+        self.assertEqual(self.values['mdblist.token'],'new-oauth')
+        self.assertEqual(self.values['mdblist.refresh'],'new-refresh')
+        self.assertEqual(self.values['mdblist_user'],'fixture-user')
+        self.assertEqual([call.args[0] for call in self.api.session.request.call_args_list],['get','post'])
 
     def test_context_cache_new_host_opens_closes_and_preserves_verified_reads(self):
         events = []
@@ -126,15 +204,16 @@ class MDBListRecoveryTests(unittest.TestCase):
 
     def test_real_generic_exception_401_refreshes_once_then_reads_lists(self):
         self.api.session.request.side_effect = [self.response(401, {}),
+            self.response(401, {}),  # The expired OAuth token is not an API key.
             self.response(200, {'expires_in': 3600, 'access_token': 'new-fixture', 'refresh_token': 'new-refresh'}),
             self.response(200, [{'id': 7, 'name': 'Mine', 'items': 3, 'dynamic': False}])]
         result = self.api.mdbl_get_lists('my_lists')
         self.assertEqual(result[0]['id'], 7)
         self.assertEqual(self.values['mdblist.token'], 'new-fixture')
-        self.assertEqual(self.api.session.request.call_count, 3)
+        self.assertEqual(self.api.session.request.call_count, 4)
         self.assertEqual(self.api.session.request.call_args.kwargs['headers'], {'Authorization': 'Bearer new-fixture'})
         self.assertEqual(self.api.mdbl_get_lists('my_lists'), result)
-        self.assertEqual(self.api.session.request.call_count, 3)
+        self.assertEqual(self.api.session.request.call_count, 4)
 
     def test_invalid_api_key_manager_not_crashed_no_write_or_empty_cache(self):
         self.values['mdblist.refresh'] = ''
@@ -174,7 +253,7 @@ class MDBListRecoveryTests(unittest.TestCase):
         for _ in range(2):
             with self.assertRaises(self.logic.MDBListUnavailable): self.api.mdbl_get_lists('my_lists')
         methods = [c.args[0] for c in self.api.session.request.call_args_list]
-        self.assertEqual(methods, ['get', 'post', 'get'])
+        self.assertEqual(methods, ['get', 'get', 'post', 'get'])
         self.assertEqual(self.values['mdblist.refresh'], 'refresh-fixture')
 
     def test_busy_refresh_lock_not_stolen(self):
@@ -318,10 +397,11 @@ class MDBListRecoveryTests(unittest.TestCase):
 
     def test_refreshed_oauth_preserves_bucketed_response_headers(self):
         self.api.session.request.side_effect = [self.response(401, {}),
+            self.response(401, {}),
             self.response(200, {'expires_in': 3600, 'access_token': 'new-fixture', 'refresh_token': 'new-refresh'}),
             self.response(200, {'movies': [{'id': 42}]}, {'X-Has-More': 'false'})]
         self.assertEqual(self.api.mdbl_collection_watchlist_items('watchlist', 'movies'), [{'id': 42}])
-        self.assertEqual(self.api.session.request.call_count, 3)
+        self.assertEqual(self.api.session.request.call_count, 4)
 
     def test_empty_collection_cursor_is_valid_and_cached(self):
         self.api.session.request.return_value = self.response(200, {'movies': [], 'shows': [],

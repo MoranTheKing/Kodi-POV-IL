@@ -34,6 +34,12 @@ POPULAR = {'movie': ('build_movie_list', 'tmdb_movies_popular'),
 NEW_RELEASES = {'movie': ('build_movie_list', 'tmdb_movies_latest_releases'),
                 'tvshow': ('build_tvshow_list', 'tmdb_tv_premieres')}
 NEXT_EPISODES = 'plugin://plugin.video.pov/?mode=build_next_episode&name=32483&iconImage=next_episodes&widget_limit=12'
+EPISODE_INFO = ('$INFO[ListItem.Property(povil_episode_name),[B],[/B][CR][CR]]'
+                '$INFO[ListItem.Premiered,[B]שודר לראשונה: [/B],[CR]]'
+                '$INFO[ListItem.Duration,[B]משך: [/B],[CR]]'
+                '$INFO[ListItem.Mpaa,[B]דירוג גיל: [/B],[CR][CR]]'
+                '$INFO[ListItem.Property(povil_episode_plot_label),[B],:[/B][CR]]'
+                '$INFO[ListItem.Plot]')
 
 
 def _path_identity(path):
@@ -506,6 +512,42 @@ def repair_saved_widgets(addons, userdata):
     return changed_files
 
 
+def repair_episode_panel(addons):
+    """Upgrade only the shipped episode panel; preserve other/custom panels."""
+    path = os.path.join(addons, 'skin.fentastic', 'xml', 'Home.xml')
+    if not os.path.isfile(path):
+        return 0
+    root = ET.parse(path).getroot()
+    parents = {child: parent for parent in root.iter() for child in parent}
+    labels = [node for node in root.iter('label') if node.text == '$VAR[InfoPanelEpisode]']
+    if len(labels) != 1:
+        return 0  # Already upgraded or a different/custom episode panel.
+    control = parents[labels[0]]
+    group = parents[control]
+    visible = group.find('visible')
+    if visible is None or visible.text != 'Skin.HasSetting(Disable.RatingsINF) | String.IsEmpty(Skin.String(mdblist_api_key))':
+        return 0
+    visible.text = 'String.IsEqual(ListItem.DBtype,episode) | ' + visible.text
+    labels[0].text = EPISODE_INFO
+    ET.SubElement(control, 'visible').text = 'String.IsEqual(ListItem.DBtype,episode)'
+    for label in group.iter('label'):
+        if label.text == '$LOCALIZE[700015] $INFO[ListItem.Season], $LOCALIZE[700016] $INFO[ListItem.Episode]':
+            label.text = 'עונה $INFO[ListItem.Season] · פרק $INFO[ListItem.Episode]'
+    for node in root.iter('include'):
+        if node.get('content') == 'RatingsInfoPanel' and node.get('condition') == '![Skin.HasSetting(Disable.RatingsINF) | String.IsEmpty(Skin.String(mdblist_api_key))]':
+            parent = parents[node]
+            index = list(parent).index(node)
+            wrapper = ET.Element('control', type='group')
+            ET.SubElement(wrapper, 'visible').text = '!String.IsEqual(ListItem.DBtype,episode)'
+            parent.remove(node)
+            wrapper.append(node)
+            parent.insert(index, wrapper)
+    payload = ET.tostring(root, encoding='utf-8', xml_declaration=True)
+    ET.fromstring(payload)
+    _write(path, payload)
+    return 1
+
+
 def repair(reload_skin=True):
     import xbmc
     import xbmcvfs
@@ -519,6 +561,7 @@ def repair(reload_skin=True):
         except Exception as exc:
             xbmc.log('[POV IL] Build shortcut repair deferred: ' + type(exc).__name__, xbmc.LOGWARNING)
         repair_helper(addons)
+        episode_panel = repair_episode_panel(addons)
         paired = restore_catalogue_pair(addons, userdata)
         restored = restore_popular_defaults(addons, userdata)
         aligned = align_default_order(addons, userdata)
@@ -541,9 +584,9 @@ def repair(reload_skin=True):
         if shortcuts:
             xbmc.log('[POV IL] Restored %s build shortcut folders/rows in active profile' % shortcuts,
                      xbmc.LOGINFO)
-        if (changed or aligned or shortcuts or paired or episodes) and reload_skin and xbmc.getSkinDir() == 'skin.fentastic' and not xbmc.Player().isPlayingVideo():
+        if (changed or aligned or shortcuts or paired or episodes or episode_panel) and reload_skin and xbmc.getSkinDir() == 'skin.fentastic' and not xbmc.Player().isPlayingVideo():
             xbmc.executebuiltin('ReloadSkin()')
-        return changed or aligned or shortcuts or paired or episodes
+        return changed or aligned or shortcuts or paired or episodes or episode_panel
     except Exception as exc:
         xbmc.log('[POV IL] FENtastic widget repair deferred: %s' % exc, xbmc.LOGWARNING)
         return 0

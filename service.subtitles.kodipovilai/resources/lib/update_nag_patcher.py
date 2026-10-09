@@ -1,4 +1,4 @@
-# Stop two add-ons offering an update the build will not let anybody take.
+# Quiet pinned add-on offers and the optional Kodi 21.2 upgrade reminder.
 #
 # Umbrella and Account Manager Lite each check their own upstream repo at
 # Kodi start and pop a toast when it is ahead. Neither toast leads anywhere.
@@ -42,6 +42,11 @@ try:
 except Exception:
     addon_settings_safe = None
 
+try:
+    import xbmc
+except Exception:
+    xbmc = None
+
 
 # (add-on id, setting, the value they ship, what we want, guard property)
 # The guard property is the home-window flag the add-on uses to mute its own
@@ -53,6 +58,19 @@ TARGETS = (
     ('script.module.acctmgr', 'check_for_update', 'true', 'false', None),
 )
 DONE_SETTING = '_update_nag_quiet_v1'
+
+
+def _targets():
+    targets = TARGETS
+    try:
+        import re
+        version = xbmc.getInfoLabel('System.BuildVersion')
+        if re.match(r'^21\.2(?:\D|$)', version.strip()):
+            targets += (('service.xbmc.versioncheck', 'versioncheck_enable',
+                         'true', 'false', None),)
+    except Exception:
+        pass
+    return targets
 
 
 def _log(msg, level='INFO'):
@@ -90,7 +108,7 @@ def ensure_quiet():
     quieted = []
     failed_any = False
     saw_one = False
-    for addon_id, key, shipped, wanted, guard in TARGETS:
+    for addon_id, key, shipped, wanted, guard in _targets():
         tag = addon_id + ':' + key
         if tag in done:
             # Settled on an earlier start. That still counts as having found

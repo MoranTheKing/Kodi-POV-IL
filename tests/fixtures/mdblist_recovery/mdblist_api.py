@@ -55,6 +55,15 @@ def mdbl_refresh():
 		kodi_utils.sleep(500)
 	except Exception as e: logger('mdbl_refresh error', str(e))
 
+# Additional verbatim expiry function from the pinned official POV 6.10.05.
+def mdbl_expires():
+	if not get_setting('mdblist.refresh', ''): return
+	from datetime import datetime, timezone
+	interval = settings.trakt_sync_interval()[1]
+	current = int(datetime.now(timezone.utc).timestamp())
+	expires = int(get_setting('mdblist.expires', '0'))
+	if interval + current >= expires: mdbl_refresh()
+
 def mdbl_collection_watchlist_items(list_type, mediatype):
 	if list_type == 'collection': string, url = 'mdbl_collection', '/sync/collection'
 	else: string, url = 'mdbl_watchlist', '/watchlist/items'

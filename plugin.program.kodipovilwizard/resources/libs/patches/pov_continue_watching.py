@@ -92,9 +92,9 @@ def _save(path, state):
 
 
 @contextmanager
-def _lock(path):
+def _lock(path, timeout=.1):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    connection = sqlite3.connect(path + '.lock.db', timeout=.1)
+    connection = sqlite3.connect(path + '.lock.db', timeout=timeout)
     try:
         connection.execute('BEGIN IMMEDIATE')
         yield
@@ -103,10 +103,10 @@ def _lock(path):
         connection.close()
 
 
-def _refresh(path, identity, reader, now=None):
+def _refresh(path, identity, reader, now=None, lock_wait=.1):
     now = time.time() if now is None else now
     try:
-        with _lock(path):
+        with _lock(path, lock_wait):
             state = _load(path, identity)
             if state.get('retry_at', 0) > now:
                 return state
@@ -146,7 +146,10 @@ def snapshot(path, identity, reader, background=True, now=None):
                                 _pending.discard(key)
                     threading.Thread(target=run).start()
             return set(state['items'])
-    state = _refresh(path, identity, reader, now)
+    # If the service is preparing the very first list, reuse its verified
+    # result instead of briefly presenting an unknown/empty directory.
+    # Warm snapshots above never wait for that cross-interpreter lock.
+    state = _refresh(path, identity, reader, now, lock_wait=READ_BUDGET)
     if state.get('complete'):
         return set(state['items'])
     raise HiddenUnavailable(retry_after=max(30, state.get('retry_at', now + 60) - now))
@@ -208,7 +211,13 @@ provider adapters, cookies and retry policies remain untouched.
                 if provider == 'trakt':
                     api.trakt_refresh()
                 else:
-                    api.mdbl_refresh()
+                    from pov_mdblist_patch_logic import repair_api_key_auth
+                    remaining = READ_BUDGET - (time.monotonic() - start)
+                    repaired = remaining > 0 and repair_api_key_auth(client, (min(2, remaining), min(3, remaining)))
+                    if repaired:
+                        continue
+                    if kodi_utils.get_setting('mdblist.refresh'):
+                        api.mdbl_refresh()
                 if kodi_utils.get_setting(provider + '.token') != before:
                     continue
             if not response.ok:
@@ -299,6 +308,52 @@ def remote_hidden(provider):
         raise
 
 
+def prefetch_once(indicator=None):
+    """Prepare the small verified exclusion list in POV's service interpreter."""
+    from modules import kodi_utils, settings
+    indicator = settings.watched_indicators() if indicator is None else indicator
+    if indicator not in (1, 2):
+        return False
+    provider = 'trakt' if indicator == 1 else 'mdblist'
+    try:
+        profile = kodi_utils.translate_path('special://profile/')
+        path, identity = _path(provider), _identity(provider)
+        before = _load(path, identity)
+        def reader():
+            if kodi_utils.translate_path('special://profile/') != profile:
+                raise HiddenUnavailable()
+            result = _read_remote(provider, identity)
+            if kodi_utils.translate_path('special://profile/') != profile:
+                raise HiddenUnavailable()
+            return result
+        state = _refresh(path, identity, reader)
+        return bool(state.get('complete') and (not before.get('complete') or
+                    state.get('items') != before.get('items')))
+    except (HiddenUnavailable, OSError, sqlite3.Error):
+        return False
+
+
+def service_prefetch(monitor):
+    """No directory work, history reads, metadata fetches or GUI busy dialog.
+
+    Owned and joined by the existing native service, never a detached Kodi
+    interpreter. A profile change or normal exit stops the worker.
+    """
+    from modules import kodi_utils
+    profile = kodi_utils.translate_path('special://profile/')
+    while not monitor.abortRequested():
+        if kodi_utils.translate_path('special://profile/') != profile:
+            return
+        try:
+            changed = prefetch_once()
+            if changed and kodi_utils.translate_path('special://profile/') == profile:
+                kodi_utils.widget_refresh()
+        except Exception as error:
+            kodi_utils.logger('continue watching prefetch', type(error).__name__)
+        if monitor.waitForAbort(30):
+            return
+
+
 def invalidate(provider):
     try:
         path, identity = _path(provider), _identity(provider)
@@ -346,10 +401,10 @@ def append_episode_actions(scope, build_url=None, run_plugin=None):
         params = dict(mode='mark_as_watched_unwatched_season', action='mark_as_watched',
                       year=scope['year'], tmdb_id=scope['tmdb_id'], tvdb_id=scope['tvdb_id'],
                       season=scope['season'], title=scope['title'])
-        scope['cm_append']((menu.cm_sort['mark'], '[B]סמן את העונה כנצפתה (%s)[/B]' % menu.watched_title,
+        scope['cm_append']((menu.cm_sort['mark'] or 1, '[B]סמן את העונה כנצפתה (%s)[/B]' % menu.watched_title,
                             run_plugin % build_url(params)))
     if menu.list_type.startswith('next_episode') or menu.list_type == 'in_progress':
-        params = dict(mode='dropped_choice', mediatype='tvshow',
+        params = dict(mode='dropped_choice', action='hide', mediatype='tvshow',
                       tmdb_id=scope['tmdb_id'], title=scope['title'])
         # Explicit removal is available even if optional provider CM groups
         # were disabled. It hides a show; it does not mark unwatched episodes.
@@ -357,17 +412,74 @@ def append_episode_actions(scope, build_url=None, run_plugin=None):
                             run_plugin % build_url(params)))
 
 
+def append_show_actions(scope, build_url, run_plugin):
+    """Use the same explicit hide on show cards, including cloud watchlists.
+
+    Optional provider/favourites groups do not control this basic action.
+    Retain the native restore toggle in the local hidden-shows directory.
+    """
+    menu = scope['self']
+    if scope.get('meta', {}).get('season_data'):
+        params = dict(mode='mark_as_watched_unwatched_season', action='mark_as_watched',
+                      season='choose', tmdb_id=scope['tmdb_id'], title=scope['title'],
+                      year=scope.get('year', 0), tvdb_id=scope.get('tvdb_id', 0))
+        scope['cm_append']((1, '[B]סמן עונה כנצפתה…[/B]', run_plugin % build_url(params)))
+    if menu.action in ('dropped_tvshows', 'trakt_droplist', 'mdblist_droplist'):
+        original = run_plugin % scope['drop_manager_params']
+        scope['cm'][:] = [(priority or 1, label, command) if command == original else (priority, label, command)
+                         for priority, label, command in scope['cm']]
+        return
+    original = run_plugin % scope['drop_manager_params']
+    scope['cm'][:] = [row for row in scope['cm'] if row[2] != original]
+    params = dict(mode='dropped_choice', action='hide', mediatype='tvshow',
+                  tmdb_id=scope['tmdb_id'], title=scope['title'])
+    scope['cm_append']((1, '[B]הסר מהמשך צפייה[/B]', run_plugin % build_url(params)))
+
+
+def filter_show_sources(menu):
+    if menu.action != 'in_progress_tvshows':
+        return
+    hidden = dropped_info({}, menu.watched_indicators)
+    rows = []
+    for row in menu.list:
+        try:
+            if _id(row) not in hidden:
+                rows.append(row)
+        except (TypeError, ValueError):
+            # A malformed source entry must not blank all the valid shows.
+            continue
+    menu.list = rows
+
+
+def choose_season(params, native):
+    """A show card offers a picker, then delegates to the native season write."""
+    from modules import kodi_utils, settings
+    current = native['get_datetime']()
+    meta = native['metadata'].tvshow_meta('tmdb_id', params['tmdb_id'], settings.metadata_user_info(), current)
+    seasons = sorted({int(row['season_number']) for row in meta.get('season_data', [])
+                      if row.get('season_number', 0) > 0 and row.get('episode_count', 0) > 0
+                      and row.get('air_date') and row['air_date'] <= str(current)[:10]})
+    if not seasons:
+        return kodi_utils.notify_error()
+    index = kodi_utils.dialog.select('סמן עונה כנצפתה', ['עונה %s' % number for number in seasons])
+    if index < 0 or index >= len(seasons):
+        return
+    return native['mark_as_watched_unwatched_season'](dict(params, season=seasons[index]))
+
+
 def dropped_choice(params, native):
     from indexers.local_api import local_droplist, add_to_sync, remove_from_sync
     from modules import kodi_utils
     mediatype, tmdb_id, title = params['mediatype'], _id(params['tmdb_id']), params['title']
     current = {_id(row['tmdb_id']) for row in local_droplist(None, mediatype, 'all')}
-    remove = tmdb_id in current
+    action = params.get('action')
+    remove = action == 'unhide' if action in ('hide', 'unhide') else tmdb_id in current
     text = ('להחזיר להמשך צפייה?' if remove else 'להסיר מהמשך צפייה?') + '[CR]' + title
     if not native['confirm_dialog'](text=text):
         return
     mutation = remove_from_sync if remove else add_to_sync
-    ok = mutation('dropped', mediatype, tmdb_id, title)
+    already_done = action in ('hide', 'unhide') and ((tmdb_id not in current) if remove else (tmdb_id in current))
+    ok = already_done or mutation('dropped', mediatype, tmdb_id, title)
     if ok:
         kodi_utils.notify_success()
         kodi_utils.widget_refresh()
