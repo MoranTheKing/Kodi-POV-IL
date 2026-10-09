@@ -1543,6 +1543,41 @@ PATCH_CONFIG = [
     }
 ]
 
+# The next-episode worker fixes playcount at zero and reads resume points from
+# bookmarks; it never consumes the constructor's complete TV history mapping.
+PATCH_CONFIG.extend([
+    {
+        'id': 'pov_next_episode_constructor',
+        'name': 'Scope the unused next-episode constructor history read',
+        'addon_id': 'plugin.video.pov', 'enabled': True,
+        'target_file': 'resources/lib/menus/episodes.py',
+        'marker': '# WIZARD_POV_NEXT_CONSTRUCTOR_v1',
+        'anchor': 'class Menu(Episodes):',
+        'action': 'append_after',
+        'hook': ('# Keep the inherited constructor unchanged outside this scoped read.\n'
+                 '\tdef __init__(self, params):\n'
+                 '\t\timport sys, xbmcvfs\n'
+                 "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+                 '\t\tif p not in sys.path: sys.path.append(p)\n'
+                 '\t\timport pov_watch_history\n'
+                 '\t\tpov_watch_history.next_constructor(self, super().__init__, params, ws.get_watched_info_tv)\n\n')
+    },
+    {
+        'id': 'pov_indexed_next_history',
+        'name': 'Seek the last watched episode through the existing native index',
+        'addon_id': 'plugin.video.pov', 'enabled': True,
+        'target_file': 'resources/lib/caches/watched_cache.py',
+        'marker': '# WIZARD_POV_INDEXED_NEXT_HISTORY_v1',
+        'anchor': '\tcommand = """\n\t\tSELECT media_id, title, last_played, season, episode',
+        'action': 'prepend_before',
+        'hook': ('\timport sys, xbmcvfs\n'
+                 "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+                 '\tif p not in sys.path: sys.path.append(p)\n'
+                 '\timport pov_next_history\n'
+                 '\treturn pov_next_history.next_episodes(globals(), watched_indicators)\n')
+    }
+])
+
 # Provider IDs cannot be derived from labels after interface localization.
 for _provider, _file in (('tmdb', 'menus/tmdb.py'), ('trakt', 'menus/trakt.py')):
     PATCH_CONFIG.append({
@@ -1584,3 +1619,72 @@ PATCH_CONFIG.extend([
               "\tsys.path.append(p) if p not in sys.path else None\n"
               "\timport pov_invoker_safe\n\treturn pov_invoker_safe.manual_toggle_applied(new_value)\n")},
 ])
+
+# Keep explicit continuation exclusions independent of the watched provider.
+# Read-only cloud snapshots are account/profile scoped; failed reads cannot
+# restore hidden shows. No history is changed to simulate removing a title.
+_continue_import = ("import sys, xbmcvfs\n"
+                    "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+                    "sys.path.append(p) if p not in sys.path else None\n"
+                    "import pov_continue_watching\n")
+PATCH_CONFIG.extend([
+    {'id': 'pov_persistent_continue_exclusions', 'name': 'Honor local removals with every watched provider',
+     'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/caches/watched_cache.py',
+     'marker': '# WIZARD_POV_CONTINUE_EXCLUSIONS_v1',
+     'anchor': 'def get_dropped_info_tv(watched_indicators):', 'action': 'append_after',
+     'hook': _continue_import + 'return pov_continue_watching.dropped_info(globals(), watched_indicators)\n'},
+    {'id': 'pov_continuation_extra_sources', 'name': 'Apply exclusions to bookmarks and optional watchlists',
+     'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/menus/episodes.py',
+     'marker': '# WIZARD_POV_CONTINUE_SOURCES_v1',
+     'anchor': '\t\tif callable(func): func(params_get)', 'action': 'append_after',
+     'hook': _continue_import + 'pov_continue_watching.filter_episode_sources(self)\n'},
+    {'id': 'pov_continuation_episode_actions', 'name': 'Restore season marking and explicit continuation removal',
+     'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/menus/episodes.py',
+     'marker': '# WIZARD_POV_CONTINUE_ACTIONS_v2',
+     'anchor': '\t\t\tcm.sort(key=lambda k: k[0])', 'action': 'prepend_before',
+     'hook': _continue_import + 'pov_continue_watching.append_episode_actions(locals(), build_url, run_plugin)\n'},
+    {'id': 'pov_continuation_local_toggle', 'name': 'Persist local continuation removal and refresh widgets',
+     'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/modules/dialogs.py',
+     'marker': '# WIZARD_POV_CONTINUE_LOCAL_TOGGLE_v1',
+     'anchor': 'def dropped_choice(params):', 'action': 'append_after',
+     'hook': _continue_import + 'return pov_continue_watching.dropped_choice(params, globals())\n'},
+    {'id': 'pov_debrid_cache_upsert', 'name': 'Update repeated debrid cache hashes without uniqueness errors',
+     'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/caches/debrid_cache.py',
+     'marker': '# WIZARD_POV_DEBRID_CACHE_UPSERT_v1',
+     'anchor': "SET_MANY = 'INSERT INTO debrid_data VALUES (?, ?, ?, ?)'", 'action': 'append_after',
+     'hook': "SET_MANY = 'INSERT OR REPLACE INTO debrid_data VALUES (?, ?, ?, ?)'\n"},
+])
+for _provider, _prefix in (('trakt', 'trakt'), ('mdblist', 'mdbl')):
+    PATCH_CONFIG.extend([
+        {'id': 'pov_%s_continue_snapshot_invalidation' % _prefix,
+         'name': 'Invalidate the continuation snapshot with native dropped activity',
+         'addon_id': 'plugin.video.pov', 'enabled': True,
+         'target_file': 'resources/lib/caches/%s_cache.py' % _prefix,
+         'marker': '# WIZARD_POV_%s_CONTINUE_INVALIDATE_v1' % _prefix.upper(),
+         'anchor': 'def clear_%s_hidden_data(list_type):' % _prefix, 'action': 'append_after',
+         'hook': _continue_import + "if list_type == 'dropped': pov_continue_watching.invalidate('%s')\n" % _provider},
+        {'id': 'pov_%s_verified_continue_toggle' % _prefix,
+         'name': 'Verify cloud dropped writes and preserve immediate local exclusions',
+         'addon_id': 'plugin.video.pov', 'enabled': True,
+         'target_file': 'resources/lib/indexers/%s_api.py' % _provider,
+         'marker': '# WIZARD_POV_%s_CONTINUE_TOGGLE_v2' % _prefix.upper(),
+         'anchor': 'def hide_unhide_%s_items(action, mediatype, media_id, list_type):' % _prefix,
+         'action': 'append_after',
+         'hook': _continue_import + ("if mediatype in ('show', 'shows', 'tvshow') and list_type == 'dropped':\n"
+                                    "\treturn pov_continue_watching.remote_toggle(globals(), '%s', action, mediatype, media_id, list_type)\n" % _provider)},
+    ])
+
+# Function anchors are at column zero; retain the extra body indentation when
+# the engine dedents and reindents the hook to that anchor.
+for _entry in PATCH_CONFIG:
+    if (_entry['id'].startswith(('pov_persistent_continue_', 'pov_continuation_local_',
+                                 'pov_trakt_continue_', 'pov_mdbl_continue_',
+                                 'pov_trakt_verified_continue_', 'pov_mdbl_verified_continue_'))
+            and _entry['anchor'].startswith('def ')):
+        _entry['hook'] = '# Preserve the native function body below.\n' + ''.join(
+            '\t' + line + '\n' for line in _entry['hook'].splitlines())
