@@ -71,12 +71,7 @@ def prepare(master, profile):
     base = os.path.join(addons, 'service.subtitles.kodipovilai', 'resources', 'lib')
     tonight = _module('tonight', os.path.join(base, 'tonight', 'entrypoints.py'))
     path = os.path.join(target, 'favourites.xml')
-    with open(path, encoding='utf-8') as source:
-        before = source.read()
-    after = tonight.insert(before)
-    if before != after:
-        from resources.libs.parental_profiles import atomic_write
-        atomic_write(path, after.encode('utf-8'))
+    tonight.ensure(profile=target)
     recent = _module('recent', os.path.join(base, 'recent_updates_tile_patcher.py'))
     recent.xbmcvfs = _ProfileFiles(target)
     result = recent.ensure_patched()
