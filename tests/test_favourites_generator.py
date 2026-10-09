@@ -106,7 +106,7 @@ class FavouritesGeneratorTests(unittest.TestCase):
         visible = self._refresh()
         self.assertEqual(sum('Umbrella' in i.get('name') for i in _items(visible)), 2)
 
-    def test_already_hidden_service_tiles_are_not_recorded_as_user_deletions(self):
+    def test_deletion_before_service_disconnect_survives_reconnection(self):
         first = self._refresh()
         root = ET.fromstring(first)
         for item in list(root):
@@ -117,10 +117,10 @@ class FavouritesGeneratorTests(unittest.TestCase):
         self._refresh()
         self.visibility.active |= {'umbrella', 'trakt'}
         restored = _items(self._refresh())
-        self.assertEqual(sum('Umbrella' in i.get('name') for i in restored), 2)
-        self.assertEqual(sum('(Trakt)' in i.get('name') for i in restored), 2)
+        self.assertEqual(sum('Umbrella' in i.get('name') for i in restored), 0)
+        self.assertEqual(sum('(Trakt)' in i.get('name') for i in restored), 0)
 
-    def test_legacy_poisoned_deletion_flags_repaired_once(self):
+    def test_legacy_explicit_deletions_are_not_reset_by_update(self):
         import json
         first = self._refresh(); root = ET.fromstring(first)
         names = {i.get('name') for i in root if 'Umbrella' in i.get('name') or '(Trakt)' in i.get('name')}
@@ -131,14 +131,72 @@ class FavouritesGeneratorTests(unittest.TestCase):
         state['layout_version']=2;state['deleted']=sorted(names)
         state_path.write_text(json.dumps(state), 'utf8')
         restored=self._refresh()
-        self.assertTrue(names <= {i.get('name') for i in _items(restored)})
+        self.assertFalse(names & {i.get('name') for i in _items(restored)})
         # Deliberate removals following migration stay removed on later boots.
         root=ET.fromstring(restored)
         for item in list(root):
             if item.get('name') in names: root.remove(item)
         self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
         self.assertFalse(names & {i.get('name') for i in _items(self._refresh())})
-        self.assertFalse(names & {i.get('name') for i in _items(self._refresh())})
+
+    def test_deleted_tile_stays_deleted_across_label_and_action_update(self):
+        import json
+        first = self._refresh()
+        root = ET.fromstring(first)
+        tile = next(i for i in root if i.get('name') == '[B]סדרות חדשות[/B]')
+        root.remove(tile)
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        self._refresh()
+        config = generator._load_config()
+        config['tiles']['shows_new']['name'] = '[B]סדרות חדשות — מעודכן[/B]'
+        config['tiles']['shows_new']['action'] = tile.text.replace('tmdb_tv_premieres', 'tmdb_tv_recent')
+        with mock.patch.object(generator, '_load_config', return_value=config):
+            for _ in range(3):
+                self.assertFalse(any('סדרות חדשות' in i.get('name') for i in _items(self._refresh())))
+        state = json.loads(Path(generator._state_file()).read_text('utf8'))
+        self.assertIn('povil.tile:shows_new', state['deleted'])
+
+    def test_rename_keeps_user_tile_without_adding_duplicate(self):
+        first = self._refresh()
+        root = ET.fromstring(first)
+        item = next(i for i in root if i.get('name') == '[B]סדרות חדשות[/B]')
+        item.set('name', 'My renamed shows')
+        item.set('thumb', 'custom.png')
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        rows = _items(self._refresh())
+        self.assertEqual(sum('action=tmdb_tv_premieres' in i.text for i in rows), 1)
+        self.assertTrue(any(i.get('name') == 'My renamed shows' and i.get('thumb') == 'custom.png' for i in rows))
+
+    def test_untouched_label_upgrade_does_not_duplicate_or_move_tile(self):
+        first = self._refresh()
+        config = generator._load_config()
+        config['tiles']['shows_new']['name'] = '[B]Updated new shows[/B]'
+        with mock.patch.object(generator, '_load_config', return_value=config):
+            rows = _items(self._refresh())
+        old = [i.get('name') for i in _items(first)]
+        new = [i.get('name') for i in rows]
+        self.assertEqual(new, ['[B]Updated new shows[/B]' if n == '[B]סדרות חדשות[/B]' else n for n in old])
+
+    def test_delete_before_skin_excludes_tile_stays_deleted_on_return(self):
+        self._refresh()
+        root = ET.fromstring(self._installed().read_text('utf8'))
+        name = '[B]הסדרות שלי (MDBList)[/B]'
+        root[:] = [i for i in root if i.get('name') != name]
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        self._refresh('skin.arctic.fuse.3')
+        self.assertNotIn(name, [i.get('name') for i in _items(self._refresh())])
+
+    def test_explicit_readd_clears_stable_deletion(self):
+        first = self._refresh()
+        root = ET.fromstring(first)
+        tile = next(i for i in root if i.get('name') == '[B]סדרות חדשות[/B]')
+        root.remove(tile)
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        self._refresh()
+        root = ET.fromstring(self._installed().read_text('utf8'))
+        root.append(tile)
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf8')
+        self.assertEqual(_items(self._refresh())[-1].get('name'), tile.get('name'))
 
     def test_concurrent_refreshes_serialize_xml_and_baseline(self):
         import threading, time
