@@ -1129,7 +1129,7 @@
 						<visible>String.IsEmpty(ListItem.Art(clearlogo))</visible>
 					</control>
 					<control type="group">
-						<visible>Skin.HasSetting(Disable.RatingsINF) | String.IsEmpty(Skin.String(mdblist_api_key))</visible>
+						<visible>String.IsEqual(ListItem.DBtype,episode) | Skin.HasSetting(Disable.RatingsINF) | String.IsEmpty(Skin.String(mdblist_api_key))</visible>
 						<control type="textbox">
 							<left>30</left>
 							<top>239</top>
@@ -1149,7 +1149,8 @@
 							<top>323</top>
 							<width>410</width>
 							<bottom>60</bottom>
-							<label>$VAR[InfoPanelEpisode]</label>
+							<label>$INFO[ListItem.Property(povil_episode_name),[B],[/B][CR][CR]]$INFO[ListItem.Premiered,[B]שודר לראשונה: [/B],[CR]]$INFO[ListItem.Duration,[B]משך: [/B],[CR]]$INFO[ListItem.Mpaa,[B]דירוג גיל: [/B],[CR][CR]]$INFO[ListItem.Property(povil_episode_plot_label),[B],:[/B][CR]]$INFO[ListItem.Plot]</label>
+							<visible>String.IsEqual(ListItem.DBtype,episode)</visible>
 						
 							<!-- KODI-RD-IL ADDITION -->
 							<align>right</align>
@@ -1167,7 +1168,7 @@
 							<bottom>60</bottom>
 							<font>font36_title</font>
 							<!-- KODI-RD-IL CHANGES -->
-							<label>$LOCALIZE[700015] $INFO[ListItem.Season], $LOCALIZE[700016] $INFO[ListItem.Episode]</label>
+							<label>עונה $INFO[ListItem.Season] · פרק $INFO[ListItem.Episode]</label>
 							<!-- ##################### -->
 						
 							<!-- KODI-RD-IL ADDITION -->
@@ -1177,6 +1178,8 @@
 							<visible>String.IsEqual(ListItem.DbType,episode)</visible>
 						</control>
 					</control>
+					<control type="group">
+						<visible>!String.IsEqual(ListItem.DBtype,episode)</visible>
 					<include condition="![Skin.HasSetting(Disable.RatingsINF) | String.IsEmpty(Skin.String(mdblist_api_key))]" content="RatingsInfoPanel">
 						<param name="left" value="30" />
 						<param name="width" value="410" />
@@ -1186,6 +1189,7 @@
 						<param name="height_alt_movie" value="330" />
 						<param name="height_alt_tvshow" value="290" />
 					</include>
+					</control>
 					<!-- <control type="textbox">
 						<left>30</left>
 						<top>467</top>
