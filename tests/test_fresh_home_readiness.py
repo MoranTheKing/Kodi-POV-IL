@@ -52,6 +52,9 @@ class FreshHomeReadinessTests(unittest.TestCase):
                 favs.write_text(ET.tostring(root, encoding='unicode'), encoding='utf8')
                 fn()
                 self.assertNotIn('mode=recentupdates', favs.read_text('utf8'))
+                self.assertNotIn('action=tonight', favs.read_text('utf8'))
+                fn()
+                self.assertNotIn('action=tonight', favs.read_text('utf8'))
 
     def test_late_first_install_tiles_get_one_bounded_extra_profile_refresh(self):
         with tempfile.TemporaryDirectory() as raw:
