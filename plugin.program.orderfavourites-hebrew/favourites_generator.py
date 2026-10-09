@@ -205,19 +205,27 @@ def _state_file():
 
 
 def _load_state():
+    baseline, deleted, _ = _load_state_details()
+    return baseline, deleted
+
+
+def _load_state_details():
     path = _state_file()
     if path and os.path.isfile(path):
         try:
             with open(path, 'r', encoding='utf-8') as fh:
                 state = json.load(fh)
             if state.get('version') == 1 and isinstance(state.get('baseline'), str):
-                return state['baseline'], set(state.get('deleted', []))
+                identities = state.get('identities', {})
+                if not isinstance(identities, dict):
+                    identities = {}
+                return state['baseline'], set(state.get('deleted', [])), identities
         except (OSError, ValueError, TypeError) as exc:
             _log('could not read favourites state: {0}'.format(exc), error=True)
-    return None, set()
+    return None, set(), {}
 
 
-def _save_state(baseline, deleted):
+def _save_state(baseline, deleted, identities=None):
     path = _state_file()
     if not path:
         return False
@@ -227,8 +235,9 @@ def _save_state(baseline, deleted):
         os.makedirs(folder, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix='.favourites-', dir=folder)
         with os.fdopen(fd, 'w', encoding='utf-8') as fh:
-            json.dump({'version': 1, 'layout_version': 3, 'baseline': baseline,
-                       'deleted': sorted(deleted)}, fh, ensure_ascii=False)
+            json.dump({'version': 1, 'layout_version': 4, 'baseline': baseline,
+                       'deleted': sorted(deleted), 'identities': identities or {}},
+                      fh, ensure_ascii=False)
         os.replace(tmp, path)
         return True
     except (OSError, ValueError) as exc:
@@ -346,7 +355,50 @@ def _insert_personal(root, item, desired_root):
     root.append(ET.fromstring(ET.tostring(item)))
 
 
-def _merge_favourites(existing, previous, desired, deleted, repair_tail=False):
+def _action_identity(action):
+    # Presentation parameters can change with translations and thumbnail fixes.
+    # Keep filters, IDs and routing parameters: custom destinations stay custom.
+    return re.sub(r'plugin://[^"\s)]+', lambda match: _url_identity(match.group()),
+                  (action or '').strip())
+
+
+def _url_identity(url):
+    parsed = urlsplit(url)
+    pairs = [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+             if key not in ('name', 'iconImage')]
+    return repr((parsed.scheme, parsed.netloc, parsed.path, sorted(pairs), parsed.fragment))
+
+
+def _tile_identities(config, xmls, recorded=None):
+    """Match known build tiles across label changes without changing Kodi XML."""
+    names, actions = {}, {}
+    for key, tile in config.get('tiles', {}).items():
+        variants = [tile]
+        for skin in config.get('skins', {}).values():
+            override = skin.get('overrides', {}).get(key)
+            if override:
+                variants.append(dict(tile, **override))
+        for variant in variants:
+            identity = 'povil.tile:' + key
+            names[variant.get('name')] = identity
+            fingerprint = _action_identity(variant.get('action'))
+            actions.setdefault(fingerprint, set()).add(identity)
+    names['[B]סדרות חדשים[/B]'] = 'povil.tile:shows_new'
+    names.update({name: key for name, key in (recorded or {}).items()
+                  if isinstance(name, str) and isinstance(key, str)
+                  and key.startswith('povil.tile:')})
+    for xml in xmls:
+        if xml is None:
+            continue
+        _, rows = _parse_favourites(xml, 'identity')
+        for name, item in rows.items():
+            candidates = actions.get(_action_identity(item.text), set())
+            if name not in names and len(candidates) == 1:
+                names[name] = next(iter(candidates))
+    return names
+
+
+def _merge_favourites(existing, previous, desired, deleted, repair_tail=False, identities=None):
     """Three-way merge: preserve user order, edits, additions and deletions.
 
     `previous` is the last generated *default*, even if the installed file
@@ -362,17 +414,24 @@ def _merge_favourites(existing, previous, desired, deleted, repair_tail=False):
     else:
         _, old_by_name = _parse_favourites(previous, 'previous default')
     deleted = set(deleted)
+    identities = identities or {}
+    current_ids = {identities.get(name, name) for name in user_by_name}
+    desired_by_id = {identities.get(name, name): item for name, item in desired_by_name.items()}
+    # Convert old label tombstones before an update renames the same build tile.
+    deleted.update(identities[name] for name in tuple(deleted) if name in identities)
     for name in old_by_name:
-        if name not in user_by_name and name in desired_by_name:
+        identity = identities.get(name, name)
+        if identity not in current_ids:
             deleted.add(name)
-        elif name in user_by_name:
-            deleted.discard(name)
+            deleted.add(identity)
+    # An explicit re-add (including a renamed tile) reverses its own deletion.
+    deleted = {name for name in deleted if identities.get(name, name) not in current_ids}
     for item in list(user_root):
         name = item.get('name')
         old = old_by_name.get(name)
         if old is None or not _same_favourite(item, old):
             continue
-        replacement = desired_by_name.get(name)
+        replacement = desired_by_id.get(identities.get(name, name))
         index = list(user_root).index(item)
         user_root.remove(item)
         if replacement is not None:
@@ -394,14 +453,17 @@ def _merge_favourites(existing, previous, desired, deleted, repair_tail=False):
         for item in trailing:
             user_root.remove(item)
     current_names = {item.get('name') for item in user_root}
+    current_ids = {identities.get(name, name) for name in current_names}
     for item in desired_root:
         name = item.get('name')
-        if name not in current_names and name not in deleted:
+        identity = identities.get(name, name)
+        if identity not in current_ids and name not in deleted and identity not in deleted:
             if _mdbl_personal(item) and previous is not None:
                 _insert_personal(user_root, item, desired_root)
             else:
                 user_root.append(ET.fromstring(ET.tostring(item)))
             current_names.add(name)
+            current_ids.add(identity)
     return ET.tostring(user_root, encoding='unicode'), deleted
 
 
@@ -496,43 +558,28 @@ def _generate_favourites_xml(skin_id, merge=True, write=True, config_path=None):
     previous = None
     previous_deleted = set()
     existing = None
+    identities = {}
     if merge:
-        previous, previous_deleted = _load_state()
+        previous, previous_deleted, recorded = _load_state_details()
         layout_version = _layout_version()
-        if layout_version < 3:
-            # Older refreshes could record a temporarily hidden service tile
-            # as deleted forever. Restore the reported Umbrella/Trakt defaults
-            # once; explicit removals after this migration remain authoritative.
-            recover = {tile.get('name') for tile in config.get('tiles', {}).values()
-                       if tile.get('condition') in ('umbrella', 'trakt')}
-            previous_deleted -= recover
-            if previous:
-                try:
-                    root, _ = _parse_favourites(previous, 'previous default')
-                except ValueError as exc:
-                    _log('leaving existing favourites untouched: ' + str(exc), error=True)
-                    return None
-                for item in list(root):
-                    if item.get('name') in recover:
-                        root.remove(item)
-                previous = ET.tostring(root, encoding='unicode')
         existing = _read_existing()
         try:
+            identities = _tile_identities(config, (previous, existing, desired), recorded)
             xml, deleted = _merge_favourites(
                 existing, previous, desired, previous_deleted,
-                repair_tail=layout_version < 2)
+                repair_tail=layout_version < 2, identities=identities)
         except ValueError as exc:
             _log('leaving existing favourites untouched: {0}'.format(exc), error=True)
             return None
 
     if write:
         if existing == xml:
-            if previous != desired or previous_deleted != deleted or _layout_version() < 3:
-                if not _save_state(desired, deleted):
+            if previous != desired or previous_deleted != deleted or _layout_version() < 4:
+                if not _save_state(desired, deleted, identities):
                     return None
             return xml
         if _write_favourites(xml):
-            if not _save_state(desired, deleted):
+            if not _save_state(desired, deleted, identities):
                 _log('favourites written but baseline state was not saved', error=True)
             _log('wrote {0} favourite(s) for skin "{1}"'.format(len(lines), skin_id))
         else:
