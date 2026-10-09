@@ -240,6 +240,51 @@ def _call_mdblist(path, **kwargs):
     return call_mdblist(path, **kwargs)
 
 
+def repair_api_key_auth(client=None, timeout=None):
+    """Recover a valid API key left beside an old OAuth refresh token.
+
+    Probe after an authentication failure or before expired OAuth metadata
+    is refreshed. A healthy, unexpired OAuth connection makes no extra request.
+    A rejected key, changed account or incomplete response cannot clear the
+    current OAuth credentials.
+    """
+    from modules import kodi_utils
+    from indexers import mdblist_api
+    token = kodi_utils.get_setting('mdblist.token') or ''
+    refresh = kodi_utils.get_setting('mdblist.refresh') or ''
+    user = kodi_utils.get_setting('mdblist_user') or ''
+    if not token or not refresh:
+        return False
+    profile_path = getattr(kodi_utils, 'translate_path', None)
+    profile = profile_path('special://profile/') if profile_path else None
+    try:
+        response = (client or mdblist_api.session).request('get',
+            mdblist_api.base_url.rstrip('/') + '/user', params={'apikey': token},
+            headers=None, timeout=timeout if timeout is not None else min(3, mdblist_api.timeout))
+        if not response.ok:
+            return False
+        data = response.json()
+        username = data.get('username') if isinstance(data, dict) else None
+        if not isinstance(username, str) or not username.strip():
+            return False
+        if user and username.casefold() != user.casefold():
+            return False
+        if profile_path and profile_path('special://profile/') != profile:
+            return False
+        if (kodi_utils.get_setting('mdblist.token'), kodi_utils.get_setting('mdblist.refresh')) != (token, refresh):
+            return False
+        kodi_utils.set_setting('mdblist.refresh', '')
+        if kodi_utils.get_setting('mdblist.refresh'):
+            return False
+        kodi_utils.set_setting('mdblist.expires', '0')
+        kodi_utils.set_setting('mdblist_user', username.strip())
+        # The selected watched provider and history remain unchanged.
+        kodi_utils.logger('mdblist auth', 'Verified API-key authentication recovered')
+        return True
+    except Exception:
+        return False
+
+
 def handle_401_reauth(e, path, params, json_data, method, response=None):
     """Recover one failed request; never recursively retry or steal a busy lock."""
     import hashlib, time
@@ -272,15 +317,18 @@ def handle_401_reauth(e, path, params, json_data, method, response=None):
             window.clearProperty(_AI_MDBL_REFRESH_LOCK)
             return _retry_call(path, params, json_data, method)
 
+    repaired = False
     try:
         with _refresh_mutex:
             if kodi_utils.get_setting('mdblist.token') == before:
-                from indexers.mdblist_api import mdbl_refresh
-                mdbl_refresh()
+                repaired = repair_api_key_auth()
+                if not repaired:
+                    from indexers.mdblist_api import mdbl_refresh
+                    mdbl_refresh()
     finally:
         if window is not None: window.clearProperty(_AI_MDBL_REFRESH_LOCK)
 
-    if kodi_utils.get_setting('mdblist.token') != before:
+    if repaired or kodi_utils.get_setting('mdblist.token') != before:
         return _retry_call(path, params, json_data, method)
     if window is not None: window.setProperty(failure_key, str(time.time()))
     return None
@@ -293,6 +341,7 @@ def _retry_call(path, params, json_data, method):
     if not bool(kodi_utils.get_setting('mdblist.refresh')):
         params['apikey'] = kodi_utils.get_setting('mdblist.token')
     else:
+        params.pop('apikey', None)
         headers = {'Authorization': 'Bearer %s' % kodi_utils.get_setting('mdblist.token')}
     try:
         response = session.request(
