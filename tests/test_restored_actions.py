@@ -48,8 +48,35 @@ class PublicActionTests(unittest.TestCase):
                 mod, '_mdblist_pov_write', side_effect=write):
             self.assertTrue(mod._mdblist_apply_connect('key', 'tester'))
         self.assertEqual(writes[0], (('mdblist.token', 'key'),))
-        self.assertIn(('watched_indicators', '2'), writes[1])
-        self.assertIn(('mdbl_indicators_active', 'true'), writes[1])
+        self.assertIn(('watched_indicators', '2'), writes[-1])
+        self.assertIn(('mdbl_indicators_active', 'true'), writes[-1])
+
+    def test_pairing_an_api_key_removes_old_oauth_auth_mode(self):
+        values={'mdblist.token':'old-access','mdblist.refresh':'old-refresh','mdblist.expires':'123'}
+        addon=types.SimpleNamespace(getSetting=lambda key:values.get(key,''))
+        def write(pairs):
+            values.update(pairs);return []
+        with patch.object(mod,'_mdblist_pov_addon',return_value=addon),patch.object(mod,'_mdblist_pov_write',side_effect=write):
+            self.assertTrue(mod._mdblist_apply_connect('verified-api-key','tester'))
+            self.assertEqual(values['mdblist.refresh'],'')
+            self.assertEqual(values['mdblist.expires'],'0')
+            self.assertEqual(values['mdblist.token'],'verified-api-key')
+            self.assertTrue(mod._mdblist_apply_disconnect())
+            self.assertEqual(values['mdblist.refresh'],'')
+
+    def test_failed_auth_mode_change_rolls_back_the_previous_connection(self):
+        values={'mdblist.token':'old-access','mdblist.refresh':'old-refresh','mdblist.expires':'123',
+                'mdblist_user':'existing-user','mdbl_indicators_active':'false','watched_indicators':'1'}
+        before=dict(values);addon=types.SimpleNamespace(getSetting=lambda key:values.get(key,''))
+        def write(pairs):
+            failed=[]
+            for key,value in pairs:
+                if key=='mdblist.refresh' and value=='':failed.append(key)
+                else:values[key]=value
+            return failed
+        with patch.object(mod,'_mdblist_pov_addon',return_value=addon),patch.object(mod,'_mdblist_pov_write',side_effect=write):
+            self.assertFalse(mod._mdblist_apply_connect('verified-api-key','tester'))
+        self.assertEqual(values,before)
 
     def test_invalid_mdblist_key_cannot_reach_connect(self):
         dialog = types.SimpleNamespace(ok=Mock(), yesno=Mock(return_value=False))

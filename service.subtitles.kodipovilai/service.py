@@ -476,6 +476,9 @@ def _run_build_startup_repairs():
         # them, so POV never shows its mismatch dialog. Do not move it down on
         # the strength of the old sentence.
         _maybe_patch_pov_language_invoker,
+        # Persist the optional core-upgrade reminder preference early; build
+        # updates and application compatibility checks use separate paths.
+        _maybe_quiet_update_nags,
         # Cheap XML migration. It touches only the build's exact 9999 value,
         # keeps every cached thumbnail, and affects Kodi after its next start.
         _maybe_optimize_32bit_artwork,
@@ -489,7 +492,6 @@ def _run_build_startup_repairs():
         # race the skin and momentarily render an empty personal/network/genre
         # shelf. These are small local SQLite writes/checks, never web calls.
         _maybe_patch_af3_home,
-        _maybe_quiet_update_nags,
         _maybe_patch_pov_widget_crash_guard,
         _maybe_patch_umbrella_language,
         _maybe_patch_skin_watched_poster,
@@ -1252,7 +1254,7 @@ def _maybe_seed_pov_seasons_view():
             pass
 
 def _maybe_quiet_update_nags():
-    """Switch off the self-update check in Umbrella and Account Manager Lite.
+    """Quiet pinned add-on offers and the optional Kodi 21.2 reminder.
 
     Both nag at every start about a version the build pins deliberately, and
     neither offers a way to take it -- taking it would strip the patches that

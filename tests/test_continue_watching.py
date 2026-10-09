@@ -45,7 +45,8 @@ class ContinuationTests(unittest.TestCase):
         mdbl_spec = importlib.util.spec_from_file_location('pov_mdblist_patch_logic',
             SOURCE.with_name('pov_mdblist_patch_logic.py'))
         mdbl_helper = importlib.util.module_from_spec(mdbl_spec);mdbl_spec.loader.exec_module(mdbl_helper)
-        modules = {'modules': types.SimpleNamespace(kodi_utils=self.utils),
+        modules = {'modules': types.SimpleNamespace(kodi_utils=self.utils,
+                       settings=types.SimpleNamespace(watched_indicators=lambda:2)),
                    'indexers':self.native_indexers, 'indexers.local_api':self.local,
                    'pov_mdblist_patch_logic':mdbl_helper,
                    'caches':types.SimpleNamespace(
@@ -128,6 +129,52 @@ class ContinuationTests(unittest.TestCase):
         state=helper._load(path,'A')
         self.assertTrue(state['complete'])
         self.assertNotIn('token',Path(path).read_text())
+
+    def test_service_prefetch_primes_verified_empty_snapshot_before_first_directory(self):
+        with patch.object(helper,'_read_remote',return_value=set()) as read:
+            self.assertTrue(helper.prefetch_once())
+            self.assertEqual(helper.remote_hidden('mdblist'),set())
+            self.assertFalse(helper.prefetch_once())
+            self.assertEqual(read.call_count,1)
+        self.check_history()
+
+    def test_first_directory_waits_for_active_prefetch_without_a_second_read(self):
+        started=threading.Event();finish=threading.Event();result=[]
+        def read(*args):
+            started.set()
+            if not finish.wait(2):raise RuntimeError('Test prefetch timed out')
+            return {1396}
+        with patch.object(helper,'_read_remote',side_effect=read) as reader:
+            worker=threading.Thread(target=lambda:helper.prefetch_once(2))
+            worker.start()
+            self.assertTrue(started.wait(1))
+            foreground=threading.Thread(target=lambda:result.append(helper.remote_hidden('mdblist')))
+            foreground.start()
+            time.sleep(.15);finish.set()
+            worker.join(2);foreground.join(2)
+            self.assertFalse(worker.is_alive())
+            self.assertFalse(foreground.is_alive())
+            self.assertEqual(result,[{1396}])
+            self.assertEqual(reader.call_count,1)
+
+    def test_service_prefetch_stops_with_monitor_and_skips_local_provider(self):
+        monitor=types.SimpleNamespace(abortRequested=lambda:False,waitForAbort=Mock(return_value=True))
+        with patch.object(helper,'prefetch_once',return_value=True) as prefetch:
+            helper.service_prefetch(monitor)
+            prefetch.assert_called_once_with()
+            monitor.waitForAbort.assert_called_once_with(30)
+        self.utils.widget_refresh.assert_called_once_with()
+        with patch.object(helper,'_read_remote') as read:
+            self.assertFalse(helper.prefetch_once(0))
+            read.assert_not_called()
+
+    def test_profile_change_during_prefetch_cannot_publish_new_ids(self):
+        profile=['profile-a']
+        self.utils.translate_path=lambda path:profile[0] if path=='special://profile/' else path
+        def read(*args):profile[0]='profile-b';return {1396}
+        with patch.object(helper,'_read_remote',side_effect=read):
+            self.assertFalse(helper.prefetch_once())
+        self.assertFalse(helper._load(helper._path('mdblist'),helper._identity('mdblist')).get('complete'))
 
     def test_rate_limited_read_keeps_last_verified_ids_and_respects_cooldown(self):
         path=str(self.root/'snapshot.json')
@@ -228,6 +275,69 @@ class ContinuationTests(unittest.TestCase):
         self.assertEqual(len(cm),1)
         scope['self'].list_type='trakt_calendar';cm.clear();helper.append_episode_actions(scope)
         self.assertEqual(cm,[])
+
+    def test_current_season_action_remains_visible_when_optional_mark_group_is_off(self):
+        cm=[]
+        scope=dict(self=types.SimpleNamespace(cm_sort={'mark':0},watched_title='MDBList',list_type='next_episode_pov'),
+            cm_append=cm.append,season=3,unaired=False,year=2020,tmdb_id=1396,tvdb_id=81189,title='Show')
+        helper.append_episode_actions(scope,lambda p:json.dumps(p),'RunPlugin(%s)')
+        visible=[action for priority,*action in cm if priority]
+        self.assertEqual(len(visible),2)
+        self.assertIn('mark_as_watched_unwatched_season',visible[0][1])
+        self.assertIn('"action": "hide"',visible[1][1])
+
+    def test_show_context_removal_is_available_in_cloud_and_local_lists(self):
+        for action in ('in_progress_tvshows','mdblist_watchlist','trakt_watchlist','favorites_tvshows'):
+            with self.subTest(action=action):
+                cm=[(0,'Native drop group','RunPlugin(native-dropped-choice)')]
+                scope=dict(self=types.SimpleNamespace(action=action,cm_sort={'favorites':0}),cm=cm,
+                    cm_append=cm.append,tmdb_id=1396,title='Show',drop_manager_params='native-dropped-choice')
+                helper.append_show_actions(scope,lambda p:json.dumps(p),'RunPlugin(%s)')
+                self.assertEqual(len(cm),1)
+                self.assertEqual(cm[0][0],1)
+                self.assertEqual(cm[0][1],'[B]הסר מהמשך צפייה[/B]')
+                self.assertIn('"action": "hide"',cm[0][2])
+
+    def test_repeated_explicit_removal_does_not_toggle_back_a_stale_item(self):
+        params=dict(mediatype='tvshow',tmdb_id='1396',title='Show',action='hide')
+        native={'confirm_dialog':lambda **kw:True}
+        self.assertTrue(helper.dropped_choice(params,native))
+        with patch.object(self.local,'add_to_sync',return_value=False) as duplicate:
+            self.assertTrue(helper.dropped_choice(params,native))
+            duplicate.assert_not_called()
+        self.assertEqual(self.local_rows(None,'tvshow','all'),[{'tmdb_id':'1396','title':'Show'}])
+        self.check_history()
+
+    def test_show_continuation_filters_hidden_titles_without_changing_personal_lists(self):
+        rows=['1396','456','82728'];self.add('dropped','tvshow',1396,'Show')
+        with patch.object(helper,'remote_hidden',return_value={82728}):
+            menu=types.SimpleNamespace(action='in_progress_tvshows',watched_indicators=2,list=rows[:])
+            helper.filter_show_sources(menu)
+            self.assertEqual(menu.list,['456'])
+            menu.action='mdblist_watchlist';menu.list=rows[:]
+            helper.filter_show_sources(menu)
+            self.assertEqual(menu.list,rows)
+
+    def test_show_season_picker_uses_only_positive_aired_seasons_and_native_handler(self):
+        self.utils.dialog=types.SimpleNamespace(select=Mock(return_value=1))
+        settings=types.SimpleNamespace(metadata_user_info=lambda:{})
+        native={'get_datetime':lambda:'2026-10-09',
+            'metadata':types.SimpleNamespace(tvshow_meta=lambda *a:{'season_data':[
+                {'season_number':0,'episode_count':10,'air_date':'2020-01-01'},
+                {'season_number':1,'episode_count':5,'air_date':'2021-01-01'},
+                {'season_number':3,'episode_count':5,'air_date':'2023-01-01'},
+                {'season_number':4,'episode_count':5,'air_date':'2027-01-01'}]}),
+            'mark_as_watched_unwatched_season':Mock(return_value=True)}
+        params=dict(tmdb_id='1396',title='Show',season='choose',action='mark_as_watched')
+        with patch.dict(sys.modules,{'modules':types.SimpleNamespace(kodi_utils=self.utils,settings=settings)}):
+            self.assertTrue(helper.choose_season(params,native))
+            self.utils.dialog.select.assert_called_once_with('סמן עונה כנצפתה',['עונה 1','עונה 3'])
+            native['mark_as_watched_unwatched_season'].assert_called_once_with(dict(params,season=3))
+            self.assertEqual(params['season'],'choose')
+            self.utils.dialog.select.return_value=-1
+            native['mark_as_watched_unwatched_season'].reset_mock()
+            self.assertIsNone(helper.choose_season(params,native))
+            native['mark_as_watched_unwatched_season'].assert_not_called()
 
     def test_provider_hooks_preserve_native_actions_outside_show_dropped_lists(self):
         import runpy
