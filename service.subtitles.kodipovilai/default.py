@@ -3726,62 +3726,54 @@ def _mdblist_pov_write(pairs):
 
 
 def _mdblist_apply_connect(key, username):
-    """Replicate POV's native MDBList.set() connect side-effects cross-addon:
-    store the account name + token, activate the MDBList watched-indicator, and
-    make MDBList the watched-status/progress provider -- exactly the four
-    settings POV writes itself. Returns True iff the token stuck.
+    """Persist a validated phone-pairing API key with the correct auth mode.
 
-    ORDER MATTERS: we write + hard-verify the token FIRST and gate the other
-    three writes on that success. If the token write fails, writing the aux
-    flags anyway would leave POV's watched-status pointing at MDBList
-    (watched_indicators='2', mdbl_indicators_active='true') with an empty token
-    -- an inconsistent state a Kodi restart would NOT undo, and the exact
-    'provider set, no key' breakage this whole change set out to prevent.
-    (The disconnect path can write its aux flags unconditionally because those
-    fail toward *deactivating* MDBList -- the safe direction; connect's fail
-    toward the unsafe one, so they must be gated.)
-
-    NB: POV's native set() also calls clear_cache('mdblist'). We deliberately do
-    NOT import POV's cache module cross-addon -- doing so would pull POV internals
-    into this add-on's interpreter and risk sys.modules bleed in the shared Kodi
-    process. The stale MDBList cache is inert once the indicator flags change and
-    POV refreshes it on its own schedule / next restart, so skipping it is safe.
-    POV still renders settings from an in-memory cache, so a live POV session may
-    need a restart before it reflects these writes (documented POV trap).
-
-    TWO calls into addon_settings_safe rather than one, precisely to keep the
-    gating above: a single apply() would write all four keys before telling us
-    the token had failed, which is the inconsistent state this docstring is
-    about. The wrapper already reads each key back, so its `failed` list is the
-    same hard verification the old code did by hand."""
-    if _mdblist_pov_addon() is None:
+    Verify the token before clearing obsolete OAuth refresh/expiry fields,
+    then verify the account and watched-provider settings. Roll back the six
+    affected fields if a later write fails; unrelated settings and the
+    profile's watched/progress databases are not changed. The caller refreshes
+    the personal rows only after the whole connection has been saved.
+    """
+    addon = _mdblist_pov_addon()
+    if addon is None:
         return False
+    keys = ('mdblist.token', 'mdblist.refresh', 'mdblist.expires', 'mdblist_user',
+            'mdbl_indicators_active', 'watched_indicators')
+    try:
+        before = tuple((name, addon.getSetting(name) or '') for name in keys)
+    except Exception:
+        before = ()
     if _mdblist_pov_write((('mdblist.token', (key or '').strip()),)):
         return False                       # leave every aux setting untouched
-    _mdblist_pov_write((('mdblist_user', username or ''),
-                        ('mdbl_indicators_active', 'true'),
-                        ('watched_indicators', '2')))
+    # Phone pairing validates an API key, not an OAuth access token. POV uses
+    # the presence of the refresh field to choose Bearer versus apikey.
+    failed = _mdblist_pov_write((('mdblist.refresh', ''), ('mdblist.expires', '0')))
+    if not failed:
+        failed = _mdblist_pov_write((('mdblist_user', username or ''),
+                                    ('mdbl_indicators_active', 'true'),
+                                    ('watched_indicators', '2')))
+    if failed:
+        if before:
+            _mdblist_pov_write(before)
+        return False
     return True
 
 
 def _mdblist_apply_disconnect():
-    """Reverse of _mdblist_apply_connect -- mirror POV's native MDBList
-    disconnect: blank the account name + token, deactivate the MDBList
-    watched-indicator, and hand the watched-status provider back to POV (0).
-    Returns True iff the token was cleared (hard-verified); the rest best-effort.
-    This is the fix for the 'Remove leaves indicators pointing at MDBList with no
-    key' inconsistency.
+    """Clear both authentication modes and deactivate the watched provider.
 
-    ONE call here, unlike connect: every one of these four writes fails toward
-    DEACTIVATING MDBList, which is the safe direction, so there is nothing to
-    gate and no reason to pay for two settings round trips."""
+    Returns success only when both the token and OAuth refresh field are
+    verified empty. History and bookmarks remain in the profile.
+    """
     if _mdblist_pov_addon() is None:
         return False
     failed = _mdblist_pov_write((('mdblist_user', ''),
                                  ('mdblist.token', ''),
+                                 ('mdblist.refresh', ''),
+                                 ('mdblist.expires', '0'),
                                  ('mdbl_indicators_active', 'false'),
                                  ('watched_indicators', '0')))
-    return 'mdblist.token' not in failed
+    return not any(name in failed for name in ('mdblist.token', 'mdblist.refresh'))
 
 
 def _handle_connect_mdblist(_params):
