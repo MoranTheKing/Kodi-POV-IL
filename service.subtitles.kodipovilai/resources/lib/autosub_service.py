@@ -95,10 +95,24 @@ def autosub_on_play():
     _excluded = {x.strip().lower() for x in _raw.split(',') if x.strip()}
     if _excluded:
         _src_ids = set()
+        # The ITEM's path, not only the playing file: a plugin that resolves
+        # to a stream (Idan Plus does, live and VOD alike) leaves
+        # getPlayingFile() on the plain https:// URL, and Container.PluginName
+        # is empty when playback starts from a home widget, a favourite or a
+        # JSON-RPC Player.Open -- so neither caught Kan, which then got the
+        # search overlay and an AI-translation toast. Player.Filenameandpath
+        # keeps the plugin:// path the item was started from.
+        _paths = [_pf]
+        for _label in ('Player.Filenameandpath', 'Player.FolderPath'):
+            try:
+                _paths.append(xbmc.getInfoLabel(_label) or '')
+            except Exception:
+                pass
         try:
-            if _pf.startswith('plugin://'):
-                import urllib.parse as _up
-                _src_ids.add((_up.urlparse(_pf).netloc or '').lower())
+            import urllib.parse as _up
+            for _path in _paths:
+                if _path.startswith('plugin://'):
+                    _src_ids.add((_up.urlparse(_path).netloc or '').lower())
         except Exception:
             pass
         try:
