@@ -3,14 +3,16 @@
 Reads only the movie index, never the video/audio payload. Unsupported sample
 codecs, fragmented files, and complex edit lists fail closed.
 """
+import array
 import struct
+import sys
 from pathlib import Path
 
 _MAX_INDEX_BYTES = 16 * 1024 * 1024
 _MAX_SUBTITLE_SAMPLES = 50000
 
 
-def _read_movie_index_source(file_size, read):
+def _read_movie_index_source(file_size, read, max_bytes=None):
     """Read one moov box using bounded positional reads, including tail moov."""
     if file_size < 16:
         raise ValueError('short MP4 file')
@@ -32,7 +34,7 @@ def _read_movie_index_source(file_size, read):
         if size < min_header or size > file_size - pos:
             raise ValueError('bad MP4 box size')
         if kind == b'moov':
-            if size > _MAX_INDEX_BYTES:
+            if size > (max_bytes or _MAX_INDEX_BYTES):
                 raise ValueError('MP4 index exceeds read limit')
             chunks = []
             for offset in range(0, size, 4 * 1024 * 1024):
@@ -298,3 +300,159 @@ def subtitle_reference_source(file_size, read, log=None):
             'MP4 index probe skipped: %s' % type(exc).__name__)
         return None
     return _reference_from_index(index_bytes, log=log)
+
+
+# ---- audio frame-size envelope --------------------------------------------
+# AAC is variable-bitrate: the encoder spends a different number of bytes on
+# speech than on music/effects/silence.  The per-frame sizes in ``stsz`` are
+# therefore a free, decode-less loudness proxy read from the same movie index
+# as the timed-text probe.  Constant-size codecs (AC-3, CBR) carry no signal
+# and are refused.
+_MAX_AUDIO_FRAMES = 2000000
+_ENVELOPE_STEP_MS = 100
+_ENVELOPE_TREND_BINS = 40
+_ENVELOPE_MIN_DISTINCT = 32
+_ENVELOPE_MAX_MS = 6 * 3600 * 1000
+
+
+def _audio_runs(data, bounds):
+    _version, pos, end = fullbox(data, bounds)
+    if pos + 4 > end:
+        raise ValueError('truncated stts')
+    count = struct.unpack_from('>I', data, pos)[0]
+    pos += 4
+    if count > _MAX_AUDIO_FRAMES or pos + 8 * count > end:
+        raise ValueError('invalid stts')
+    return [struct.unpack_from('>II', data, pos + 8 * i)
+            for i in range(count)]
+
+
+def _audio_sizes(data, bounds):
+    _version, pos, end = fullbox(data, bounds)
+    if pos + 8 > end:
+        raise ValueError('truncated stsz')
+    constant, count = struct.unpack_from('>II', data, pos)
+    pos += 8
+    if count > _MAX_AUDIO_FRAMES:
+        raise ValueError('excessive audio frame count')
+    if constant:
+        return [constant] * count
+    if pos + 4 * count > end:
+        raise ValueError('truncated sample sizes')
+    # A compact machine array (4 bytes a frame, not a Python int object):
+    # a three-hour film has ~500k frames.
+    sizes = array.array('I')
+    if sizes.itemsize != 4:
+        return list(struct.unpack_from('>%dI' % count, data, pos))
+    sizes.frombytes(data[pos:pos + 4 * count])
+    if sys.byteorder == 'little':
+        sizes.byteswap()
+    return sizes
+
+
+def audio_envelope(index_data, step_ms=_ENVELOPE_STEP_MS):
+    """Detrended log frame-size envelope of the first AAC track, or None.
+
+    Returns ``{'step_ms', 'values', 'frames', 'distinct', 'codec'}`` where
+    ``values`` are small signed ints, one per ``step_ms`` of movie time
+    (edit lists applied).  Only relative structure matters; whether speech
+    raises or lowers the bitrate is left to the consumer.
+    """
+    import math
+    data = index_data
+    top = list(boxes(data))
+    moov = next(((a, b) for k, a, b in top if k == b'moov'), None)
+    if not moov or seek(data, moov, b'mvex'):
+        return None
+    mvhd = seek(data, moov, b'mvhd')
+    movie_scale = movie_timescale(data, mvhd)
+    for kind, start, end in boxes(data, *moov):
+        if kind != b'trak':
+            continue
+        trak = (start, end)
+        hdlr = seek(data, trak, b'mdia', b'hdlr')
+        if not hdlr or handler(data, hdlr) != b'soun':
+            continue
+        stbl = seek(data, trak, b'mdia', b'minf', b'stbl')
+        mdhd = seek(data, trak, b'mdia', b'mdhd')
+        stsd = seek(data, stbl, b'stsd') if stbl else None
+        if not stbl or not mdhd or not stsd:
+            continue
+        _v, pos, stop = fullbox(data, stsd)
+        if pos + 12 > stop:
+            continue
+        codec = data[pos + 8:pos + 12]
+        if codec != b'mp4a':
+            continue
+        timescale = media_timescale(data, mdhd)
+        stts = seek(data, stbl, b'stts')
+        stsz = seek(data, stbl, b'stsz')
+        if not stts or not stsz or not timescale:
+            continue
+        sizes = _audio_sizes(data, stsz)
+        runs = _audio_runs(data, stts)
+        if sum(count for count, _delta in runs) != len(sizes):
+            raise ValueError('stts/stsz count mismatch')
+        distinct = len(set(sizes))
+        if len(sizes) < 1000 or distinct < _ENVELOPE_MIN_DISTINCT:
+            return None
+        blank_ms, trim_ms = simple_edit(data, trak, movie_scale, timescale)
+        total_ticks = sum(count * delta for count, delta in runs)
+        bins = int((total_ticks * 1000.0 / timescale + blank_ms) / step_ms) + 2
+        # A corrupt duration must not allocate a film's worth of bins per
+        # bogus hour on a low-memory box: nothing real runs past 6 hours.
+        if bins > _ENVELOPE_MAX_MS // step_ms + 2:
+            return None
+        sums = [0] * bins
+        counts = [0] * bins
+        tick = 0
+        index = 0
+        scale = 1000.0 / timescale
+        for count, delta in runs:
+            for _ in range(count):
+                at = tick * scale + blank_ms - trim_ms
+                if at >= 0:
+                    b = int(at / step_ms)
+                    if b < bins:
+                        sums[b] += sizes[index]
+                        counts[b] += 1
+                tick += delta
+                index += 1
+        level = []
+        last = 0.0
+        for total, count in zip(sums, counts):
+            if count:
+                last = math.log(total / float(count) + 1.0)
+            level.append(last)
+        prefix = [0.0]
+        for value in level:
+            prefix.append(prefix[-1] + value)
+        half = _ENVELOPE_TREND_BINS // 2
+        values = []
+        for i, value in enumerate(level):
+            lo = max(0, i - half)
+            hi = min(len(level), i + half)
+            trend = (prefix[hi] - prefix[lo]) / float(hi - lo)
+            values.append(max(-127, min(127, int(round((value - trend)
+                                                       * 64.0)))))
+        return {'step_ms': step_ms, 'values': values, 'frames': len(sizes),
+                'distinct': distinct, 'codec': codec.decode('latin-1')}
+    return None
+
+
+def audio_envelope_source(file_size, read, index_data=None, log=None):
+    """Envelope from a positional byte source; None when unavailable."""
+    emit = log or (lambda _message: None)
+    try:
+        data = (index_data if index_data is not None
+                else _read_movie_index_source(file_size, read))
+        envelope = audio_envelope(data)
+    except (OSError, ValueError, struct.error, OverflowError,
+            ZeroDivisionError, TypeError, MemoryError) as exc:
+        emit('MP4 audio envelope skipped: %s' % type(exc).__name__)
+        return None
+    if envelope:
+        emit('MP4 audio envelope: %d frames, %d distinct sizes, %d bins'
+             % (envelope['frames'], envelope['distinct'],
+                len(envelope['values'])))
+    return envelope
