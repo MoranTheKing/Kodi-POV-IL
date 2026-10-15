@@ -131,7 +131,7 @@ class PlaybackSwitchTests(unittest.TestCase):
         subsync = types.ModuleType('resources.lib.subsync')
         subsync.prefetch_autosub_reference = lambda info, rows: False
         subsync.rank_ready_candidates = lambda info, rows: rows
-        subsync.diverse_human_alternatives = lambda rows: [
+        subsync.diverse_human_alternatives = lambda rows, **_kw: [
             row['link'] for row in rows if row['link'] == 'human-b']
         lib = types.ModuleType('resources.lib')
         lib.kodi_utils = kodi

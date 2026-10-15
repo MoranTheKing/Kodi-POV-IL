@@ -78,6 +78,41 @@ _NOT_GROUP = set(
 }
 
 
+# Hyphenated TECHNICAL tags are not release groups. Before this, the scene
+# convention "token after the last '-' is the group" read 'dl' out of every
+# group-less "...WEB-DL.DDP5.1.H.264" name, 'hd' out of "DTS-HD.MA" and 'ray'
+# out of "Blu-ray". Two unrelated group-less WEB-DLs then shared group 'dl',
+# scored TIER_GROUP, were TRUSTED as synced and skipped timing verification
+# entirely -- and could even serve as a timing oracle for each other.
+_HYPHEN_TECH = frozenset({
+    'dl', 'rip', 'hd', 'ray', 'ma', 'vision', 'sub', 'subs', 'bit', 'es',
+    'dts', 'ac3', 'aac', 'dd', 'ddp', 'hq', 'lq', 'tv', 'track', 'tracks',
+    'dub', 'dubbed', 'cut', 'res', 'rd', 'ld', 'cam', 'sync', 'synced',
+})
+# Tokens that can only FOLLOW a hyphenated technical tag ("WEB-DL.DDP5.1"),
+# never a real group (which is followed at most by language/site decoration).
+_TRAILING_TECH_RE = re.compile(
+    r'^(?:\d+|ddp?\d*|dd\d*|aac\d*|e?ac3|dts\d*|truehd|atmos|flac\d*|opus'
+    r'|mp3|l?pcm|ma|hd|h|x|[hx]26[45]|hevc|avc|av1|xvid|\d+bit|hdr\d*|dv'
+    r'|dovi|sdr|\d{3,4}p|4k|uhd|web|webdl|webrip|bluray|bdrip|brrip|remux'
+    r'|hdtv|dvdrip)$')
+# Streaming services. Two WEB releases from DIFFERENT services are separate
+# masters: logos, intros and recaps routinely move the timeline by seconds.
+# Detected only after the first technical anchor so titles like "Mad Max" or
+# "Stan Lee" never read as a service.
+_SERVICE_TOKENS = {
+    'amzn': 'amzn', 'amazon': 'amzn', 'nf': 'nf', 'netflix': 'nf',
+    'dsnp': 'dsnp', 'dsny': 'dsnp', 'dsnyp': 'dsnp', 'disney': 'dsnp',
+    'hmax': 'max', 'max': 'max', 'atvp': 'atvp', 'aptv': 'atvp',
+    'hulu': 'hulu', 'pcok': 'pcok', 'pmtp': 'pmtp', 'stan': 'stan',
+    'crav': 'crav', 'sho': 'sho', 'roku': 'roku', 'vudu': 'vudu',
+    'mubi': 'mubi', 'itunes': 'itunes', 'pmnt': 'pmtp', 'shdr': 'shdr',
+}
+# Editions that change the CUT. One side tagged and the other not is not proof
+# of the same timeline (an untagged release is normally the theatrical cut).
+_CUT_EDITIONS = frozenset({'extended', 'unrated', 'directors'})
+
+
 # PRECOMPUTED ONCE, not per call. parse() used to build seven sets on every
 # invocation -- one per source class plus the PROPER set -- and it is called
 # twice for every scored pair. See the memo note below for why that mattered.
@@ -204,7 +239,7 @@ def _parse(name):
     toks = _toks(name)
     tokset = set(toks)
     out = {'resolution': '', 'source': '', 'group': '', 'codec': '',
-           'edition': '', 'proper': False}
+           'edition': '', 'proper': False, 'service': ''}
 
     m = _RES_RE.search(normalize(name))
     if m:
@@ -236,17 +271,56 @@ def _parse(name):
 
     out['proper'] = bool(tokset & _PROPER_SET)
 
+    # A service tag sits among the technical tags: after the resolution or
+    # source ("1080p.AMZN.WEB-DL") or directly before the source
+    # ("AMZN.WEB-DL.1080p"). An episode title after SxxEyy ("Max.Out") or a
+    # movie title ("Mad.Max") is never a service.
+    is_source = [any(t in cls_tokens for _c, cls_tokens in _SOURCE_SETS)
+                 for t in toks]
+    first_tech = next((i for i, t in enumerate(toks)
+                       if _RES_RE.fullmatch(t) or is_source[i]), None)
+    for i, t in enumerate(toks):
+        service = _SERVICE_TOKENS.get(t)
+        if not service:
+            continue
+        if ((first_tech is not None and i > first_tech)
+                or (i + 1 < len(toks) and is_source[i + 1])):
+            out['service'] = service
+            break
+
     # Group: the token after the LAST '-' in the raw name (scene convention
     # "...-NTb"), if it isn't a known technical tag. Fall back to the last
     # normalized token under the same filter.
     raw = _strip_ext(name)
     cand = ''
-    if '-' in raw:
-        cand = raw.rsplit('-', 1)[1].strip()
-        cand = _SEPS.sub('.', cand.lower()).split('.')[0]
-    if not cand and toks:
-        cand = toks[-1]
-    if (cand and cand not in _NOT_GROUP and not cand.isdigit()
+    from_hyphen = False
+    head, _dash, rest = raw.rpartition('-')
+    # "Show_s01e02_-_Episode_Title" / "Show - 1x02 - Title": a hyphen with a
+    # separator on either side introduces an episode title, never a group.
+    spaced = bool(_dash) and (head[-1:] in ' ._' or rest[:1] in ' ._')
+    if _dash and not spaced:
+        tail = _SEPS.sub('.', rest.strip().lower())
+        parts = [p for p in re.split(r'[.\[\]()]+', tail) if p]
+        if parts:
+            cand = parts[0]
+            from_hyphen = True
+            # "WEB-DL.DDP5.1.H.264": the hyphen joined a technical tag; the
+            # name carries no group at all.
+            if (cand in _HYPHEN_TECH
+                    or any(_TRAILING_TECH_RE.fullmatch(p) for p in parts[1:])):
+                cand = ''
+    if not cand and toks and not from_hyphen:
+        # Group-less scene-style names ("From.S04E10.1080p.ColdFilm") carry
+        # the group as the last token AFTER a technical tag. Without one, the
+        # last token is a title word: "The.Flash.S01E02.Fastest.Man.Alive"
+        # must not get group 'alive' and then be trusted by containment.
+        tech = [i for i, t in enumerate(toks)
+                if _RES_RE.fullmatch(t) or t in _CODEC_MAP
+                or any(t in cls_tokens for _c, cls_tokens in _SOURCE_SETS)]
+        if tech and tech[-1] < len(toks) - 1:
+            cand = toks[-1]
+    if (cand and cand not in _NOT_GROUP and cand not in _HYPHEN_TECH
+            and not cand.isdigit()
             and 2 <= len(cand) <= 20 and _GROUP_RE.fullmatch(cand)):
         out['group'] = cand
     return out
@@ -427,22 +501,37 @@ def _score(video_name, sub_name, floor=0):
         ratio = _token_ratio(vt, st)
         pct = min(40, int(ratio * 55))
         return pct, TIER_CROSS, ['PROPER/REPACK mismatch']
+    # Extended/unrated/director's on ONE side only: the untagged release is
+    # normally the theatrical cut, so the same group/name proves nothing.
+    if ((v['edition'] in _CUT_EDITIONS) != (s['edition'] in _CUT_EDITIONS)):
+        if floor >= _CEIL_EDITION:
+            return None
+        ratio = _token_ratio(vt, st)
+        pct = min(25, int(ratio * 40))
+        return pct, TIER_CROSS, ['possibly different cut/edition']
 
     same_source = bool(v['source'] and s['source'])  # equal if both set here
     same_group = bool(v['group'] and s['group'] and v['group'] == s['group'])
+    other_service = bool(v['service'] and s['service']
+                         and v['service'] != s['service'])
 
     # Containment: one normalized name fully inside the other (after the
     # contradiction guards above). Covers provider-decorated variants of the
     # SAME release ("...ColdFilm" vs "...ColdFilm.rus"). Requires the shorter
-    # side to be a real identity (enough tokens + some structural field).
+    # side to be a real identity: enough tokens AND its own release group. A
+    # group-less prefix ("Show.S01E01.1080p.WEB") is shared by every release
+    # of that episode, so it is a same-source match at best, never a trusted
+    # one.
     shorter, longer = (va, sa) if len(va) <= len(sa) else (sa, va)
-    if shorter in longer:
+    if shorter in longer and not other_service:
         sp = v if shorter == va else s
-        if (len(shorter.split('.')) >= 4
-                and (sp['group'] or sp['source'] or sp['resolution'])):
+        # "Show.S01E02.Episode.Title" names no release at all, however its
+        # last word parses; trust needs a technical identity on that side.
+        if (len(shorter.split('.')) >= 4 and sp['group']
+                and (sp['resolution'] or sp['source'] or sp['codec'])):
             return 96, TIER_GROUP, ['release name contained']
 
-    if same_group:
+    if same_group and not other_service:
         # Same release group is the strongest identity signal. With the same
         # source class it's a near-certain sync; with source UNKNOWN on one or
         # both sides (groups like ColdFilm often ship no WEB/BluRay tag at
@@ -472,6 +561,10 @@ def _score(video_name, sub_name, floor=0):
         if v['group'] and s['group'] and v['group'] != s['group']:
             pct -= 8
             reasons.append('different group')
+        if other_service:
+            pct -= 10
+            reasons.append('different streaming service (%s vs %s)'
+                           % (v['service'], s['service']))
         if ratio < 0:
             ratio = _token_ratio(vt, st)
         pct += int(ratio * 15)   # token tie-break WITHIN the tier
