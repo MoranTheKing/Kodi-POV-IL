@@ -176,6 +176,9 @@ _SUB_TRACK_TYPE = 0x11
 
 # ---- budgets ----------------------------------------------------------------
 DEFAULT_HEAD_BYTES = 2 * 1024 * 1024
+# A remote MP4 movie index is read only when it is this small: an
+# episode's moov is 1-3 MB, and playback must keep the bandwidth.
+_MP4_REMOTE_INDEX_BYTES = 8 * 1024 * 1024
 DEFAULT_MAX_BYTES = 80 * 1024 * 1024      # surgical Cues fetch stays well under
 DEFAULT_DEADLINE_S = 30.0
 _HTTP_TIMEOUT = 15
@@ -2047,12 +2050,27 @@ def cue_reference_profile(url_or_path, head_bytes=DEFAULT_HEAD_BYTES,
             # select by the bytes already fetched for the Matroska head rather
             # than by URL suffix.  A missing text track remains an unknown.
             head = getattr(src, '_cut_head', b'')
+            envelope = None
             if len(head) >= 8 and head[4:8] in (
                     b'ftyp', b'moov', b'wide', b'mdat', b'free', b'skip'):
                 try:
                     from resources.lib import mp4_probe
-                    reference = mp4_probe.subtitle_reference_source(
-                        src.total, src.read, log=_log) or {}
+                    index = mp4_probe._read_movie_index_source(
+                        src.total, src.read,
+                        max_bytes=(_MP4_REMOTE_INDEX_BYTES if src.is_http
+                                   else None))
+                    reference = mp4_probe._reference_from_index(
+                        index, log=_log) or {}
+                    if not reference.get('track_cues'):
+                        # The same index carries the audio frame sizes: a
+                        # free speech envelope for files with no subtitle
+                        # track.  Its own guard: an odd audio box must never
+                        # cost the timed-text reference.
+                        try:
+                            envelope = mp4_probe.audio_envelope_source(
+                                None, None, index_data=index, log=_log)
+                        except Exception:
+                            envelope = None
                     if reference.get('track_cues'):
                         profiles = [
                             {'track': item.get('track') or {},
@@ -2079,9 +2097,12 @@ def cue_reference_profile(url_or_path, head_bytes=DEFAULT_HEAD_BYTES,
                 src, head_hint=getattr(src, '_cut_head', b''), log=_log)
             _log('cue-profile: no Matroska index (%s), cut=%s'
                  % (e, 'yes' if cut_sig else 'no'))
-            return {'starts': [], 'track_starts': [], 'tracks': [],
-                    'cut_signature': cut_sig, 'bytes': src.fetched,
-                    'requests': src.reqs}
+            out = {'starts': [], 'track_starts': [], 'tracks': [],
+                   'cut_signature': cut_sig, 'bytes': src.fetched,
+                   'requests': src.reqs}
+            if envelope:
+                out['envelope'] = envelope
+            return out
         subs = _sub_tracks(tracks)
         anchors = [t for t in subs if not t.get('forced')]
         if not anchors:

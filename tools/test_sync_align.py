@@ -8,6 +8,7 @@ recuts) and asserts the verdicts + recovered parameters.
 import os
 import sys
 import random
+import time
 
 sys.path.insert(0, os.path.join(
     os.path.dirname(__file__), '..',
@@ -532,6 +533,296 @@ for label, sample in (
     check(label + ' dialogue survives',
           bool(sa.dialogue_cues([{'start': 1000, 'end': 2000,
                                   'text': sample}])))
+
+print('== DIFFERENT AUTHORINGS of one dialogue (the real field case) ==')
+# Every fixture above transforms ONE cue list, so reference and candidate start
+# their lines at identical instants. Real references are other subbers or
+# other languages: lines are merged/split differently, onsets jitter, SDH adds
+# cues. Onset "tight" agreement then caps at ~40-65% even at the correct
+# offset, and the magnitude-scaled bar (78-90%) refused EVERY real shift over
+# 1.5s. Timing-only synthetic authorings; no subtitle text is stored.
+import random as _rnd  # noqa: E402
+
+
+def _speech(seed, minutes=44):
+    rng = _rnd.Random(seed)
+    t, out = rng.uniform(20000, 90000), []
+    while t < minutes * 60000:
+        dur = rng.choice([rng.uniform(700, 2200), rng.uniform(1500, 4200),
+                          rng.uniform(2500, 6500)])
+        out.append((t, t + dur))
+        r = rng.random()
+        t += dur + (rng.uniform(80, 700) if r < 0.55 else
+                    rng.uniform(700, 4000) if r < 0.85 else
+                    rng.uniform(4000, 45000))
+    return out
+
+
+def _author(seed, speech, merge, split, jit_on, jit_off, bias, drop, sdh=0.0):
+    rng = _rnd.Random(seed)
+    cues, i = [], 0
+    while i < len(speech):
+        s, e = speech[i]
+        while (i + 1 < len(speech) and speech[i + 1][0] - e < 600
+               and speech[i + 1][1] - s < 6500 and rng.random() < merge):
+            i += 1
+            e = speech[i][1]
+        parts = [(s, e)]
+        if e - s > 3500 and rng.random() < split:
+            cut = s + (e - s) * rng.uniform(0.35, 0.65)
+            parts = [(s, cut), (cut + 40, e)]
+        for ps, pe in parts:
+            if rng.random() < drop:
+                continue
+            ns = ps + bias + rng.gauss(0, jit_on)
+            ne = max(ns + 500, pe + bias + rng.gauss(0, jit_off)
+                     + rng.uniform(0, 400))
+            cues.append([ns, ne])
+        i += 1
+    if sdh:
+        extra = []
+        for a, b in zip(cues, cues[1:]):
+            if b[0] - a[1] > 2500 and rng.random() < sdh:
+                m = a[1] + rng.uniform(300, b[0] - a[1] - 1500)
+                extra.append([m, m + rng.uniform(900, 1800)])
+        cues.extend(extra)
+    cues.sort()
+    for a, b in zip(cues, cues[1:]):
+        if a[1] > b[0] - 40:
+            a[1] = max(a[0] + 300, b[0] - 40)
+    return cues
+
+
+def _authored_srt(cues, offset=0.0):
+    return '\n'.join('%d\n%s --> %s\nline\n' % (
+        n, sa._ms_to_stamp(s + offset), sa._ms_to_stamp(e + offset))
+        for n, (s, e) in enumerate(cues, 1) if s + offset >= 0)
+
+
+def _pair(seed, offset=0.0, unrelated=False):
+    speech = _speech(seed)
+    ref = _author(seed + 1, speech, 0.2, 0.15, 160, 260, 0, 0.03, sdh=0.35)
+    other = _speech(seed + 7777) if unrelated else speech
+    cand = _author(seed + 2, other, 0.5, 0.45, 260, 340,
+                   _rnd.Random(seed).uniform(-250, 250), 0.10)
+    return _authored_srt(ref), _authored_srt(cand, offset)
+
+
+for _seed, _off in ((501, 2600), (502, -6500), (503, 14000), (504, 45000)):
+    _ref, _cand = _pair(_seed, _off)
+    _v = sa.verify(_ref, _cand)
+    check('different subber, real %+dms shift -> FIXABLE near truth'
+          % _off, _v['status'] == sa.STATUS_FIXABLE
+          and abs(_v['offset_ms'] - _off) <= 450, _v['diag'])
+    _plain = sa.verify(_ref, _cand)
+    check('    ... and it is marked for independent corroboration',
+          bool(_plain.get('coverage_rescue')) or abs(_off) <= 1500,
+          _plain['diag'])
+for _seed in (601, 602, 603):
+    _ref, _cand = _pair(_seed, 0)
+    _v = sa.verify(_ref, _cand)
+    check('different subber, already synced -> never shifted',
+          _v['status'] != sa.STATUS_FIXABLE or abs(_v['offset_ms']) <= 350,
+          _v['diag'])
+for _seed in (701, 702, 703, 704):
+    _ref, _cand = _pair(_seed, 0, unrelated=True)
+    _v = sa.verify(_ref, _cand)
+    check('unrelated authoring -> never FIXABLE',
+          _v['status'] != sa.STATUS_FIXABLE, _v['diag'])
+
+_ref, _cand = _pair(801, 3000)
+_rc = sa.dialogue_cues(_ref)
+_cc = sa.dialogue_cues(_cand)
+_cov = sa.coverage_profile(_rc, _cc, 1.0, 3000)
+check('coverage peaks at the true offset', _cov['corroborates']
+      and abs(_cov['offset_ms'] - 3000) <= 450, _cov['diag'])
+_cov_wrong = sa.coverage_profile(_rc, _cc, 1.0, 900)
+check('coverage refuses to support a different offset',
+      not _cov_wrong['corroborates'], _cov_wrong['diag'])
+_ref_u, _cand_u = _pair(802, 0, unrelated=True)
+_cov_u = sa.coverage_profile(sa.dialogue_cues(_ref_u),
+                             sa.dialogue_cues(_cand_u), 1.0, 0)
+check('coverage of unrelated subtitles is flat (no support)',
+      not _cov_u['corroborates'], _cov_u['diag'])
+
+print('== cue-level region planner: short acts, different authorings ==')
+# A broadcast/WEB subtitle on a disc remux: ~2s of padding at every act break,
+# one act only a few minutes long, the reference authored by a different
+# subber (merges/splits/drops/SDH).  Fixed windows straddle the short act; the
+# cue-level planner must still prove the map on held-out folds -- and refuse
+# drift, unrelated rhythm, zigzags and steps outside the short-edit space.
+
+
+def _dense_speech(seed, minutes=44):
+    # Episode-like dialogue density (~1 line every 3-4 s) with occasional
+    # scene pauses; act breaks are chosen among the longer pauses.
+    rng = _rnd.Random(seed)
+    t, out = rng.uniform(20000, 60000), []
+    while t < minutes * 60000:
+        dur = rng.uniform(900, 4200)
+        out.append((t, t + dur))
+        r = rng.random()
+        t += dur + (rng.uniform(80, 700) if r < 0.60 else
+                    rng.uniform(700, 3000) if r < 0.95 else
+                    rng.uniform(5000, 14000))
+    return out
+
+
+def _act_boundaries(speech, fractions):
+    span = speech[-1][1] - speech[0][0]
+    gaps = [((a[1] + b[0]) / 2.0, b[0] - a[1])
+            for a, b in zip(speech, speech[1:]) if b[0] - a[1] >= 5000]
+    out = []
+    for fraction in fractions:
+        target = speech[0][0] + span * fraction
+        free = [gap for gap in gaps if gap[0] not in out]
+        out.append(min(free, key=lambda gap: abs(gap[0] - target))[0])
+    return sorted(out)
+
+
+def _regioned(cues, boundaries, offsets):
+    out = []
+    for start, end in cues:
+        region = sum(start >= boundary for boundary in boundaries)
+        out.append([start + offsets[region], end + offsets[region]])
+    return out
+
+
+_ACT_OFFSETS = [-200, 1700, 3600, 5700, 7700, 9650]
+_ACT_FRACTIONS = (0.26, 0.45, 0.53, 0.72, 0.86)
+for _seed in (911, 912, 913):
+    _speech_times = _dense_speech(_seed)
+    _bounds = _act_boundaries(_speech_times, _ACT_FRACTIONS)
+    # English disc track vs a Hebrew translation: separately authored lines
+    # (merges, splits, drops, SDH extras), the density of the field case.
+    _ref_cues = _author(_seed + 1, _speech_times, 0.2, 0.15, 160, 260, 0,
+                        0.03, sdh=0.15)
+    _cand_cues = _author(_seed + 2, _speech_times, 0.3, 0.25, 200, 300,
+                         _rnd.Random(_seed).uniform(-250, 250), 0.05)
+    _ref_srt = _authored_srt(_ref_cues)
+    _cand_srt = _authored_srt(_regioned(_cand_cues, _bounds, _ACT_OFFSETS))
+    _t0 = time.time()
+    _val = sa.validate_micro_piecewise(sa.parse_srt(_ref_srt), _cand_srt)
+    _elapsed = time.time() - _t0
+    _offs = [s['offset_ms'] for s in (_val or {}).get('segments') or []]
+    _steps = [b - a for a, b in zip(_offs, _offs[1:])]
+    _want = [b - a for a, b in zip(_ACT_OFFSETS, _ACT_OFFSETS[1:])]
+    check('seed %d: six-act map proven on 4+/5 held-out folds' % _seed,
+          _val is not None and _val.get('validation_folds', 0) >= 4
+          and len(_offs) == 6,
+          '' if _val is None else _val['diag'])
+    check('    ... every act step within 250ms of truth',
+          len(_steps) == 5 and all(abs(a - b) <= 250
+                                   for a, b in zip(_steps, _want)),
+          str([int(x) for x in _offs]))
+    check('    ... still needs a second timing family to apply',
+          _val is None or _val.get('timing_family_count', 0) < 2)
+    check('    ... in under 3 seconds (%.2fs)' % _elapsed, _elapsed < 3.0)
+    if _val is not None:
+        _fixed = sa.apply_verdict(_cand_srt, dict(_val, timing_family_count=2))
+        check('    ... corroborated map keeps every cue',
+              len(sa.parse_srt(_fixed)) == len(sa.parse_srt(_cand_srt)))
+
+    _drift = _authored_srt([[s * 1.0012, e * 1.0012] for s, e in _cand_cues])
+    check('seed %d: clock drift is never mistaken for act cuts' % _seed,
+          sa.validate_micro_piecewise(sa.parse_srt(_ref_srt), _drift) is None)
+    _other = _author(_seed + 3, _dense_speech(_seed + 5555), 0.5, 0.45,
+                     260, 340, 0, 0.10)
+    _other_srt = _authored_srt(_regioned(_other, _bounds, _ACT_OFFSETS))
+    check('seed %d: unrelated rhythm yields no region proposal' % _seed,
+          sa.micro_piecewise_proposal(sa.parse_srt(_ref_srt), _other_srt)
+          is None)
+    _flat = _authored_srt(_cand_cues, 2600)
+    check('seed %d: one global shift is not a region map' % _seed,
+          sa.validate_micro_piecewise(sa.parse_srt(_ref_srt), _flat) is None)
+    _zig = _authored_srt(_regioned(_cand_cues, _bounds,
+                                   [-200, 1700, -100, 3600, 1500, 5500]))
+    check('seed %d: zigzag act offsets are refused' % _seed,
+          sa.validate_micro_piecewise(sa.parse_srt(_ref_srt), _zig) is None)
+    _big = _authored_srt(_regioned(_cand_cues, _bounds,
+                                   [0, 6000, 12000, 18000, 24000, 30000]))
+    _big_val = sa.validate_micro_piecewise(sa.parse_srt(_ref_srt), _big)
+    check('seed %d: steps beyond the short-edit space are not proposed here'
+          % _seed, _big_val is None)
+
+
+print('== region cuts skip non-dialogue lines; file plateaus veto ==')
+# Field case: a lone '+' line 150 ms before an act cut kept the left offset
+# while the next spoken line took the right one; the strict overlap invariant
+# then refused an otherwise proven six-region fix.
+_speech_times = _dense_speech(921)
+_bounds = _act_boundaries(_speech_times, _ACT_FRACTIONS)
+_ref_cues = _author(922, _speech_times, 0.2, 0.15, 160, 260, 0, 0.03,
+                    sdh=0.15)
+_cand_cues = _regioned(_author(923, _speech_times, 0.3, 0.25, 200, 300, 0,
+                               0.05), _bounds, _ACT_OFFSETS)
+_ref_srt = _authored_srt(_ref_cues)
+_plain_srt = _authored_srt(_cand_cues)
+_val = sa.validate_micro_piecewise(sa.parse_srt(_ref_srt), _plain_srt)
+check('base six-act map is proven', _val is not None, '')
+_marked = [list(c) for c in _cand_cues]
+_cut = (_val or {}).get('segments', [{}, {}])[1].get('cand_from_ms') or 0
+_prev = max(c for c in _marked if c[0] < _cut)
+_marker_start = max(_prev[1] + 50, _cut - 150)
+_marked.append([_marker_start, _marker_start + 900])
+_marked.sort()
+_marked_srt = '\n'.join(
+    '%d\n%s --> %s\n%s\n' % (n, sa._ms_to_stamp(a), sa._ms_to_stamp(b),
+                             '+' if a == _marker_start else 'line')
+    for n, (a, b) in enumerate(_marked, 1))
+_val_m = sa.validate_micro_piecewise(sa.parse_srt(_ref_srt), _marked_srt)
+try:
+    _fixed_m = sa.apply_verdict(_marked_srt,
+                                dict(_val_m or {}, timing_family_count=2))
+except ValueError as _e:
+    _fixed_m = ''
+check('a non-dialogue line at a cut no longer blocks the fix',
+      bool(_fixed_m) and len(sa.parse_srt(_fixed_m)) == len(_marked),
+      '' if _val_m is None else _val_m['diag'])
+
+_plateaus = sa.timeline_conflict(sa.parse_srt(_ref_srt), _plain_srt)
+check('unfixed act-pad subtitle shows several plateaus on the file',
+      _plateaus is not None and len(_plateaus) >= 3, str(_plateaus))
+if _val is not None:
+    _fixed_plain = sa.apply_verdict(_plain_srt,
+                                    dict(_val, timing_family_count=2))
+    check('the region-fixed subtitle sits on one plateau',
+          sa.timeline_conflict(sa.parse_srt(_ref_srt), _fixed_plain) is None)
+_synced = _authored_srt(_author(923, _speech_times, 0.3, 0.25, 200, 300, 0,
+                                0.05))
+check('a synced different-subber subtitle is never vetoed',
+      sa.timeline_conflict(sa.parse_srt(_ref_srt), _synced) is None)
+_shifted = _authored_srt(_author(923, _speech_times, 0.3, 0.25, 200, 300, 0,
+                                 0.05), 4200)
+check('a single global shift is one plateau, not a conflict',
+      sa.timeline_conflict(sa.parse_srt(_ref_srt), _shifted) is None)
+_unrelated = _authored_srt(_author(924, _dense_speech(925), 0.3, 0.25, 200,
+                                   300, 0, 0.05))
+check('an unrelated rhythm never fabricates plateaus',
+      sa.timeline_conflict(sa.parse_srt(_ref_srt), _unrelated) is None)
+
+
+print('== native disc lane proof (bitmap tracks of the same disc) ==')
+if _val is not None:
+    _lane = dict(_val, validation_proof='native-disc-lane-v1',
+                 native_lane_tracks=2, holdout_score_min=0.90,
+                 holdout_gain_min=0.25, timing_family_count=1)
+
+    def _applies(verdict):
+        try:
+            return bool(sa.apply_verdict(_plain_srt, verdict))
+        except ValueError:
+            return False
+    check('two same-disc bitmap languages + strong folds apply',
+          _applies(_lane))
+    check('one bitmap language is not enough',
+          not _applies(dict(_lane, native_lane_tracks=1)))
+    check('weak held-out score is not enough',
+          not _applies(dict(_lane, holdout_score_min=0.80)))
+    check('small held-out gain is not enough',
+          not _applies(dict(_lane, holdout_gain_min=0.10)))
+    check('three folds are not enough',
+          not _applies(dict(_lane, validation_folds=3)))
 
 print()
 if FAILS:
