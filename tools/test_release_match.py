@@ -153,6 +153,60 @@ check('different movie title is never the same content',
           'Some.Movie.2024.2160p.WEB-DL.x265-FLUX',
           'Other.Movie.2024.1080p.WEB-DL.x264-FLUX'))
 
+print('== hyphenated technical tags are not release groups ==')
+# 'WEB-DL', 'DTS-HD', 'Blu-ray' and title hyphens used to yield groups 'dl',
+# 'hd', 'ray', 'man'. Two unrelated group-less releases then scored
+# TIER_GROUP and were trusted as synced without any timing check.
+for name in ('Movie.2023.1080p.WEB-DL.DDP5.1.H.264',
+             'Movie.2019.1080p.BluRay.DTS-HD.MA.7.1.x264',
+             'Movie.2010.1080p.Blu-ray.x264',
+             'Spider-Man.2002.1080p.BluRay.x264',
+             'Show.S01E01.1080p.WEB-DL.mkv'):
+    check('no group in %r' % name, rm.parse(name)['group'] == '',
+          repr(rm.parse(name)))
+t('Movie.2023.1080p.WEB-DL.DDP5.1.H.264',
+  'Movie.2023.720p.WEB-DL.AAC2.0.H.264', rm.TIER_SOURCE)
+t('Movie.2019.1080p.BluRay.DTS-HD.MA.7.1.x264',
+  'Movie.2019.720p.BluRay.DTS-HD.MA.5.1.x264', rm.TIER_SOURCE)
+check('real groups survive decorations',
+      rm.parse('Show.S01E01.1080p.WEB.H264-ETHEL[TGx]')['group'] == 'ethel'
+      and rm.parse('Show.S02E05.1080p.WEB.h264-ETHEL.HebSubs')['group']
+      == 'ethel')
+
+print('== different streaming services are different masters ==')
+t('Show.S01E01.1080p.AMZN.WEB-DL.DDP5.1.H.264-NTb',
+  'Show.S01E01.720p.NF.WEB-DL.DDP5.1.H.264-NTb', rm.TIER_SOURCE)
+check('a title word is never a service',
+      rm.parse('Mad.Max.Fury.Road.2015.1080p.BluRay.x264-SPARKS')['service']
+      == '')
+t('Mad.Max.Fury.Road.2015.1080p.BluRay.x264-SPARKS',
+  'Mad.Max.Fury.Road.2015.720p.BluRay.x264-SPARKS', rm.TIER_GROUP, 88)
+
+print('== a one-sided cut edition is never trusted ==')
+t('Movie.2010.Extended.1080p.BluRay.x264-SPARKS',
+  'Movie.2010.1080p.BluRay.x264-SPARKS', rm.TIER_CROSS, None, 25)
+
+print('== a group-less prefix is not a trusted containment ==')
+t('Show.S01E01.1080p.WEB.H264-ETHEL', 'Show.S01E01.1080p.WEB', rm.TIER_SOURCE)
+
+print('== an episode title after a spaced hyphen is not a group ==')
+# Field case: 'The_Flash_s01e02_-_Fastest_Man_Alive' parsed group 'fastest',
+# and name containment then trusted a WEB-timed subtitle as the BluRay
+# playing release (96%, group tier) -> a false 'synced' verdict.
+for name in ('The_Flash_s01e02_-_Fastest_Man_Alive',
+             'The Flash - 1x02 - Out of Control'):
+    check('no group in %r' % name, rm.parse(name)['group'] == '',
+          repr(rm.parse(name)))
+check('spaced group after a technical tag still parses',
+      rm.parse('Show S01E01 1080p WEB H264 - NTb')['group'] == 'ntb')
+_tier = rm.score(
+    'The.Flash.S01E02.Fastest.Man.Alive.1080p.10bit.BluRay.AAC5.1.HEVC-Vyndros.mkv',
+    'The_Flash_s01e02_-_Fastest_Man_Alive')[1]
+check('title-only subtitle name is never a trusted containment',
+      _tier not in (rm.TIER_EXACT, rm.TIER_GROUP), _tier)
+t('From.S04E10.1080p.ColdFilm.mkv',
+  'From.S04E10.1080p.ColdFilm.rus.srt', rm.TIER_GROUP, 90)
+
 print('== empties / junk never crash ==')
 check('empty', rm.match_pct('', 'x') == 0)
 check('none-ish', rm.match_pct('   ', '') == 0)
