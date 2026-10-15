@@ -1,3 +1,8 @@
+0.3.31
+- Stop the Nox player OSD fix from shrinking neighbouring buttons on later starts, and restore the buttons it already shrank.
+- Idan Plus: Kan 11, Kan Educational 23 and the Kan archive play again after changes on Kan's website, and i24NEWS English lists its programs again after its old catalog service shut down.
+- Never start the automatic subtitle search on Idan Plus live channels or VOD, also when they are started from a home widget or a favourite.
+
 0.3.30
 - Restore automatic subtitle timing checks in the modular package; it had stopped identifying the playing release and left every subtitle unverified.
 - Correct real multi-second offsets between differently segmented subtitles using speech-coverage corroboration, and stop weak sub-second nudges of subtitles that are already synchronized.

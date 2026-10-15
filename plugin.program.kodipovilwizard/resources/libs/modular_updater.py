@@ -282,7 +282,11 @@ class ModularUpdater:
             service_mod = next(mod for mod in update_queue if
                                mod.get('id') == 'service.subtitles.kodipovilai')
             if self._runtime_addon_enabled('service.subtitles.kodipovilai'):
-                if self._service_handoff_ready():
+                # A modular MoranSubs already took over from the legacy repair
+                # service; a newer modular package changes no POV ownership, so
+                # it never waits for the legacy clean-host migration.  Holding
+                # it back left migrated devices on old MoranSubs indefinitely.
+                if self._service_update_allowed():
                     self._prepare_service_handoff(service_mod)
                 else:
                     logging.log('[ModularUpdater] Keeping legacy MoranSubs until '
@@ -290,7 +294,7 @@ class ModularUpdater:
                                 level=xbmc.LOGWARNING)
                 update_queue = [mod for mod in update_queue
                                 if mod.get('id') != 'service.subtitles.kodipovilai']
-            elif not self._service_handoff_ready():
+            elif not self._service_update_allowed():
                 update_queue = [mod for mod in update_queue
                                 if mod.get('id') != 'service.subtitles.kodipovilai']
                 logging.log('[ModularUpdater] Service disabled, but POV handoff '
@@ -416,6 +420,26 @@ class ModularUpdater:
                         .format(exc), level=xbmc.LOGERROR)
             return False
 
+    def _service_update_allowed(self):
+        """One gate for preparing, completing and directly applying MoranSubs.
+
+        The legacy service owns repairs of a legacy-edited POV and may only be
+        replaced once the clean-host migration verifies every hook.  A modular
+        (0.3+) service already gave that up, so updating it to a newer modular
+        package never waits for that migration; holding it back left migrated
+        devices on old MoranSubs indefinitely.  The two lines are told apart
+        by version: the legacy tree is 0.2.x and the modular one 0.3+.
+        """
+        try:
+            local = self.get_local_version('service.subtitles.kodipovilai')
+            numbers = [int(''.join(ch for ch in part if ch.isdigit()) or 0)
+                       for part in str(local or '').split('.')[:2]]
+            if local and len(numbers) == 2 and tuple(numbers) >= (0, 3):
+                return True
+        except Exception:
+            pass
+        return bool(self._service_handoff_ready())
+
     def _prepare_service_handoff(self, mod):
         """Stage MoranSubs while the currently running service remains intact."""
         from resources.libs import staged_addon_install
@@ -480,7 +504,10 @@ class ModularUpdater:
         if not plan or not ack:
             return False
         addon_id = 'service.subtitles.kodipovilai'
-        if xbmc.getCondVisibility('Player.HasMedia') or not self._service_handoff_ready():
+        # Same gate as the preparation: a request prepared and acknowledged
+        # but never completed would make the service yield on every boot.
+        if (xbmc.getCondVisibility('Player.HasMedia')
+                or not self._service_update_allowed()):
             return False
         if not staged_addon_install.prepared_matches(
                 CONFIG.ADDONS, addon_id, plan['version'], plan['sha256']):
@@ -993,7 +1020,7 @@ class ModularUpdater:
                         for mod in queue)
                 and (not self.background or
                      self._runtime_addon_enabled('service.subtitles.kodipovilai') or
-                     not self._service_handoff_ready())):
+                     not self._service_update_allowed())):
             queue = [mod for mod in queue
                      if mod.get('id') != 'service.subtitles.kodipovilai']
             logging.log('[ModularUpdater] Refusing direct MoranSubs replacement '

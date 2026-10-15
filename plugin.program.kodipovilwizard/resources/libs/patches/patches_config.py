@@ -154,12 +154,20 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/menus/navigator.py",
-        "marker": "# WIZARD_POV_FANART_SHADOW_v3",
-        "anchor": "\t\t\t\t\tlistitem.setArt({'icon': icon, 'poster': icon, 'thumb': icon, 'fanart': fanart, 'banner': icon})",
+        "marker": "# WIZARD_POV_FANART_SHADOW_v4",
+        # POV 6.10 has this setArt line in three builders; a bare one-line
+        # anchor landed in shortcut_folders(), where the hook's item_get is
+        # undefined and every folder vanished.  Pin it to the shortcut-folder
+        # CONTENTS builder by its own yield, and test `icon` (defined in all
+        # three) so a future move can never raise inside POV's bare except.
+        "anchor": (
+            "\t\t\t\t\tlistitem.setArt({'icon': icon, 'poster': icon, 'thumb': icon, 'fanart': fanart, 'banner': icon})\n"
+            "\t\t\t\t\tyield (url, listitem, isFolder)"
+        ),
         "action": "append_after",
         "hook": (
             "\t\t\t\t\t# WIZARD: Sequential property override to preserve fanart\n"
-            "\t\t\t\t\tif 'genres/' in str(item_get('iconImage') or ''):\n"
+            "\t\t\t\t\tif 'genres/' in str(icon or ''):\n"
             "\t\t\t\t\t\tlistitem.setArt({'fanart': icon})\n"
         )
     },

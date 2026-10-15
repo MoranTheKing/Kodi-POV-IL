@@ -1,3 +1,7 @@
+0.4.48
+- Deliver MoranSubs updates to devices that already run the modular MoranSubs instead of holding them until the POV migration completes; a legacy MoranSubs keeps waiting for that migration.
+- Keep every entry in POV Shortcut Folders: the fanart fix now lands in the folder contents and removes the copy that hid the folders on POV 6.10.
+
 0.4.41
 - Reduce content-diagnostic overhead and restore saved views without repeated one-second GUI updates. Cancel view changes when the user leaves the directory, skin or profile.
 
