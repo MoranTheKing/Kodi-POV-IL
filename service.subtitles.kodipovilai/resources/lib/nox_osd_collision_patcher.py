@@ -49,6 +49,40 @@ _WIDTHS = (
     ('70043', '140', '100'),   # "מידע" (info)
 )
 
+# The native-player include has no <controls> element, so 0.3.30 never wrote
+# its marker there; and a width pattern that could run past its own control
+# then shrank the NEXT matching button on the following boot.  These are the
+# buttons that took the hit (id, original width, width the stray pass left).
+_COLLATERAL = (
+    ('70039', '150', '90'),
+    ('700450', '140', '100'),
+)
+
+
+def _own_width(bid):
+    """Pattern for a button's OWN <width>, never crossing its </control>."""
+    return re.compile(
+        r'(<control type="button" id="' + re.escape(bid) +
+        r'">(?:(?!</control>).)*?<width>)(\d+)(</width>)', re.DOTALL)
+
+
+def _set_width(content, bid, expected, new):
+    rx = _own_width(bid)
+    match = rx.search(content)
+    if not match or match.group(2) != expected:
+        return content, 0
+    return (content[:match.start(2)] + new + content[match.end(2):]), 1
+
+
+def _with_marker(content):
+    marker = '<!-- ' + MARKER + ' -->'
+    if '<controls>' in content:
+        return content.replace('<controls>', '<controls>\n\t\t' + marker, 1)
+    root = re.search(r'<(includes|window)\b[^>]*>', content)
+    if not root:
+        return None
+    return content[:root.end()] + '\n\t' + marker + content[root.end():]
+
 
 def _log(msg, level='INFO'):
     if kodi_utils is None:
@@ -91,20 +125,31 @@ def ensure_patched():
     content = original
     changed = 0
     for bid, old, new in _WIDTHS:
-        # Match this button's OWN <width> (the first one after its id), so we
-        # never touch another control that happens to share the width value.
-        rx = re.compile(
-            r'(<control type="button" id="' + re.escape(bid) +
-            r'">.*?<width>)' + old + r'(</width>)', re.DOTALL)
-        content, n = rx.subn(r'\g<1>' + new + r'\g<2>', content, count=1)
+        # Only this button's OWN <width>; never another control's.
+        content, n = _set_width(content, bid, old, new)
         changed += n
 
+    repaired = 0
     if changed == 0:
-        return 'unmatched'          # widths already differ / button absent
+        # An earlier, markerless pass already applied our widths.  If it also
+        # shrank the neighbours (the exact 0.3.30 second-boot signature),
+        # restore them; either way record the marker so nothing re-runs.
+        ours = []
+        for bid, _old, new in _WIDTHS:
+            match = _own_width(bid).search(content)
+            if match:
+                ours.append(match.group(2) == new)
+        if not ours or not all(ours):
+            return 'unmatched'      # widths already differ / buttons absent
+        for bid, original_width, shrunk in _COLLATERAL:
+            content, n = _set_width(content, bid, shrunk, original_width)
+            repaired += n
 
-    # Drop the marker in right after <controls> so the fix is idempotent.
-    content = content.replace('<controls>',
-                              '<controls>\n\t\t<!-- ' + MARKER + ' -->', 1)
+    # Drop the marker in so the fix is idempotent.
+    marked = _with_marker(content)
+    if marked is None:
+        return 'unmatched'
+    content = marked
 
     if ET is not None:
         try:
@@ -122,4 +167,8 @@ def ensure_patched():
     except OSError as e:
         _log('write failed: {0}'.format(e), level='WARNING')
         return 'write_failed'
+    if changed == 0:
+        _log('marker recorded; restored {0} neighbouring button width(s)'
+             .format(repaired))
+        return 'repaired' if repaired else 'ok'
     return 'patched'

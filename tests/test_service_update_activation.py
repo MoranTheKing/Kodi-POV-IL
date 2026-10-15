@@ -45,6 +45,7 @@ class ServiceUpdateActivationTests(unittest.TestCase):
                 Monitor=lambda:types.SimpleNamespace(waitForAbort=lambda *_a:False))}
         fn=complete_method(namespace)
         owner=types.SimpleNamespace(_service_handoff_ready=lambda:True,
+            _service_update_allowed=lambda:True,
             _runtime_addon_enabled=lambda *_a:not disable,
             _enable_addon=lambda *_a:events.append('enable') or enable)
         with patch.dict(sys.modules, {'resources':types.ModuleType('resources'),

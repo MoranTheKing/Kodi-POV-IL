@@ -180,6 +180,8 @@ class ProvisioningGateTests(unittest.TestCase):
         # never prevent an initial installation (real Kodi returns an error).
         updater._runtime_addon_enabled = lambda _aid: True
         updater._service_handoff_ready = lambda: False
+        # Legacy (or versionless) live service: the gate stays shut.
+        updater._service_update_allowed = lambda: False
         seen.clear()
         self.assertTrue(fn(updater))
         self.assertIn('service.subtitles.kodipovilai', [item['id'] for item in seen])
@@ -219,6 +221,7 @@ class ProvisioningGateTests(unittest.TestCase):
             get_local_version=lambda aid: ('0.2.566' if aid.startswith('service.')
                                            else '1.2.1'),
             _service_handoff_ready=lambda: False,
+            _service_update_allowed=lambda: False,
             _runtime_addon_enabled=lambda _aid: True,
             _complete_pending_service_handoff=lambda: False,
             _version_tuple=lambda version: tuple(int(x) for x in version.split('.')),
@@ -257,6 +260,53 @@ class ProvisioningGateTests(unittest.TestCase):
             self.assertEqual([item['id'] for item in queued],
                              ['plugin.program.orderfavourites-hebrew'],
                              'missing addon.xml during interrupted extraction must retry')
+
+    def test_modular_service_updates_without_legacy_migration(self):
+        # A legacy (0.2.x) service owns repairs of a legacy-edited POV and
+        # waits for the clean-host migration; an already-modular service has
+        # no such duty, and holding it back stranded migrated devices.
+        path = (ROOT / 'plugin.program.kodipovilwizard' / 'resources' / 'libs'
+                / 'modular_updater.py')
+        fn = _load_function(path, '_service_update_allowed', {},
+                            class_name='ModularUpdater')
+
+        def owner(local, ready):
+            calls = []
+            return types.SimpleNamespace(
+                get_local_version=lambda _aid: local,
+                _service_handoff_ready=lambda: calls.append(1) or ready), calls
+
+        modular, calls = owner('0.3.24', False)
+        self.assertTrue(fn(modular))
+        self.assertEqual(calls, [])  # no patch-engine pass needed
+        self.assertTrue(fn(owner('0.3.29', False)[0]))
+        self.assertFalse(fn(owner('0.2.566', False)[0]))
+        self.assertTrue(fn(owner('0.2.566', True)[0]))
+        self.assertFalse(fn(owner(None, False)[0]))
+        self.assertFalse(fn(owner('garbage', False)[0]))
+
+    def test_every_moransubs_gate_uses_the_same_decision(self):
+        # Preparing, completing, the disabled-service branch and direct
+        # replacement must agree; a prepared-but-never-completed handoff
+        # makes the service yield on every boot.
+        path = (ROOT / 'plugin.program.kodipovilwizard' / 'resources' / 'libs'
+                / 'modular_updater.py')
+        tree = ast.parse(path.read_text(encoding='utf-8'))
+        owners = []
+        gates = 0
+        for func in ast.walk(tree):
+            if not isinstance(func, ast.FunctionDef):
+                continue
+            for node in ast.walk(func):
+                if (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)):
+                    if node.func.attr == '_service_handoff_ready':
+                        owners.append(func.name)
+                    elif (node.func.attr == '_service_update_allowed'
+                          and func.name != '_service_update_allowed'):
+                        gates += 1
+        self.assertEqual(owners, ['_service_update_allowed'])
+        self.assertGreaterEqual(gates, 4)
 
     def test_service_handoff_requires_all_active_patches(self):
         path = (ROOT / 'plugin.program.kodipovilwizard' / 'resources' / 'libs'
