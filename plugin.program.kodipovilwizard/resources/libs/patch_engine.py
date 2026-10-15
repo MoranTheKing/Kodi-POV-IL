@@ -553,7 +553,9 @@ class PatchEngine(object):
         # (upstream addon changed that line, typo in config, etc.) is a
         # pure no-op -- we never destroy a working stale block just because
         # we can no longer find where to put its replacement.
-        if patch['anchor'] not in content:
+        # Judge the host WITHOUT our previous block: a stale block sitting
+        # between the lines of a multi-line anchor must not hide it.
+        if patch['anchor'] not in clean:
             return content, False, 'anchor_missing'
 
         working = content
