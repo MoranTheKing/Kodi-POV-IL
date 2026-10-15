@@ -381,7 +381,7 @@ def autosub_on_play():
         # No second provider search is needed.
         try:
             _human_alternatives = subsync.diverse_human_alternatives(
-                he_list, limit=6)
+                he_list, limit=6, info=info)
         except Exception:
             _human_alternatives = []
         applied = False

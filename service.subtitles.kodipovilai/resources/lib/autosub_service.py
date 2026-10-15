@@ -388,8 +388,19 @@ def autosub_on_play():
         # gently over time. Nothing to do here.)
         try:
             from resources.lib import subsync
+            # Begin the exact-file cue read only for a genuinely uncertain
+            # multi-human choice.  It runs alongside the normal first subtitle
+            # download; the deep verifier reuses the same read if it is still
+            # in flight.  The initial application never waits for this thread.
+            # Its own guard: a prefetch problem must never cost the ranking or
+            # the alternatives below.
+            try:
+                subsync.prefetch_autosub_reference(info, cands)
+            except Exception:
+                pass
             cands = subsync.rank_ready_candidates(info, cands)
-            _human_fallbacks = subsync.diverse_human_alternatives(cands)
+            _human_fallbacks = subsync.diverse_human_alternatives(
+                cands, info=info)
         except Exception:
             _human_fallbacks = []
         # Try the ready Hebrew candidates in priority order until one actually
@@ -555,20 +566,26 @@ def autosub_on_play():
         # DarkSubs-style final status in the top overlay (full subtitle name,
         # + cache note when it came straight from the Cached_subs folder),
         # instead of a success toast.
-        _status_msg = '[COLOR lightblue]כתובית מוכנה'
+        # This first delivery can be provisional while exact-cut timing is
+        # checked in the background. Never call it "ready" or "synced" before
+        # the current selection actually has that verdict; the later worker
+        # may still replace it with a proven alternative.
+        try:
+            _sync_state = (kodi_utils.get_subtitle_sync_status(
+                chosen_link) or {}).get('state')
+        except Exception:
+            _sync_state = ''
+        _heading = {
+            'checking': 'כתובית נטענה · התזמון נבדק ברקע',
+            'confirmed': 'כתובית מסונכרנת',
+            'fixed': 'כתובית סונכרנה אוטומטית',
+            'unverified': 'כתובית נטענה · התזמון טרם אומת',
+        }.get(_sync_state, 'כתובית נטענה')
+        _status_msg = '[COLOR lightblue]' + _heading
         if chosen_name:
             _status_msg += '\n' + chosen_name
         if chosen_from_cache:
             _status_msg += '\n(נטענה מהקאש)'
-        try:
-            _timing_state = (kodi_utils.get_subtitle_sync_status(
-                chosen_link).get('state') or '')
-            if _timing_state == 'checking':
-                _status_msg += '\nהתזמון בבדיקה'
-            elif _timing_state == 'unverified':
-                _status_msg += '\nהתזמון טרם אומת'
-        except Exception:
-            pass
         _status_msg += '[/COLOR]'
         _final_overlay(_status_msg)
     except Exception as e:

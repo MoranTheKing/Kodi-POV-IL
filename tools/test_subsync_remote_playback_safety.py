@@ -621,7 +621,10 @@ class RemotePlaybackSafety(unittest.TestCase):
                 identity_only=True))
         self.assertEqual(len(list(queue.glob('*.json'))), 3)
 
-    def test_trusted_remote_delivery_queues_only_cut_identity_work(self):
+    def test_trusted_remote_delivery_queues_only_file_evidence_check(self):
+        # A release label is a claim: the trusted row is delivered at once, but
+        # the service still checks it against the playing file's own subtitle
+        # timeline (never against provider oracles, audio or alternates).
         playing = 'Movie.2026.1080p.WEB-DL'
         tier = next(iter(self.sub.release_match.AUTO_OK_TIERS))
         enqueue = Mock(return_value=True)
@@ -636,8 +639,58 @@ class RemotePlaybackSafety(unittest.TestCase):
                 {}, str(self.subtitle), playing)
         self.assertEqual(out, str(self.subtitle))
         self.assertEqual(verdict['status'], self.sub._STATUS_TRUSTED)
-        self.assertTrue(enqueue.call_args.kwargs['identity_only'])
+        self.assertTrue(enqueue.call_args.kwargs['file_only'])
+        self.assertFalse(enqueue.call_args.kwargs.get('identity_only'))
         self.assertEqual(self.sub._pending_key(), enqueue.call_args.args[4])
+        self.sub._oracle_candidates.assert_not_called()
+
+    def test_trusted_file_check_fixes_only_on_file_proof(self):
+        text = self.subtitle.read_text(encoding='utf-8')
+        sig = 'cut1:' + 'a' * 32
+        fixable = {'status': self.sub.sync_align.STATUS_FIXABLE,
+                   'scale': 1.0, 'offset_ms': 2000.0, 'mode': 'global',
+                   'diag': 'file proof'}
+        job = {'key': 'k', 'path': str(self.subtitle), 'release': 'Rel',
+               'playing': 'Rel', 'file_only': True}
+        bundle = {'cut_signature': sig, 'cues': [{'start': 0, 'end': 1}],
+                  'track_cues': [{'track': {}, 'cues': []}]}
+        swap = Mock(return_value=True)
+        with patch.object(self.sub, '_wait_for_delivery_ack',
+                          return_value=True), \
+             patch.object(self.sub, '_probe_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_job_stream_is_current',
+                          return_value=True), \
+             patch.object(self.sub, '_job_matches_current', return_value=True), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(fixable, 'FILE TRACK #3 eng', 400)), \
+             patch.object(self.sub.sync_align, 'apply_verdict',
+                          return_value=text), \
+             patch.object(self.sub, '_write_fixed', return_value='fixed.srt'), \
+             patch.object(self.sub, '_swap_if_current', swap), \
+             patch.object(self.sub, '_record_delivery'), \
+             patch.object(self.sub, '_store_verdict'), \
+             patch.object(self.sub, '_publish_selection_status',
+                          return_value=False):
+            self.sub._run_file_only_job(job, {}, 'Rel', str(self.subtitle), {})
+        swap.assert_called_once()
+        self.sub._oracle_candidates.assert_not_called()
+        # Without a file timeline the release decision stands untouched.
+        swap.reset_mock()
+        with patch.object(self.sub, '_wait_for_delivery_ack',
+                          return_value=True), \
+             patch.object(self.sub, '_probe_reference_bundle',
+                          return_value={'cut_signature': sig, 'cues': [],
+                                        'track_cues': []}), \
+             patch.object(self.sub, '_job_stream_is_current',
+                          return_value=True), \
+             patch.object(self.sub, '_job_matches_current', return_value=True), \
+             patch.object(self.sub, '_verify_file_bundle') as judge, \
+             patch.object(self.sub, '_swap_if_current', swap), \
+             patch.object(self.sub, '_record_delivery'):
+            self.sub._run_file_only_job(job, {}, 'Rel', str(self.subtitle), {})
+        judge.assert_not_called()
+        swap.assert_not_called()
         self.sub._oracle_candidates.assert_not_called()
 
     def test_identity_probe_reads_only_tiny_content_signature_not_cues(self):
@@ -745,7 +798,9 @@ class RemotePlaybackSafety(unittest.TestCase):
         store.assert_not_called()
         self.sub._oracle_candidates.assert_not_called()
 
-    def test_exact_community_verdict_short_circuits_oracle_and_file_judge(self):
+    def test_community_confirmed_never_short_circuits_file_judge(self):
+        # Older clients reported every unadjusted 15-minute watch as a HUMAN
+        # confirmation. Such a record must not skip the playing-file check.
         sig = 'cut1:' + '1' * 32
         confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
                      'scale': 1.0, 'offset_ms': 0.0,
@@ -754,15 +809,62 @@ class RemotePlaybackSafety(unittest.TestCase):
                 'cut_signature': sig, 'cues': [], 'track_cues': []}), \
              patch.object(self.sub, '_community_verdict',
                           return_value=confirmed), \
-             patch.object(self.sub, '_verify_file_bundle') as judge:
+             patch.object(self.sub, '_audio_probe_reference',
+                          return_value=None), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(None, 'FILE PROBE', 0)) as judge:
             out, verdict = self.sub._deep_verify(
                 {}, str(self.subtitle), self.subtitle.read_text(encoding='utf-8'),
                 '', 'release', 'legacy-key')
         self.assertEqual(out, str(self.subtitle))
-        self.assertEqual(verdict['status'], self.sub.sync_align.STATUS_CONFIRMED)
-        self.assertTrue(verdict['community'])
-        judge.assert_not_called()
-        self.sub._oracle_candidates.assert_not_called()
+        judge.assert_called_once()
+        self.assertNotEqual((verdict or {}).get('status'),
+                            self.sub.sync_align.STATUS_CONFIRMED)
+        self.assertFalse((verdict or {}).get('community'))
+
+    def test_file_proof_wins_and_community_fix_is_only_a_last_resort(self):
+        sig = 'cut1:' + '1' * 32
+        text = self.subtitle.read_text(encoding='utf-8')
+        file_fix = {'status': self.sub.sync_align.STATUS_FIXABLE,
+                    'scale': 1.0, 'offset_ms': 1500.0, 'mode': 'global',
+                    'diag': 'file'}
+        community = Mock(return_value={
+            'status': self.sub.sync_align.STATUS_FIXABLE, 'scale': 1.0,
+            'offset_ms': -3000.0, 'diag': 'community record'})
+        bundle = {'cut_signature': sig, 'cues': [], 'track_cues': []}
+        with patch.object(self.sub, '_probe_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_community_verdict', community), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(file_fix, 'FILE TRACK', 300)), \
+             patch.object(self.sub.sync_align, 'apply_verdict',
+                          return_value=text), \
+             patch.object(self.sub, '_write_fixed', return_value='fixed.srt'):
+            out, verdict = self.sub._deep_verify(
+                {}, str(self.subtitle), text, '', 'release', 'legacy-key')
+        self.assertEqual(verdict['offset_ms'], 1500.0)
+        self.assertFalse(verdict.get('community'))
+        community.assert_not_called()
+        # File and oracle both abstain -> the deliberate community fix applies
+        # and is never echoed back to the registry as a fresh auto verdict.
+        report = Mock()
+        with patch.object(self.sub, '_probe_reference_bundle',
+                          return_value=bundle), \
+             patch.object(self.sub, '_community_verdict', community), \
+             patch.object(self.sub, '_audio_probe_reference',
+                          return_value=None), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(None, 'FILE PROBE', 0)), \
+             patch.object(self.sub.sync_align, 'apply_verdict',
+                          return_value=text), \
+             patch.object(self.sub, '_write_fixed', return_value='fixed.srt'), \
+             patch.dict(sys.modules, {'resources.lib.pool': Mock(
+                 report_sync=report)}):
+            out, verdict = self.sub._deep_verify(
+                {}, str(self.subtitle), text, '', 'release', 'legacy-key')
+        self.assertTrue(verdict.get('community'))
+        self.assertEqual(verdict['offset_ms'], -3000.0)
+        report.assert_not_called()
 
     def test_cached_cues_with_missing_identity_retry_only_tiny_signature(self):
         sig = 'cut1:' + '2' * 32
@@ -955,6 +1057,57 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.assertEqual(count, 0)
         judge.assert_not_called()
 
+    def test_same_disc_bitmap_lane_is_its_own_labelled_proof(self):
+        def cues(offset=0, count=60, stride=10000):
+            return [{'start': 10000 + offset + i * stride,
+                     'end': 11000 + offset + i * stride}
+                    for i in range(count)]
+
+        validated = {'status': self.sub.sync_align.STATUS_FIXABLE,
+                     'mode': 'piecewise', 'scale': 1.0, 'offset_ms': 1000.0,
+                     'segments': [
+                         {'cand_from_ms': None, 'offset_ms': 1000.0},
+                         {'cand_from_ms': 300000.0, 'offset_ms': 2700.0}],
+                     'validation_required': True, 'validation_folds': 5,
+                     'holdout_score_min': 0.92, 'holdout_gain_min': 0.25,
+                     'timing_family_count': 0, 'diag': 'synthetic proposal'}
+        accepted = {'accepted': True, 'before_score': .50,
+                    'after_score': .90, 'after_overlap': .90,
+                    'after_unique': .80}
+        text_profile = {'track': {'num': 3, 'lang': 'eng',
+                                  'codec': 'S_TEXT/UTF8', 'name': 'English'},
+                        'cues': cues()}
+
+        def clone(num, lang):
+            return {'track': {'num': num, 'lang': lang,
+                              'codec': 'S_HDMV/PGS', 'name': lang},
+                    'cues': cues()}
+
+        with patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=validated),              patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=validated),              patch.object(self.sub.sync_align, 'evaluate_piecewise_family',
+                          return_value=accepted):
+            one = self.sub._validated_micro_piecewise(
+                [text_profile, clone(5, 'dan')], self.subtitle.read_text())
+            two = self.sub._validated_micro_piecewise(
+                [text_profile, clone(5, 'dan'), clone(6, 'spa')],
+                self.subtitle.read_text())
+        self.assertIsNone(one)
+        self.assertIsNotNone(two)
+        verdict = two['verdict']
+        self.assertEqual(verdict['validation_proof'], 'native-disc-lane-v1')
+        self.assertEqual(verdict['native_lane_tracks'], 2)
+        # Never dressed up as an independent second timing family.
+        self.assertEqual(verdict['timing_family_count'], 0)
+        with patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          return_value=validated),              patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          return_value=dict(validated,
+                                            holdout_score_min=0.80)),              patch.object(self.sub.sync_align, 'evaluate_piecewise_family',
+                          return_value=accepted):
+            self.assertIsNone(self.sub._validated_micro_piecewise(
+                [text_profile, clone(5, 'dan'), clone(6, 'spa')],
+                self.subtitle.read_text()))
+
     def test_micro_piecewise_requires_a_complete_distinct_codec_family(self):
         def cues(offset=0, count=60, stride=10000):
             return [{'start': 10000 + offset + i * stride,
@@ -996,9 +1149,9 @@ class RemotePlaybackSafety(unittest.TestCase):
                           return_value=validated), \
              patch.object(self.sub.sync_align, 'evaluate_piecewise_family',
                           return_value=accepted) as family:
+            # A timing clone of the text track is never a second family.
             self.assertIsNone(self.sub._validated_micro_piecewise(
                 [text_profile, duplicate_pgs], self.subtitle.read_text()))
-            family.assert_not_called()
             result = self.sub._validated_micro_piecewise(
                 [short_text, text_profile, distinct_pgs],
                 self.subtitle.read_text())
@@ -1764,11 +1917,16 @@ class RemotePlaybackSafety(unittest.TestCase):
     def test_file_bundle_uses_validated_micro_path_and_exact_track_veto(self):
         cues = [{'start': 10000 + i * 10000,
                  'end': 11000 + i * 10000} for i in range(12)]
+        # Two genuinely different lanes (an in-place duplicate is pruned as
+        # one timing family before the per-track work: it cannot answer
+        # differently from its representative).
+        pgs = [{'start': c['start'] + 600, 'end': c['end'] + 600}
+               for c in cues]
         bundle = {'track_cues': [
             {'track': {'num': 3, 'lang': 'eng',
                        'codec': 'S_TEXT/UTF8'}, 'cues': cues},
             {'track': {'num': 5, 'lang': 'eng',
-                       'codec': 'S_HDMV/PGS'}, 'cues': cues},
+                       'codec': 'S_HDMV/PGS'}, 'cues': pgs},
         ]}
         piecewise = {'status': self.sub.sync_align.STATUS_FIXABLE,
                      'mode': 'piecewise', 'scale': 1.0,
@@ -1894,6 +2052,135 @@ class RemotePlaybackSafety(unittest.TestCase):
             dict(record, mode='piecewise'), 1.0, 300))
         self.assertIsNone(self.sub.finalize_delay_session(
             dict(record, mode=None), 1.0, 300))
+
+    def test_in_place_duplicate_tracks_are_judged_once(self):
+        # A disc remux carries many PGS tracks on one timeline; judging each
+        # in full cost ~60 s of desktop CPU per subtitle (minutes on a TV box).
+        base = [{'start': 10000 + i * 7000, 'end': 11500 + i * 7000}
+                for i in range(40)]
+        shifted = [{'start': c['start'] + 4000, 'end': c['end'] + 4000}
+                   for c in base]
+        profiles = [{'track': {'num': n, 'lang': lang, 'codec': codec},
+                     'cues': cues} for n, lang, codec, cues in (
+            (6, 'en', 'S_HDMV/PGS', base), (7, 'fre', 'S_HDMV/PGS', base),
+            (8, 'ita', 'S_HDMV/PGS', base), (4, 'en', 'S_TEXT/UTF8', base),
+            (9, 'spa', 'S_HDMV/PGS', shifted))]
+        kept = self.sub._distinct_track_families(profiles)
+        self.assertEqual([p['track']['num'] for p in kept], [4, 9])
+
+    def test_unnamed_release_is_checked_against_the_file_only(self):
+        # "Episode.Title.mp4" carries no trustworthy release identity: no
+        # provider oracle or shared record may anchor it, but the playing
+        # file's own subtitle timeline still can.
+        text = self.subtitle.read_text(encoding='utf-8')
+        enqueue = Mock(return_value=True)
+        with patch.object(self.sub, 'enabled', return_value=True), \
+             patch.object(self.sub, 'playing_release', return_value=''), \
+             patch.object(self.sub, '_known_cut_signature', return_value=''), \
+             patch.object(self.sub, '_record_delivery'), \
+             patch.object(self.sub, '_community_verdict') as community, \
+             patch.object(self.sub, '_enqueue_deep', enqueue):
+            out, verdict = self.sub.process(
+                {}, str(self.subtitle), 'Some.Release.1080p.WEB-DL-GRP')
+        self.assertEqual(out, str(self.subtitle))
+        self.assertEqual((verdict or {}).get('status'), 'PENDING')
+        enqueue.assert_called_once()
+        community.assert_not_called()
+        sig = 'cut1:' + '6' * 32
+        with patch.object(self.sub, '_probe_reference_bundle', return_value={
+                'cut_signature': sig, 'cues': [], 'track_cues': []}), \
+             patch.object(self.sub, '_community_verdict') as community, \
+             patch.object(self.sub, '_audio_probe_reference',
+                          return_value=None), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(None, 'FILE PROBE', 0)) as judge:
+            out, verdict = self.sub._deep_verify(
+                {}, str(self.subtitle), text, 'Some.Release', '', 'key')
+        judge.assert_called_once()
+        community.assert_not_called()
+        self.sub._oracle_candidates.assert_not_called()
+
+    def test_untouched_delay_is_never_a_human_confirmation(self):
+        # Viewers rarely open the delay control. A long session with zero delay
+        # (paused, tolerated, or abandoned) must not become a HUMAN vote that
+        # freezes the delivered timing -- original or auto-fixed -- for the cut.
+        sig = 'cut1:' + '8' * 32
+        for base in (0.0, 2400.0):
+            record = {'key': 'subtitlehash|' + sig, 'playing': 'release',
+                      'scale': 1.0, 'offset': base, 'mode': 'global',
+                      'cut_signature': sig, 'info': {'tmdb_id': '1'}}
+            self.assertIsNone(self.sub.finalize_delay_session(
+                record, 0.0, 3 * 3600))
+
+    def _rescue_fixture(self, n=320, seed=11):
+        import random
+        rng = random.Random(seed)
+        starts, t = [], 30000.0
+        while len(starts) < n:
+            starts.append(t)
+            t += rng.uniform(1200, 6500) + (rng.uniform(5000, 30000)
+                                            if rng.random() < 0.08 else 0)
+
+        def srt(offset=0.0, jitter=0.0, keep=1.0, r=None):
+            r = r or random.Random(seed + 1)
+            blocks = []
+            for i, s in enumerate(starts):
+                if r.random() > keep:
+                    continue
+                a = s + offset + r.uniform(-jitter, jitter)
+                blocks.append('%d\n%s --> %s\nline\n' % (
+                    len(blocks) + 1, self.sub.sync_align._ms_to_stamp(a),
+                    self.sub.sync_align._ms_to_stamp(a + 1600)))
+            return '\n'.join(blocks)
+        return srt
+
+    def test_coverage_rescue_needs_an_independent_agreeing_reference(self):
+        import random
+        srt = self._rescue_fixture()
+        hebrew = srt(offset=5000.0, jitter=120, r=random.Random(3))
+        first = srt(jitter=150, keep=0.93, r=random.Random(4))
+        rescued = {'status': self.sub.sync_align.STATUS_FIXABLE,
+                   'scale': 1.0, 'offset_ms': 5000.0, 'mode': 'global',
+                   'coverage_rescue': True, 'diag': 'rescued'}
+        oracle = {'release': 'Movie.2020.1080p.BluRay.x264-AAA',
+                  'payload': {'id': 1}}
+        second_row = {'release': 'Movie.2020.720p.BluRay.x264-AAA',
+                      'payload': {'id': 2}}
+        playing = 'Movie.2020.1080p.BluRay.x264-AAA'
+        # An independent lane that reproduces the map corroborates it.
+        independent = srt(jitter=380, keep=0.82, r=random.Random(9))
+        with patch.object(self.sub, '_download_oracle',
+                          return_value=independent), \
+             patch.object(self.sub, '_timing_profiles_distinct',
+                          return_value=True):
+            out = self.sub._corroborate_rescued_oracle(
+                [oracle, second_row], playing, hebrew, oracle, first, rescued)
+        self.assertEqual(out['status'], self.sub.sync_align.STATUS_FIXABLE)
+        self.assertEqual(out['corroborated_by'], second_row['release'])
+        # A reference that says the Hebrew is ALREADY in sync vetoes the shift.
+        conflicting = srt(offset=5000.0, jitter=380, keep=0.82,
+                          r=random.Random(9))
+        with patch.object(self.sub, '_download_oracle',
+                          return_value=conflicting), \
+             patch.object(self.sub, '_timing_profiles_distinct',
+                          return_value=True):
+            out = self.sub._corroborate_rescued_oracle(
+                [oracle, second_row], playing, hebrew, oracle, first, rescued)
+        self.assertEqual(out['status'], self.sub.sync_align.STATUS_UNKNOWN)
+        self.assertEqual(out['reason'], 'oracle_conflict')
+        # A timing clone is not a second vote; nothing else -> abstain.
+        with patch.object(self.sub, '_download_oracle',
+                          return_value=independent), \
+             patch.object(self.sub, '_timing_profiles_distinct',
+                          return_value=False):
+            out = self.sub._corroborate_rescued_oracle(
+                [oracle, second_row], playing, hebrew, oracle, first, rescued)
+        self.assertEqual(out['status'], self.sub.sync_align.STATUS_UNKNOWN)
+        self.assertEqual(out['reason'], 'uncorroborated_rescue')
+        # No other release-matched reference at all -> abstain, never guess.
+        out = self.sub._corroborate_rescued_oracle(
+            [oracle], playing, hebrew, oracle, first, rescued)
+        self.assertEqual(out['status'], self.sub.sync_align.STATUS_UNKNOWN)
 
     def test_unfingerprinted_auto_verdict_is_not_persisted_or_shared(self):
         confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
@@ -2623,6 +2910,71 @@ class RemotePlaybackSafety(unittest.TestCase):
         fake_translate.resolve.assert_called_once()
         ku.apply_subtitle_file.assert_called_once()
 
+    def test_autosub_tournament_can_use_exact_reference_without_file_track(self):
+        # Small MP4/HDTV files carry no subtitle track. An exact/same-group
+        # provider subtitle can still pick a PROVEN Hebrew row; a rescued
+        # (low-onset) shift is never enough on one reference.
+        def link(row_id):
+            return urllib.parse.quote(json.dumps({
+                'type': 'engine', 'source': 'opensubtitles',
+                'language': 'Hebrew', 'filename': 'Candidate-%d' % row_id,
+                'download_data': {'id': row_id}}))
+
+        first, second = link(1), link(2)
+        job = self._bound_job(
+            key='original', playing='Show.S01E03.720p.HDTV.x264-GRP',
+            fallback_links=[first, second], info={})
+        rescued = {'status': self.sub.sync_align.STATUS_FIXABLE,
+                   'scale': 1.0, 'offset_ms': 4000.0, 'mode': 'global',
+                   'coverage_rescue': True, 'diag': 'rescued'}
+        confirmed = {'status': self.sub.sync_align.STATUS_CONFIRMED,
+                     'scale': 1.0, 'offset_ms': 0.0, 'diag': 'confirmed'}
+        fake_translate = types.ModuleType('resources.lib.translate')
+        fake_translate.resolve = Mock(return_value=str(self.subtitle))
+        ku = sys.modules['resources.lib.kodi_utils']
+        ku.get_current_subtitle = Mock(return_value='original-link')
+        ku.set_current_subtitle = Mock()
+        ku.current_subtitle_selection = Mock(
+            return_value=self._selection_snapshot())
+        ku.apply_subtitle_file = Mock(return_value=True)
+        ku.notify = Mock()
+        reference = {'text': 'reference srt', 'release': 'Show.S01E03.HDTV-GRP',
+                     'tier': self.sub.release_match.TIER_GROUP}
+        with patch.dict(sys.modules, {
+                'resources.lib.translate': fake_translate}), \
+             patch.object(self.sub, '_job_matches_current', return_value=True), \
+             patch.object(self.sub, '_job_stream_is_current',
+                          return_value=True), \
+             patch.object(self.sub, '_selection_matches', return_value=True), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}), \
+             patch.object(self.sub, '_tournament_candidate_text',
+                          side_effect=[('first text', self.sub._decode_link(first)),
+                                       ('second text', self.sub._decode_link(second))]), \
+             patch.object(self.sub.sync_align, 'verify',
+                          side_effect=[rescued, confirmed]) as judge, \
+             patch.object(self.sub, '_verify_file_bundle') as file_judge:
+            applied = self.sub._apply_verified_human_fallback(
+                job, reference=reference)
+        self.assertTrue(applied)
+        file_judge.assert_not_called()
+        self.assertEqual(judge.call_count, 2)
+        ku.set_current_subtitle.assert_called_once_with(second, renew=True)
+        # A weak (source-tier) reference never runs the tournament at all.
+        ku.set_current_subtitle.reset_mock()
+        with patch.object(self.sub, '_job_matches_current', return_value=True), \
+             patch.object(self.sub, '_job_stream_is_current',
+                          return_value=True), \
+             patch.object(self.sub, '_cached_reference_bundle',
+                          return_value={}), \
+             patch.object(self.sub.sync_align, 'verify') as judge:
+            applied = self.sub._apply_verified_human_fallback(
+                job, reference=dict(reference,
+                                    tier=self.sub.release_match.TIER_SOURCE))
+        self.assertFalse(applied)
+        judge.assert_not_called()
+        ku.set_current_subtitle.assert_not_called()
+
     def test_autosub_tournament_does_not_reverify_identical_srt_bytes(self):
         def link(row_id):
             return urllib.parse.quote(json.dumps({
@@ -2842,10 +3194,14 @@ class RemotePlaybackSafety(unittest.TestCase):
              patch.object(self.sub, '_cached_reference_bundle',
                           return_value={}):
             ranked = self.sub.rank_ready_candidates({}, rows)
-        self.assertIs(ranked[0], d)
+        # The playing cut is a HULU master; the DSNP row is another service's
+        # master (field: DSNP failed exact proof, CAKES was confirmed). The
+        # service mismatch now demotes DSNP, so CAKES opens the tournament and
+        # DSNP remains the next distinct alternative.
+        self.assertIs(ranked[0], c)
         alternatives = self.sub.diverse_human_alternatives(ranked)
         self.assertEqual([link for link in alternatives
-                          if link != d['link']][0], c['link'])
+                          if link != c['link']][0], d['link'])
 
     def test_autosub_tournament_never_replaces_when_all_proofs_abstain(self):
         payload = {'type': 'engine', 'source': 'opensubtitles',
@@ -3125,8 +3481,10 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.assertIsNone(self.sub._matched_oracle_piecewise(
             playing, same_source_only, proposal))
 
-    def test_schema_27_retries_incomplete_release_and_tournament_decisions(self):
-        self.assertEqual(self.sub._VERDICT_VERSION, 27)
+    def test_schema_28_retries_incomplete_release_and_tournament_decisions(self):
+        # v28: coverage corroboration, release-identity fixes and removal of
+        # passive "human" confirmations -- every older decision recomputes.
+        self.assertEqual(self.sub._VERDICT_VERSION, 28)
         sig = 'cut1:' + '7' * 32
         text = self.subtitle.read_text(encoding='utf-8')
         final_key = self.sub._cache_key(text, 'movie-release', sig)

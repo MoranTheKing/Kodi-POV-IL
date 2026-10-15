@@ -371,6 +371,14 @@ def _start_subsync_delay_watch(monitor):
         except Exception:
             return 0.0
 
+    def _watching_with_subtitles():
+        # Paused time or a hidden subtitle is not "watching this subtitle".
+        try:
+            return (not xbmc.getCondVisibility('Player.Paused')
+                    and xbmc.getCondVisibility('VideoPlayer.SubtitlesEnabled'))
+        except Exception:
+            return False
+
     def _loop():
         try:
             if monitor.waitForAbort(2.0):
@@ -398,8 +406,11 @@ def _start_subsync_delay_watch(monitor):
                         elif not rec:
                             active, watched, last_delay = None, 0, 0.0
                         if active is not None:
-                            watched += 10
+                            # Sample even while paused: a delay set during a
+                            # pause and then stopped is still the viewer's fix.
                             last_delay = _delay_now()
+                            if _watching_with_subtitles():
+                                watched += 10
                     elif active is not None:
                         akey = active.get('key') or ''
                         if akey and akey not in reported:

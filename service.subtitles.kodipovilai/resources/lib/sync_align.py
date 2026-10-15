@@ -25,6 +25,7 @@
 
 import re
 import bisect
+import collections
 import math
 import statistics
 
@@ -33,10 +34,13 @@ _FPS = [24000 / 1001, 24.0, 25.0, 30000 / 1001, 30.0]
 SCALES = sorted({1.0} | {round(p / q, 6) for p in _FPS for q in _FPS
                          if 0.9 <= p / q <= 1.11})
 _TOL = 500            # offset histogram bin (ms)
-_MAXOFF = 600000      # search window: +/-10 minutes
+_MAXOFF = 250000      # search window: just past MAX_PLAUSIBLE_OFFSET_MS;
+                      # a wider peak would be refused anyway, and the
+                      # old +/-10 min window cost 2.4x the CPU
 _SAMPLE = 500         # cap sampled reference cues
 MIN_CUES = 8          # min dialogue cues on each side
 MIN_VOTE = 0.65       # histogram peak must carry >=65% of sampled cues
+_IDENTITY_SHORTCUT_VOTE = 0.80   # identity this strong: no FPS search
 MIN_OVERLAP = 0.80    # >=80% of ref cues must overlap after the map
 SCALE_MIN, SCALE_MAX = 0.90, 1.11
 CONFIRM_OFFSET_MS = 350   # |offset| <= this and scale==1.0 -> already synced
@@ -86,6 +90,22 @@ _MICRO_MAX_SEGMENTS = 8
 _MICRO_MIN_WINDOWS = 10
 _MICRO_MIN_CORE_RATIO = 0.75
 _MICRO_POST_RESIDUAL_MS = 850
+# Cue-level region planner for the same narrow proposal space.  Fixed 2.5-min
+# windows straddle short acts, so a fifth of the reference removed by a holdout
+# fold can move a window onto the wrong plateau and make the re-planned map
+# disagree with an otherwise perfect proposal.  Assigning every candidate cue
+# its own plateau by dynamic programming locates each act from the cues inside
+# it.  The output is still only a proposal: holdout folds and an independent
+# timing family must prove it before ``apply_verdict`` will accept it.
+_REGION_STEP_MS = 250
+_REGION_RADIUS_MS = 32000
+_REGION_CAP_MS = 800.0
+_REGION_SWITCH_COST = 5000.0
+_REGION_MATCH_MS = 400.0
+_REGION_MIN_CUES = 20
+_REGION_MIN_SPAN_MS = 60000.0
+_REGION_BOUNDARY_SLACK = 8
+_REGION_MAX_DRIFT_MS = 400.0
 
 
 # ---- SRT parsing -----------------------------------------------------------
@@ -177,6 +197,35 @@ def _preflight_srt(text):
     return cues, ''
 
 
+def _tolerant_reference(text):
+    """Timing skeleton of a reference SRT that failed the strict preflight.
+
+    The strict preflight protects files we REWRITE. A reference is only read
+    for its timestamps, and provider files routinely break the strict layout
+    without any timing damage -- most often a blank line inside a credit or
+    song cue (field: an OpenSubtitles HDTV reference refused at "malformed
+    timing block 159" for exactly that). Accept the tolerant parse only when
+    virtually every timing line survives it intact.
+    """
+    if not isinstance(text, str):
+        return None
+    # Timing itself must be intact and in order; only the block LAYOUT may
+    # be imperfect (non-positive or reordered cues still refuse).
+    timings = [(_to_ms(*m.group(1, 2, 3, 4)), _to_ms(*m.group(5, 6, 7, 8)))
+               for m in _TIME_RE.finditer(text)]
+    if len(timings) < MIN_CUES:
+        return None
+    previous = None
+    for start, end in timings:
+        if end <= start or (previous is not None and start < previous):
+            return None
+        previous = start
+    cues = parse_srt(text)
+    if len(cues) < max(MIN_CUES, int(0.97 * len(timings))):
+        return None
+    return cues
+
+
 def _preflight_cues(cues):
     """Validate an already-parsed timing skeleton without reordering it."""
     out = []
@@ -242,20 +291,22 @@ def dialogue_cues(text_or_cues):
 def _best_offset(ref_on, cand_on, a, max_off=_MAXOFF):
     step = max(1, len(ref_on) // _SAMPLE)
     sampled = ref_on[::step]
-    hist = {}
+    hist = collections.Counter()
+    left, right = bisect.bisect_left, bisect.bisect_right
+    tol = float(_TOL)
     for e in sampled:
         pe = a * e
-        lo = bisect.bisect_left(cand_on, pe - max_off)
-        hi = bisect.bisect_right(cand_on, pe + max_off)
+        lo = left(cand_on, pe - max_off)
+        hi = right(cand_on, pe + max_off)
+        if lo >= hi:
+            continue
         # ONE vote per reference cue per bin. Without the dedupe, a DENSE
         # candidate (600 cues) inflated bins with multiple hits per ref cue,
         # so a sparse 10-cue reference could report vote=120% on a spurious
         # alignment (seen in the field: offset=-350s applied, subs vanished).
-        bins = set()
-        for j in range(lo, hi):
-            bins.add(int(round((cand_on[j] - pe) / _TOL)))
-        for b in bins:
-            hist[b] = hist.get(b, 0) + 1
+        # (Set comprehension + Counter: same bins, a fraction of the
+        # interpreter work -- this loop dominates SubSync's CPU time.)
+        hist.update({round((c - pe) / tol) for c in cand_on[lo:hi]})
     if not hist:
         return 0.0, 0
     peak = max(hist, key=lambda k: hist[k] + hist.get(k - 1, 0)
@@ -421,6 +472,17 @@ def estimate(ref_cues, cand_cues, scales=None, max_offset_ms=None):
                 current = (candidate_scale, candidate_offset, candidate_votes)
         return current
 
+    if 1.0 in candidates:
+        # Identity first (same tie rule as before: another scale must be
+        # strictly better). When the identity clock already carries a strong
+        # majority there is no FPS drift to find: skip the dozen other scale
+        # histograms -- the bulk of SubSync's CPU on weak TV boxes. Every
+        # downstream gate still runs on the result.
+        offset1, votes1 = _best_offset(ref_on, cand_on, 1.0, max_off)
+        best = (1.0, offset1, votes1)
+        if sampled and votes1 / sampled >= _IDENTITY_SHORTCUT_VOTE:
+            return 1.0, offset1, votes1 / sampled
+        candidates = [value for value in candidates if value != 1.0]
     best = consider(candidates, best)
     # Standard FPS/identity covers almost every healthy file.  Arbitrary
     # quantile proposals cost two extra histogram passes, so evaluate them only
@@ -484,15 +546,21 @@ def verify(ref_srt_text, cand_srt_text, min_vote=None, min_overlap=None,
     graduated tight gate still guards correctness."""
     ref_all, ref_error = _preflight_srt(ref_srt_text)
     if ref_error:
-        return _preflight_unknown('reference: ' + ref_error)
+        ref_all = (_tolerant_reference(ref_srt_text)
+                   if ref_error.startswith(('malformed timing block',
+                                            'unparseable timing block'))
+                   else None)
+        if ref_all is None:
+            return _preflight_unknown('reference: ' + ref_error)
     cand_all, cand_error = _preflight_srt(cand_srt_text)
     if cand_error:
         return _preflight_unknown('candidate: ' + cand_error)
-    return _gate(dialogue_cues(ref_all), dialogue_cues(cand_all),
-                 min_vote=min_vote, min_overlap=min_overlap,
-                 scales=scales, max_offset_ms=max_offset_ms,
-                 allow_piecewise=allow_piecewise,
-                 require_tight=require_tight)
+    return _snap_piecewise_boundaries(
+        _gate(dialogue_cues(ref_all), dialogue_cues(cand_all),
+              min_vote=min_vote, min_overlap=min_overlap,
+              scales=scales, max_offset_ms=max_offset_ms,
+              allow_piecewise=allow_piecewise,
+              require_tight=require_tight), cand_all)
 
 
 def verify_cues(ref_cues, cand_srt_text, min_vote=None, min_overlap=None,
@@ -510,11 +578,12 @@ def verify_cues(ref_cues, cand_srt_text, min_vote=None, min_overlap=None,
     cand_all, cand_error = _preflight_srt(cand_srt_text)
     if cand_error:
         return _preflight_unknown('candidate: ' + cand_error)
-    return _gate(ref, dialogue_cues(cand_all),
-                 min_vote=min_vote, min_overlap=min_overlap,
-                 scales=scales, max_offset_ms=max_offset_ms,
-                 allow_piecewise=allow_piecewise,
-                 require_tight=require_tight)
+    return _snap_piecewise_boundaries(
+        _gate(ref, dialogue_cues(cand_all),
+              min_vote=min_vote, min_overlap=min_overlap,
+              scales=scales, max_offset_ms=max_offset_ms,
+              allow_piecewise=allow_piecewise,
+              require_tight=require_tight), cand_all)
 
 
 def verify_cue_lists(ref_cues, cand_cues, min_vote=None, min_overlap=None,
@@ -649,6 +718,234 @@ def _required_tight(offset_ms, n_ref, vote=1.0, overlap=1.0):
 
 def _median(values):
     return float(statistics.median(values))
+
+
+# ---- speech-coverage correlation (segmentation-robust corroboration) -------
+# Onset agreement ("tight") asks whether two files START their lines at the
+# same instants.  Two different subbers/languages split the same speech into
+# different lines, so even an exactly correct offset caps around 40-65% tight
+# in the field, while the magnitude-scaled requirement for a multi-second shift
+# is 78-90%.  A real desync of several seconds therefore could never be fixed:
+# only small (<=1.5s) nudges ever reached a user.  What two authorings of one
+# dialogue DO share is the time covered by speech.  The overlap of the two
+# coverage masks as a function of offset -- the subtitle analogue of
+# ffsubsync's speech correlation -- has one sharp peak at the true offset for a
+# genuine pair and stays flat for an unrelated one; merging or splitting lines
+# barely moves it.  It never proposes a map: it can only corroborate (or
+# contradict) the offset that the histogram estimator already found.
+_COV_STEP_MS = 20
+_COV_MIN_WINDOW_MS = 60000
+_COV_MARGIN_MS = 60000
+_COV_PAD_MS = 70000          # integration headroom so no trapezoid is clipped
+_COV_MAX_CUE_MS = 60000      # pathological cues never anchor coverage
+_COV_MAX_SPAN_MS = 120000    # merged back-to-back blocks longer than this
+                             # carry no usable gap structure
+_COV_PLATEAU = 0.015         # peak plateau (longer lines flatten the top)
+_COV_AGREE_MS = 300          # estimator offset must sit on/near the plateau
+_COV_EXCLUDE_MS = 6000       # a competing peak must be clearly elsewhere
+_COV_MIN_CUES = 60           # dense references only; sparse ones stay strict
+_COV_MIN_PEAK = 0.65
+_COV_MIN_PROMINENCE = 0.15
+_COV_MIN_REL_PROMINENCE = 0.45
+_COV_MAX_SECOND = 0.60
+# The coverage rescue still keeps an onset floor. Unrelated pairs measure
+# ~0.15-0.20 tight; correct different-subber pairs 0.40-0.65.
+_COV_TIGHT_FLOOR = 0.40
+
+
+_RESCUE_WINDOW_VOTE = 0.50
+_RESCUE_WINDOW_RANGE_MS = 1500
+_EDGE_VOTE = 0.50
+_EDGE_DIV = 25
+_EDGE_RADIUS_MS = 20000
+
+
+def _edge_windows(ref, cand, scale, offset):
+    """Short probes of the very start and end of the reference timeline.
+
+    Recaps, cold opens, logos and end credits are where releases most often
+    differ, and such a region (a few minutes) is smaller than one ordinary
+    local window, whose estimate it merely dilutes.
+    """
+    size = max(12, len(ref) // 30)
+    if len(ref) < 4 * size:
+        return []
+    cand_on = [c['start'] - offset for c in cand]
+    out = []
+    for subset in (ref[:size], ref[-size:]):
+        # Search NEAR the global offset only: a short probe searched over
+        # +/-150 s finds dense-dialogue aliases (field-like fixtures produced
+        # a spurious 139 s "region"); recap/logo differences are seconds.
+        found, votes = _best_offset([c['start'] for c in subset], cand_on,
+                                    scale, _EDGE_RADIUS_MS)
+        out.append({'offset_ms': float(found) + offset,
+                    'vote': votes / float(len(subset)), 'edge': True})
+    return out
+
+
+def _rescue_regions_agree(windows, offset, edges=()):
+    """Every moderately supported local region must sit near ``offset``.
+
+    The ordinary local-consistency guard counts only windows with a strong
+    (>=65%) vote, which different-subber pairs rarely reach near a region
+    boundary, so a minority region on another clock can go unseen. A rescued
+    shift therefore needs most windows to carry at least moderate support,
+    and all of those -- plus the short start/end probes -- to agree with the
+    global offset.
+    """
+    if not windows:
+        return False, '; regions n/a'
+    for edge in edges or ():
+        if (edge.get('vote', 0.0) >= _EDGE_VOTE
+                and abs(float(edge['offset_ms']) - float(offset))
+                > _RESCUE_WINDOW_RANGE_MS):
+            return False, '; edge region is %dms away' % int(
+                abs(float(edge['offset_ms']) - float(offset)))
+    supported = [w for w in windows if w.get('vote', 0.0) >= _RESCUE_WINDOW_VOTE]
+    needed = max(3, int(math.ceil(0.5 * len(windows))))
+    if len(supported) < needed:
+        return False, '; regions %d/%d supported' % (len(supported),
+                                                     len(windows))
+    worst = max(abs(float(w['offset_ms']) - float(offset)) for w in supported)
+    if worst > _RESCUE_WINDOW_RANGE_MS:
+        return False, '; a supported region is %dms away' % int(worst)
+    return True, ''
+
+
+def _coverage_union(cues, scale=1.0, offset=0.0):
+    spans = sorted((scale * float(c['start']) + offset,
+                    scale * float(c['end']) + offset) for c in cues
+                   if float(c['end']) - float(c['start']) <= _COV_MAX_CUE_MS)
+    out = []
+    for start, end in spans:
+        if end <= start:
+            continue
+        if out and start <= out[-1][1]:
+            if end > out[-1][1]:
+                out[-1][1] = end
+        else:
+            out.append([start, end])
+    return out
+
+
+def coverage_profile(ref, cand, scale=1.0, offset_hint=0.0):
+    """Corroborate a proposed map with speech-coverage cross-correlation.
+
+    C(d) = |scale*ref_coverage  intersect  (cand_coverage - d)| / min(total).
+    Every pair of covered intervals contributes a trapezoid in d, accumulated
+    exactly through second differences on a 20 ms grid, so the cost is linear
+    in the number of nearby interval pairs (no FFT, stdlib only).
+
+    Returns metrics plus ``corroborates``: the estimator's offset lies on the
+    single dominant peak and that peak clearly stands above the background.
+    """
+    hint = float(offset_hint or 0.0)
+    window = min(MAX_PLAUSIBLE_OFFSET_MS + _COV_MARGIN_MS,
+                 max(_COV_MIN_WINDOW_MS, abs(hint) + _COV_MARGIN_MS))
+    step = _COV_STEP_MS
+    a_spans = _coverage_union(ref, scale)
+    b_spans = _coverage_union(cand)
+    a_total = sum(e - s for s, e in a_spans)
+    b_total = sum(e - s for s, e in b_spans)
+    # 'agrees' None = no information: never a reason to veto anything.
+    result = {'corroborates': False, 'agrees': None, 'offset_ms': None,
+              'peak': 0.0, 'median': 0.0, 'prominence': 0.0,
+              'rel_prominence': 0.0, 'second': 1.0, 'diag': 'coverage n/a'}
+    if not a_spans or not b_spans or a_total <= 0 or b_total <= 0:
+        return result
+    longest = max(max(e - s for s, e in a_spans),
+                  max(e - s for s, e in b_spans))
+    if longest > _COV_MAX_SPAN_MS:
+        # Back-to-back cues merged into minutes-long blocks (continuous
+        # captions / auto-generated timing) carry no gap structure to align.
+        result['diag'] = 'coverage n/a (continuous %ds block)' % int(
+            longest / 1000)
+        return result
+    # Every interval pair's trapezoid spans at most la+lb beyond the search
+    # window on either side; pad so no breakpoint can fall off the grid.
+    pad = max(_COV_PAD_MS, 2 * longest + 2000)
+    full = window + pad
+    bins = int(2 * full / step) + 3
+    d2 = [0.0] * (bins + 2)
+    b_starts = [s for s, _ in b_spans]
+
+    def add(position, weight):
+        k = int(round((position + full) / step))
+        if 0 <= k <= bins:
+            d2[k] += weight
+
+    for a1, a2 in a_spans:
+        la = a2 - a1
+        j = bisect.bisect_left(b_starts, a1 - window - longest)
+        while j < len(b_spans):
+            b1, b2 = b_spans[j]
+            j += 1
+            if b1 - a2 > window:
+                break
+            if b2 - a1 < -window:
+                continue
+            m = min(la, b2 - b1)
+            d0 = b1 - a2
+            d3 = b2 - a1
+            add(d0, 1.0)
+            add(d0 + m, -1.0)
+            add(d3 - m, -1.0)
+            add(d3, 1.0)
+    slope = 0.0
+    value = 0.0
+    norm = float(min(a_total, b_total))
+    first = int(round(pad / step))
+    last = first + int(2 * window / step)
+    curve = []
+    for k in range(last + 1):
+        # f(k) = f(k-1) + step * slope(k-1): a breakpoint at bin k changes the
+        # slope only AFTER that bin (updating first biased the peak 1 step).
+        value += slope * step
+        slope += d2[k]
+        if k >= first:
+            curve.append(value / norm)
+    if not curve:
+        return result
+    top = max(range(len(curve)), key=curve.__getitem__)
+    peak = curve[top]
+    lo = top
+    while lo > 0 and curve[lo - 1] >= peak - _COV_PLATEAU:
+        lo -= 1
+    hi = top
+    while hi + 1 < len(curve) and curve[hi + 1] >= peak - _COV_PLATEAU:
+        hi += 1
+
+    def at(index):
+        return index * step - window
+
+    exclude = int(_COV_EXCLUDE_MS / step)
+    outside = [curve[i] for i in range(len(curve))
+               if i < lo - exclude or i > hi + exclude]
+    ordered = sorted(curve)
+    median = ordered[len(ordered) // 2]
+    prominence = peak - median
+    rel_prominence = prominence / max(0.05, 1.0 - median)
+    second = ((max(outside) - median) / prominence
+              if outside and prominence > 1e-9 else 1.0)
+    plateau_lo, plateau_hi = at(lo), at(hi)
+    agrees = (plateau_lo - _COV_AGREE_MS <= hint
+              <= plateau_hi + _COV_AGREE_MS)
+    corroborates = bool(agrees and peak >= _COV_MIN_PEAK
+                        and prominence >= _COV_MIN_PROMINENCE
+                        and rel_prominence >= _COV_MIN_REL_PROMINENCE
+                        and second <= _COV_MAX_SECOND)
+    result.update({
+        'corroborates': corroborates, 'agrees': agrees,
+        'offset_ms': float(at(top)), 'plateau_ms': (plateau_lo, plateau_hi),
+        'peak': peak, 'median': median, 'prominence': prominence,
+        'rel_prominence': rel_prominence, 'second': second,
+        'diag': ('coverage=%+d[%+d..%+d]ms peak=%.0f%% bg=%.0f%% '
+                 'rel=%.0f%% 2nd=%.0f%%%s' % (
+                     int(at(top)), int(plateau_lo), int(plateau_hi),
+                     peak * 100, median * 100, rel_prominence * 100,
+                     second * 100, '' if corroborates else ' (no support)')),
+    })
+    return result
 
 
 def _local_windows(ref, cand, scale, max_offset_ms=None, center_offset=0.0):
@@ -1035,6 +1332,22 @@ def _micro_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
         ref, cand, scale, groups, offsets)
     if cuts is None:
         return None, info
+    return _micro_verdict_from_cuts(
+        ref, cand, cuts, offsets, info,
+        vote=min(w['vote'] for w in core),
+        label='embedded-track consensus proposal',
+        min_overlap=min_overlap, max_offset_ms=max_offset_ms)
+
+
+def _micro_verdict_from_cuts(ref, cand, cuts, offsets, info, vote, label,
+                             min_overlap=MIN_OVERLAP, max_offset_ms=None):
+    """Shared acceptance tail for both short-edit planners.
+
+    Whatever proposed the plateaus, the same region-size, ordering, residual,
+    overlap, uniqueness and score-gain gates decide whether a validation-
+    required proposal exists at all.
+    """
+    scale = 1.0
     candidate_boundaries = []
     reference_boundaries = []
     for cut, left_offset, right_offset in zip(
@@ -1099,9 +1412,9 @@ def _micro_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
                      'after_overlap': after_overlap,
                      'after_unique': after_unique})
         return None, info
-    diag = ('embedded-track consensus proposal: %d regions offsets=%s '
+    diag = ('%s: %d regions offsets=%s '
             'score=%.3f->%.3f overlap=%.0f%% unique=%.0f%% residual=%dms'
-            % (len(segments),
+            % (label, len(segments),
                ','.join('%+d' % int(value) for value in offsets),
                before_score, after_score, after_overlap * 100,
                after_unique * 100, int(post_residual)))
@@ -1111,7 +1424,7 @@ def _micro_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
         'scale': 1.0,
         'offset_ms': offsets[0],
         'segments': segments,
-        'vote': min(w['vote'] for w in core),
+        'vote': vote,
         'overlap': after_overlap,
         'unique': after_unique,
         'unique_median_ms': unique_median,
@@ -1125,6 +1438,560 @@ def _micro_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
         'timing_family_count': 0,
         'diag': diag,
     }
+    return verdict, info
+
+
+_ENV_WINDOW_MS = 240000
+_ENV_MAX_WINDOWS = 20
+_ENV_LAG_MS = 20000
+_ENV_EDGE_MS = 30000
+_ENV_MIN_Z = 3.5
+_ENV_POLARITY_MARGIN = 0.6
+_ENV_SYNC_MS = 500.0
+_ENV_NEAR_MS = 900.0
+_ENV_SHIFT_MS = 1000.0
+_ENV_STAIR_MS = 3000.0
+
+
+def _envelope_scores(prefix, size, spans, lags):
+    scores = []
+    for lag in lags:
+        total = 0.0
+        for begin, end in spans:
+            a = begin - lag
+            b = end - lag
+            if a < 0:
+                a = 0
+            if b > size:
+                b = size
+            if b > a:
+                total += prefix[b] - prefix[a]
+        scores.append(total)
+    return scores
+
+
+def envelope_windows(envelope, cand_srt_text):
+    """Per-window offsets of a subtitle against an audio frame-size envelope.
+
+    Each window slides the subtitle's dialogue intervals over the envelope by
+    up to +/-20 s and scores the summed envelope under them (prefix sums: one
+    subtraction per cue per lag).  The windows tile the whole subtitle span
+    without gaps -- at least four minutes each, at most twenty of them -- so
+    no act can hide between samples.  The search runs on a 200-ms grid and
+    is refined around each extreme.  Speech raises the bitrate with some
+    encoders and lowers it with others, so both extremes are kept; the caller
+    picks the polarity that the whole file supports.  Offsets follow the
+    module convention: positive means the subtitle is late.
+    """
+    try:
+        step = float(envelope.get('step_ms') or 0)
+        values = list(envelope.get('values') or [])
+    except AttributeError:
+        return []
+    if step <= 0 or len(values) < 1000:
+        return []
+    cand_all, cand_error = _preflight_srt(cand_srt_text)
+    if cand_error:
+        return []
+    cand = dialogue_cues(cand_all)
+    if len(cand) < _LOCAL_MIN_REF_CUES:
+        return []
+    prefix = [0.0]
+    for value in values:
+        prefix.append(prefix[-1] + value)
+    size = len(values)
+    first = float(cand[0]['start']) + _ENV_EDGE_MS
+    last = min(float(cand[-1]['end']), size * step) - _ENV_EDGE_MS
+    span = last - first
+    if span < _ENV_WINDOW_MS:
+        return []
+    count = max(1, min(_ENV_MAX_WINDOWS, int(span // _ENV_WINDOW_MS)))
+    width = span / float(count)
+    lag_bins = int(_ENV_LAG_MS / step)
+    coarse = list(range(-lag_bins, lag_bins + 1, 2))
+    starts = [c['start'] for c in cand]
+    rows = []
+    for index in range(count):
+        low = first + index * width
+        high = low + width
+        lo = bisect.bisect_left(starts, low)
+        hi = bisect.bisect_left(starts, high)
+        spans = [(int(c['start'] / step), int(c['end'] / step))
+                 for c in cand[lo:hi] if c['end'] > c['start']]
+        if len(spans) < 15:
+            continue
+        scores = _envelope_scores(prefix, size, spans, coarse)
+        ordered = sorted(scores)
+        middle = ordered[len(ordered) // 2]
+        mean = sum(scores) / float(len(scores))
+        spread = math.sqrt(sum((x - mean) ** 2 for x in scores)
+                           / float(len(scores))) or 1e-9
+
+        def refine(position, sign):
+            lag = coarse[position]
+            best_lag, best_value = lag, scores[position]
+            for near in (lag - 1, lag + 1):
+                if -lag_bins <= near <= lag_bins:
+                    value = _envelope_scores(prefix, size, spans, [near])[0]
+                    if sign * value > sign * best_value:
+                        best_lag, best_value = near, value
+            return best_lag, best_value
+        hi_lag, hi_value = refine(
+            max(range(len(scores)), key=scores.__getitem__), 1)
+        lo_lag, lo_value = refine(
+            min(range(len(scores)), key=scores.__getitem__), -1)
+        rows.append({
+            'center_ms': (low + high) / 2.0,
+            'pos': (hi_lag * step, (hi_value - middle) / spread),
+            'neg': (lo_lag * step, (middle - lo_value) / spread),
+        })
+    return rows
+
+
+def _envelope_staircase(ordered):
+    """Monotonic drift of strong window offsets that no single window makes.
+
+    A real run of act-break pads moves every later window the same way.  One
+    aliased window can fake a 'staircase' on its own, so the pattern must
+    survive the removal of any one window.
+    """
+    def rising_or_falling(seq):
+        if len(seq) < 4 or max(seq) - min(seq) < _ENV_STAIR_MS:
+            return False
+        drops = sum(1 for a, b in zip(seq, seq[1:]) if b < a - 300)
+        climbs = sum(1 for a, b in zip(seq, seq[1:]) if b > a + 300)
+        return min(drops, climbs) <= 1
+    if len(ordered) < 5 or not rising_or_falling(ordered):
+        return False
+    return all(rising_or_falling(ordered[:i] + ordered[i + 1:])
+               for i in range(len(ordered)))
+
+
+def envelope_check(envelope, cand_srt_text, polarity=None):
+    """Judge a subtitle against the playing file's audio envelope.
+
+    ``status`` is 'synced' (one plateau within 0.5 s), 'near' (one plateau
+    within 0.9 s), 'conflict' (sustained plateaus >=1.5 s apart, or a
+    monotonic staircase of strong windows spanning >=3 s that survives the
+    removal of any one window -- no single clock fits), 'shifted' (one
+    plateau >=1 s away) or 'unknown'.  Windows count only when their peak is
+    strong (z >= 3.5) and a plateau needs two of them, so one aliased window
+    decides nothing.  A file whose two polarities score alike is 'unknown'.
+    The envelope's absolute offset carries an encoder-dependent bias of a
+    few hundred ms: it can tell timelines apart, but it never fine-tunes one,
+    and a constant bias can never produce a 'conflict'.
+    """
+    rows = envelope_windows(envelope, cand_srt_text)
+    result = {'status': 'unknown', 'windows': len(rows), 'trusted': 0,
+              'plateaus': [], 'polarity': 0}
+    if len(rows) < 4:
+        return result
+    medians = {}
+    for key in ('pos', 'neg'):
+        zs = sorted(row[key][1] for row in rows)
+        medians[key] = zs[len(zs) // 2]
+    if polarity in (1, -1):
+        key = 'pos' if polarity > 0 else 'neg'
+    else:
+        key = max(medians, key=medians.get)
+        other = 'neg' if key == 'pos' else 'pos'
+        if medians[key] - medians[other] < _ENV_POLARITY_MARGIN:
+            result['reason'] = 'ambiguous polarity'
+            return result
+    result['polarity'] = 1 if key == 'pos' else -1
+    result['median_z'] = medians[key]
+    ordered = [row[key][0] for row in rows if row[key][1] >= _ENV_MIN_Z]
+    trusted = sorted(ordered)
+    result['trusted'] = len(trusted)
+    result['offsets'] = [(int(row['center_ms']), int(row[key][0]),
+                          round(row[key][1], 1)) for row in rows]
+    if len(trusted) < max(4, int(math.ceil(0.6 * len(rows)))):
+        result['reason'] = 'weak envelope'
+        return result
+    clusters = []
+    for value in trusted:
+        if clusters and value - clusters[-1][-1] <= _PLATEAU_JOIN_MS:
+            clusters[-1].append(value)
+        else:
+            clusters.append([value])
+    plateaus = sorted(((_median(c), len(c)) for c in clusters if len(c) >= 2),
+                      key=lambda item: -item[1])
+    result['plateaus'] = plateaus
+    if _envelope_staircase(ordered):
+        result['status'] = 'conflict'
+        result['reason'] = 'staircase'
+        return result
+    if not plateaus:
+        return result
+    values_ = [offset for offset, _count in plateaus]
+    if len(plateaus) >= 2 and max(values_) - min(values_) >= _PLATEAU_CONFLICT_MS:
+        result['status'] = 'conflict'
+        return result
+    main_offset, main_count = plateaus[0]
+    if main_count < 0.8 * len(trusted):
+        return result
+    result['offset_ms'] = main_offset
+    # One strong window elsewhere is not enough to call a conflict (it may be
+    # an alias), but it is enough to withhold agreement: a single act cut
+    # differently looks exactly like that.
+    if any(abs(value - main_offset) > 1000.0 for value in trusted):
+        result['reason'] = 'deviating window'
+        return result
+    if abs(main_offset) <= _ENV_SYNC_MS:
+        result['status'] = 'synced'
+    elif abs(main_offset) <= _ENV_NEAR_MS:
+        result['status'] = 'near'
+    elif abs(main_offset) >= _ENV_SHIFT_MS:
+        result['status'] = 'shifted'
+    return result
+
+
+_PLATEAU_JOIN_MS = 700.0
+_PLATEAU_CONFLICT_MS = 1500.0
+
+
+def timeline_plateaus(ref_cues, cand_srt_text):
+    """Sustained identity-clock offset plateaus of a subtitle on a reference.
+
+    Each trusted local window votes for the offset its own stretch of the
+    timeline needs.  Offsets are clustered; only clusters backed by at least
+    two trusted windows count, so one aliased window never forms a plateau.
+    Returns ``[(median_offset_ms, windows), ...]`` strongest first, or ``[]``
+    when the reference cannot tell.
+    """
+    try:
+        ref, ref_error = _preflight_cues(ref_cues)
+        cand_all, cand_error = _preflight_srt(cand_srt_text)
+        if ref_error or cand_error:
+            return []
+        cand = dialogue_cues(cand_all)
+        if len(ref) < _LOCAL_MIN_REF_CUES or len(cand) < _LOCAL_MIN_REF_CUES:
+            return []
+        center, _votes = _best_offset(
+            [c['start'] for c in ref], [c['start'] for c in cand], 1.0)
+        windows = _local_windows(ref, cand, 1.0, center_offset=center)
+        offsets = sorted(w['offset_ms'] for w in _trusted_local_windows(windows))
+        clusters = []
+        for value in offsets:
+            if clusters and value - clusters[-1][-1] <= _PLATEAU_JOIN_MS:
+                clusters[-1].append(value)
+            else:
+                clusters.append([value])
+        return sorted(((_median(c), len(c)) for c in clusters if len(c) >= 2),
+                      key=lambda item: -item[1])
+    except Exception:
+        return []
+
+
+def timeline_conflict(ref_cues, cand_srt_text):
+    """Two sustained plateaus >=1.5 s apart: no single clock fits the text."""
+    plateaus = timeline_plateaus(ref_cues, cand_srt_text)
+    if len(plateaus) < 2:
+        return None
+    values = [offset for offset, _count in plateaus]
+    if max(values) - min(values) < _PLATEAU_CONFLICT_MS:
+        return None
+    return plateaus
+
+
+def _snap_piecewise_boundaries(verdict, cand_all):
+    """Move each cut within its dialogue gap so it is valid for ALL cues.
+
+    Planners place cuts between dialogue cues only, yet ``apply_verdict``
+    retimes every cue.  A music/credit line sitting just before a cut keeps
+    the left offset while the next spoken line takes the right one, and a
+    positive step then stacks the two.  Sliding the cut across such non-
+    dialogue lines -- never across a dialogue cue -- leaves every validated
+    dialogue mapping untouched.  A cut that cannot be made valid is left as
+    is so the strict invariants still refuse it.
+    """
+    try:
+        if (not verdict or verdict.get('status') != STATUS_FIXABLE
+                or verdict.get('mode') != 'piecewise'):
+            return verdict
+        segments = [dict(item) for item in verdict.get('segments') or []]
+        if len(segments) < 2 or not cand_all:
+            return verdict
+        scale = float(verdict.get('scale') or 1.0)
+        cues = sorted(cand_all, key=lambda cue: cue['start'])
+        starts = [float(cue['start']) for cue in cues]
+        spoken = [float(cue['start']) for cue in dialogue_cues(cues)]
+        if not spoken:
+            return verdict
+        changed = False
+        for index in range(1, len(segments)):
+            boundary = segments[index].get('cand_from_ms')
+            if boundary is None:
+                return verdict
+            boundary = float(boundary)
+            left = float(segments[index - 1].get('offset_ms') or 0.0)
+            right = float(segments[index].get('offset_ms') or 0.0)
+
+            def valid(k):
+                return (0 < k < len(cues) and starts[k] > starts[k - 1]
+                        and (starts[k] - right) / scale
+                        >= (float(cues[k - 1]['end']) - left) / scale)
+            nominal = bisect.bisect_left(starts, boundary)
+            if valid(nominal):
+                continue
+            j = bisect.bisect_left(spoken, boundary)
+            low_time = spoken[j - 1] if j > 0 else float('-inf')
+            high_time = spoken[j] if j < len(spoken) else float('inf')
+            first = max(1, bisect.bisect_right(starts, low_time))
+            last = min(len(cues) - 1, bisect.bisect_left(starts, high_time))
+            options = [k for k in range(first, last + 1) if valid(k)]
+            if not options:
+                continue
+            k = min(options, key=lambda item: abs(item - nominal))
+            previous_end = float(cues[k - 1]['end'])
+            new_boundary = min(max((previous_end + starts[k]) / 2.0,
+                                   starts[k - 1] + 1.0), starts[k])
+            lower = (float(segments[index - 1].get('cand_from_ms'))
+                     if segments[index - 1].get('cand_from_ms') is not None
+                     else float('-inf'))
+            upper = (float(segments[index + 1].get('cand_from_ms'))
+                     if index + 1 < len(segments)
+                     and segments[index + 1].get('cand_from_ms') is not None
+                     else float('inf'))
+            if not lower < new_boundary < upper:
+                continue
+            reference = ((previous_end - left) / scale
+                         + (starts[k] - right) / scale) / 2.0
+            segments[index]['cand_from_ms'] = new_boundary
+            segments[index - 1]['cand_to_ms'] = new_boundary
+            if 'ref_from_ms' in segments[index]:
+                segments[index]['ref_from_ms'] = reference
+            if 'ref_to_ms' in segments[index - 1]:
+                segments[index - 1]['ref_to_ms'] = reference
+            changed = True
+        if not changed:
+            return verdict
+        snapped = dict(verdict)
+        snapped['segments'] = segments
+        return snapped
+    except (TypeError, ValueError, KeyError):
+        return verdict
+
+
+def _region_cost_rows(ref_on, cand_on, center):
+    """Capped nearest-onset distance of every candidate cue to every plateau.
+
+    State ``k`` is the offset ``center - radius + k * step``.  Only reference
+    onsets that can land within the cap of some state are visited, so a cue
+    costs a handful of operations instead of one search per state.
+    """
+    step = float(_REGION_STEP_MS)
+    radius = float(_REGION_RADIUS_MS)
+    cap = _REGION_CAP_MS
+    count = int(2 * radius / step) + 1
+    rows = []
+    for onset in cand_on:
+        row = [cap] * count
+        lo = bisect.bisect_left(ref_on, onset - center - radius - cap)
+        hi = bisect.bisect_right(ref_on, onset - center + radius + cap)
+        for ref_onset in ref_on[lo:hi]:
+            delta = onset - ref_onset - center + radius
+            first = max(0, int(math.ceil((delta - cap) / step)))
+            last = min(count - 1, int(math.floor((delta + cap) / step)))
+            for k in range(first, last + 1):
+                distance = abs(delta - k * step)
+                if distance < row[k]:
+                    row[k] = distance
+        rows.append(row)
+    return rows
+
+
+def _region_dp_path(rows):
+    """Cheapest plateau per cue; changing plateau costs a fixed penalty."""
+    count = len(rows[0])
+    previous = list(rows[0])
+    transitions = []
+    for row in rows[1:]:
+        best = min(range(count), key=previous.__getitem__)
+        threshold = previous[best] + _REGION_SWITCH_COST
+        flags = bytes(1 if value > threshold else 0 for value in previous)
+        previous = [cost + (threshold if value > threshold else value)
+                    for cost, value in zip(row, previous)]
+        transitions.append((best, flags))
+    state = min(range(count), key=previous.__getitem__)
+    path = [state]
+    for best, flags in reversed(transitions):
+        if flags[state]:
+            state = best
+        path.append(state)
+    path.reverse()
+    return path
+
+
+def _region_matched_deltas(ref_on, cand, begin, end, base):
+    """(candidate onset, candidate-minus-reference) pairs near ``base``."""
+    pairs = []
+    for cue in cand[begin:end + 1]:
+        onset = cue['start']
+        pos = bisect.bisect_left(ref_on, onset - base)
+        best = None
+        for j in (pos - 1, pos):
+            if 0 <= j < len(ref_on):
+                delta = onset - ref_on[j]
+                if (abs(delta - base) <= _REGION_MATCH_MS
+                        and (best is None
+                             or abs(delta - base) < abs(best - base))):
+                    best = delta
+        if best is not None:
+            pairs.append((onset, best))
+    return pairs
+
+
+def _region_drift_ms(pairs):
+    """Least-squares offset change across one plateau's matched cues."""
+    if len(pairs) < 3:
+        return 0.0
+    xs = [float(x) for x, _y in pairs]
+    ys = [float(y) for _x, y in pairs]
+    mean_x = sum(xs) / len(xs)
+    mean_y = sum(ys) / len(ys)
+    var_x = sum((x - mean_x) ** 2 for x in xs)
+    if var_x <= 0:
+        return 0.0
+    slope = sum((x - mean_x) * (y - mean_y)
+                for x, y in zip(xs, ys)) / var_x
+    return abs(slope) * (max(xs) - min(xs))
+
+
+def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
+                           max_offset_ms=None):
+    """Cue-level proposal for repeated short edit pads, pending validation.
+
+    Same proposal space and the same acceptance tail as
+    ``_micro_piecewise_plan``: identity clock, 3-8 monotonic plateaus whose
+    steps are 1-4.5 s, every act sustained.  Only the plateau evidence
+    differs: each candidate cue is assigned to the plateau its own onset
+    supports, so a short act is never smeared by a window straddling it.  A
+    plateau whose offset drifts is a clock-rate mismatch, not an edit, and is
+    refused here so the scale paths handle it.
+    """
+    info = {'planner': 'region'}
+    if len(ref) < _LOCAL_MIN_REF_CUES or len(cand) < 3 * _REGION_MIN_CUES:
+        return None, info
+    max_off = _MAXOFF if max_offset_ms is None else max_offset_ms
+    ref_on = [float(c['start']) for c in ref]
+    cand_on = [float(c['start']) for c in cand]
+    center, _votes = _best_offset(ref_on, cand_on, 1.0, max_off)
+    path = _region_dp_path(_region_cost_rows(ref_on, cand_on, center))
+    step = float(_REGION_STEP_MS)
+    radius = float(_REGION_RADIUS_MS)
+
+    runs = []
+    for index, state in enumerate(path):
+        if runs and runs[-1][0] == state:
+            runs[-1][2] = index
+        else:
+            runs.append([state, index, index])
+
+    def sustained(run):
+        return (run[2] - run[1] + 1 >= _REGION_MIN_CUES
+                and cand[run[2]]['end'] - cand[run[1]]['start']
+                >= _REGION_MIN_SPAN_MS)
+
+    while len(runs) > 1:
+        weak = [index for index, run in enumerate(runs)
+                if not sustained(run)]
+        if not weak:
+            break
+        index = min(weak, key=lambda i: runs[i][2] - runs[i][1])
+        neighbours = [j for j in (index - 1, index + 1)
+                      if 0 <= j < len(runs)]
+        target = min(neighbours,
+                     key=lambda j: abs(runs[j][0] - runs[index][0]))
+        low, high = sorted((index, target))
+        runs[low] = [runs[target][0], runs[low][1], runs[high][2]]
+        del runs[high]
+
+    # Refine each plateau from its own matched cues, then merge neighbours
+    # that turn out to be the same plateau.
+    regions = []
+    for state, begin, end in runs:
+        base = center - radius + state * step
+        regions.append([begin, end, base])
+    merged = True
+    while merged:
+        merged = False
+        refined = []
+        for begin, end, base in regions:
+            pairs = _region_matched_deltas(ref_on, cand, begin, end, base)
+            if len(pairs) < max(8, int(0.25 * (end - begin + 1))):
+                info['reason'] = 'unsupported region'
+                return None, info
+            refined.append([begin, end, _median([y for _x, y in pairs]),
+                            pairs])
+        regions = []
+        for begin, end, offset, pairs in refined:
+            if (regions
+                    and abs(offset - regions[-1][2]) < _MICRO_MIN_STEP_MS):
+                previous = regions[-1]
+                weight = previous[1] - previous[0] + 1
+                size = end - begin + 1
+                previous[1] = end
+                previous[2] = ((previous[2] * weight + offset * size)
+                               / float(weight + size))
+                merged = True
+            else:
+                regions.append([begin, end, offset])
+    info['regions'] = [(begin, end, offset) for begin, end, offset in regions]
+    if not (3 <= len(regions) <= _MICRO_MAX_SEGMENTS):
+        return None, info
+    offsets = [offset for _begin, _end, offset in regions]
+    if any(abs(offset) > MAX_PLAUSIBLE_OFFSET_MS for offset in offsets):
+        return None, info
+    steps = [offsets[i + 1] - offsets[i] for i in range(len(offsets) - 1)]
+    direction = 1.0 if _median(steps) > 0 else -1.0
+    if any(direction * value < _MICRO_MIN_STEP_MS
+           or abs(value) > _MICRO_MAX_STEP_MS for value in steps):
+        return None, info
+    if max(offsets) - min(offsets) < 3000.0:
+        return None, info
+    for begin, end, offset, pairs in refined:
+        if _region_drift_ms(pairs) > _REGION_MAX_DRIFT_MS:
+            info['reason'] = 'drifting plateau'
+            return None, info
+
+    # Each cut goes where the two neighbouring plateaus explain the nearby
+    # onsets best, among positions that keep adjacent cues ordered.
+    cuts = []
+    for left, right in zip(regions, regions[1:]):
+        left_off, right_off = left[2], right[2]
+        nominal = right[0]
+        lo = max(left[0] + 4, nominal - _REGION_BOUNDARY_SLACK)
+        hi = min(right[1] - 3, nominal + _REGION_BOUNDARY_SLACK)
+        if cuts:
+            lo = max(lo, cuts[-1] + 4)
+        best = None
+        for position in range(lo, hi + 1):
+            if (cand[position]['start'] - right_off
+                    < cand[position - 1]['end'] - left_off):
+                continue
+            cost = 0.0
+            for index in range(lo, hi + 1):
+                offset = left_off if index < position else right_off
+                cost += _nearest_onset_distance(
+                    ref_on, cand[index]['start'] - offset,
+                    cap=_REGION_CAP_MS)
+            key = (cost, abs(position - nominal))
+            if best is None or key < best[0]:
+                best = (key, position)
+        if best is None:
+            info['reason'] = 'no ordered boundary'
+            return None, info
+        cuts.append(best[1])
+    support = min(len(_region_matched_deltas(
+        ref_on, cand, begin, end, offset)) / float(end - begin + 1)
+        for begin, end, offset in regions)
+    verdict, info = _micro_verdict_from_cuts(
+        ref, cand, cuts, offsets, info, vote=support,
+        label='cue-level region proposal',
+        min_overlap=min_overlap, max_offset_ms=max_offset_ms)
+    if verdict:
+        verdict['planner'] = 'region'
     return verdict, info
 
 
@@ -1147,6 +2014,9 @@ def micro_piecewise_proposal(ref_cues, cand_srt_text,
         return None
     verdict, _info = _micro_piecewise_plan(
         ref, cand, max_offset_ms=max_offset_ms)
+    if verdict is None:
+        verdict, _info = _region_piecewise_plan(
+            ref, cand, max_offset_ms=max_offset_ms)
     return verdict
 
 
@@ -1247,9 +2117,26 @@ def validate_micro_piecewise(ref_cues, cand_srt_text, proposal=None,
     if full is None:
         full, _info = _micro_piecewise_plan(
             ref, cand, max_offset_ms=max_offset_ms)
-    if not full or not full.get('validation_required'):
-        return None
+    validated = None
+    if full and full.get('validation_required'):
+        planner = (_region_piecewise_plan if full.get('planner') == 'region'
+                   else _micro_piecewise_plan)
+        validated = _holdout_validate(ref, cand, full, planner,
+                                      max_offset_ms)
+    # Window plateaus can be unstable when a fold removes the cues of a short
+    # act; the cue-level planner gets its own full proposal and its own five
+    # folds.  Never a mix: each fold is rebuilt by the planner that proposed
+    # the map it is compared with.
+    if validated is None and not (full and full.get('planner') == 'region'):
+        region, _info = _region_piecewise_plan(
+            ref, cand, max_offset_ms=max_offset_ms)
+        if region and region.get('validation_required'):
+            validated = _holdout_validate(
+                ref, cand, region, _region_piecewise_plan, max_offset_ms)
+    return _snap_piecewise_boundaries(validated, cand_all)
 
+
+def _holdout_validate(ref, cand, full, planner, max_offset_ms=None):
     reference_edges = [
         float(item.get('ref_from_ms'))
         for item in (full.get('segments') or [])[1:]
@@ -1266,15 +2153,19 @@ def validate_micro_piecewise(ref_cues, cand_srt_text, proposal=None,
             holdout_regions[min(region, len(holdout_regions) - 1)] += 1
         if not holdout_regions or min(holdout_regions) < 5:
             continue
-        fold_plan, _info = _micro_piecewise_plan(
+        fold_plan, _info = planner(
             train, cand, max_offset_ms=max_offset_ms)
         if not fold_plan or not piecewise_maps_agree(full, fold_plan):
             continue
         # Score the FULL map that would actually be applied.  The fold-derived
         # map is used as an independent stability requirement above; this keeps
         # the production transform itself under the held-out measurement.
+        # The cue-level planner fits every plateau on the very cues being
+        # held out, so for it the map rebuilt WITHOUT them is what must
+        # explain them: a genuinely out-of-sample score.
+        scored = fold_plan if planner is _region_piecewise_plan else full
         fixed = _map_cues_piecewise(
-            cand, full.get('scale', 1.0), full.get('segments') or [])
+            cand, scored.get('scale', 1.0), scored.get('segments') or [])
         if (len(fixed) != len(cand)
                 or any(c['end'] <= c['start'] for c in fixed)
                 or any(fixed[index]['start'] < fixed[index - 1]['start']
@@ -1593,13 +2484,46 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
     # 0.65 floor -- which let a 31-cue file-probe union apply a -20.3s jump at
     # 68% tight and de-sync an already-good sub. Now every non-trivial offset
     # must clear a bar that grows with the size of the jump, on dense refs too.
+    coverage_rescue = False
     if tight is not None and require_tight:
         need = _required_tight(b, len(ref), vote, ov)
         diag += ' (need %.0f%%)' % (need * 100)
+        dense = len(ref) >= _COV_MIN_CUES and len(cand) >= _COV_MIN_CUES
+        small_weak = abs(b) <= 1500 and tight < _TIGHT_MIN
+        coverage = None
+        if dense and (tight < need or small_weak):
+            coverage = coverage_profile(ref, cand, a, b)
+            diag += ' ' + coverage['diag']
         if tight < need:
+            # Different subbers segment lines differently, so a correct
+            # multi-second offset rarely reaches the magnitude-scaled onset
+            # bar.  Accept it only when the segmentation-robust speech
+            # coverage independently peaks at the SAME offset, clearly above
+            # the background and with no competing peak elsewhere -- and when
+            # no supported timeline region sits on a different offset (a
+            # global shift must never mis-time a correctly timed minority
+            # region that the coarse local-consistency guard cannot see
+            # between different subbers).
+            regions_ok, regions_diag = _rescue_regions_agree(
+                local_windows, b, _edge_windows(ref, cand, a, b))
+            if not (coverage is not None and coverage['corroborates']
+                    and tight >= _COV_TIGHT_FLOOR and regions_ok):
+                return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
+                        'vote': vote, 'overlap': ov,
+                        'diag': 'tight check FAILED (' + diag
+                                + regions_diag + ')'}
+            coverage_rescue = True
+        elif (coverage is not None and small_weak
+                and not coverage.get('agrees')):
+            # The small-shift lane accepts weak onset agreement (~35%) on the
+            # strength of overlap alone, and overlap is high for ANY nudge of
+            # a dense subtitle.  When speech coverage puts its peak somewhere
+            # else, the nudge is noise: leave the subtitle untouched. (Dense
+            # dialogue can lack peak prominence; agreement is what counts.)
             return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
                     'vote': vote, 'overlap': ov,
-                    'diag': 'tight check FAILED (' + diag + ')'}
+                    'reason': 'coverage_contradicts_small_shift',
+                    'diag': 'coverage check FAILED (' + diag + ')'}
     if a == 1.0 and abs(b) <= CONFIRM_OFFSET_MS:
         return {'status': STATUS_CONFIRMED, 'scale': a, 'offset_ms': b,
                 'vote': vote, 'overlap': ov, 'unique': unique,
@@ -1620,12 +2544,20 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
                 'reason': 'no_material_improvement',
                 'diag': ('identity comparison FAILED (score %.3f->%.3f; %s)'
                          % (before_score, after_score, diag))}
-    return {'status': STATUS_FIXABLE, 'scale': a, 'offset_ms': b,
-            'vote': vote, 'overlap': ov, 'unique': unique,
-            'unique_median_ms': unique_median,
-            'unique_p95_ms': unique_p95,
-            'before_score': before_score, 'after_score': after_score,
-            'mode': 'global', 'diag': diag}
+    verdict = {'status': STATUS_FIXABLE, 'scale': a, 'offset_ms': b,
+               'vote': vote, 'overlap': ov, 'unique': unique,
+               'unique_median_ms': unique_median,
+               'unique_p95_ms': unique_p95,
+               'before_score': before_score, 'after_score': after_score,
+               'mode': 'global', 'diag': diag}
+    if coverage_rescue:
+        # Callers whose reference is only another subtitle (not the playing
+        # file) must corroborate a rescued shift with an independent second
+        # reference before applying it: a mislabeled provider subtitle can be
+        # perfectly self-consistent and still belong to another cut.
+        verdict['coverage_rescue'] = True
+        verdict['diag'] = diag + ' [coverage-corroborated]'
+    return verdict
 
 
 def retime(cand_srt_text, scale, offset_ms, segments=None, strict=False):
@@ -1833,9 +2765,42 @@ def apply_verdict(cand_srt_text, verdict):
                                 for step in matched_steps))
             except (ImportError, TypeError, ValueError):
                 matched_oracle = False
+        # Bitmap tracks of the same disc accept the frozen map: the reference
+        # is native to the playing file, and strong held-out folds proved the
+        # map on it.  Never claimed as a second timing family.
+        native_lane = False
+        if verdict.get('validation_proof') == 'native-disc-lane-v1':
+            try:
+                native_lane = bool(
+                    int(verdict.get('native_lane_tracks') or 0) >= 2
+                    and float(verdict.get('holdout_score_min') or 0.0) >= 0.85
+                    and float(verdict.get('holdout_gain_min') or 0.0) >= 0.15
+                    and 3 <= len(verdict.get('segments') or [])
+                    <= _MICRO_MAX_SEGMENTS)
+            except (TypeError, ValueError):
+                native_lane = False
+        # The playing file's own audio as the independent family: the Hebrew
+        # text sat on several envelope plateaus (or one large shift) and the
+        # frozen map lands it on a single near-zero plateau of strong windows.
+        envelope_proof = False
+        if verdict.get('validation_proof') == 'file-audio-envelope-v1':
+            try:
+                envelope_proof = bool(
+                    verdict.get('envelope_status') in ('synced', 'near')
+                    and verdict.get('envelope_before')
+                    in ('conflict', 'shifted')
+                    and int(verdict.get('envelope_trusted') or 0) >= 6
+                    and int(verdict.get('envelope_windows') or 0) >= 6
+                    and abs(float(verdict.get('envelope_offset_ms') or 0.0))
+                    <= _ENV_NEAR_MS
+                    and 2 <= len(verdict.get('segments') or [])
+                    <= _MICRO_MAX_SEGMENTS)
+            except (TypeError, ValueError):
+                envelope_proof = False
         if (validation_folds < 4
                 or (timing_families < 2 and not same_disc_quorum
-                    and not field_certificate and not matched_oracle)):
+                    and not field_certificate and not matched_oracle
+                    and not envelope_proof and not native_lane)):
             raise ValueError('piecewise proposal lacks holdout/family validation')
     _all_cues, preflight_error = _preflight_srt(cand_srt_text)
     if preflight_error:
