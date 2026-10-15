@@ -1,3 +1,15 @@
+0.3.30
+- Restore automatic subtitle timing checks in the modular package; it had stopped identifying the playing release and left every subtitle unverified.
+- Correct real multi-second offsets between differently segmented subtitles using speech-coverage corroboration, and stop weak sub-second nudges of subtitles that are already synchronized.
+- Stop trusting release names that only look alike (WEB-DL/DTS-HD groups, different streaming services, extended versus theatrical cuts) and check trusted subtitles against the playing file's own subtitle track.
+- Require a second independent reference before a provider subtitle can apply a large correction, and never apply one global shift that would mis-time a differently cut region.
+- Stop reporting unadjusted viewing as a human timing confirmation, and let the playing file decide before any shared timing record.
+- Skip subtitles that name another episode, try proven alternatives against an exact reference when the file has no subtitle track, and accept provider references with harmless layout errors.
+- Check large multi-track files many times faster, keeping background work light on low-power devices.
+- Fix subtitles from broadcast and web releases on Blu-ray copies whose act breaks shift each section by a few seconds, proving every section on held-out timing and an independent track before rewriting anything.
+- Use the audio of MP4 files without a subtitle track to tell whether a subtitle fits the whole episode, and let it choose among timelines proposed by provider subtitles.
+- Never mark a subtitle as synchronized when the playing file shows that different parts of the episode are off by different amounts, and stop treating an episode title in a subtitle name as a release group.
+
 0.3.23
 - Restore MDBList library items in Arctic Fuse personal widgets; upgrade the old routes in place while preserving positions and removed widgets.
 

@@ -15,9 +15,11 @@ import os
 import re
 import json
 import time
+import base64
 import hashlib
 import math
 import threading
+import zlib
 
 try:
     from resources.lib import kodi_utils
@@ -127,7 +129,16 @@ _MAX_VERDICTS = 400
 # a later candidate is tested against the exact playing cut.
 # v27: autosub tries cached, already-discovered human alternatives before a
 # slow foreign-oracle search. Retry earlier UNKNOWN decisions under that order.
-_VERDICT_VERSION = 27
+# v28: speech-coverage corroboration lets a real multi-second shift between
+# differently segmented subtitles pass (it was always refused by the onset
+# "tight" bar) and vetoes weak sub-1.5s nudges; release names no longer read
+# "WEB-DL"/"DTS-HD" as a group, and service/edition differences are no longer
+# trusted. Locally stored "human" CONFIRMED records came from unadjusted
+# watches, not from viewers. A cue-level region planner now proves the
+# repeated act-break pads of disc remuxes that fixed windows missed, and
+# region cuts skip non-dialogue lines instead of stacking them. Every
+# older verdict must recompute.
+_VERDICT_VERSION = 28
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -662,6 +673,7 @@ def _remote_reference_bundle(url):
     return {'cues': cues, 'track_cues': profiles,
             'tracks': raw.get('tracks') or [],
             'cut_signature': raw.get('cut_signature') or '',
+            'envelope': raw.get('envelope'),
             'bytes': raw.get('bytes') or 0,
             'requests': raw.get('requests') or 0,
             'legacy_single_track': bool(raw.get('legacy_single_track')),
@@ -952,6 +964,46 @@ def _learn_cut_signature(info):
     return sig
 
 
+def _pack_envelope(envelope):
+    """JSON-safe compressed MP4 audio envelope for the probe cache."""
+    try:
+        values = (envelope or {}).get('values') or []
+        if not values:
+            return None
+        raw = bytes((int(value) + 128) & 0xFF for value in values)
+        return {'step_ms': int(envelope.get('step_ms') or 0),
+                'z': base64.b64encode(zlib.compress(raw, 6)).decode('ascii'),
+                'frames': int(envelope.get('frames') or 0),
+                'distinct': int(envelope.get('distinct') or 0)}
+    except Exception:
+        return None
+
+
+def _bundle_envelope(bundle):
+    """The playing file's audio envelope (values unpacked), or None."""
+    packed = (bundle or {}).get('envelope')
+    if not isinstance(packed, dict):
+        return None
+    if isinstance(packed.get('values'), list):
+        return packed
+    try:
+        raw = zlib.decompress(base64.b64decode(packed.get('z') or ''))
+        return {'step_ms': int(packed.get('step_ms') or 0),
+                'values': [byte - 128 for byte in bytearray(raw)]}
+    except Exception:
+        return None
+
+
+def _envelope_diag(check):
+    check = check or {}
+    return ('audio envelope %s (trusted %d/%d, polarity %+d, plateaus %s%s)'
+            % (check.get('status', 'unknown'), int(check.get('trusted') or 0),
+               int(check.get('windows') or 0), int(check.get('polarity') or 0),
+               ', '.join('%+dms x%d' % (int(o), c)
+                         for o, c in check.get('plateaus') or []) or '-',
+               ('; ' + check['reason']) if check.get('reason') else ''))
+
+
 _PROBE_LOCK = threading.RLock()
 _PREFETCH_KEYS = set()
 
@@ -988,13 +1040,15 @@ def _probe_reference_bundle_unlocked(info, playing):
                     'yes' if has_sig else 'no'))
             return ent
     if (ent is not None and not ent.get('cues')
-            and ent.get('timing_attempted', True)):
+            and ent.get('timing_attempted', True)
+            and ent.get('envelope_attempted')):
         # No timeline may mean "no embedded subtitles" or transient provider
         # pressure.  Keep the useful cut id, but retry the timing read after the
         # normal negative TTL instead of letting signature success freeze a cue
         # miss forever.
         if time.time() - float(ent.get('ts') or 0) < _NEGATIVE_PROBE_TTL_S:
-            return ent if ent.get('cut_signature') else {}
+            return ent if (ent.get('cut_signature')
+                           or ent.get('envelope')) else {}
 
     local_url = _playing_url(info)
     if local_url:
@@ -1006,6 +1060,16 @@ def _probe_reference_bundle_unlocked(info, playing):
                 from resources.lib import mp4_probe
                 res = mp4_probe.subtitle_reference(
                     local_url, log=lambda m: _log('probe: ' + m)) or {}
+                if not res.get('track_cues'):
+                    # Only a file without timed text needs the audio envelope;
+                    # re-reading a local index costs nothing.
+                    try:
+                        res['envelope'] = mp4_probe.audio_envelope_source(
+                            None, None,
+                            index_data=mp4_probe._read_movie_index(local_url),
+                            log=lambda m: _log('probe: ' + m))
+                    except Exception:
+                        pass
             else:
                 res = {}
                 if local_url.lower().endswith('.webm'):
@@ -1051,6 +1115,8 @@ def _probe_reference_bundle_unlocked(info, playing):
         'bytes': int(res.get('bytes') or 0),
         'legacy_single_track': bool(res.get('legacy_single_track')),
         'timing_attempted': not bool(res.get('probe_error')),
+        'envelope': _pack_envelope(res.get('envelope')),
+        'envelope_attempted': True,
     }
     # A blocked/not-ready Range read is not evidence that the media has no
     # subtitle track.  In particular, an early prefetch must never poison the
@@ -1199,7 +1265,15 @@ def _is_human_hebrew_candidate(payload):
     return False
 
 
-def diverse_human_alternatives(candidates, limit=6):
+def _names_other_episode(name, info):
+    try:
+        return bool(kodi_utils.release_conflicts_with_episode(
+            name, (info or {}).get('season'), (info or {}).get('episode')))
+    except Exception:
+        return False
+
+
+def diverse_human_alternatives(candidates, limit=6, info=None):
     """Keep first-play alternates from distinct release timing families.
 
     The provider search has already finished.  We only inspect row metadata;
@@ -1235,6 +1309,8 @@ def diverse_human_alternatives(candidates, limit=6):
         seen_links.add(link)
         release = next((value.strip() for value in release_fields
             if isinstance(value, str) and value.strip()), '')
+        if info is not None and _names_other_episode(release, info):
+            continue
         try:
             parsed = release_match.parse(release)
         except Exception:
@@ -1306,9 +1382,13 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
                 pct, tier, _diag = release_match.score(playing, rel)
             except Exception:
                 pct, tier = 0, ''
+            rank = tier_rank.get(tier, 0)
+            if _names_other_episode(rel, info):
+                # A row explicitly naming another episode ("...2014.201...",
+                # "S02E01") is never a first choice, whatever its score.
+                rank = -1
             meta.append({'index': index, 'pct': int(pct or 0),
-                         'tier': tier, 'rank': tier_rank.get(tier, 0),
-                         'release': rel})
+                         'tier': tier, 'rank': rank, 'release': rel})
         if len(meta) >= 2:
             first = meta[0]
             best = max(meta, key=lambda item: (
@@ -1502,12 +1582,18 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         if not path or not os.path.isfile(path):
             return path, None
         playing = playing_release(info)
-        if not playing:
+        if not playing and not (_playing_url(info)
+                                or _remote_playing_url(info)):
             _log('delivery unverified: playing release unavailable')
             kodi_utils.stage_subtitle_delivery(
                 path, selection=selection,
                 status='unverified', source='no-release')
             return path, None
+        if not playing:
+            # No trustworthy release name (e.g. "Episode.Title.mp4"): nothing
+            # can anchor a provider oracle or a shared record, but the playing
+            # file's own subtitle timeline needs no name at all.
+            _log('playing release unavailable; file evidence only')
 
         try:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
@@ -1525,22 +1611,29 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         if rel:
             _pct, tier, _ = release_match.score(playing, rel)
             if tier in release_match.AUTO_OK_TIERS:
-                _log('delivery trusted by release tier: %s' % tier)
+                _log('delivery trusted by release tier: %s (%r for %r)'
+                     % (tier, rel, playing))
                 _record_delivery(info, playing, key, 1.0, 0.0,
                                  cut_signature=cut_signature,
                                  selection=selection)
-                # Trusted timing needs no verification, but a remote first play
-                # still needs its tiny content id so a later manual delay is
-                # learned for this cut only.  Do that in the service worker.
-                if not cut_signature and _remote_playing_url(info):
-                    marked = _mark_pending(key, selection=selection)
-                    if (marked and not _enqueue_deep(
-                            info, path, rel, playing, key,
-                            identity_only=True, selection=selection)):
-                        _log('identity job queue unavailable', level='DEBUG')
+                # A release label is a claim, not proof: Hebrew uploads are
+                # routinely tagged with a release they were never timed to.
+                # When the playing file carries its own subtitle timeline, the
+                # service checks the trusted row against THAT (file evidence
+                # only -- no provider oracle, audio or alternate rows) and
+                # corrects it only on a proven >=1s shift. The same job learns
+                # the content id a later manual delay needs. Stage first: the
+                # job must only ever observe an already-staged delivery.
                 kodi_utils.stage_subtitle_delivery(
                     path, selection=selection,
                     status='confirmed', source='release')
+                if _playing_url(info) or _remote_playing_url(info):
+                    marked = _mark_pending(key, selection=selection)
+                    if (marked and not _enqueue_deep(
+                            info, path, rel, playing, key,
+                            file_only=True, selection=selection,
+                            fallback_links=fallback_links)):
+                        _log('file-check job queue unavailable', level='DEBUG')
                 return path, {'status': _STATUS_TRUSTED, 'tier': tier}
 
         cached = _load_verdicts().get(key)
@@ -1609,9 +1702,22 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         # A remote first play has no exact cut id yet.  Do not apply the old
         # release-only community record blindly; the background verifier will
         # fingerprint the actual file and consult/store the scoped namespace.
-        cv = (None if (_remote_playing_url(info) and not cut_signature) else
+        cv = (None if ((_remote_playing_url(info) and not cut_signature)
+                       or not playing) else
               _community_verdict(info, key, playing,
                                  cut_signature=cut_signature))
+        # A community record is a shortcut, never stronger evidence than the
+        # playing file. When this exact transport already has a cached
+        # subtitle timeline, let the background worker judge against it first
+        # (it consults the community record only if the file cannot decide).
+        # A CONFIRMED record never skips that check: older clients reported
+        # any unadjusted 15-minute watch as a human confirmation.
+        if cv is not None and (
+                cv.get('status') == sync_align.STATUS_CONFIRMED
+                or _cached_reference_bundle(info).get('cues')):
+            _log('community record deferred to file verification (%s)'
+                 % cv.get('status'))
+            cv = None
         if cv is not None:
             status = cv.get('status')
             if status == sync_align.STATUS_FIXABLE:
@@ -1878,8 +1984,7 @@ def finalize_delay_session(record, delay_s, watched_s):
     Returns the report dict for pool.report_sync, or None.
       - settled manual delay >= 0.4s after >= 5 min watched -> FIXABLE
         (combined with whatever fix was already applied at delivery);
-      - zero delay after >= 15 min watched -> a confirming vote for the
-        delivered timing.
+      - an untouched delay yields nothing (it proves nothing about timing).
     Pure function (no Kodi imports) so it is unit-testable."""
     try:
         if not record or watched_s < 300:
@@ -1920,24 +2025,13 @@ def finalize_delay_session(record, delay_s, watched_s):
                     'cache_key': key,
                     'cut_signature': cut_signature,
                     'info': record.get('info') or {}}
-        if watched_s >= 900 and abs(d) < 0.05:
-            if base_scale == 1.0 and abs(base_off) < 1.0:
-                return {'sub_hash': sub_hash, 'release': playing,
-                        'scale': 1.0, 'offset_ms': 0.0,
-                        'status': 'CONFIRMED', 'origin': 'human',
-                        'mode': 'global',
-                        'cache_key': key,
-                        'cut_signature': cut_signature,
-                        'info': record.get('info') or {}}
-            # Zero manual delay on an APPLIED fix = a human vote that the fix
-            # is right (agrees with the stored record -> just bumps votes).
-            return {'sub_hash': sub_hash, 'release': playing,
-                    'scale': base_scale, 'offset_ms': base_off,
-                    'status': 'FIXABLE', 'origin': 'human',
-                    'mode': 'global',
-                    'cache_key': key,
-                    'cut_signature': cut_signature,
-                    'info': record.get('info') or {}}
+        # An untouched delay is NOT evidence of good timing. Most viewers never
+        # open the delay control: they tolerate a bad subtitle, switch it, or
+        # stop watching. Reporting those sessions as HUMAN confirmations (which
+        # outrank machine verdicts on the Worker and skip all later checks)
+        # froze both unsynced originals and wrong automatic fixes as
+        # "confirmed" for every viewer of that cut. Only a deliberate delay
+        # change is a human timing signal.
         return None
     except Exception:
         return None
@@ -2268,7 +2362,8 @@ def _validated_micro_piecewise(profiles, text):
     primary = max(text_tracks, key=primary_key)
     try:
         proposal = planner(primary.get('cues') or [], text)
-        verdict = validator(primary.get('cues') or [], text, proposal)
+        verdict = (validator(primary.get('cues') or [], text, proposal)
+                   if proposal is not None else None)
     except Exception:
         verdict = None
     if verdict is None:
@@ -2282,8 +2377,10 @@ def _validated_micro_piecewise(profiles, text):
         _track_span(profile), len(profile.get('cues') or [])), reverse=True)
     family_result = None
     family_profile = None
+    lane_languages = set()
     for profile in pgs_tracks:
-        if not _timing_profiles_distinct(primary, profile):
+        distinct = _timing_profiles_distinct(primary, profile)
+        if not distinct and len(lane_languages) >= 2:
             continue
         try:
             metrics = family_judge(profile.get('cues') or [], text, verdict)
@@ -2295,10 +2392,44 @@ def _validated_micro_piecewise(profiles, text):
                 and metrics.get('after_score', 0.0)
                 < metrics.get('before_score', 0.0) - 0.03):
             return None
-        if family_result is None and metrics and metrics.get('accepted'):
-            family_result, family_profile = metrics, profile
+        if not (metrics and metrics.get('accepted')):
+            continue
+        if distinct:
+            if family_result is None:
+                family_result, family_profile = metrics, profile
+        else:
+            lane = ((profile.get('track') or {}).get('lang') or '').lower()
+            if lane and lane not in ('und', 'unk', 'mul', 'zxx', 'mis'):
+                lane_languages.add(lane)
     if family_result is None:
-        return None
+        # Bitmap tracks that share the text track's timing are no second
+        # family: the text track is usually their OCR.  What their agreement
+        # does prove is that the reference is native to this disc -- not a
+        # subtitle from another cut muxed in.  Together with strong held-out
+        # folds that is accepted as its own, explicitly labelled proof.
+        try:
+            folds = int(verdict.get('validation_folds') or 0)
+            holdout_min = float(verdict.get('holdout_score_min') or 0.0)
+            gain_min = float(verdict.get('holdout_gain_min') or 0.0)
+        except (TypeError, ValueError):
+            return None
+        if (len(lane_languages) < 2 or folds < 4
+                or holdout_min < 0.85 or gain_min < 0.15):
+            return None
+        primary_track = primary.get('track') or {}
+        verdict = dict(verdict)
+        verdict.update({
+            'validation_proof': 'native-disc-lane-v1',
+            'native_lane_tracks': len(lane_languages),
+            'timing_families': ['text'],
+            'validation_primary_track': '#%s/%s' % (
+                primary_track.get('num', '?'), primary_track.get('lang', '?')),
+            'diag': ('%s; frozen map accepted by the same disc bitmap '
+                     'tracks (%s)' % (verdict.get('diag', ''),
+                                      ', '.join(sorted(lane_languages)))),
+        })
+        return {'track': primary_track, 'cues': primary.get('cues') or [],
+                'verdict': verdict}
 
     primary_track = primary.get('track') or {}
     family_track = family_profile.get('track') or {}
@@ -2575,7 +2706,8 @@ def _validated_oracle_piecewise(candidates, playing, text,
         primary_cues = sync_align.dialogue_cues(
             sync_align.parse_srt(primary_text))
         proposal = planner(primary_cues, text)
-        validated = validator(primary_cues, text, proposal)
+        validated = (validator(primary_cues, text, proposal)
+                     if proposal is not None else None)
     except Exception:
         return None
     if (not validated
@@ -2687,8 +2819,9 @@ def _validated_oracle_piecewise(candidates, playing, text,
         downloads += 1
         try:
             secondary_proposal = planner(secondary_cues, text)
-            secondary_validated = validator(
+            secondary_validated = (validator(
                 secondary_cues, text, secondary_proposal)
+                if secondary_proposal is not None else None)
             if (not secondary_validated
                     or int(secondary_validated.get(
                         'validation_folds') or 0) < 4):
@@ -2815,6 +2948,330 @@ def _provider_piecewise_rescue(info, candidates, playing, text,
         newly_discovered, playing, text, primary, primary_text)
 
 
+_RESCUE_CORROBORATION_DOWNLOADS = 2
+
+
+def _corroborate_rescued_oracle(cands, playing, text, oracle, oracle_text,
+                                verdict, early_job=None):
+    """Require an independent second reference for a coverage-rescued shift.
+
+    sync_align accepts a multi-second shift whose onset agreement is low (as
+    it always is between different subbers) only when speech coverage peaks
+    at the same offset. A provider subtitle, however, may itself belong to
+    another cut while carrying this release's name. Before such a shift is
+    applied, another release-matched reference with a genuinely different
+    timing lane (not a copy, superset or rebased clone) must reproduce the
+    same map. A conflicting reference vetoes; no second reference abstains,
+    which is exactly the previous behaviour for these shifts.
+    """
+    try:
+        first_profile = {'cues': sync_align.dialogue_cues(oracle_text)}
+        chosen_payload = json.dumps(oracle.get('payload') or {},
+                                    sort_keys=True, default=str)
+        psrc = release_match.parse(playing).get('source', '')
+        ranked = []
+        for c in cands or []:
+            payload = json.dumps(c.get('payload') or {}, sort_keys=True,
+                                 default=str)
+            if payload == chosen_payload:
+                continue
+            pct, tier, _ = release_match.score(playing, c.get('release') or '')
+            rank = {release_match.TIER_EXACT: 3,
+                    release_match.TIER_GROUP: 2}.get(tier, 0)
+            if not rank and tier == release_match.TIER_SOURCE and psrc in (
+                    'bluray', 'dvd'):
+                rank = 1
+            if not rank:
+                continue
+            ranked.append((rank, pct, c, tier))
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        tried = 0
+        for _rank, _pct, cand, tier in ranked:
+            if tried >= _RESCUE_CORROBORATION_DOWNLOADS:
+                break
+            if early_job and not _job_matches_current(early_job):
+                break
+            second = _download_oracle(cand['payload'])
+            tried += 1
+            if not second.strip():
+                continue
+            if not _timing_profiles_distinct(
+                    first_profile,
+                    {'cues': sync_align.dialogue_cues(second)}):
+                _log('rescue corroboration: %r is a timing clone; skipped'
+                     % cand.get('release'))
+                continue
+            kw = ({'scales': _ORACLE_SOURCE_SCALES,
+                   'min_vote': _ORACLE_SOURCE_MIN_VOTE}
+                  if tier == release_match.TIER_SOURCE else {})
+            other = sync_align.verify(second, text, **kw)
+            status = other.get('status')
+            if status in (sync_align.STATUS_CONFIRMED,
+                          sync_align.STATUS_FIXABLE):
+                if _maps_agree(verdict, other):
+                    return dict(verdict, corroborated_by=cand.get('release'),
+                                diag=verdict.get('diag', '')
+                                + ' | corroborated by %r' % cand.get('release'))
+                return dict(verdict, status=sync_align.STATUS_UNKNOWN,
+                            reason='oracle_conflict',
+                            diag=verdict.get('diag', '')
+                            + ' | CONFLICT with %r (%s)'
+                            % (cand.get('release'), other.get('diag', '')))
+        return dict(verdict, status=sync_align.STATUS_UNKNOWN,
+                    reason='uncorroborated_rescue',
+                    diag=verdict.get('diag', '')
+                    + ' | no independent second reference (%d tried)' % tried)
+    except Exception as e:
+        _log('rescue corroboration failed: %r' % e, level='WARNING')
+        return dict(verdict, status=sync_align.STATUS_UNKNOWN,
+                    reason='uncorroborated_rescue')
+
+
+_MAX_FILE_FAMILIES = 4
+
+
+def _distinct_track_families(profiles):
+    """One representative per embedded timing family, strongest first.
+
+    Disc remuxes carry a dozen PGS tracks authored on the same timeline; each
+    was verified in full, which cost ~60 s of CPU per subtitle on a desktop
+    (10-20 minutes on a 32-bit TV box, during playback). A clone family gives
+    the same answer as its representative, so only distinct lanes are judged:
+    text before bitmap, Hebrew/English first, denser tracks first, at most
+    _MAX_FILE_FAMILIES of them.
+    """
+    def rank(profile):
+        track = profile.get('track') or {}
+        codec = str(track.get('codec') or '').upper()
+        return (0 if codec.startswith('S_TEXT') else 1,
+                _track_language_rank(track),
+                -len(profile.get('cues') or []))
+    def same_lane(left, right):
+        # Redundant only when the onsets coincide IN PLACE. A lane with the
+        # same shape at another offset gives a different answer and must
+        # stay: it is exactly what conflict detection and the exact-track
+        # veto need to see.
+        a = left.get('cues') or []
+        b = right.get('cues') or []
+        return (_onset_coverage(a, b) >= 0.90
+                and _onset_coverage(b, a) >= 0.90)
+    kept = []
+    for profile in sorted(profiles or [], key=rank):
+        try:
+            distinct = not any(same_lane(other, profile) for other in kept)
+        except Exception:
+            distinct = True
+        if distinct:
+            kept.append(profile)
+            if len(kept) >= _MAX_FILE_FAMILIES:
+                break
+    return kept
+
+
+def _file_timeline_conflict(bundle, text):
+    """Plateaus proving ``text`` is not on one clock with the playing file.
+
+    Only the preferred complete track is consulted (text before bitmap,
+    Hebrew/English first, non-forced); one representative suffices and an
+    odd commentary/forced track can never veto on its own.
+    """
+    finder = getattr(sync_align, 'timeline_conflict', None)
+    if finder is None or not text:
+        return None
+    profiles = []
+    for profile in (bundle or {}).get('track_cues') or []:
+        track = profile.get('track') or {}
+        if track.get('forced') or len(profile.get('cues') or []) < MIN_REMOTE_CUES:
+            continue
+        profiles.append({'track': track, 'cues': profile.get('cues') or []})
+    if not profiles:
+        envelope = _bundle_envelope(bundle)
+        checker = getattr(sync_align, 'envelope_check', None)
+        if envelope is None or checker is None:
+            return None
+        try:
+            check = checker(envelope, text)
+        except Exception:
+            return None
+        # Only a 'conflict' can overrule other evidence: it is relative, so an
+        # encoder's constant bias can never produce one, whereas 'shifted'
+        # could be nothing but that bias.
+        if check.get('status') == 'conflict':
+            return check.get('plateaus') or [(0.0, int(check['trusted']))]
+        return None
+    longest = max(_track_span(item) for item in profiles)
+    complete = [item for item in profiles
+                if _track_span(item) >= 0.90 * longest]
+    preferred = _distinct_track_families(complete)[:1]
+    for profile in preferred:
+        try:
+            return finder(profile['cues'], text)
+        except Exception:
+            return None
+    return None
+
+
+_ENVELOPE_MAX_DOWNLOADS = 4
+_ENVELOPE_SEARCH_S = 45.0
+
+
+def _envelope_accepts(envelope, before, fixed_text, allow_near=False):
+    """Envelope verdict for a proposed timeline, or None when it disagrees.
+
+    'near' (0.5-0.9 s) is within the envelope's encoder bias.  It is good
+    enough only for a held-out-validated region map, whose own precision
+    comes from text; a single global shift must land squarely 'synced'.
+    """
+    try:
+        check = sync_align.envelope_check(
+            envelope, fixed_text,
+            polarity=(before or {}).get('polarity') or None)
+    except Exception:
+        return None
+    wanted = ('synced', 'near') if allow_near else ('synced',)
+    if (check.get('status') not in wanted
+            or int(check.get('trusted') or 0) < 6):
+        return None
+    return check
+
+
+def _envelope_hypothesis_search(info, text, envelope, before, early_job=None,
+                                state=None):
+    """Let the playing file's own audio choose among provider timelines.
+
+    Reached only when the audio envelope has already proved that the selected
+    subtitle is NOT on the file's clock (sectional plateaus or one large
+    shift).  Each downloaded provider subtitle proposes a timeline for the
+    Hebrew text -- a global map, a proven large-cut map, or a five-fold
+    validated short-edit map -- and only a proposal that lands the text on a
+    single near-zero envelope plateau is kept.  The release name plays no
+    part, so an unnamed or mislabelled MP4 is handled the same way.
+    """
+    started = time.monotonic()
+    try:
+        cands = _oracle_candidates(info) or []
+    except Exception:
+        cands = []
+
+    def rank(candidate):
+        try:
+            parts = release_match.parse(candidate.get('release') or '')
+        except Exception:
+            parts = {}
+        english = (candidate.get('language') or '').lower() in (
+            'en', 'eng', 'english')
+        return (1 if parts.get('source') else 0, 1 if english else 0,
+                1 if parts.get('group') else 0)
+
+    # One row per (source, group) before any second row: the point is to try
+    # different timing families, not six translations of one release.
+    buckets = {}
+    order = []
+    for candidate in sorted(cands, key=rank, reverse=True):
+        try:
+            parts = release_match.parse(candidate.get('release') or '')
+            key = (parts.get('source') or '?', parts.get('group') or '?')
+        except Exception:
+            key = ('?', '?')
+        if key not in buckets:
+            buckets[key] = []
+            order.append(key)
+        buckets[key].append(candidate)
+    ranked = []
+    while any(buckets[key] for key in order):
+        for key in order:
+            if buckets[key]:
+                ranked.append(buckets[key].pop(0))
+
+    downloads = 0
+    seen = set()
+    state = state if isinstance(state, dict) else {}
+    for candidate in ranked:
+        if (downloads >= _ENVELOPE_MAX_DOWNLOADS
+                or time.monotonic() - started > _ENVELOPE_SEARCH_S):
+            break
+        if early_job and not _job_matches_current(early_job):
+            return None
+        downloads += 1
+        oracle_text = _download_oracle(candidate.get('payload') or {})
+        if not oracle_text.strip():
+            state['transient'] = True
+            continue
+        if oracle_text == text:
+            continue
+        digest = hashlib.sha1(
+            oracle_text.encode('utf-8', 'ignore')).hexdigest()
+        if digest in seen:
+            continue
+        seen.add(digest)
+        if time.monotonic() - started > _ENVELOPE_SEARCH_S:
+            break
+        proposals = []
+        try:
+            fixed, verdict = sync_align.verify_and_fix(oracle_text, text)
+        except Exception:
+            continue
+        if (verdict.get('status') == sync_align.STATUS_FIXABLE
+                and fixed and fixed.strip() and fixed != text):
+            proposals.append((verdict, fixed))
+        elif (verdict.get('status') == sync_align.STATUS_UNKNOWN
+                and time.monotonic() - started <= _ENVELOPE_SEARCH_S):
+            try:
+                oracle_cues = sync_align.dialogue_cues(
+                    sync_align.parse_srt(oracle_text))
+                validated = sync_align.validate_micro_piecewise(
+                    oracle_cues, text)
+            except Exception:
+                validated = None
+            if (validated
+                    and int(validated.get('validation_folds') or 0) >= 4):
+                try:
+                    preview = sync_align.retime(
+                        text, validated.get('scale', 1.0),
+                        validated.get('offset_ms', 0.0),
+                        segments=validated.get('segments'), strict=True)
+                except Exception:
+                    preview = ''
+                if preview:
+                    proposals.append((validated, preview))
+        for verdict, preview in proposals:
+            check = _envelope_accepts(
+                envelope, before, preview,
+                allow_near=bool(verdict.get('validation_required')))
+            if check is None:
+                continue
+            proof = dict(verdict)
+            proof.update({
+                'envelope_status': check['status'],
+                'envelope_before': (before or {}).get('status'),
+                'envelope_trusted': int(check.get('trusted') or 0),
+                'envelope_windows': int(check.get('windows') or 0),
+                'envelope_offset_ms': float(check.get('offset_ms') or 0.0),
+                'validation_primary_oracle': candidate.get('release') or '',
+                'diag': ('%s; %s; was %s' % (
+                    verdict.get('diag', ''), _envelope_diag(check),
+                    (before or {}).get('status', '?'))),
+            })
+            if proof.get('validation_required'):
+                proof['validation_proof'] = 'file-audio-envelope-v1'
+            try:
+                fixed_text = sync_align.apply_verdict(text, proof)
+            except Exception as e:
+                _log('audio-envelope hypothesis from %r refused: %r'
+                     % (candidate.get('release') or '?', e))
+                continue
+            if fixed_text and fixed_text.strip():
+                _log('audio envelope chose the timeline proposed by %r '
+                     '(%d download(s), %.1fs)'
+                     % (candidate.get('release') or '?', downloads,
+                        time.monotonic() - started))
+                return proof, fixed_text
+    _log('audio-envelope hypothesis search: no proposal landed on the '
+         "file's clock (%d download(s), %.1fs)"
+         % (downloads, time.monotonic() - started))
+    return None
+
+
 def _verify_file_bundle(bundle, text):
     """Judge independent embedded tracks; abstain when they are all too sparse.
 
@@ -2832,6 +3289,11 @@ def _verify_file_bundle(bundle, text):
             continue
         raw_profiles.append({'track': profile.get('track') or {},
                              'cues': cues})
+    # The piecewise validator needs every PGS representative: one of them
+    # validates the frozen map and any strong one may veto it.  Clone-family
+    # pruning below is only for the expensive per-track verdicts.
+    all_profiles = list(raw_profiles)
+    raw_profiles = _distinct_track_families(raw_profiles)
 
     # A zero-shift answer can be settled cheaply before testing every FPS
     # ratio and edit map.  Check each track independently with the same final
@@ -2868,7 +3330,7 @@ def _verify_file_bundle(bundle, text):
     # accepting it, every track gets an identity-only veto: a truly CONFIRMED
     # track proves that no rewrite is needed, and any competing flat FIXABLE
     # sends us through the complete conflict-aware path below.
-    validated_piecewise = _validated_micro_piecewise(raw_profiles, text)
+    validated_piecewise = _validated_micro_piecewise(all_profiles, text)
     if validated_piecewise is not None:
         quick = [item for item in identity_checked
                  if item['verdict'].get('status') in (
@@ -3038,27 +3500,11 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                           sync_align.STATUS_UNKNOWN):
                 return path, result
 
-        # Same idea for shared learning.  Never consult a release-only record
-        # here: it may belong to another cut with the same release label.
-        community = (_community_verdict(
-            info, final_key, playing, cut_signature=cut_signature)
-                     if cut_signature else None)
-        if community:
-            status = community.get('status')
-            result = dict(community, cut_signature=cut_signature,
-                          cache_key=final_key, community=True)
-            if status == sync_align.STATUS_FIXABLE:
-                try:
-                    fixed = sync_align.apply_verdict(text, community)
-                except Exception:
-                    fixed = ''
-                out = _write_fixed(path, fixed)
-                if out:
-                    _store_verdict(final_key, community)
-                    return out, dict(result, applied=True)
-            elif status == sync_align.STATUS_CONFIRMED:
-                _store_verdict(final_key, community)
-                return path, result
+        # Shared (community) learning is consulted only AFTER the playing file
+        # and the provider oracle could not decide -- see below. It used to win
+        # before either was even looked at, so one wrong shared record (older
+        # clients reported every unadjusted 15-minute watch as a HUMAN
+        # confirmation) silently disabled all verification for that cut.
 
         file_verdict, ref_kind, ref_count = _verify_file_bundle(bundle, text)
         _remember_rejected_timing(early_job, text, cut_signature,
@@ -3067,6 +3513,25 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
             _log('verdict for %r vs %s (%d ref cues): %s'
                  % (rel or '?', ref_kind, ref_count,
                     file_verdict.get('diag', '?')))
+
+        # An MP4 without a subtitle track still carries its audio frame sizes.
+        # They cannot fine-tune a timeline, but they can prove whether one
+        # clock fits the whole episode.
+        envelope = None
+        envelope_before = None
+        if not bundle.get('track_cues') and file_verdict is None:
+            envelope = _bundle_envelope(bundle)
+            if envelope is not None:
+                try:
+                    envelope_before = sync_align.envelope_check(
+                        envelope, text)
+                except Exception:
+                    envelope_before = None
+                if envelope_before:
+                    _log('verdict for %r vs FILE AUDIO ENVELOPE: %s'
+                         % (rel or '?', _envelope_diag(envelope_before)))
+                # Agreement is never proof: four-minute windows cannot see a
+                # half-second error.  Only a 'conflict' is acted upon below.
 
         # Autosub has already discovered its Hebrew alternatives. If the
         # original cannot be proved against this exact file, check only rows
@@ -3092,6 +3557,11 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
         transient_oracle_search = False
         if file_verdict and file_verdict.get('status') in accepted:
             verdict = file_verdict
+        elif not playing:
+            # Without a trustworthy release name no provider subtitle can be
+            # proven to belong to this cut; keep the file's (non-)answer.
+            _log('no oracle: playing release unavailable')
+            verdict = file_verdict
         else:
             # The file could not decide, so only now pay for a provider oracle.
             oracle_started = time.monotonic()
@@ -3106,6 +3576,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                             if cands else (None, ''))
             oracle_verdict = None
             oracle_fixed = None
+            oracle_text = ''
             if oracle is not None:
                 download_started = time.monotonic()
                 oracle_text = _download_oracle(oracle['payload'])
@@ -3127,7 +3598,20 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                          % (rel or '?', oracle['release'], tier,
                             oracle_verdict['diag']))
                     if (oracle_verdict.get('status')
-                            == sync_align.STATUS_UNKNOWN):
+                            == sync_align.STATUS_FIXABLE
+                            and oracle_verdict.get('coverage_rescue')):
+                        oracle_verdict = _corroborate_rescued_oracle(
+                            cands, playing, text, oracle, oracle_text,
+                            oracle_verdict, early_job=early_job)
+                        _log('oracle rescue corroboration: %s'
+                             % oracle_verdict.get('diag', '?')[-160:])
+                        if (oracle_verdict.get('status')
+                                != sync_align.STATUS_FIXABLE):
+                            oracle_fixed = None
+                    if (oracle_verdict.get('status')
+                            == sync_align.STATUS_UNKNOWN
+                            and oracle_verdict.get('reason') not in (
+                                'oracle_conflict',)):
                         rescue_state = {}
                         rescue = _provider_piecewise_rescue(
                             info, cands, playing, text, oracle, oracle_text,
@@ -3168,6 +3652,42 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 fixed_text = oracle_fixed
             else:
                 verdict = file_verdict or oracle_verdict
+                # The delivered row cannot be proven against an exact /
+                # same-group reference. When the file has no subtitle
+                # timeline of its own, that reference is the best evidence:
+                # let it pick an already-discovered Hebrew row that IS proven.
+                if (early_job and early_job.get('fallback_links')
+                        and oracle is not None and oracle_text.strip()
+                        and not bundle.get('cues')
+                        and _apply_verified_human_fallback(
+                            early_job, reference={
+                                'text': oracle_text, 'tier': tier,
+                                'release': oracle.get('release')})):
+                    _log('autosub tournament: proven alternate selected '
+                         'against oracle %r' % oracle.get('release'))
+                    return path, {'status': _STATUS_ALTERNATE_APPLIED,
+                                  'cut_signature': cut_signature,
+                                  'cache_key': final_key}
+
+        # Shared exact-cut learning, last: only when neither the playing file
+        # nor a provider oracle could decide. A CONFIRMED record proves nothing
+        # here (see finalize_delay_session); a FIXABLE one is still somebody's
+        # deliberate correction for these exact media bytes.
+        if (cut_signature and playing
+                and (verdict is None or verdict.get('status') not in accepted)):
+            community = _community_verdict(
+                info, final_key, playing, cut_signature=cut_signature)
+            if (community
+                    and community.get('status') == sync_align.STATUS_FIXABLE):
+                try:
+                    community_fixed = sync_align.apply_verdict(text, community)
+                except Exception:
+                    community_fixed = ''
+                if community_fixed and community_fixed.strip():
+                    _log('community FIXABLE used after file/oracle abstained: '
+                         + community.get('diag', ''))
+                    verdict = dict(community, community=True)
+                    fixed_text = community_fixed
 
         # With no usable embedded timeline, local AAC speech remains the final
         # fallback.  Remote audio is deliberately not opened: the proven-safe
@@ -3194,6 +3714,30 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                         _log('audio verdict (pass 2, %d cues): %s'
                              % (len(more), verdict['diag']))
                 verdict = _guard_soft_probe_shift(verdict, 'AUDIO PROBE')
+                if (verdict.get('status') == sync_align.STATUS_FIXABLE
+                        and verdict.get('coverage_rescue')):
+                    # Speech-detector onsets carry ~1s of error; they cannot
+                    # stand in for the onset agreement a rescue relaxes.
+                    verdict = dict(verdict, status=sync_align.STATUS_UNKNOWN,
+                                   reason='audio_rescue_refused')
+
+        envelope_searched = False
+        envelope_state = {}
+        if (envelope is not None and envelope_before
+                and envelope_before.get('status') == 'conflict'
+                and (verdict is None
+                     or verdict.get('status') not in accepted)):
+            envelope_searched = True
+            found = _envelope_hypothesis_search(
+                info, text, envelope, envelope_before, early_job=early_job,
+                state=envelope_state)
+            if found:
+                verdict, fixed_text = found
+            elif verdict is None:
+                verdict = {'status': sync_align.STATUS_UNKNOWN,
+                           'scale': 1.0, 'offset_ms': 0.0,
+                           'reason': 'file_timeline_conflict',
+                           'diag': _envelope_diag(envelope_before)}
 
         if verdict is None:
             return path, {'status': _STATUS_NO_ORACLE,
@@ -3207,6 +3751,41 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 fixed_text = None
             if not (fixed_text and fixed_text.strip()):
                 verdict = dict(verdict, status=sync_align.STATUS_UNKNOWN)
+
+        # The playing file is the ground truth for its own cut.  A provider or
+        # community answer that still leaves the delivered text on two
+        # different plateaus of the file's own subtitle timeline cannot be
+        # right for this file, however well it matched its own reference.
+        if (verdict is not file_verdict
+                and verdict.get('status') in accepted
+                and not verdict.get('envelope_status')):
+            delivered = (fixed_text if verdict.get('status')
+                         == sync_align.STATUS_FIXABLE else text)
+            conflict = _file_timeline_conflict(bundle, delivered)
+            if conflict:
+                _log('file timeline contradicts the %s answer: plateaus %s'
+                     % ('community' if verdict.get('community')
+                        else 'provider',
+                        ', '.join('%+dms x%d' % (int(offset), count)
+                                  for offset, count in conflict)))
+                verdict = dict(
+                    verdict, status=sync_align.STATUS_UNKNOWN,
+                    reason='file_timeline_conflict',
+                    diag=(verdict.get('diag', '')
+                          + ' | contradicted by the playing file'))
+                fixed_text = None
+
+        if (envelope is not None and envelope_before and not envelope_searched
+                and envelope_before.get('status') == 'conflict'
+                and verdict.get('status') not in accepted):
+            found = _envelope_hypothesis_search(
+                info, text, envelope, envelope_before, early_job=early_job,
+                state=envelope_state)
+            if found:
+                verdict, fixed_text = found
+        if (envelope_state.get('transient')
+                and verdict.get('status') not in accepted):
+            transient_oracle_search = True
 
         if pinned and _current_stream_transport() != pinned:
             _log('deep verify discarded: playback changed before commit')
@@ -3223,8 +3802,11 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
         # the content signature.  Old clients keep their legacy records; new
         # clients never apply one cut's vote to another cut with the same name.
         try:
-            if (cut_signature and verdict['status'] in accepted
-                    and verdict.get('mode', 'global') == 'global'):
+            if (cut_signature and playing and verdict['status'] in accepted
+                    and verdict.get('mode', 'global') == 'global'
+                    and not verdict.get('community')
+                    and verdict.get('reference') != 'audio-envelope'
+                    and not verdict.get('envelope_status')):
                 from resources.lib import pool as _pool
                 _pool.report_sync(
                     info, final_key.split('|', 1)[0],
@@ -3379,7 +3961,8 @@ def _clear_job_pending(job):
 
 
 def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
-                  selection=None, fallback_link='', fallback_links=None):
+                  selection=None, fallback_link='', fallback_links=None,
+                  file_only=False):
     """Drop a deep-verify job for the service drainer. True on success."""
     d = _queue_dir()
     if not d:
@@ -3394,7 +3977,8 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
         # differed after character 80.  A full-key digest makes the queue name
         # unambiguous; identity-only and full verification are separate jobs so
         # a cheap trusted-subtitle task can never swallow a later timing task.
-        job_identity = (key + ('|identity' if identity_only else '|verify')
+        job_identity = (key + ('|identity' if identity_only else
+                               '|file' if file_only else '|verify')
                         + '|' + (expected.get('token') or ''))
         prefix = re.sub(r'[^0-9A-Za-z]+', '_', key)[:48] or 'job'
         safe = prefix + '_' + hashlib.sha1(
@@ -3409,6 +3993,7 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
         job = {
             'key': key, 'path': path, 'release': rel, 'playing': playing,
             'identity_only': bool(identity_only),
+            'file_only': bool(file_only) and not identity_only,
             'ts': time.time(),
             'selection_token': expected.get('token') or '',
             'selection_hash': expected.get('link_hash') or '',
@@ -3558,7 +4143,7 @@ def _tournament_candidate_text(info, link, cache_only=False):
     return '', payload
 
 
-def _apply_verified_human_fallback(job, cache_only=False):
+def _apply_verified_human_fallback(job, cache_only=False, reference=None):
     """Find and apply the first alternate human row proven for this cut.
 
     This is the first-play continuation path: the initially displayed row may
@@ -3566,6 +4151,12 @@ def _apply_verified_human_fallback(job, cache_only=False):
     its deep check has built that profile and abstained, test a bounded set of
     rows returned by the same search.  Only CONFIRMED/FIXABLE evidence may
     replace the visible subtitle.
+
+    ``reference`` ({'text', 'tier', 'release'}) judges the rows against an
+    exact/same-group provider subtitle instead of the playing file's own
+    timeline -- for files that carry no subtitle track (most small MP4/AVI/
+    HDTV encodes). A rescued (low-onset) shift is not enough there: it would
+    need a second independent reference, so such rows are skipped.
     """
     links = [str(link) for link in (job.get('fallback_links') or []) if link]
     if (not links or not _job_matches_current(job)
@@ -3575,9 +4166,17 @@ def _apply_verified_human_fallback(job, cache_only=False):
     info['_subsync_stream_url'] = (job.get('stream_url') or '').strip()
     bundle = _cached_reference_bundle(info)
     cut_signature = (bundle.get('cut_signature') or '').strip().lower()
-    if (not bundle.get('cues')
-            or not re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature)):
-        return False
+    if reference is None:
+        if (not bundle.get('cues')
+                or not re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature)):
+            return False
+    else:
+        if (reference.get('tier') not in (release_match.TIER_EXACT,
+                                          release_match.TIER_GROUP)
+                or not (reference.get('text') or '').strip()):
+            return False
+        if not re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature):
+            cut_signature = ''
     playing = job.get('playing') or ''
     old_link = kodi_utils.get_current_subtitle() or ''
     attempted = 0
@@ -3603,7 +4202,16 @@ def _apply_verified_human_fallback(job, cache_only=False):
                  'checked for this playing file', level='DEBUG')
             continue
         attempted += 1
-        verdict, label, count = _verify_file_bundle(bundle, text)
+        if reference is None:
+            verdict, label, count = _verify_file_bundle(bundle, text)
+        else:
+            verdict = sync_align.verify(reference['text'], text)
+            label = 'ORACLE %r' % (reference.get('release') or '?')
+            count = 0
+            if (verdict.get('status') == sync_align.STATUS_FIXABLE
+                    and verdict.get('coverage_rescue')):
+                verdict = dict(verdict, status=sync_align.STATUS_UNKNOWN,
+                               reason='rescue_needs_corroboration')
         verdict = verdict or {}
         status = verdict.get('status')
         rel = (payload.get('filename') or payload.get('release') or '?')
@@ -3617,7 +4225,8 @@ def _apply_verified_human_fallback(job, cache_only=False):
         # this canonical subtitle/cut pair. Delivery-side RTL may produce a
         # different text hash, in which case its own fast background check
         # repeats against the already-cached media profile.
-        _store_verdict(_cache_key(text, playing, cut_signature), verdict)
+        if cut_signature:
+            _store_verdict(_cache_key(text, playing, cut_signature), verdict)
         fallback_selection = {}
         try:
             # Candidate retrieval/analysis can take seconds.  Re-check the old
@@ -3652,8 +4261,10 @@ def _apply_verified_human_fallback(job, cache_only=False):
                 delivery_text = ''
             if not delivery_text.strip():
                 raise RuntimeError('verified candidate delivery is unreadable')
-            _store_verdict(
-                _cache_key(delivery_text, playing, cut_signature), verdict)
+            if cut_signature:
+                _store_verdict(
+                    _cache_key(delivery_text, playing, cut_signature),
+                    verdict)
             delivery_path = path
             if status == sync_align.STATUS_FIXABLE:
                 fixed_text = sync_align.apply_verdict(delivery_text, verdict)
@@ -3882,6 +4493,117 @@ def _swap_if_current(job, fixed_path, verdict):
         return False
 
 
+def _run_file_only_job(job, info, playing, path, job_selection):
+    """Check a release-trusted subtitle against the playing file only.
+
+    Release identity made the foreground deliver it as synced. The playing
+    file's own subtitle timeline is stronger evidence than any label, so when
+    the file proves a correction it replaces the trusted copy. Provider
+    oracles, audio and alternate rows are deliberately NOT consulted: without
+    file evidence the release-identity decision stands unchanged.
+    """
+    if not _wait_for_delivery_ack(job, timeout_ms=6000):
+        _log('trusted file check skipped: delivery unconfirmed',
+             level='WARNING')
+        return
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as f:
+            text = f.read()
+    except Exception:
+        return
+    if not text.strip():
+        return
+    bundle = _probe_reference_bundle(info, playing)
+    if not _job_stream_is_current(job):
+        _log('trusted file check discarded: playback changed during probe')
+        return
+    cut_signature = (bundle.get('cut_signature') or '').strip().lower()
+    if not re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature):
+        cut_signature = _learn_cut_signature(info)
+        if not re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature or ''):
+            cut_signature = ''
+    exact_key = _cache_key(text, playing, cut_signature)
+    verdict = None
+    # Always judge against the file itself (its profile is cached per
+    # transport, so this is cheap). A cached verdict for the same key may have
+    # come from an oracle, a shared record or a sub-second soft probe, none of
+    # which this release-trusted path is allowed to act on.
+    if bundle.get('track_cues') or bundle.get('cues'):
+        verdict, ref_kind, ref_count = _verify_file_bundle(bundle, text)
+        if verdict:
+            _log('trusted file check for %r vs %s (%d ref cues): %s'
+                 % (job.get('release') or '?', ref_kind, ref_count,
+                    verdict.get('diag', '?')))
+            if cut_signature and verdict.get('status') in (
+                    sync_align.STATUS_CONFIRMED, sync_align.STATUS_FIXABLE):
+                _store_verdict(exact_key, verdict)
+    else:
+        # No subtitle timeline, but an MP4 still carries its audio frame
+        # sizes.  When they prove the trusted row is on another clock, the
+        # label is overruled by the file: let the audio pick a provider
+        # timeline, and never keep calling the row synced.
+        envelope = _bundle_envelope(bundle)
+        check = None
+        if envelope is not None:
+            try:
+                check = sync_align.envelope_check(envelope, text)
+            except Exception:
+                check = None
+        if check and check.get('status') == 'conflict':
+            _log('trusted file check for %r vs FILE AUDIO ENVELOPE: %s'
+                 % (job.get('release') or '?', _envelope_diag(check)))
+            found = _envelope_hypothesis_search(
+                info, text, envelope, check, early_job=job)
+            if found:
+                verdict = found[0]
+                if cut_signature:
+                    _store_verdict(exact_key, verdict)
+            else:
+                verdict = {'status': sync_align.STATUS_UNKNOWN,
+                           'scale': 1.0, 'offset_ms': 0.0,
+                           'reason': 'file_timeline_conflict',
+                           'diag': _envelope_diag(check)}
+                if _job_matches_current(job):
+                    _publish_selection_status('unverified', 'local',
+                                              selection=job_selection)
+        else:
+            _log('trusted file check: playing file has no subtitle timeline; '
+                 'release identity kept%s'
+                 % ((' (' + _envelope_diag(check) + ')') if check else ''))
+    if (verdict and verdict.get('status') == sync_align.STATUS_FIXABLE
+            and _job_matches_current(job)):
+        try:
+            fixed = sync_align.apply_verdict(text, verdict)
+        except Exception:
+            fixed = ''
+        out = _write_fixed(path, fixed)
+        if out and _swap_if_current(job, out, dict(verdict, applied=True)):
+            if verdict.get('mode', 'global') == 'global':
+                _record_delivery(info, playing, exact_key,
+                                 verdict.get('scale', 1.0),
+                                 verdict.get('offset_ms', 0.0),
+                                 cut_signature=cut_signature,
+                                 selection=job_selection)
+            else:
+                _clear_delivery(selection=job_selection)
+            if _publish_selection_status('fixed', 'local',
+                                         selection=job_selection):
+                _announce(dict(verdict, applied=True), fresh=True,
+                          selection=job_selection)
+            return
+    if (verdict and verdict.get('status') == sync_align.STATUS_UNKNOWN
+            and job.get('fallback_links')
+            and _apply_verified_human_fallback(job)):
+        # The file could not confirm the release-trusted row; another
+        # already-discovered Hebrew row was PROVEN against this exact file.
+        _log('trusted row unproven by the file; proven alternate selected')
+        return
+    if _job_matches_current(job):
+        _record_delivery(info, playing, exact_key, 1.0, 0.0,
+                         cut_signature=cut_signature,
+                         selection=job_selection)
+
+
 def run_deep_job(job):
     """Service-side execution of one queued deep-verify job. Computes the
     verdict, and on FIXABLE swaps the playing subtitle in place. One gentle
@@ -3927,6 +4649,9 @@ def run_deep_job(job):
                     _record_delivery(info, playing, exact_key, 1.0, 0.0,
                                      cut_signature=cut_signature,
                                      selection=job_selection)
+            return
+        if job.get('file_only'):
+            _run_file_only_job(job, info, playing, path, job_selection)
             return
         # The foreground picker/chooser still owns the first application. Never
         # let this faster service thread apply a corrected copy before Kodi has
@@ -4070,7 +4795,11 @@ def drain_queue_once():
                 try:
                     run_deep_job(job)
                 finally:
-                    if not job.get('identity_only'):
+                    # The trusted foreground path owns its own staged record
+                    # (as identity jobs always did): clearing it here, e.g.
+                    # after an unacknowledged wait, would make Kodi's later
+                    # confirmation fail and abandon a good subtitle.
+                    if not (job.get('identity_only') or job.get('file_only')):
                         try:
                             kodi_utils.clear_subtitle_delivery(
                                 job.get('path') or '',

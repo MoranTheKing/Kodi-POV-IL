@@ -4113,8 +4113,8 @@ def _start_subsync_delay_watch(monitor):
     """The HUMAN sync anchor (SubSync S3): while a MoranSubs-delivered
     subtitle plays, sample the user's manual subtitle delay (JSON-RPC); when
     playback ends, a settled non-zero delay becomes a community FIXABLE
-    report, and a long zero-delay watch becomes a CONFIRMED vote -- both via
-    pool.report_sync (share-gated, fire-and-forget). One report per
+    report via pool.report_sync (share-gated, fire-and-forget); an untouched
+    delay is not timing evidence and is never reported. One report per
     (subtitle, release) pair per Kodi session. This is what resolves files no
     algorithm can anchor (dubbed re-encodes with no subs anywhere)."""
     def _delay_now():
@@ -4128,6 +4128,14 @@ def _start_subsync_delay_watch(monitor):
                          .get('subtitledelay') or 0.0)
         except Exception:
             return 0.0
+
+    def _watching_with_subtitles():
+        # Paused time or a hidden subtitle is not "watching this subtitle".
+        try:
+            return (not xbmc.getCondVisibility('Player.Paused')
+                    and xbmc.getCondVisibility('VideoPlayer.SubtitlesEnabled'))
+        except Exception:
+            return False
 
     def _loop():
         try:
@@ -4159,8 +4167,11 @@ def _start_subsync_delay_watch(monitor):
                             # watch time against the subtitle it replaced.
                             active, watched, last_delay = None, 0, 0.0
                         if active is not None:
-                            watched += 10
+                            # Sample even while paused: a delay set during a
+                            # pause and then stopped is still the viewer's fix.
                             last_delay = _delay_now()
+                            if _watching_with_subtitles():
+                                watched += 10
                     elif active is not None:
                         akey = active.get('key') or ''
                         if akey and akey not in reported:

@@ -415,6 +415,14 @@ def notify(msg, title=None, icon=None, time_ms=4000):
 
 _EXPLICIT_EPISODE_RE = re.compile(
     r'(?i)(?<![a-z0-9])s0*(\d{1,2})e0*(\d{1,3})(?![a-z0-9])')
+# Older scene names: "Show.2014.201.HDTV-LOL" (S02E01, right after the
+# show year) and "Show.2x01". Without these a wrong-season subtitle
+# passed the episode guard (field: S02E01 offered for S01E01).
+_YEAR_EPISODE_RE = re.compile(
+    r'(?i)(?<![a-z0-9])(?:19[5-9]\d|20[0-3]\d)[ ._-]+([1-9])(\d{2})'
+    r'(?![a-z0-9])')
+_CROSS_EPISODE_RE = re.compile(
+    r'(?i)(?<![a-z0-9])(\d{1,2})x(\d{2,3})(?![a-z0-9])')
 
 
 def release_conflicts_with_episode(name, season, episode):
@@ -427,7 +435,10 @@ def release_conflicts_with_episode(name, season, episode):
         expected = (int(season), int(episode))
     except (TypeError, ValueError):
         return False
-    matches = _EXPLICIT_EPISODE_RE.findall(str(name or ''))
+    text = str(name or '')
+    matches = (_EXPLICIT_EPISODE_RE.findall(text)
+               or _CROSS_EPISODE_RE.findall(text)
+               or _YEAR_EPISODE_RE.findall(text))
     return bool(matches and any(
         (int(s), int(e)) != expected for s, e in matches))
 
