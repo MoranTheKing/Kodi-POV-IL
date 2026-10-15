@@ -498,6 +498,7 @@ def _run_build_startup_repairs():
         _maybe_add_tonight_entry,
         _maybe_seed_recent_updates_tile,
         _maybe_fix_idanplus_youtube_id,
+        _maybe_fix_idanplus_vod,
         _maybe_refresh_shared_sdh,
         _maybe_show_af3_first_launch_dialog,
         _maybe_repair_addon_autoupdate,
@@ -1173,6 +1174,35 @@ def _maybe_fix_idanplus_youtube_id():
             kodi_utils.log(
                 'idanplus_youtube_id_patcher failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_fix_idanplus_vod():
+    """Kan VOD, the Kan archive and i24NEWS English stopped working.
+
+    All on the providers' side: Kan's Cloudflare answers Kodi 403 on every
+    www.kan.org.il page while its mobile-API host serves the same pages, Kan
+    moved its player into a JSON config, its archive lobby was redesigned,
+    and i24NEWS retired the API host its English catalog used. The module
+    header has the evidence for each. Every injection is insert-only and
+    reverts byte-for-byte; a file whose shape changed is left alone and
+    reported here.
+
+    Not behind _skip_pov_patchers(), for the same reason as the YouTube-id
+    fix above: this writes to plugin.video.idanplus, not POV.
+    """
+    try:
+        from resources.lib import idanplus_vod_patcher, kodi_utils
+        st = idanplus_vod_patcher.ensure_patched()
+        if st in ('unmatched', 'compile_failed', 'write_failed',
+                  'revert_failed', 'read_failed'):
+            kodi_utils.log('idanplus_vod_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log('idanplus_vod_patcher failed: {0}'.format(e),
+                           level='WARNING')
         except Exception:
             pass
 
