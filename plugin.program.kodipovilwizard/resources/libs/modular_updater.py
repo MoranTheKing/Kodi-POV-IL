@@ -642,6 +642,14 @@ class ModularUpdater:
             if xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
                 continue
             if self._on_disk(addon_id):
+                # System.HasAddon lowercases its argument, so a mixed-case id
+                # (repository.Fishenzon) reads as absent even while enabled,
+                # and was "enabled" again on every boot -- including the
+                # MoranSubs handoff boot, where that needless call hung Kodi
+                # while it restarted the service. Ask by the exact id first.
+                if (addon_id != addon_id.lower()
+                        and self._runtime_addon_enabled(addon_id)):
+                    continue
                 disabled_on_disk.append(addon_id)
             else:
                 missing.append(mod)

@@ -1,10 +1,15 @@
-name: Check upstream POV
+name: Check upstream add-ons
 
-# Runs every 6 hours to see if kodi7rd published a new POV build. If
-# the version/URL in their build.txt differs from what we last
-# recorded in UPSTREAM_POV.md, opens a tracking issue. Uses only curl
-# + gh CLI so the repo's "MoranTheKing actions only" policy does not
-# block the run.
+# Runs every 6 hours. POV, Idan Plus, Arctic Fuse 3, Umbrella, Otaku and
+# Account Manager update themselves on users' devices straight from their
+# developers' repositories, and the build patches several of them. When a
+# repository publishes a version newer than the one recorded in
+# UPSTREAM_VERSIONS.txt, open a tracking issue so the patchers are re-run
+# against it. Uses only the runner's own git, python3 and gh, so the repo's
+# "owner-authored Actions only" policy does not block the run.
+#
+# This replaced a watch on kodi7rd's build.txt, which went offline and left
+# the old check skipping every run in silence.
 
 on:
   schedule:
@@ -19,57 +24,31 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch upstream + diff against marker
+      - name: Compare upstream repositories with the verified versions
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO_SLUG: ${{ github.repository }}
         run: |
           set -euo pipefail
-
-          UPSTREAM_URL="https://kodi7rd.github.io/wizard/assets/build.txt"
-          if ! UPSTREAM=$(curl -fsSL "$UPSTREAM_URL"); then
-            echo "::notice::Upstream POV build file is no longer available: $UPSTREAM_URL"
-            echo "Skipping check instead of failing the scheduled workflow."
+          git clone --depth 1 --filter=blob:none --sparse \
+            "https://github.com/${REPO_SLUG}.git" repo
+          cd repo
+          git sparse-checkout set --no-cone /tools/check_upstream_addons.py /UPSTREAM_VERSIONS.txt
+          CHANGES=$(python3 tools/check_upstream_addons.py UPSTREAM_VERSIONS.txt)
+          if [ -z "$CHANGES" ]; then
+            echo "All watched add-ons match UPSTREAM_VERSIONS.txt."
             exit 0
           fi
+          echo "$CHANGES"
 
-          # Pull the POV section: everything from its name= line until the
-          # next blank-line/name= boundary, then extract version + url.
-          POV_BLOCK=$(printf '%s\n' "$UPSTREAM" | awk '
-            BEGIN { inblock=0 }
-            /name="Kodi Real Debrid Israel - POV"/ { inblock=1 }
-            inblock { print }
-            inblock && /^[[:space:]]*$/ { exit }
-          ')
-          VERSION=$(printf '%s\n' "$POV_BLOCK" | sed -n 's/^version="\([^"]*\)".*/\1/p' | head -1)
-          URL=$(printf '%s\n' "$POV_BLOCK" | sed -n 's/^url="\([^"]*\)".*/\1/p' | head -1)
-          if [ -z "$VERSION" ] || [ -z "$URL" ]; then
-            echo "::error::Could not parse upstream POV version/url from build.txt"
-            printf '%s\n' "$UPSTREAM" | head -40
-            exit 1
-          fi
-          echo "Upstream: version=$VERSION url=$URL"
-
-          # Read the marker from main without cloning the whole repo.
-          MARKER=$(curl -fsSL \
-            "https://raw.githubusercontent.com/${REPO_SLUG}/main/UPSTREAM_POV.md" || echo "")
-          if echo "$MARKER" | grep -q "version: ${VERSION}" && \
-             echo "$MARKER" | grep -q "url: ${URL}"; then
-            echo "Upstream POV unchanged at ${VERSION}; nothing to do."
-            exit 0
-          fi
-
-          TITLE="Upstream POV changed to ${VERSION}"
-          # Skip if an open issue with this title already exists.
+          TITLE="Upstream add-on update: $(printf '%s' "$CHANGES" | sed 's/: .* -> / /' | paste -sd ',' - | sed 's/,/, /g')"
           if gh issue list --repo "$REPO_SLUG" --state open --search "in:title \"$TITLE\"" \
                --json title --jq 'length' | grep -qv '^0$'; then
             echo "Issue \"$TITLE\" already open; skipping."
             exit 0
           fi
-
-          BODY=$(printf '%s\n\n%s\n%s\n\n%s' \
-            "A new upstream POV build appears to be available." \
-            "version: ${VERSION}" \
-            "url: ${URL}" \
-            "Next step: rebuild Kodi POV IL FENtastic from the new upstream POV package, test on Android, then bump wizard/assets/build.txt.")
+          BODY=$(printf '%s\n\n%s\n\n%s' \
+            "New upstream versions (verified -> published):" \
+            "$CHANGES" \
+            "Devices install these from the developers' repositories. Re-run the wizard patch engine and the MoranSubs host patchers against the new version, fix any moved anchor, then update UPSTREAM_VERSIONS.txt.")
           gh issue create --repo "$REPO_SLUG" --title "$TITLE" --body "$BODY"
