@@ -2230,8 +2230,28 @@ def _track_span(profile):
     return max(0.0, float(cues[-1]['end']) - float(cues[0]['start']))
 
 
+# Kodi runs every add-on's Python under one interpreter lock. Measured in QA
+# Kodi (21, Python 3.11): while one thread runs a CPU-bound loop that never
+# sleeps, a NEW script -- e.g. our own "בחירת כתוביות" button -- does not even
+# start until that loop ends (15.8 s behind a 20 s loop, 0.3 s idle); a 1 ms
+# sleep every ~20 ms brings it back to 0.3 s. Field logs from an Android box
+# showed the same 5-11 s waits behind SubSync's deep check at playback start.
+# The long loops here call _breathe(): about 5% slower in the background,
+# never in the way of the viewer.
+_BREATHE_SLICE = 0.02
+_breath = [0.0]
+
+
+def _breathe():
+    now = time.monotonic()
+    if now - _breath[0] >= _BREATHE_SLICE:
+        time.sleep(0.001)
+        _breath[0] = time.monotonic()
+
+
 def _onset_coverage(source, target, tolerance_ms=250.0):
     """Fraction of source onsets with a nearby target onset (linear scan)."""
+    _breathe()
     left = sorted(float(cue['start']) for cue in source or [])
     right = sorted(float(cue['start']) for cue in target or [])
     if not left or not right:
@@ -2315,6 +2335,7 @@ def _shift_invariant_shape_coverage(source, target, tolerance_ms=350.0,
 
     best = 0.0
     for offset in offsets:
+        _breathe()
         matched = 0
         cursor = 0
         for cue in left:
