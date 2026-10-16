@@ -37,7 +37,7 @@ ICON_SRC_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'icons')
 ICON_FILENAMES = ('gemini.png',)
 
-INJECT_VERSION = 12
+INJECT_VERSION = 13
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 END_MARKER = '# END AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
@@ -86,6 +86,11 @@ TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
 #     authorised the service rather than declined a confirmation. It is
 #     the only place with both sides of one click; every attempt to infer
 #     it from outside reverted somebody's settings.
+#   v13 (addon v0.2.568): POV 6.10.06 turned kodi_utils.dialog into the
+#     xbmcgui.Dialog CLASS, so kodi_utils.dialog.select(...) raised
+#     "descriptor 'select' for 'xbmcgui.Dialog' objects doesn't apply to a
+#     'str' object" and "חיבור שירותים" died. _ai_dialog() returns an
+#     instance whichever shape the installed POV has.
 # Each bump triggers a one-time re-patch on the next Kodi startup;
 # OLD_MARKERS lists every prior version's marker so the legacy
 # blocks get stripped cleanly before the new one is injected.
@@ -101,6 +106,7 @@ OLD_MARKERS = [
     '# AI_SUBS_MYSERVICES_INJECT_v9',
     '# AI_SUBS_MYSERVICES_INJECT_v10',
     '# AI_SUBS_MYSERVICES_INJECT_v11',
+    '# AI_SUBS_MYSERVICES_INJECT_v12',
 ]
 
 # Two service classes plus a hook that monkey-patches authorize()
@@ -127,6 +133,13 @@ _AI_ON_POV = 'מחובר ✓ · לחץ לניהול'
 _AI_OFF_POV = 'לא מחובר · לחץ לחיבור'
 _AI_ADVANCED = 'חיבור ל-POV בלבד (מתקדם)'
 _AI_ADVANCED2 = 'התפריט המקורי של POV, ללא סנכרון לשאר התוספים'
+
+
+def _ai_dialog():
+    # POV <= 6.10.05: kodi_utils.dialog is an xbmcgui.Dialog() instance;
+    # POV 6.10.06+: it is the xbmcgui.Dialog class itself.
+    d = kodi_utils.dialog
+    return d() if isinstance(d, type) else d
 
 
 def _ai_get_addon():
@@ -348,7 +361,7 @@ def _ai_am_service(prefix, icon_name, keys, title, pov_names):
                 return
             if not self.token:
                 return _ai_am_run(self._prefix + 'Auth')
-            choice = kodi_utils.dialog.select(self._title, [
+            choice = _ai_dialog().select(self._title, [
                 'סנכרון החשבון לכל התוספים',
                 'ניתוק החשבון מכל התוספים'])
             if choice < 0:
@@ -517,7 +530,7 @@ def authorize():
 
     icon_path = kodi_utils.media_path()
     services = tuple(_ai_services)
-    service = kodi_utils.dialog.select(
+    service = _ai_dialog().select(
         _AI_TITLE, list(_builder()), useDetails=True)
     if service < 0: return
     try: success = services[service][1]().set()
