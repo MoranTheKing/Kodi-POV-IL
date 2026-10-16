@@ -687,6 +687,37 @@ def _deliver_pick(c, info, close_cb):
         _log('deliver pick failed: {0}'.format(e), level='WARNING')
 
 
+def _busy(on):
+    try:
+        xbmc.executebuiltin('ActivateWindow(busydialognocancel)' if on
+                            else 'Dialog.Close(busydialognocancel)')
+    except Exception:
+        pass
+
+
+def _pause_for_chooser():
+    """Pause the playing video; True when this call paused it."""
+    try:
+        if (xbmc.Player().isPlayingVideo()
+                and not xbmc.getCondVisibility('Player.Paused')):
+            xbmc.Player().pause()
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _resume_after_chooser(paused):
+    if not paused:
+        return
+    try:
+        if (xbmc.Player().isPlayingVideo()
+                and xbmc.getCondVisibility('Player.Paused')):
+            xbmc.Player().pause()  # resume
+    except Exception:
+        pass
+
+
 def show():
     """Open the rich MoranSubs chooser (a self-contained WindowXMLDialog that
     looks the same on every skin). Falls back to the pyxbmct chooser, then to
@@ -702,19 +733,42 @@ def show():
         from resources.lib import kodi_utils, translate
     except Exception:
         return False
-    info = kodi_utils.current_video_info()
+    # The search behind this window can take seconds on a streaming box (a
+    # title no source has is searched again in full). Measured in a user's
+    # video: 8 s of plain playback after the press, so it looked ignored.
+    # Pause at once, as Kodi's own subtitle dialog does, and show the busy
+    # spinner until the list is ready.
+    import time
+    t_start = time.monotonic()
+    _paused = _pause_for_chooser()
+    _busy(True)
     try:
-        cands = translate.list_candidates(info, modal_progress=False) or []
-    except Exception as e:
-        _log('list_candidates failed: {0}'.format(e), level='WARNING')
-        cands = []
-    try:
-        from resources.lib import subsync
-        cands = subsync.rank_picker_candidates(info, cands)
-    except Exception as e:
-        _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
-    items = [c for c in cands if c.get('link') and c.get('filename')]
+        info = kodi_utils.current_video_info()
+        t0 = time.monotonic()
+        try:
+            cands = translate.list_candidates(info, modal_progress=False) or []
+        except Exception as e:
+            _log('list_candidates failed: {0}'.format(e), level='WARNING')
+            cands = []
+        t1 = time.monotonic()
+        try:
+            from resources.lib import subsync
+            cands = subsync.rank_picker_candidates(info, cands)
+        except Exception as e:
+            _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
+        t2 = time.monotonic()
+    except BaseException:
+        _resume_after_chooser(_paused)
+        raise
+    finally:
+        _busy(False)
+    _log('chooser: {0} candidate(s); list {1:.1f}s, timing rank {2:.1f}s, '
+         'from the press {3:.1f}s'.format(
+             len(cands), t1 - t0, t2 - t1, t2 - t_start))
+    items = [c for c in cands
+             if isinstance(c, dict) and c.get('link') and c.get('filename')]
     if not items:
+        _resume_after_chooser(_paused)
         try:
             kodi_utils.notify('לא נמצאו כתוביות לכותר הזה', time_ms=3500)
         except Exception:
@@ -793,17 +847,8 @@ def show():
                 except Exception as e:
                     _log('xml onClick failed: {0}'.format(e), level='WARNING')
 
-        # Pause playback while the chooser is open (Kodi's native subtitle
-        # dialog does this; our custom window doesn't unless we tell it to), then
-        # resume on close if WE paused it.
-        _paused = False
-        try:
-            if (xbmc.Player().isPlayingVideo()
-                    and not xbmc.getCondVisibility('Player.Paused')):
-                xbmc.Player().pause()
-                _paused = True
-        except Exception:
-            pass
+        # Playback was paused at the press (above) and resumes on close if
+        # WE paused it.
         addon_path = xbmcaddon.Addon(ADDON_ID).getAddonInfo('path')
         w = _ChooserXML('script.moransubs.chooser.xml', addon_path,
                         'Default', '1080i')
@@ -812,13 +857,7 @@ def show():
         w.translate = translate
         w.doModal()
         del w
-        if _paused:
-            try:
-                if (xbmc.Player().isPlayingVideo()
-                        and xbmc.getCondVisibility('Player.Paused')):
-                    xbmc.Player().pause()  # resume
-            except Exception:
-                pass
+        _resume_after_chooser(_paused)
         return True
     except Exception as e:
         _log('WindowXMLDialog failed, falling back to pyxbmct: {0}'.format(e),
@@ -828,3 +867,5 @@ def show():
         return _show_pyxbmct()
     except Exception:
         return False
+    finally:
+        _resume_after_chooser(_paused)
