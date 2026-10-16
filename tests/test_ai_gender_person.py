@@ -161,6 +161,32 @@ class PersonGenderTests(unittest.TestCase):
                 ('pt', u'Ela foi obrigada a sair.', None)):
             self.assertEqual(ag.reference_speaker_gender(text, lang), want, msg=text)
 
+    def test_arabic_without_harakat(self):
+        # Lines from human Arabic subtitles whose gender the reader used to
+        # leave unread, and the traps measured while widening it.
+        for text, want in (
+                (u'أتريدين توصيلة أو ما شابه', 'F'), (u'تبدين رائعة', 'F'),
+                (u'ماذا ستفعلين؟', 'F'), (u'عليك أن تكوني قوية', 'F'),
+                (u'لا تسألي عن أي شيء', 'F'), (u'انظري إلى تلك المزبلة', 'F'),
+                (u'أمابيلا، عزيزتي هل يُمكنك الإشارة', 'F'),
+                (u'تعال هنا.', 'M'), (u'صدقني، فأنا أعلم', 'M'), (u'انظر إلى حياتنا', 'M'),
+                (u'أنت تتصرف بسخافة', 'M'), (u'لا، أنت وسيم جدًا', 'M'),
+                (u'تبدو جميلاً', 'M'), (u'هل تحب الكعك؟', 'M'), (u'وأتعرف ماذا أيضًا ؟', 'M'),
+                # traps
+                (u'أتفق معك', None),                        # I agree
+                (u'سأعرفك على صديقتي الجديدة', None),        # a third person
+                (u'أتعتقد أنها يجب ان تبقي كل عواطفها', 'M'),  # تبقي: she keeps
+                (u'هل تمزح معي؟', None),                    # idiom, said to anyone
+                (u'تعالِ إلى هنا', None),                    # kasra: not masculine
+                (u'هل تحققت من الكابحات بسيارتي', None),     # a past tense
+                (u'أعرف ما يعني رغبة الحصول على اشياء', None)):
+            self.assertEqual(ag.reference_addressee_gender(text, 'ar'), want, msg=text)
+        for text, want in (
+                (u'آسفة على التأخير', 'F'), (u'فأنا متأكدة', 'F'), (u'إنني سعيدة', 'F'),
+                (u'أنا ذاهب', 'M'), (u'لست متأكداً', 'M'),
+                (u'أعرف', None), (u'أنا بحاجة إلى مساعدة', None)):
+            self.assertEqual(ag.reference_speaker_gender(text, 'ar'), want, msg=text)
+
     def test_the_reference_clock_is_measured_on_the_original_cues(self):
         # Merging a Netflix file's split captions made every reference fail
         # local consistency in Kodi; the gate must see the authored cues.
