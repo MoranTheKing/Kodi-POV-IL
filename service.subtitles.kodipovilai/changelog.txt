@@ -1,5 +1,6 @@
 0.3.37
 - Start-up no longer rewrites the player's "choose subtitles" skin settings when they are already right; each needless write makes the skin re-check the home screen.
+- Ships with Wizard 0.4.51, which saves compiled code for faster lists (MoranSubs' own code included).
 
 0.3.36
 - "בחירת כתוביות" should open much sooner at the start of an episode. On a slow Android box the button waited 5-11 s for MoranSubs' own background work to let go: Kodi cannot start a new script while another add-on's Python runs without a pause.
