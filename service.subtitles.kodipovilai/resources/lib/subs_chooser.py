@@ -732,6 +732,30 @@ def _human_hebrew_rows(cands):
     return n
 
 
+def _chooser_items(info, translate, quick=False):
+    """The chooser's rows: list_candidates, the timing rank when it has a
+    human Hebrew row to work on, and only rows that can be picked."""
+    try:
+        cands = translate.list_candidates(info, modal_progress=False,
+                                          quick=quick) or []
+    except Exception as e:
+        _log('list_candidates failed: {0}'.format(e), level='WARNING')
+        cands = []
+    # The timing rank only works on human Hebrew rows (its cached-proof pass
+    # labels even a single one); importing SubSync for it cost 1.9 s on that
+    # box when the list held only embedded / AI rows.
+    if _human_hebrew_rows(cands) >= 1:
+        try:
+            from resources.lib import subsync
+            cands = subsync.rank_picker_candidates(info, cands)
+        except Exception as e:
+            _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
+    else:
+        cands = _current_first(cands)
+    return [c for c in cands
+            if isinstance(c, dict) and c.get('link') and c.get('filename')]
+
+
 def _current_first(cands):
     """Keep the row that is on screen at the top, as the rank does."""
     rows = list(cands or [])
@@ -821,40 +845,26 @@ def _show():
     # video: 8 s of plain playback after the press, so it looked ignored. A
     # pause + busy spinner (0.3.33) was worse for him: the video stood still
     # for the whole wait, and his "Unpause Jumpback" add-on rewinds 4 s on
-    # every resume. So playback keeps going with a small background notice,
-    # and pauses only once the window is open.
+    # every resume. Then (0.3.34) every press still searched every provider
+    # for 4.6 s on his box. So the window now opens on what needs no network
+    # (embedded tracks, AI rows, a search already cached), and the provider
+    # search and the community pool fill it in from a background thread.
     import time
     t_start = time.monotonic()
     _paused = False
     _notice = _searching_notice()
     try:
         info = kodi_utils.current_video_info()
-        t0 = time.monotonic()
-        try:
-            cands = translate.list_candidates(info, modal_progress=False) or []
-        except Exception as e:
-            _log('list_candidates failed: {0}'.format(e), level='WARNING')
-            cands = []
-        t1 = time.monotonic()
-        # The timing rank only works on human Hebrew rows (its cached-proof
-        # pass labels even a single one); importing SubSync for it cost 1.9 s
-        # on that box when the list held only embedded / AI rows.
-        if _human_hebrew_rows(cands) >= 1:
-            try:
-                from resources.lib import subsync
-                cands = subsync.rank_picker_candidates(info, cands)
-            except Exception as e:
-                _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
-        else:
-            cands = _current_first(cands)
-        t2 = time.monotonic()
+        items = _chooser_items(info, translate, quick=True)
+        pending = bool(info.pop('_list_pending', False))
     finally:
         _close_notice(_notice)
-    _log('chooser: {0} candidate(s); list {1:.1f}s, timing rank {2:.1f}s, '
-         'from the press {3:.1f}s'.format(
-             len(cands), t1 - t0, t2 - t1, t2 - t_start))
-    items = [c for c in cands
-             if isinstance(c, dict) and c.get('link') and c.get('filename')]
+    _log('chooser: {0} candidate(s) {1}in {2:.1f}s from the press'.format(
+        len(items), '(the source search continues in the background) '
+        if pending else '', time.monotonic() - t_start))
+    if not items and pending:
+        items = [{'filename': 'מחפש כתוביות…', 'language': '', 'link': '',
+                  '_placeholder': True}]
     if not items:
         _resume_after_chooser(_paused)
         try:
@@ -867,43 +877,87 @@ def _show():
         import xbmcaddon
 
         class _ChooserXML(xbmcgui.WindowXMLDialog):
+            closed = False
+
             def onInit(self):
                 try:
                     self.setProperty('subs.head', _video_ref(self.info) or '')
-                    self.setProperty('subs.count',
-                                     'נמצאו {0} כתוביות'.format(len(self.items)))
                     try:
                         xbmcgui.Window(10000).setProperty(
                             'MoranSubsChooserOpen', '1')
                     except Exception:
                         pass
-                    lst = self.getControl(100)
-                    rows = []
-                    for c in self.items:
-                        label, label2, pct, col, flag = _classify(
-                            c, self.info, self.translate)
-                        # Bake colours into the label text (BBCode): per-row
-                        # <textcolor>$INFO[...]</textcolor> is unreliable in Kodi,
-                        # so the row colour lives in the label string itself.
-                        li = xbmcgui.ListItem(
-                            '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, label))
-                        li.setLabel2(
-                            '[COLOR FF9AA0A6]{0}[/COLOR]'.format(label2)
-                            if label2 else '')
-                        if flag:
-                            li.setArt({'thumb': flag})
-                        li.setProperty(
-                            'pct',
-                            '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, pct)
-                            if pct else '')
-                        rows.append(li)
-                    lst.addItems(rows)
+                    self._fill()
                     try:
                         self.setFocusId(100)
                     except Exception:
                         pass
+                    if self.pending:
+                        import threading
+                        t = threading.Thread(target=self._complete)
+                        t.daemon = True
+                        t.start()
                 except Exception as e:
                     _log('xml onInit failed: {0}'.format(e), level='WARNING')
+
+            def _fill(self):
+                self.setProperty('subs.count', 'מחפש כתוביות נוספות…'
+                                 if self.pending else
+                                 'נמצאו {0} כתוביות'.format(len(self.items)))
+                lst = self.getControl(100)
+                keep = lst.getSelectedPosition() if lst.size() else 0
+                rows = []
+                for c in self.items:
+                    if c.get('_placeholder'):
+                        rows.append(xbmcgui.ListItem(
+                            '[COLOR FF9AA0A6]{0}[/COLOR]'.format(c['filename'])))
+                        continue
+                    label, label2, pct, col, flag = _classify(
+                        c, self.info, self.translate)
+                    # Bake colours into the label text (BBCode): per-row
+                    # <textcolor>$INFO[...]</textcolor> is unreliable in Kodi,
+                    # so the row colour lives in the label string itself.
+                    li = xbmcgui.ListItem(
+                        '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, label))
+                    li.setLabel2(
+                        '[COLOR FF9AA0A6]{0}[/COLOR]'.format(label2)
+                        if label2 else '')
+                    if flag:
+                        li.setArt({'thumb': flag})
+                    li.setProperty(
+                        'pct',
+                        '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, pct)
+                        if pct else '')
+                    rows.append(li)
+                lst.reset()
+                lst.addItems(rows)
+                if 0 < keep < len(rows):
+                    lst.selectItem(keep)
+
+            def _complete(self):
+                """The full list (provider search + pool), into the open window."""
+                import time
+                t = time.monotonic()
+                try:
+                    items = _chooser_items(dict(self.info), self.translate)
+                except Exception as e:
+                    _log('chooser background list failed: {0}'.format(e),
+                         level='WARNING')
+                    items = [c for c in self.items if not c.get('_placeholder')]
+                _log('chooser: full list {0} candidate(s) after {1:.1f}s more'.format(
+                    len(items), time.monotonic() - t))
+                if self.closed:
+                    return
+                self.items = items
+                self.pending = False
+                try:
+                    self._fill()
+                except Exception as e:
+                    _log('chooser refresh failed: {0}'.format(e), level='WARNING')
+
+            def close(self):
+                self.closed = True
+                xbmcgui.WindowXMLDialog.close(self)
 
             def onAction(self, action):
                 try:
@@ -931,6 +985,8 @@ def _show():
                         i = self.getControl(100).getSelectedPosition()
                         if i is None or i < 0 or i >= len(self.items):
                             return
+                        if self.items[i].get('_placeholder'):
+                            return
                         _deliver_pick(self.items[i], self.info, self.close)
                 except Exception as e:
                     _log('xml onClick failed: {0}'.format(e), level='WARNING')
@@ -946,6 +1002,7 @@ def _show():
                         'Default', '1080i')
         w.info = info
         w.items = items
+        w.pending = pending
         w.translate = translate
         w.doModal()
         del w

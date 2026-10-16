@@ -326,7 +326,7 @@ def _parse_download_url(url):
     }
 
 
-def search(info, modal_progress=True):
+def search(info, modal_progress=True, cache_only=False):
     """Return MoranSubs candidate dicts for the subtitles the engine
     found. Empty list when the gate is off or anything fails.
 
@@ -366,6 +366,8 @@ def search(info, modal_progress=True):
         recent = _recent_get(info)
         if recent is not None:
             return recent
+    if cache_only:
+        return None           # nothing cached: the caller searches later
     try:
         started = time.monotonic()
         out = _search_inner(info, modal_progress=modal_progress)
