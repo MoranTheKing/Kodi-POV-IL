@@ -1,3 +1,6 @@
+0.2.568
+- Fix "חיבור שירותים" (Connect Services) in POV 6.10.06: the menu crashed with "descriptor 'select' for 'xbmcgui.Dialog' objects doesn't apply to a 'str' object", so debrid accounts (AllDebrid, Real-Debrid, TorBox...) could not be connected or switched.
+
 0.2.567
 - Correct real multi-second offsets between differently segmented subtitles using speech-coverage corroboration, and stop weak sub-second nudges of subtitles that are already synchronized.
 - Stop trusting release names that only look alike (WEB-DL/DTS-HD groups, different streaming services, extended versus theatrical cuts) and check trusted subtitles against the playing file's own subtitle track.
