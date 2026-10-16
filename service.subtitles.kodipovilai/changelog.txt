@@ -1,3 +1,6 @@
+0.3.37
+- Start-up no longer rewrites the player's "choose subtitles" skin settings when they are already right; each needless write makes the skin re-check the home screen.
+
 0.3.36
 - "בחירת כתוביות" should open much sooner at the start of an episode. On a slow Android box the button waited 5-11 s for MoranSubs' own background work to let go: Kodi cannot start a new script while another add-on's Python runs without a pause.
 - SubSync's long timing calculations (alignment, subtitle parsing, audio envelope, MKV/MP4 index reading) now take a 1 ms pause at most every 20 ms -- about 5% slower in the background, out of the viewer's way.

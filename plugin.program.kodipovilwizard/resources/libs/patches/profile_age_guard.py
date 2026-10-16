@@ -157,14 +157,31 @@ def host_integrity(addons):
     return True
 
 
+# Skin.HasSetting is answered by Kodi's GUI thread, so each query waits for a
+# free frame: 20 ms on a PC, far more on a busy Android box -- and every POV
+# list asked it twice. One answer per invocation is enough; the short expiry
+# keeps a reused interpreter honest.
+_CHILD_FLAG = [None, 0.0]
+_CHILD_FLAG_TTL_S = 3.0
+
+
+def _skin_child_flag():
+    import time
+    now = time.monotonic()
+    if _CHILD_FLAG[0] is None or now - _CHILD_FLAG[1] > _CHILD_FLAG_TTL_S:
+        import xbmc
+        _CHILD_FLAG[0] = bool(xbmc.getCondVisibility('Skin.HasSetting(POVILChild)'))
+        _CHILD_FLAG[1] = now
+    return _CHILD_FLAG[0]
+
+
 def active_policy():
     import xbmcvfs
     try:
         policy = policy_for(xbmcvfs.translatePath('special://masterprofile/'),
                             xbmcvfs.translatePath('special://profile/'))
         if policy is None:
-            import xbmc
-            if xbmc.getCondVisibility('Skin.HasSetting(POVILChild)'):
+            if _skin_child_flag():
                 return {'blocked': True}
         return policy
     except (OSError, ValueError):

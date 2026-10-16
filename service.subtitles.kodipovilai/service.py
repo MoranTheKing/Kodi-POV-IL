@@ -3272,13 +3272,24 @@ def _point_subtitle_button(engine_on):
     Only touches the ACTIVE skin; cheap; safe if the setting doesn't exist."""
     if xbmc is None:
         return
+    # Write only what differs. Every Skin.Set*/Reset makes Kodi re-evaluate
+    # the open windows, and the home screen then asks every widget again:
+    # QA (NOX and FENtastic) loaded each home row twice at every start-up,
+    # the second round right after this ran with nothing to change.
     try:
+        has_kodi_window = xbmc.getCondVisibility(
+            'Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)')
+        search = xbmc.getInfoLabel('Skin.String(subtitlesearch)')
         if engine_on:
-            xbmc.executebuiltin('Skin.SetBool(ChooseSubtitlesButtonOpensKodiWindow)')
-            xbmc.executebuiltin('Skin.SetString(subtitlesearch,kodisubtitle)')
+            if not has_kodi_window:
+                xbmc.executebuiltin('Skin.SetBool(ChooseSubtitlesButtonOpensKodiWindow)')
+            if search != 'kodisubtitle':
+                xbmc.executebuiltin('Skin.SetString(subtitlesearch,kodisubtitle)')
         else:
-            xbmc.executebuiltin('Skin.Reset(ChooseSubtitlesButtonOpensKodiWindow)')
-            xbmc.executebuiltin('Skin.SetString(subtitlesearch,darksubs)')
+            if has_kodi_window:
+                xbmc.executebuiltin('Skin.Reset(ChooseSubtitlesButtonOpensKodiWindow)')
+            if search != 'darksubs':
+                xbmc.executebuiltin('Skin.SetString(subtitlesearch,darksubs)')
     except Exception:
         pass
 
