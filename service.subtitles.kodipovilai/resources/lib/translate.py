@@ -4869,14 +4869,30 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             'commentary.\n\n'
             + json.dumps(evidence, ensure_ascii=False))
 
-        try:
+        def _ask():
             _gemini_rate_gate(_rpm_interval)
-            reply = _repair_generate(
+            return _repair_generate(
                 api_key=api_key, model=model, prompt=prompt_text,
                 temperature=0.0, max_output_tokens=max_output_tokens,
                 top_p=top_p, thinking_budget=thinking_budget,
                 thinking_level=thinking_level,
                 timeout=gemini_timeout or gemini.REQUEST_TIMEOUT)
+
+        def _answers(text):
+            heads = (nb.split('\n', 1)[0].strip() for nb in srt.parse_blocks(text or ''))
+            return sum(1 for h in heads if h.isdigit() and int(h) in eligible)
+
+        try:
+            reply = _ask()
+            # Every entry here is a proven contradiction with the human
+            # reference, so a reply that answers none of them is worth one
+            # more request (measured: a 14-entry repair came back with 0).
+            if not _answers(reply):
+                kodi_utils.log(
+                    'gender repair: the reply answered none of the {0} entries '
+                    '({1} chars) -- asking once more'.format(
+                        len(ask), len(reply or '')), level='WARNING')
+                reply = _ask()
         except Exception as e:
             kodi_utils.log('gender repair request failed ({0}) -- keeping the '
                            'lines as they are'.format(e), level='WARNING')
@@ -4884,6 +4900,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         out = list(blocks)
         done = set()
         want = eligible
+        # Why entries were not taken, for the log: a 0/N repair is otherwise
+        # indistinguishable between a model that kept every line and a proof
+        # that refused every rewrite.
+        tally = {'returned': 0, 'unchanged': 0, 'unproven': 0, 'refused': 0}
         for nb in srt.parse_blocks(reply or ''):
             head = nb.split('\n', 1)[0].strip()
             if not head.isdigit():
@@ -4896,9 +4916,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 continue
             new_lines = [l for l in nb.split('\n')[2:] if l.strip()]
             body = '\n'.join(new_lines).strip()
+            tally['returned'] += 1
+            if body == '\n'.join(
+                    l for l in blocks[pos_of[num]].split('\n')[2:] if l.strip()).strip():
+                tally['unchanged'] += 1
+                continue
             if not body or not arabic_gender.person_roles_fixed(
                     body, target_by_num[num],
                     _ar_map.get(num) if _ref_lang == 'he' else None):
+                tally['unproven'] += 1
                 continue          # ignored the instruction -> keep the original
             # Explicit Hebrew characters, NOT looks_hebrew alone. looks_hebrew
             # counts only Hebrew and Latin as alphabetic, so a reply in Arabic
@@ -4932,9 +4958,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # pair, so there is no positional pairing to verify.
             out[pos_of[num]] = '\n'.join(src_lines[:2] + new_lines)
             done.add(num)
+        tally['refused'] = (tally['returned'] - tally['unchanged']
+                            - tally['unproven'] - len(done))
         kodi_utils.log(
             'gender repair: {0}/{1} entr(ies) rewritten with per-entry '
-            'addressee evidence'.format(len(done), len(ask)), level='INFO')
+            'addressee evidence (returned {2}, kept as they were {3}, '
+            'not proven {4}, refused by the shape checks {5})'.format(
+                len(done), len(ask), tally['returned'], tally['unchanged'],
+                tally['unproven'], tally['refused']), level='INFO')
         return out
 
     # Stitch in original order.
