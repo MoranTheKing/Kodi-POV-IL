@@ -360,9 +360,12 @@ def search(info, modal_progress=True):
         # waiting 24h for it to expire.
         if cached:
             return cached
-        if _recently_empty(info):
+        # Kodi's own subtitle dialog (modal_progress) is an explicit request
+        # and always searches.
+        if not modal_progress and _recently_empty(info):
             return []
     try:
+        started = time.monotonic()
         out = _search_inner(info, modal_progress=modal_progress)
         # NEVER cache an empty / failed search. A transient timeout, rate-limit
         # (429) or network hiccup returns [] -- caching that would hide every
@@ -371,7 +374,7 @@ def search(info, modal_progress=True):
         # It is only remembered for a few minutes (_EMPTY_TTL), in memory.
         if cacheable and out:
             _cache_put(info, out)
-        elif cacheable:
+        elif cacheable and _search_finished(time.monotonic() - started):
             _mark_empty(info)
         return out
     except Exception as e:
@@ -412,13 +415,27 @@ def _cache_key(info):
         mid, info.get('season') or '0', info.get('episode') or '0', sig)
 
 
-# A search that found nothing is remembered for a few minutes, in Kodi's
+# A search that found nothing is remembered for two minutes, in Kodi's
 # memory only. Measured in a user's log: the automatic search at the start of
 # an episode found no subtitle in any language, and pressing "בחירת כתוביות"
 # 12 s later ran every provider again -- 6.4 s on a streaming box before the
-# window opened, to find the same nothing. Short, so a hiccup that returned
-# nothing is retried soon; never on disk, so a restart forgets it.
-_EMPTY_TTL = 300
+# window opened, to find the same nothing. Only a search that FINISHED counts:
+# the engine also returns nothing when it hits max_search_time (a link busy
+# buffering the video) or refuses to start while a timed-out provider is
+# still running, and that must be searched again. Never on disk.
+_EMPTY_TTL = 120
+
+
+def _search_finished(took):
+    """True when the engine searched every provider to the end."""
+    try:
+        from resources.lib.subs_engine import engine
+        if getattr(engine, '_lingering_provider_threads', None):
+            return False
+        limit = float(kodi_utils.addon().getSetting('max_search_time') or 10)
+    except Exception:
+        return False
+    return took < limit - 0.5
 
 
 def _empty_prop(info):
