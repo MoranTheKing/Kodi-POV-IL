@@ -1,3 +1,7 @@
+2.1.3
+
+- TMDb suggestions work again: themoviedb.org's web search now blocks automated requests (403), so the keyboard offered no titles. Uses the official TMDb API with POV's read token, and Google suggestions when TMDb gives nothing.
+
 2.1.2
 
 - Kodi 20+21 Hebrew fix
