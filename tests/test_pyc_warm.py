@@ -89,6 +89,32 @@ class PycWarmTests(unittest.TestCase):
         self.assertIn(5, slept)
 
 
+class PycWarmSafetyTests(PycWarmTests):
+    def test_hidden_wizard_staging_trees_are_never_touched(self):
+        stage = self.addons / '.kodipovil-wizard-stage-abc' / 'resources'
+        stage.mkdir(parents=True)
+        (stage / 'x.py').write_text('X = 1' + chr(10))
+        self.run_warm()
+        self.assertFalse((stage / '__pycache__').exists())
+
+    def test_a_file_replaced_during_the_compile_never_runs_stale_code(self):
+        src = self.pov / 'entry.py'
+        real = importlib.machinery.SourceFileLoader.source_to_code
+
+        def racing(loader, data, path, *a, **k):
+            code = real(loader, data, path, *a, **k)      # compiled the OLD bytes
+            if path.endswith('entry.py'):
+                src.write_text('X = 99  # replaced mid-compile' + chr(10))
+            return code
+        with mock.patch.object(importlib.machinery.SourceFileLoader, 'source_to_code', racing):
+            self.run_warm()
+        loader = importlib.machinery.SourceFileLoader('entry_race_check', str(src))
+        ns = {}
+        exec(loader.get_code('entry_race_check'), ns)
+        self.assertEqual(ns['X'], 99)                      # the hash rejects the stale pyc
+        self.assertEqual(self.run_warm(), (1, 0, 1))       # and the next pass rewrites it
+
+
 class ChildFlagCacheTests(unittest.TestCase):
     def test_the_gui_is_asked_once_per_invocation(self):
         calls = []
