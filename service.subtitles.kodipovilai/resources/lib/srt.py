@@ -2039,6 +2039,26 @@ def fold_stray_latin_letter(text):
         return text
 
 
+# A stutter repeats one word, so its fragment has the word's gender. Measured
+# after a gender repair: "You-you look nice" came back "את-אתה נראה טוב" --
+# the full pronoun and the verb were fixed, the fragment kept the old gender.
+_PRONOUN_STUTTER_RE = re.compile(
+    u'(?<![\u05d0-\u05ea])(\u05d0\u05ea\u05d4|\u05d0\u05ea)'
+    u'(\\s*(?:-|\\.\\.\\.|\u2026)\\s*)(\u05d0\u05ea\u05d4|\u05d0\u05ea)(?![\u05d0-\u05ea])')
+
+
+def fix_pronoun_stutter(text):
+    """'את-אתה' -> 'אתה-אתה' (and the reverse): a stuttered pronoun takes the
+    gender of the word it repeats. Never raises."""
+    if not text or u'\u05d0\u05ea' not in text:
+        return text
+    try:
+        out = _PRONOUN_STUTTER_RE.sub(lambda m: m.group(3) + m.group(2) + m.group(3), text)
+        return text if out == text else out
+    except Exception:
+        return text
+
+
 # A hearing-impaired sound cue written in capitals without brackets ("HEAVY
 # BREATHING", "DOORBELL BUZZES" -- BBC style) gets past the bracket-based HI
 # cleaner, and the model hands it back in English. Shouted dialogue in

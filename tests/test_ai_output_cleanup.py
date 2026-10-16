@@ -46,6 +46,15 @@ class StrayLatinLetterTests(unittest.TestCase):
             self.assertIs(srt.fold_stray_latin_letter(kept), kept)
 
 
+
+class PronounStutterTests(unittest.TestCase):
+    def test_a_stutter_takes_the_gender_of_the_word_it_repeats(self):
+        # Measured after a repair: "You-you look nice".
+        self.assertEqual(srt.fix_pronoun_stutter('.את-אתה נראה טוב'), '.אתה-אתה נראה טוב')
+        self.assertEqual(srt.fix_pronoun_stutter('אתה... את בסדר?'), 'את... את בסדר?')
+        for kept in ('ראיתי את-את הכלב', 'את-את נראית טוב', 'זאת-אתה'):
+            self.assertIs(srt.fix_pronoun_stutter(kept), kept)
+
 class SoundCueTests(unittest.TestCase):
     SRC = crlf(block(1, 'HEAVY BREATHING'), block(2, 'GET OUT!'), block(3, 'Who is it?'),
                block(4, 'BELL RINGS\n- Who is it?'), block(5, 'Here we go.'), block(6, 'Fine.'),
