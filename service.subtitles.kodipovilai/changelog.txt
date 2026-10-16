@@ -1,7 +1,7 @@
 0.3.34
-- "בחירת כתוביות" no longer stops the video while it prepares the list: a small progress bar shows instead, and the video pauses only once the window is open.
-- "בחירת כתוביות" reuses a search that ran to the end in the last two minutes, also when it found subtitles and when the player has no release name, instead of searching every source again on each press.
-- "בחירת כתוביות" skips the subtitle-timing ranking when the list has fewer than two human Hebrew subtitles to reorder.
+- "בחירת כתוביות" no longer stops the video while it prepares the list: a small progress bar shows instead, and the video pauses only once the window is open. A second press while it is preparing is ignored.
+- Subtitle searches reuse one that ran to the end in the last two minutes for the same title and release, also when it found subtitles and when the player has no release name, so "בחירת כתוביות" no longer searches every source again on each press. A search that ran out of time is repeated, and Kodi's own subtitle dialog always searches.
+- "בחירת כתוביות" skips the subtitle-timing ranking when the list has no human Hebrew subtitle for it to check.
 
 0.3.33
 - "בחירת כתוביות" answers at once: playback pauses and Kodi's busy spinner shows while the list is prepared, instead of seconds of playback with no sign the press was taken.
