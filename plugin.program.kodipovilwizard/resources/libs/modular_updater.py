@@ -311,7 +311,8 @@ class ModularUpdater:
         logging.log('[ModularUpdater] update queue={0}, config_pending={1}, fresh={2}'
                     .format(len(update_queue), config_pending, fresh), level=xbmc.LOGINFO)
         if not update_queue and not config_pending and not fresh:
-            self._record_build_identity(manifest)
+            # startup.py shows a new update note only while this is True.
+            self.build_current = bool(self._record_build_identity(manifest))
             logging.log("[ModularUpdater] All modules and config are up to date.", level=xbmc.LOGINFO)
             if not self.background:
                 self.dialog.ok(CONFIG.ADDONTITLE, "כל ההרחבות מעודכנות לגרסה האחרונה.")
@@ -325,7 +326,7 @@ class ModularUpdater:
         logging.log('[ModularUpdater] entering execute_updates', level=xbmc.LOGINFO)
         success = self.execute_updates(update_queue)
         if success:
-            self._record_build_identity(manifest)
+            self.build_current = bool(self._record_build_identity(manifest))
         return success
 
     def _record_build_identity(self, manifest):
