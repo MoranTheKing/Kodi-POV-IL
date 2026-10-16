@@ -762,10 +762,47 @@ def _resume_after_chooser(paused):
         pass
 
 
+_BUSY_PROP = 'moransubs.chooser_busy'
+
+
 def show():
     """Open the rich MoranSubs chooser (a self-contained WindowXMLDialog that
     looks the same on every skin). Falls back to the pyxbmct chooser, then to
-    Kodi's native dialog, if it can't be created."""
+    Kodi's native dialog, if it can't be created.
+
+    The video keeps playing while the list is prepared, so the OSD button can
+    be pressed again meanwhile; each press is its own script process with its
+    own search lock, and two presses used to run the providers twice and
+    stack two windows. A press while one is preparing or open is ignored
+    (True, so default.py does not open Kodi's dialog either). A stamp older
+    than a minute is a process that died and does not count."""
+    if xbmc is None:
+        return False
+    import time
+    try:
+        win = xbmcgui.Window(10000)
+        stamp = float(win.getProperty(_BUSY_PROP) or 0)
+    except Exception:
+        win, stamp = None, 0
+    if stamp and 0 <= time.time() - stamp < 60:
+        _log('chooser: already opening -- ignoring a second press')
+        return True
+    try:
+        if win is not None:
+            win.setProperty(_BUSY_PROP, str(time.time()))
+    except Exception:
+        pass
+    try:
+        return _show()
+    finally:
+        try:
+            if win is not None:
+                win.clearProperty(_BUSY_PROP)
+        except Exception:
+            pass
+
+
+def _show():
     if xbmc is None:
         return False
     try:
@@ -796,10 +833,10 @@ def show():
             _log('list_candidates failed: {0}'.format(e), level='WARNING')
             cands = []
         t1 = time.monotonic()
-        # The timing rank only ever reorders human Hebrew rows, and needs two
-        # of them; importing SubSync for it cost 1.9 s on that box when the
-        # list held only embedded / AI rows.
-        if _human_hebrew_rows(cands) >= 2:
+        # The timing rank only works on human Hebrew rows (its cached-proof
+        # pass labels even a single one); importing SubSync for it cost 1.9 s
+        # on that box when the list held only embedded / AI rows.
+        if _human_hebrew_rows(cands) >= 1:
             try:
                 from resources.lib import subsync
                 cands = subsync.rank_picker_candidates(info, cands)
@@ -895,6 +932,9 @@ def show():
                 except Exception as e:
                     _log('xml onClick failed: {0}'.format(e), level='WARNING')
 
+        # Playback may have been stopped while the list was prepared.
+        if not xbmc.Player().isPlayingVideo():
+            return True
         # Pause while the chooser is open (Kodi's own subtitle dialog does
         # this) and resume on close if WE paused it.
         _paused = _pause_for_chooser()

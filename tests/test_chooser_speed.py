@@ -34,6 +34,9 @@ class _Window(object):
     def getProperty(self, k):
         return _Window.props.get(k, '')
 
+    def clearProperty(self, k):
+        _Window.props.pop(k, None)
+
 
 def _load(name):
     pkg = types.ModuleType('resources')
@@ -109,10 +112,9 @@ class RecentSearchTests(unittest.TestCase):
 
     def test_it_is_searched_again_after_two_minutes(self):
         self._search([])
-        key = next(iter(_Window.props))
-        rec = json.loads(_Window.props[key])
-        rec['t'] -= self.bridge._RECENT_TTL + 1
-        _Window.props[key] = json.dumps(rec)
+        rows = json.loads(_Window.props[self.bridge._RECENT_PROP])
+        rows[-1]['t'] -= self.bridge._RECENT_TTL + 1
+        _Window.props[self.bridge._RECENT_PROP] = json.dumps(rows)
         self._search([])
         self.assertEqual(len(self.calls), 2)
 
@@ -122,23 +124,38 @@ class RecentSearchTests(unittest.TestCase):
         self._search([], info=other)
         self.assertEqual(len(self.calls), 2)
 
-    def test_finished_reads_the_engine_flags(self):
+    def test_another_source_url_is_searched_again(self):
+        a = {'imdb_id': 'tt35050741', 'season': '2', 'episode': '5',
+             'filepath': 'https://debrid.example/AAA/LOL.S02E05.1080p.AMZN.WEB-DL-RAWR.mkv'}
+        b = dict(a, filepath='https://debrid.example/BBB/LOL.S02E05.720p.HDTV-OTHER.mkv')
+        self._search([], info=a)
+        self._search([], info=a)
+        self._search([], info=b)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_one_property_keeps_only_the_last_few_titles(self):
+        for ep in range(1, 7):
+            self._search([], info=dict(self.INFO, episode=str(ep),
+                                       picked_release='LOL.S02E0%d.1080p-RAWR' % ep))
+        self.assertEqual(list(_Window.props), [self.bridge._RECENT_PROP])
+        self.assertEqual(len(json.loads(_Window.props[self.bridge._RECENT_PROP])),
+                         self.bridge._RECENT_KEEP)
+        self.assertNotIn('debrid', _Window.props[self.bridge._RECENT_PROP])
+
+    def test_finished_is_this_threads_last_engine_search(self):
         b = self.bridge
-        engine = types.ModuleType('resources.lib.subs_engine.engine')
-        sub = types.ModuleType('resources.lib.subs_engine')
-        sub.engine = engine
-        mods = dict(self.mods, **{'resources.lib.subs_engine': sub,
-                                  'resources.lib.subs_engine.engine': engine})
-        with patch.dict(sys.modules, mods):
-            self.mods['resources.lib'].subs_engine = sub
-            engine._lingering_provider_threads = []
-            engine.last_search_cut_short = False
-            self.assertTrue(b._search_finished())
-            engine.last_search_cut_short = True
-            self.assertFalse(b._search_finished())
-            engine.last_search_cut_short = False
-            engine._lingering_provider_threads = [object()]
-            self.assertFalse(b._search_finished())
+        b._SEARCH_STATE.finished = True
+        self.assertTrue(b._search_finished())
+        b._SEARCH_STATE.finished = False
+        self.assertFalse(b._search_finished())
+        src = (LIB / 'subs_engine_bridge.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        inner = src[src.index('def _search_inner('):]
+        locked = inner[inner.index('with _ENGINE_SEARCH_LOCK:'):]
+        # reset and read under the lock, around the engine call
+        self.assertLess(locked.index('engine.last_search_cut_short = False'),
+                        locked.index('engine.get_subtitles(video_data)'))
+        self.assertLess(locked.index('engine.get_subtitles(video_data)'),
+                        locked.index('_SEARCH_STATE.finished = not ('))
 
     def test_the_engine_marks_a_timeout_and_a_refusal(self):
         src = (LIB / 'subs_engine' / 'engine.py').read_text(encoding='utf-8')
@@ -168,7 +185,21 @@ class ChooserTests(unittest.TestCase):
         self.assertLess(show.index('_paused = _pause_for_chooser()'), show.index('w.doModal()'))
         self.assertIn('finally:\n        _close_notice(_notice)', show)
 
-    def test_the_rank_runs_only_with_two_human_hebrew_rows(self):
+    def test_a_second_press_while_one_is_open_is_ignored(self):
+        import time as _t
+        calls = []
+        _Window.props[self.ch._BUSY_PROP] = str(_t.time())
+        with patch.object(self.ch, '_show', side_effect=lambda: calls.append(1) or True), \
+                patch.object(self.ch, 'xbmcgui', types.SimpleNamespace(Window=_Window)), \
+                patch.object(self.ch, 'xbmc', types.SimpleNamespace()):
+            self.assertTrue(self.ch.show())
+            self.assertEqual(calls, [])
+            _Window.props[self.ch._BUSY_PROP] = str(_t.time() - 120)   # a dead process
+            self.assertTrue(self.ch.show())
+            self.assertEqual(calls, [1])
+            self.assertEqual(_Window.props.get(self.ch._BUSY_PROP, ''), '')
+
+    def test_the_rank_gate_counts_human_hebrew_rows(self):
         ai = _row('he', {'type': 'embedded_ai'})
         emb = _row('en', {'type': 'engine', 'embedded': True, 'language': 'English'})
         human = _row('he', {'type': 'engine', 'language': 'Hebrew'})

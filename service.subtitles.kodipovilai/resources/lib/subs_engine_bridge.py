@@ -430,53 +430,67 @@ def _cache_key(info):
 _RECENT_TTL = 120
 
 
+_SEARCH_STATE = threading.local()
+
+
 def _search_finished(took=None):
-    """True when the engine searched every provider to the end."""
-    try:
-        from resources.lib.subs_engine import engine
-        return not (getattr(engine, 'last_search_cut_short', True)
-                    or getattr(engine, '_lingering_provider_threads', None))
-    except Exception:
-        return False
+    """True when this thread's last engine search ran every provider to the
+    end (not stopped at max_search_time, not refused while a timed-out
+    provider still ran)."""
+    return bool(getattr(_SEARCH_STATE, 'finished', False))
 
 
-def _recent_prop(info):
-    key = _cache_key(info)
-    return ('moransubs.engine_recent.' + key) if key else None
+_RECENT_PROP = 'moransubs.engine_recent'
+_RECENT_KEEP = 3
 
 
 def _release_key(info):
-    """What the match % of the results depends on."""
-    for k in ('picked_release', 'tagline', 'li_filename'):
-        v = (info.get(k) or '').strip()
-        if v:
-            return v
-    fp = (info.get('filepath') or '').strip()
-    return fp if fp and '://' not in fp else ''
+    """The release name the match % is computed from, hashed."""
+    try:
+        rel = _detect_release_name(info) or ''
+    except Exception:
+        rel = ''
+    return hashlib.sha1(rel.encode('utf-8', 'replace')).hexdigest()[:16]
+
+
+def _recent_entries():
+    try:
+        import xbmcgui
+        raw = xbmcgui.Window(10000).getProperty(_RECENT_PROP)
+        rows = json.loads(raw) if raw else []
+        return rows if isinstance(rows, list) else []
+    except Exception:
+        return []
 
 
 def _recent_put(info, out):
-    prop = _recent_prop(info)
-    if not prop:
+    key = _cache_key(info)
+    if not key:
         return
+    now = time.time()
+    rows = [r for r in _recent_entries()
+            if isinstance(r, dict) and r.get('key') != key
+            and 0 <= now - float(r.get('t') or 0) < _RECENT_TTL]
+    rows.append({'key': key, 't': now, 'rel': _release_key(info),
+                 'out': out or []})
     try:
         import xbmcgui
-        xbmcgui.Window(10000).setProperty(prop, json.dumps(
-            {'t': time.time(), 'rel': _release_key(info), 'out': out or []},
-            ensure_ascii=False))
+        xbmcgui.Window(10000).setProperty(_RECENT_PROP, json.dumps(
+            rows[-_RECENT_KEEP:], ensure_ascii=False))
     except Exception:
         pass
 
 
 def _recent_get(info):
     """The finished search of the last two minutes for this media, or None."""
-    prop = _recent_prop(info)
-    if not prop:
+    key = _cache_key(info)
+    if not key:
         return None
+    rec = None
+    for r in _recent_entries():
+        if isinstance(r, dict) and r.get('key') == key:
+            rec = r
     try:
-        import xbmcgui
-        raw = xbmcgui.Window(10000).getProperty(prop)
-        rec = json.loads(raw) if raw else None
         age = time.time() - float(rec['t']) if rec else None
     except Exception:
         return None
@@ -582,7 +596,6 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
     # language flags break it. Safe to call every time.
     ensure_engine_settings()
     from resources.lib.subs_engine import engine, general
-    engine.last_search_cut_short = False
 
     video_data = build_video_data(info)
     kodi_utils.log('subs_engine_bridge: searching engine for '
@@ -615,11 +628,17 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
             # visible result set cannot provide an independent timing family.
             # Do not mutate the setting or visible list; use the engine's
             # explicit override and keep these results in a separate cache.
+            engine.last_search_cut_short = False
+            _SEARCH_STATE.finished = False
             f_result = (engine.c_get_subtitles(
                             video_data, all_lang_override=True,
                             timing_only=True)
                         if all_lang_override
                         else engine.get_subtitles(video_data))
+            # Read under the lock: another thread's search resets the flag.
+            _SEARCH_STATE.finished = not (
+                getattr(engine, 'last_search_cut_short', True)
+                or getattr(engine, '_lingering_provider_threads', None))
             sorted_subs = engine.sort_subtitles(
                 f_result, video_data, silent=all_lang_override) \
                 if f_result else []
