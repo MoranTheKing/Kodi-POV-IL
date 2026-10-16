@@ -1,4 +1,5 @@
 0.3.32
+- AI translation: read far more of an Arabic reference without vowel marks -- feminine and masculine verb endings, commands, questions and forms of address -- so the gender check finds far more errors when no Hebrew subtitle exists (19 instead of 1 in two measured episodes).
 - Arctic Fuse 3 3.3.12: keep the discover grid on POV while typing a search; the redesigned discover tab no longer stops the fix from applying.
 - AI translation: check who is speaking and who is spoken to against the human reference, not only the person addressed, and use the reference's own words to catch "את אוהבת" said to a man or "אני יודעת" said by one; rewrite only lines that then carry the right gender.
 - AI translation: read the speaker's gender from Polish, Czech, Slovak, Serbian, Croatian and Portuguese references too.
