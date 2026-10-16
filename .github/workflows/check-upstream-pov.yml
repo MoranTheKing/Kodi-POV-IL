@@ -32,15 +32,29 @@ jobs:
   pov-pin-detect:
     if: github.repository == 'MoranTheKing/Kodi-POV-IL'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       newer: ${{ steps.check.outputs.newer }}
     steps:
       - name: Is upstream POV newer than the migration pin?
         id: check
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO_SLUG: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # Queueing into the release concurrency group cancels a release
+          # already waiting there, and a newer POV whose anchors need a human
+          # keeps this "newer" for days. Never queue while a release is busy.
+          BUSY=$(gh run list --repo "$REPO_SLUG" --workflow build-and-release.yml \
+                   --json status --jq '[.[] | select(.status != "completed")] | length')
+          if [ "$BUSY" != "0" ]; then
+            echo "A release run is queued or running; not entering its group now."
+            echo "newer=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           git clone --depth 1 --filter=blob:none --sparse \
             "https://github.com/${REPO_SLUG}.git" repo
           cd repo
