@@ -313,7 +313,8 @@ class HeadlessInstaller:
                         continue
                     self.index[aid] = {'version': meta['version'],
                                        'requires': meta['requires'],
-                                       'datadir': datadir}
+                                       'datadir': datadir,
+                                       'repo': repo_name}
                     added += 1
                 _log('repo {0}: indexed {1} addons from {2}'.format(repo_name, added, info_url))
                 break
@@ -461,6 +462,19 @@ class HeadlessInstaller:
             except Exception as e:
                 _log('addon DB register failed: {0}'.format(e),
                      level=xbmc.LOGERROR if xbmc else 0)
+            # The row above has no origin, and Kodi never offers an update to
+            # an origin-less add-on from a non-official repository. Record
+            # the repository each one was downloaded from, as Kodi's own
+            # installer would have.
+            try:
+                from resources.libs import addon_origins
+                addon_origins.register(
+                    os.path.join(CONFIG.DATABASE, db.latest_db('Addons')),
+                    {aid: self.index[aid].get('repo') for aid in installed_ok},
+                    log=_log)
+            except Exception as e:
+                _log('origin register failed: {0}'.format(e),
+                     level=xbmc.LOGWARNING if xbmc else 0)
         if installed_ok and xbmc is not None:
             try:
                 xbmc.executebuiltin('UpdateLocalAddons')

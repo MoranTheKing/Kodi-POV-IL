@@ -198,13 +198,21 @@ def _patch_file(path, replacements, label):
         new_text = new_text.replace(m + '\n', '').replace(m, '')
 
     any_change = False
-    for old, new in replacements:
+    for slot in replacements:
+        old, new = slot[0], slot[1]
+        optional = len(slot) > 2 and slot[2]
         candidates = old if isinstance(old, tuple) else (old,)
         if new in new_text:
             # already the target for this slot -- nothing to do
             any_change = True  # treat as satisfied
             continue
         matched = next((c for c in candidates if c in new_text), None)
+        if matched is None and optional:
+            # A repair-only slot (it undoes an old flip) with nothing to
+            # repair: AF3 3.3.12 rebuilt the discover tab, so neither the
+            # flip nor the stock value it restored exists any more. Its
+            # absence must not cancel the slots that still matter.
+            continue
         if matched is None:
             _log('{0}: no candidate for a slot found -- AF3 may have '
                  'changed this file; leaving it alone'.format(label),
@@ -257,11 +265,13 @@ def ensure_patched():
         st = _patch_file(incsrch, (
             (_INCSRCH_CONTENT_CANDIDATES, _INCSRCH_NEW_CONTENT),
             # restore Codex's v3 onclick/visible flips to stock (no-op if
-            # already stock, since 'new in text' short-circuits).
+            # already stock, since 'new in text' short-circuits). Optional:
+            # a skin that has neither the flip nor that stock line has
+            # nothing to restore.
             ((_INCSRCH_V3_ONCLICK, _INCSRCH_STOCK_ONCLICK),
-             _INCSRCH_STOCK_ONCLICK),
+             _INCSRCH_STOCK_ONCLICK, True),
             ((_INCSRCH_V3_VISIBLE, _INCSRCH_STOCK_VISIBLE),
-             _INCSRCH_STOCK_VISIBLE),
+             _INCSRCH_STOCK_VISIBLE, True),
         ), 'Includes_Search.xml')
         results.append('search=' + st)
 

@@ -92,8 +92,12 @@ assert sys.modules['session']._native is None
         subprocess.run([sys.executable,'-c',code,str(SOURCE),str(FIXTURE),
                         str(SOURCE.with_name('pov_trakt_reauth.py'))],check=True,capture_output=True)
 
+    def test_6_10_06_ships_the_same_session_module(self):
+        self.assertTrue(lazy.install(str(FIXTURE),'6.10.06'))
+        sys.modules.pop('session',None)
+
     def test_unknown_versions_content_and_existing_modules_are_preserved(self):
-        self.assertFalse(lazy.install(str(FIXTURE),'6.10.06'))
+        self.assertFalse(lazy.install(str(FIXTURE),'6.10.99'))
         self.assertNotIn('session',sys.modules)
         with tempfile.TemporaryDirectory() as raw:
             path=Path(raw)/'session.py';path.write_text('unrecognized source')

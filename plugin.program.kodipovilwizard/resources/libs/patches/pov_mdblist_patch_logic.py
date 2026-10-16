@@ -407,7 +407,8 @@ def pre_search_check(params):
         return None
     if params.get('ai_prompt') and not params.get('search_title'):
         from modules import kodi_utils
-        query = kodi_utils.dialog.input('POV')
+        import xbmcgui
+        query = xbmcgui.Dialog().input('POV')
         if not query:
             import sys, xbmcplugin
             xbmcplugin.endOfDirectory(int(sys.argv[1]), succeeded=False)
