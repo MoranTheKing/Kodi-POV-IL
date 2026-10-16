@@ -687,12 +687,59 @@ def _deliver_pick(c, info, close_cb):
         _log('deliver pick failed: {0}'.format(e), level='WARNING')
 
 
-def _busy(on):
+def _searching_notice():
+    """A small non-blocking progress bar while the list is prepared."""
     try:
-        xbmc.executebuiltin('ActivateWindow(busydialognocancel)' if on
-                            else 'Dialog.Close(busydialognocancel)')
+        bar = xbmcgui.DialogProgressBG()
+        bar.create('MoranSubs', 'מחפש כתוביות…')
+        return bar
+    except Exception:
+        return None
+
+
+def _close_notice(bar):
+    if bar is None:
+        return
+    try:
+        bar.close()
     except Exception:
         pass
+
+
+def _human_hebrew_rows(cands):
+    """How many rows SubSync's picker rank could reorder (the same test as
+    subsync._is_human_hebrew_candidate), without importing SubSync. The row
+    on screen ("» נוכחית") is set aside by the rank, so it does not count."""
+    import json
+    import urllib.parse
+    n = 0
+    for c in cands or []:
+        try:
+            if (c.get('filename') or '').startswith('» נוכחית'):
+                continue
+            if (c.get('language') or '').strip().lower() not in ('he', 'heb', 'hebrew'):
+                continue
+            p = json.loads(urllib.parse.unquote(c.get('link') or '')) or {}
+            kind = p.get('type')
+            if (kind == 'passthrough'
+                    or (kind == 'pool' and (p.get('pool_kind') or 'ai') == 'ktuvit')
+                    or (kind == 'engine' and not p.get('embedded')
+                        and 'Hebrew' in str(p.get('language') or '')
+                        and 'MachineTranslated' not in str(p.get('language') or ''))):
+                n += 1
+        except Exception:
+            continue
+    return n
+
+
+def _current_first(cands):
+    """Keep the row that is on screen at the top, as the rank does."""
+    rows = list(cands or [])
+    current = [r for r in rows if isinstance(r, dict)
+               and (r.get('filename') or '').startswith('» נוכחית')]
+    if not current:
+        return rows
+    return [current[0]] + [r for r in rows if r is not current[0]]
 
 
 def _pause_for_chooser():
@@ -718,10 +765,47 @@ def _resume_after_chooser(paused):
         pass
 
 
+_BUSY_PROP = 'moransubs.chooser_busy'
+
+
 def show():
     """Open the rich MoranSubs chooser (a self-contained WindowXMLDialog that
     looks the same on every skin). Falls back to the pyxbmct chooser, then to
-    Kodi's native dialog, if it can't be created."""
+    Kodi's native dialog, if it can't be created.
+
+    The video keeps playing while the list is prepared, so the OSD button can
+    be pressed again meanwhile; each press is its own script process with its
+    own search lock, and two presses used to run the providers twice and
+    stack two windows. A press while one is preparing or open is ignored
+    (True, so default.py does not open Kodi's dialog either). A stamp older
+    than a minute is a process that died and does not count."""
+    if xbmc is None:
+        return False
+    import time
+    try:
+        win = xbmcgui.Window(10000)
+        stamp = float(win.getProperty(_BUSY_PROP) or 0)
+    except Exception:
+        win, stamp = None, 0
+    if stamp and 0 <= time.time() - stamp < 60:
+        _log('chooser: already opening -- ignoring a second press')
+        return True
+    try:
+        if win is not None:
+            win.setProperty(_BUSY_PROP, str(time.time()))
+    except Exception:
+        pass
+    try:
+        return _show()
+    finally:
+        try:
+            if win is not None:
+                win.clearProperty(_BUSY_PROP)
+        except Exception:
+            pass
+
+
+def _show():
     if xbmc is None:
         return False
     try:
@@ -733,15 +817,16 @@ def show():
         from resources.lib import kodi_utils, translate
     except Exception:
         return False
-    # The search behind this window can take seconds on a streaming box (a
-    # title no source has is searched again in full). Measured in a user's
-    # video: 8 s of plain playback after the press, so it looked ignored.
-    # Pause at once, as Kodi's own subtitle dialog does, and show the busy
-    # spinner until the list is ready.
+    # The list can take seconds on a streaming box. Measured in a user's
+    # video: 8 s of plain playback after the press, so it looked ignored. A
+    # pause + busy spinner (0.3.33) was worse for him: the video stood still
+    # for the whole wait, and his "Unpause Jumpback" add-on rewinds 4 s on
+    # every resume. So playback keeps going with a small background notice,
+    # and pauses only once the window is open.
     import time
     t_start = time.monotonic()
-    _paused = _pause_for_chooser()
-    _busy(True)
+    _paused = False
+    _notice = _searching_notice()
     try:
         info = kodi_utils.current_video_info()
         t0 = time.monotonic()
@@ -751,17 +836,20 @@ def show():
             _log('list_candidates failed: {0}'.format(e), level='WARNING')
             cands = []
         t1 = time.monotonic()
-        try:
-            from resources.lib import subsync
-            cands = subsync.rank_picker_candidates(info, cands)
-        except Exception as e:
-            _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
+        # The timing rank only works on human Hebrew rows (its cached-proof
+        # pass labels even a single one); importing SubSync for it cost 1.9 s
+        # on that box when the list held only embedded / AI rows.
+        if _human_hebrew_rows(cands) >= 1:
+            try:
+                from resources.lib import subsync
+                cands = subsync.rank_picker_candidates(info, cands)
+            except Exception as e:
+                _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
+        else:
+            cands = _current_first(cands)
         t2 = time.monotonic()
-    except BaseException:
-        _resume_after_chooser(_paused)
-        raise
     finally:
-        _busy(False)
+        _close_notice(_notice)
     _log('chooser: {0} candidate(s); list {1:.1f}s, timing rank {2:.1f}s, '
          'from the press {3:.1f}s'.format(
              len(cands), t1 - t0, t2 - t1, t2 - t_start))
@@ -847,8 +935,12 @@ def show():
                 except Exception as e:
                     _log('xml onClick failed: {0}'.format(e), level='WARNING')
 
-        # Playback was paused at the press (above) and resumes on close if
-        # WE paused it.
+        # Playback may have been stopped while the list was prepared.
+        if not xbmc.Player().isPlayingVideo():
+            return True
+        # Pause while the chooser is open (Kodi's own subtitle dialog does
+        # this) and resume on close if WE paused it.
+        _paused = _pause_for_chooser()
         addon_path = xbmcaddon.Addon(ADDON_ID).getAddonInfo('path')
         w = _ChooserXML('script.moransubs.chooser.xml', addon_path,
                         'Default', '1080i')
