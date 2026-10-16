@@ -86,6 +86,21 @@ class RecentSearchTests(unittest.TestCase):
                 patch.object(b, '_cache_put'):
             return b.search(dict(info or self.INFO), modal_progress=modal_progress)
 
+    def test_cache_only_never_searches(self):
+        b = self.bridge
+        with patch.dict(sys.modules, self.mods), \
+                patch.object(b, 'enabled', return_value=True), \
+                patch.object(b, '_search_inner', side_effect=AssertionError('searched')), \
+                patch.object(b, '_cache_get', return_value=None):
+            self.assertIsNone(b.search(dict(self.INFO), modal_progress=False, cache_only=True))
+        self._search([{'filename': 'x.srt', 'link': 'l'}])
+        with patch.dict(sys.modules, self.mods), \
+                patch.object(b, 'enabled', return_value=True), \
+                patch.object(b, '_search_inner', side_effect=AssertionError('searched')), \
+                patch.object(b, '_cache_get', return_value=None):
+            self.assertEqual(b.search(dict(self.INFO), modal_progress=False, cache_only=True),
+                             [{'filename': 'x.srt', 'link': 'l'}])
+
     def test_a_finished_empty_search_is_reused(self):
         self.assertEqual(self._search([]), [])
         self.assertEqual(self._search([]), [])
@@ -176,14 +191,60 @@ class ChooserTests(unittest.TestCase):
     def setUp(self):
         self.ch, _mods = _load('subs_chooser')
 
-    def test_no_pause_before_the_list_and_a_pause_at_the_window(self):
+    def test_the_window_opens_on_the_quick_list_and_completes_it_later(self):
         src = (LIB / 'subs_chooser.py').read_text(encoding='utf-8').replace('\r\n', '\n')
-        show = src[src.index('def show():'):]
-        listed = show.index('list_candidates(')
+        show = src[src.index('def _show():'):]
+        listed = show.index('_chooser_items(info, translate, quick=True)')
         self.assertLess(show.index('_searching_notice()'), listed)
         self.assertNotIn('_pause_for_chooser()', show[:listed])
         self.assertLess(show.index('_paused = _pause_for_chooser()'), show.index('w.doModal()'))
         self.assertIn('finally:\n        _close_notice(_notice)', show)
+        # the background pass is the normal (network) list, into the open window
+        complete = show[show.index('def _complete(self):'):]
+        self.assertIn('_chooser_items(dict(self.info), self.translate)', complete)
+        self.assertLess(complete.index('if self.closed:'), complete.index('self._redraw(items)'))
+
+    def test_the_quick_list_makes_no_network_request(self):
+        src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        body = src[src.index('def list_candidates('):]
+        self.assertIn('cache_only=quick)', body)
+        self.assertIn("if quick and pool is not None and pool.use_enabled():\n"
+                      "        info['_list_pending'] = True", body)
+
+    def test_ai_rows_wait_while_the_list_is_pending(self):
+        ai = _row('he', {'type': 'embedded_ai'})
+        ai2 = _row('he', {'type': 'ai', 'source': 'x'})
+        human = _row('he', {'type': 'engine', 'language': 'Hebrew'})
+        self.assertTrue(self.ch._is_ai_row(ai))
+        self.assertTrue(self.ch._is_ai_row(ai2))
+        self.assertFalse(self.ch._is_ai_row(human))
+        src = (LIB / 'subs_chooser.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        click = src[src.index('if controlId == 100:', src.index('def _show():')):]
+        self.assertLess(click.index('if pending and _is_ai_row(item):'),
+                        click.index('_deliver_pick('))
+
+    def test_a_refresh_keeps_the_same_subtitle_selected(self):
+        src = (LIB / 'subs_chooser.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        redraw = src[src.index('def _redraw(self, items):'):]
+        redraw = redraw[:redraw.index('def _complete(self):')]
+        # rows and self.items change together, the cursor follows the link
+        self.assertLess(redraw.index('lst.addItems(rows)'), redraw.index('self.items = items'))
+        self.assertIn("c.get('link') == was", redraw)
+        show = src[src.index('def _show():'):]
+        self.assertIn('with self.lock:\n                    self._redraw(', show)
+        self.assertIn('if not self.lock.acquire(timeout=2):', show)
+
+    def test_an_empty_full_list_says_so(self):
+        src = (LIB / 'subs_chooser.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        complete = src[src.index('def _complete(self):'):]
+        self.assertLess(complete.index("'לא נמצאו כתוביות לכותר הזה'"),
+                        complete.index('self._redraw(items)'))
+
+    def test_placeholder_rows_cannot_be_picked(self):
+        src = (LIB / 'subs_chooser.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        click = src[src.index('if controlId == 100:', src.index('def _show():')):]
+        self.assertLess(click.index("if item is None or item.get('_placeholder'):"),
+                        click.index('_deliver_pick('))
 
     def test_a_second_press_while_one_is_open_is_ignored(self):
         import time as _t

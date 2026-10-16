@@ -834,8 +834,13 @@ def _sleep_harvest(should_cancel):
 
 
 
-def list_candidates(info, modal_progress=True):
+def list_candidates(info, modal_progress=True, quick=False):
     """Build the list Kodi's subtitle dialog will render.
+
+    quick=True makes no network request: the provider search is used only
+    when it is already cached and the community pool is skipped; info gets
+    '_list_pending' = True when either was left out, so the caller can
+    complete the list later (the "בחירת כתוביות" window opens on this one).
 
     Returns a list of dicts with keys: filename, language, link,
     sync, rating. Empty list if nothing plausible is available.
@@ -939,8 +944,12 @@ def list_candidates(info, modal_progress=True):
             kodi_utils.log('engine embedded_candidates failed: {0}'.format(e),
                            level='WARNING')
         try:
-            for c in subs_engine_bridge.search(info,
-                                               modal_progress=modal_progress):
+            _found = subs_engine_bridge.search(
+                info, modal_progress=modal_progress, cache_only=quick)
+            if _found is None:
+                info['_list_pending'] = True
+                _found = []
+            for c in _found:
                 k = c.get('_engine_kind', 'human_he')
                 if k == 'human_he':
                     engine_human.append(c)
@@ -1054,7 +1063,9 @@ def list_candidates(info, modal_progress=True):
     # One lookup keeps the request count identical to the AI-only pool.
     _pool_variants = []
     _video_ref = ''
-    if pool is not None and pool.use_enabled():
+    if quick and pool is not None and pool.use_enabled():
+        info['_list_pending'] = True
+    elif pool is not None and pool.use_enabled():
         # Mirror the CONTRIBUTION-side release derivation (pool._release_from):
         # it tries basename(li_filename) BEFORE basename(filepath), because on a
         # debrid stream `filepath` is a tokenized URL while `li_filename`
