@@ -757,12 +757,16 @@ def show():
         except Exception as e:
             _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
         t2 = time.monotonic()
+    except BaseException:
+        _resume_after_chooser(_paused)
+        raise
     finally:
         _busy(False)
     _log('chooser: {0} candidate(s); list {1:.1f}s, timing rank {2:.1f}s, '
          'from the press {3:.1f}s'.format(
              len(cands), t1 - t0, t2 - t1, t2 - t_start))
-    items = [c for c in cands if c.get('link') and c.get('filename')]
+    items = [c for c in cands
+             if isinstance(c, dict) and c.get('link') and c.get('filename')]
     if not items:
         _resume_after_chooser(_paused)
         try:
@@ -856,7 +860,6 @@ def show():
         _resume_after_chooser(_paused)
         return True
     except Exception as e:
-        _resume_after_chooser(_paused)
         _log('WindowXMLDialog failed, falling back to pyxbmct: {0}'.format(e),
              level='WARNING')
 
@@ -864,3 +867,5 @@ def show():
         return _show_pyxbmct()
     except Exception:
         return False
+    finally:
+        _resume_after_chooser(_paused)

@@ -64,7 +64,7 @@ class EmptySearchTests(unittest.TestCase):
         self.bridge, self.mods = _load_bridge()
         self.calls = []
 
-    def _search(self, result):
+    def _search(self, result, finished=True, modal_progress=False):
         b = self.bridge
 
         def inner(info, modal_progress=True):
@@ -73,14 +73,42 @@ class EmptySearchTests(unittest.TestCase):
         with patch.dict(sys.modules, self.mods), \
                 patch.object(b, 'enabled', return_value=True), \
                 patch.object(b, '_search_inner', side_effect=inner), \
+                patch.object(b, '_search_finished', return_value=finished), \
                 patch.object(b, '_cache_get', return_value=None), \
                 patch.object(b, '_cache_put'):
-            return b.search(dict(self.INFO), modal_progress=False)
+            return b.search(dict(self.INFO), modal_progress=modal_progress)
 
     def test_nothing_found_is_not_searched_again_right_away(self):
         self.assertEqual(self._search([]), [])
         self.assertEqual(self._search([]), [])
         self.assertEqual(len(self.calls), 1)
+
+    def test_a_search_cut_short_is_searched_again(self):
+        # max_search_time hit, or refused while a timed-out provider runs
+        self._search([], finished=False)
+        self._search([])
+        self.assertEqual(len(self.calls), 2)
+
+    def test_kodis_own_dialog_always_searches(self):
+        self._search([])
+        self._search([], modal_progress=True)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_finished_means_no_lingering_provider_and_inside_the_time_limit(self):
+        b = self.bridge
+        engine = types.ModuleType('resources.lib.subs_engine.engine')
+        sub = types.ModuleType('resources.lib.subs_engine')
+        sub.engine = engine
+        b.kodi_utils.addon = lambda: types.SimpleNamespace(getSetting=lambda s: '10')
+        mods = dict(self.mods, **{'resources.lib.subs_engine': sub,
+                                  'resources.lib.subs_engine.engine': engine})
+        with patch.dict(sys.modules, mods):
+            self.mods['resources.lib'].subs_engine = sub
+            engine._lingering_provider_threads = []
+            self.assertTrue(b._search_finished(2.0))
+            self.assertFalse(b._search_finished(9.8))
+            engine._lingering_provider_threads = [object()]
+            self.assertFalse(b._search_finished(0.4))
 
     def test_it_is_searched_again_after_a_few_minutes(self):
         self._search([])
