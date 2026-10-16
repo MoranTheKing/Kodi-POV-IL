@@ -86,6 +86,21 @@ class RecentSearchTests(unittest.TestCase):
                 patch.object(b, '_cache_put'):
             return b.search(dict(info or self.INFO), modal_progress=modal_progress)
 
+    def test_cache_only_never_searches(self):
+        b = self.bridge
+        with patch.dict(sys.modules, self.mods), \
+                patch.object(b, 'enabled', return_value=True), \
+                patch.object(b, '_search_inner', side_effect=AssertionError('searched')), \
+                patch.object(b, '_cache_get', return_value=None):
+            self.assertIsNone(b.search(dict(self.INFO), modal_progress=False, cache_only=True))
+        self._search([{'filename': 'x.srt', 'link': 'l'}])
+        with patch.dict(sys.modules, self.mods), \
+                patch.object(b, 'enabled', return_value=True), \
+                patch.object(b, '_search_inner', side_effect=AssertionError('searched')), \
+                patch.object(b, '_cache_get', return_value=None):
+            self.assertEqual(b.search(dict(self.INFO), modal_progress=False, cache_only=True),
+                             [{'filename': 'x.srt', 'link': 'l'}])
+
     def test_a_finished_empty_search_is_reused(self):
         self.assertEqual(self._search([]), [])
         self.assertEqual(self._search([]), [])
@@ -176,14 +191,31 @@ class ChooserTests(unittest.TestCase):
     def setUp(self):
         self.ch, _mods = _load('subs_chooser')
 
-    def test_no_pause_before_the_list_and_a_pause_at_the_window(self):
+    def test_the_window_opens_on_the_quick_list_and_completes_it_later(self):
         src = (LIB / 'subs_chooser.py').read_text(encoding='utf-8').replace('\r\n', '\n')
-        show = src[src.index('def show():'):]
-        listed = show.index('list_candidates(')
+        show = src[src.index('def _show():'):]
+        listed = show.index('_chooser_items(info, translate, quick=True)')
         self.assertLess(show.index('_searching_notice()'), listed)
         self.assertNotIn('_pause_for_chooser()', show[:listed])
         self.assertLess(show.index('_paused = _pause_for_chooser()'), show.index('w.doModal()'))
         self.assertIn('finally:\n        _close_notice(_notice)', show)
+        # the background pass is the normal (network) list, into the open window
+        complete = show[show.index('def _complete(self):'):]
+        self.assertIn('_chooser_items(dict(self.info), self.translate)', complete)
+        self.assertLess(complete.index('if self.closed:'), complete.index('self._fill()'))
+
+    def test_the_quick_list_makes_no_network_request(self):
+        src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        body = src[src.index('def list_candidates('):]
+        self.assertIn('cache_only=quick)', body)
+        self.assertIn("if quick and pool is not None and pool.use_enabled():\n"
+                      "        info['_list_pending'] = True", body)
+
+    def test_placeholder_rows_cannot_be_picked(self):
+        src = (LIB / 'subs_chooser.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        click = src[src.index('if controlId == 100:', src.index('def _show():')):]
+        self.assertLess(click.index("if self.items[i].get('_placeholder'):"),
+                        click.index('_deliver_pick('))
 
     def test_a_second_press_while_one_is_open_is_ignored(self):
         import time as _t
