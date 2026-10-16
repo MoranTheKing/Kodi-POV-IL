@@ -207,6 +207,10 @@ class ChooserTests(unittest.TestCase):
         ktuvit = _row('he', {'type': 'pool', 'pool_kind': 'ktuvit'})
         self.assertEqual(self.ch._human_hebrew_rows([ai, ai, emb, mt]), 0)
         self.assertEqual(self.ch._human_hebrew_rows([human, ktuvit, ai]), 2)
+        # the row on screen is set aside by the rank, so it does not count
+        on_screen = _row('he', {'type': 'engine', 'language': 'Hebrew'},
+                         filename='» נוכחית · x.srt')
+        self.assertEqual(self.ch._human_hebrew_rows([on_screen, ai]), 0)
 
     def test_the_current_row_stays_first_without_the_rank(self):
         a = {'filename': 'a.srt'}
