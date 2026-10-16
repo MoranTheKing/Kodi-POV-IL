@@ -6,9 +6,23 @@ codecs, fragmented files, and complex edit lists fail closed.
 import array
 import struct
 import sys
+import time
 from pathlib import Path
 
 _MAX_INDEX_BYTES = 16 * 1024 * 1024
+
+# A 1 ms nap at most every 20 ms in the long per-frame loops, so a new Kodi
+# script (the subtitle chooser) can start meanwhile -- see sync_align._breathe.
+_BREATHE_SLICE = 0.02
+_breath = [0.0]
+
+
+def _breathe():
+    now = time.monotonic()
+    if now - _breath[0] >= _BREATHE_SLICE:
+        time.sleep(0.001)
+        _breath[0] = time.monotonic()
+
 _MAX_SUBTITLE_SAMPLES = 50000
 
 
@@ -410,6 +424,8 @@ def audio_envelope(index_data, step_ms=_ENVELOPE_STEP_MS):
         scale = 1000.0 / timescale
         for count, delta in runs:
             for _ in range(count):
+                if not index & 1023:
+                    _breathe()
                 at = tick * scale + blank_ms - trim_ms
                 if at >= 0:
                     b = int(at / step_ms)
@@ -430,6 +446,8 @@ def audio_envelope(index_data, step_ms=_ENVELOPE_STEP_MS):
         half = _ENVELOPE_TREND_BINS // 2
         values = []
         for i, value in enumerate(level):
+            if not i & 1023:
+                _breathe()
             lo = max(0, i - half)
             hi = min(len(level), i + half)
             trend = (prefix[hi] - prefix[lo]) / float(hi - lo)

@@ -64,7 +64,10 @@ class BreatheTests(unittest.TestCase):
         self.assertGreater(len(naps), 100)
 
     def test_the_hot_loops_call_it(self):
-        for name, funcs in (('sync_align', ('_best_offset', '_region_cost_rows', '_region_dp_path')),
+        for name, funcs in (('sync_align', ('_best_offset', '_region_cost_rows', '_region_dp_path',
+                                            'parse_srt', '_preflight_srt', '_is_dialogue',
+                                            '_envelope_scores', 'retime', '_timed_signature')),
+                            ('mp4_probe', ('audio_envelope',)),
                             ('subsync', ('_onset_coverage', '_shift_invariant_shape_coverage')),
                             ('embedded_extract', ('_walk',))):
             src = (LIB / (name + '.py')).read_text(encoding='utf-8')
