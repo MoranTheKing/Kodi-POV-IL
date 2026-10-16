@@ -4295,6 +4295,24 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 raise _AbortTranslation('cancelled', '')
             time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
 
+    # The repairs after the translation (gender, English residual, foreign
+    # script) are one request each, and a transient overload used to drop
+    # them outright -- measured on a film: 20 gender errors the check had
+    # found stayed on screen because that one request met an HTTP 503.
+    _REPAIR_BACKOFF = (5, 15)
+
+    def _repair_generate(**kwargs):
+        for attempt in range(len(_REPAIR_BACKOFF) + 1):
+            try:
+                return gemini.generate(**kwargs)
+            except (gemini.OverloadError, gemini.RateLimited) as e:
+                if attempt >= len(_REPAIR_BACKOFF):
+                    raise
+                kodi_utils.log('repair request: {0} -- retry {1}/{2} in {3}s'.format(
+                    e, attempt + 1, len(_REPAIR_BACKOFF), _REPAIR_BACKOFF[attempt]),
+                    level='WARNING')
+                _cancel_aware_wait(_REPAIR_BACKOFF[attempt])
+
     def _call_gemini(idx, ch, ref_level=0):
         if _translation_cancelled():
             raise _AbortTranslation('cancelled', '')
@@ -4853,7 +4871,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
 
         try:
             _gemini_rate_gate(_rpm_interval)
-            reply = gemini.generate(
+            reply = _repair_generate(
                 api_key=api_key, model=model, prompt=prompt_text,
                 temperature=0.0, max_output_tokens=max_output_tokens,
                 top_p=top_p, thinking_budget=thinking_budget,
@@ -5012,7 +5030,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # A user can cancel or choose another subtitle while pacing waits.
             if _residual_cancelled():
                 raise RuntimeError('residual repair cancelled')
-            return gemini.generate(
+            return _repair_generate(
                 api_key=api_key, model=model, prompt=prompt_text,
                 temperature=0.0, max_output_tokens=min(max_output_tokens, 4096),
                 top_p=top_p, thinking_budget=thinking_budget,
