@@ -1,4 +1,4 @@
-"""Defer POV 6.10.05's shared HTTP clients until a client is actually used.
+"""Defer POV 6.10.05/6.10.06's shared HTTP clients until a client is actually used.
 
 Cached directories need adapters configured at import time, but no network
 client. Replay those mounts into the unmodified upstream session, including
@@ -11,6 +11,9 @@ import threading
 import types
 
 SESSION_SHA256 = '4f9ece685c857d6f0f596c290dd78cf04b237ca852539fb65be3e9df845bfc2c'
+# Versions whose session.py was checked byte-identical to that digest. Left
+# at 6.10.05 alone, 6.10.06 silently lost the deferral and the bounded retry.
+_VERIFIED_VERSIONS = ('6.10.05', '6.10.06')
 _install_lock = threading.Lock()
 
 
@@ -139,7 +142,7 @@ class _SessionModule(types.ModuleType):
 def install(path, version):
     """Only the verified upstream contract is deferred; other hosts pass through."""
     with _install_lock:
-        if version != '6.10.05' or 'session' in sys.modules:
+        if version not in _VERIFIED_VERSIONS or 'session' in sys.modules:
             return False
         try:
             with open(path, 'rb') as handle:
