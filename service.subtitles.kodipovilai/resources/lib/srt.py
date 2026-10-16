@@ -2042,9 +2042,11 @@ def fold_stray_latin_letter(text):
 # A stutter repeats one word, so its fragment has the word's gender. Measured
 # after a gender repair: "You-you look nice" came back "את-אתה נראה טוב" --
 # the full pronoun and the verb were fixed, the fragment kept the old gender.
+# Only the tight hyphen form: with a pause between ("לקח את... אתה יודע") the
+# first word is just as often the object marker.
 _PRONOUN_STUTTER_RE = re.compile(
     u'(?<![\u05d0-\u05ea])(\u05d0\u05ea\u05d4|\u05d0\u05ea)'
-    u'(\\s*(?:-|\\.\\.\\.|\u2026)\\s*)(\u05d0\u05ea\u05d4|\u05d0\u05ea)(?![\u05d0-\u05ea])')
+    u'(-)(\u05d0\u05ea\u05d4|\u05d0\u05ea)(?![\u05d0-\u05ea])')
 
 
 def fix_pronoun_stutter(text):
