@@ -1,3 +1,6 @@
+0.3.36
+- "בחירת כתוביות" no longer waits for SubSync's background check at the start of an episode: the long timing calculations now pause for a moment every few milliseconds, so the button (and other add-ons) can run at once. On a slow Android box the window used to wait 5-11 s for that check to end.
+
 0.3.35
 - "בחירת כתוביות" opens at once with what needs no network -- the subtitles inside the video, the AI translations and a search made in the last minutes -- and fills in the subtitle sources and the community pool by itself when their search finishes ("מחפש כתוביות נוספות…" shows meanwhile). The highlighted subtitle stays the same when the list grows, an AI translation row can be picked once the search is done (the pool may hold it ready-made), and a title with nothing at all says so in the window.
 

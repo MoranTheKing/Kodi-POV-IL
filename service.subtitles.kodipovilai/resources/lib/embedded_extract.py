@@ -506,10 +506,30 @@ def _read_uint(data):
     return val
 
 
+# Kodi runs every add-on's Python under one interpreter lock. Measured in QA
+# Kodi (21, Python 3.11): while one thread runs a CPU-bound loop that never
+# sleeps, a NEW script -- e.g. our own "בחירת כתוביות" button -- does not even
+# start until that loop ends (15.8 s behind a 20 s loop, 0.3 s idle); a 1 ms
+# sleep every ~20 ms brings it back to 0.3 s. Field logs from an Android box
+# showed the same 5-11 s waits behind SubSync's deep check at playback start.
+# The long loops here call _breathe(): about 5% slower in the background,
+# never in the way of the viewer.
+_BREATHE_SLICE = 0.02
+_breath = [0.0]
+
+
+def _breathe():
+    now = time.monotonic()
+    if now - _breath[0] >= _BREATHE_SLICE:
+        time.sleep(0.001)
+        _breath[0] = time.monotonic()
+
+
 def _walk(buf, end):
     """Yield (element_id, size_or_None, payload_start) for children in
     buf.d[buf.p:end]; caller advances past each payload itself."""
     while buf.p < end:
+        _breathe()
         eid, _idl = _read_vint(buf, True)
         if eid is None:
             return

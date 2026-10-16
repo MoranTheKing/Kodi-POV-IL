@@ -28,6 +28,7 @@ import bisect
 import collections
 import math
 import statistics
+import time
 
 # ---- gate thresholds (mirroring arabic_gender's production values) --------
 _FPS = [24000 / 1001, 24.0, 25.0, 30000 / 1001, 30.0]
@@ -288,6 +289,25 @@ def dialogue_cues(text_or_cues):
 
 # ---- linear time-map estimation (from arabic_gender, generalized) ----------
 
+# Kodi runs every add-on's Python under one interpreter lock. Measured in QA
+# Kodi (21, Python 3.11): while one thread runs a CPU-bound loop that never
+# sleeps, a NEW script -- e.g. our own "בחירת כתוביות" button -- does not even
+# start until that loop ends (15.8 s behind a 20 s loop, 0.3 s idle); a 1 ms
+# sleep every ~20 ms brings it back to 0.3 s. Field logs from an Android box
+# showed the same 5-11 s waits behind SubSync's deep check at playback start.
+# The long loops here call _breathe(): about 5% slower in the background,
+# never in the way of the viewer.
+_BREATHE_SLICE = 0.02
+_breath = [0.0]
+
+
+def _breathe():
+    now = time.monotonic()
+    if now - _breath[0] >= _BREATHE_SLICE:
+        time.sleep(0.001)
+        _breath[0] = time.monotonic()
+
+
 def _best_offset(ref_on, cand_on, a, max_off=_MAXOFF):
     step = max(1, len(ref_on) // _SAMPLE)
     sampled = ref_on[::step]
@@ -295,6 +315,7 @@ def _best_offset(ref_on, cand_on, a, max_off=_MAXOFF):
     left, right = bisect.bisect_left, bisect.bisect_right
     tol = float(_TOL)
     for e in sampled:
+        _breathe()
         pe = a * e
         lo = left(cand_on, pe - max_off)
         hi = right(cand_on, pe + max_off)
@@ -1921,6 +1942,7 @@ def _region_cost_rows(ref_on, cand_on, center):
     count = int(2 * radius / step) + 1
     rows = []
     for onset in cand_on:
+        _breathe()
         row = [cap] * count
         lo = bisect.bisect_left(ref_on, onset - center - radius - cap)
         hi = bisect.bisect_right(ref_on, onset - center + radius + cap)
@@ -1942,6 +1964,7 @@ def _region_dp_path(rows):
     previous = list(rows[0])
     transitions = []
     for row in rows[1:]:
+        _breathe()
         best = min(range(count), key=previous.__getitem__)
         threshold = previous[best] + _REGION_SWITCH_COST
         flags = bytes(1 if value > threshold else 0 for value in previous)
