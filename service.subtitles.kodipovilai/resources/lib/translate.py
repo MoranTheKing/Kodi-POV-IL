@@ -5130,6 +5130,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # ...and its Latin form, one English letter for the Hebrew one it sounds
     # like ("בהTחשב", "בואi").
     final = srt.fold_stray_latin_letter(final)
+    final = srt.fix_pronoun_stutter(final)
     # Hebrew subtitles are written unpointed. The model vocalises a word now and
     # then ("בְּסֵדֶר", "מַה?"), reported as "a lot of niqqud that isn't really
     # needed"; every instance measured in real output was an ordinary word whose

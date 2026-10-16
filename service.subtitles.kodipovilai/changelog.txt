@@ -4,7 +4,7 @@
 - AI translation: read the speaker's gender from Polish, Czech, Slovak, Serbian, Croatian and Portuguese references too.
 - AI translation: keep the Hebrew reference working on Netflix subtitles that split each caption in two, and translate such captions as one line, without lost or doubled lines.
 - AI translation: include an episode's guest characters in the cast, so their gender is known.
-- AI translation: repair lines where the free model mixed in letters from another alphabet (Thai, Chinese, Korean...), drop translator notes and sound cues it left in English, fix single English letters inside Hebrew words, and remove speaker names such as "Celeste:".
+- AI translation: repair lines where the free model mixed in letters from another alphabet (Thai, Chinese, Korean...), drop translator notes and sound cues it left in English, fix single English letters inside Hebrew words and stuttered pronouns left in the old gender, and remove speaker names such as "Celeste:".
 - AI translation: entries a fallback reference left out are requested again instead of staying in English.
 - Show the Gemini daily quota by Google's reset time (midnight Pacific, about 10:00 in Israel) instead of UTC midnight.
 - Never write the OpenSubtitles or Bing keys to the Kodi log.
