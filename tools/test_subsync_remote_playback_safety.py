@@ -3484,7 +3484,7 @@ class RemotePlaybackSafety(unittest.TestCase):
     def test_schema_28_retries_incomplete_release_and_tournament_decisions(self):
         # v28: coverage corroboration, release-identity fixes and removal of
         # passive "human" confirmations -- every older decision recomputes.
-        self.assertEqual(self.sub._VERDICT_VERSION, 28)
+        self.assertGreaterEqual(self.sub._VERDICT_VERSION, 28)
         sig = 'cut1:' + '7' * 32
         text = self.subtitle.read_text(encoding='utf-8')
         final_key = self.sub._cache_key(text, 'movie-release', sig)

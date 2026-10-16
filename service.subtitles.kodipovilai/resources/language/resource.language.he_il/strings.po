@@ -251,8 +251,8 @@ msgid "Connection failed: {0}"
 msgstr "החיבור נכשל: {0}"
 
 msgctxt "#33005"
-msgid "Daily quota exceeded. Try again after midnight UTC."
-msgstr "הקווטה היומית מוצתה. נסה שוב אחרי חצות UTC."
+msgid "Daily quota exceeded. Try again after midnight Pacific time (about 10:00 in Israel)."
+msgstr "הקווטה היומית מוצתה. נסה שוב אחרי חצות בשעון קליפורניה (בסביבות 10:00 בבוקר בישראל)."
 
 msgctxt "#33006"
 msgid "No source subtitles found in supported languages."

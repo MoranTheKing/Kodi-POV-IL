@@ -1,3 +1,17 @@
+0.3.32
+- AI translation: read far more of an Arabic reference without vowel marks -- feminine and masculine verb endings, commands, questions and forms of address -- so the gender check finds far more errors when no Hebrew subtitle exists (19 instead of 1 in two measured episodes).
+- AI translation: when Gemini is briefly overloaded, retry the gender and leftover-English repairs instead of dropping them, ask again when a gender repair comes back empty, and never accept a repair that still contradicts the Hebrew reference.
+- Arctic Fuse 3 3.3.12: keep the discover grid on POV while typing a search; the redesigned discover tab no longer stops the fix from applying.
+- AI translation: check who is speaking and who is spoken to against the human reference, not only the person addressed, and use the reference's own words to catch "את אוהבת" said to a man or "אני יודעת" said by one; rewrite only lines that then carry the right gender.
+- AI translation: read the speaker's gender from Polish, Czech, Slovak, Serbian, Croatian and Portuguese references too.
+- AI translation: keep the Hebrew reference working on Netflix subtitles that split each caption in two, and translate such captions as one line, without lost or doubled lines.
+- AI translation: include an episode's guest characters in the cast, so their gender is known.
+- AI translation: repair lines where the free model mixed in letters from another alphabet (Thai, Chinese, Korean...), drop translator notes and sound cues it left in English, fix single English letters inside Hebrew words and stuttered pronouns left in the old gender, and remove speaker names such as "Celeste:".
+- AI translation: entries a fallback reference left out are requested again instead of staying in English.
+- Show the Gemini daily quota by Google's reset time (midnight Pacific, about 10:00 in Israel) instead of UTC midnight.
+- Never write the OpenSubtitles or Bing keys to the Kodi log.
+- SubSync: read the image (PGS) subtitles of Blu-ray rips as the captions they are, so files with only PGS tracks can confirm an in-sync subtitle, and fix TV/web subtitles across the disc's act breaks when held-out parts of the disc track and a second PGS language of the same disc confirm the map.
+
 0.3.31
 - Stop the Nox player OSD fix from shrinking neighbouring buttons on later starts, and restore the buttons it already shrank.
 - Idan Plus: Kan 11, Kan Educational 23 and the Kan archive play again after changes on Kan's website, and i24NEWS English lists its programs again after its old catalog service shut down.

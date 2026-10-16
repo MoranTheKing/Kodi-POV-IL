@@ -267,7 +267,9 @@ _ns = {'gemini': _engine, 'srt': None, 'kodi_utils': _log,
        'arabic_gender': ag, 'api_key': 'k', 'model': 'm',
        'max_output_tokens': 1024, 'top_p': 1.0, 'thinking_budget': None,
        'thinking_level': None, 'gemini_timeout': None, '_rpm_interval': 0.0,
-       '_gemini_rate_gate': lambda _i: None}
+       '_gemini_rate_gate': lambda _i: None,
+       # the production repair retries overloads around gemini.generate
+       '_repair_generate': lambda **kw: _ns['gemini'].generate(**kw)}
 
 _sspec = importlib.util.spec_from_file_location(
     'srt_for_gender', os.path.join(ADDON, 'resources', 'lib', 'srt.py'))

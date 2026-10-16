@@ -149,6 +149,27 @@ def fetch_cast(imdb_id=None, tmdb_id=None, media_type=None,
         return []
 
     cast = credits_data.get('cast', []) or []
+    # An episode's one-off characters are in guest_stars, not cast -- and
+    # they are exactly the people whose gender the model would otherwise
+    # guess (measured: a pilot came back with 8 regulars and none of its
+    # guests). They go after the regulars; their own `order` restarts at 0,
+    # so it is offset to keep the regulars first.
+    for g in credits_data.get('guest_stars', []) or []:
+        g = dict(g)
+        g['order'] = 1000 + (g.get('order') or 0)
+        cast.append(g)
+    # One entry per person: talk and reality shows give everybody the same
+    # character ("Self", "Himself", "Herself"), and episodes repeat roles
+    # ("Nurse"); collapsing those by character lost their genders.
+    seen = set()
+    unique = []
+    for c in cast:
+        key = c.get('id') or (c.get('name'), c.get('character'))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(c)
+    cast = unique
     out = []
     for c in cast[:max_actors]:
         # aggregate_credits puts character names under 'roles'

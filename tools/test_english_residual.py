@@ -59,9 +59,9 @@ class ResidualRepair(unittest.TestCase):
         def call(prompt):state['cancel']=True;return '[{"id":"0:0","text":"אנחנו יודעים"}]'
         self.assertEqual(m.repair(before,before,'en',call,cancelled=lambda:state['cancel'])[0],before)
     def test_cap_and_context(self):
-        before=[block('We know the way',i+1) for i in range(30)]
+        before=[block('We know the way',i+1) for i in range(50)]
         req=Mock(return_value='[]');out,c=m.repair(before,before,'en',req)
-        self.assertEqual(c['selected'],16);req.assert_called_once();self.assertLess(len(req.call_args.args[0]),21000)
+        self.assertEqual(c['selected'],getattr(m,'_MAX_LINES',16));req.assert_called_once();self.assertLess(len(req.call_args.args[0]),getattr(m,'_LIMIT',20000)+1000)
         self.assertEqual(out,before)
     def test_proper_latin_name_allowed_in_hebrew_result(self):
         before,out,c,req=self.run_case('We will follow Maui','אנחנו נלך בעקבות Maui')
@@ -97,7 +97,7 @@ class ResidualRepair(unittest.TestCase):
                      src_text=source,out_blocks=list(current),source_lang='en',progressive_cb=None,
                      _gemini_rate_gate=gate,_rpm_interval=2,api_key='synthetic',model='test',
                      max_output_tokens=8192,top_p=None,thinking_budget=None,thinking_level='medium',
-                     gemini_timeout=90,gemini=types.SimpleNamespace(generate=api,REQUEST_TIMEOUT=90),
+                     gemini_timeout=90,gemini=types.SimpleNamespace(generate=api,REQUEST_TIMEOUT=90),_repair_generate=lambda **kw:api(**kw),
                      kodi_utils=types.SimpleNamespace(log=Mock()))
             with patch.dict(sys.modules,{'resources':pkg,'resources.lib':lib,'xbmc':xbmc}):
                 exec(compile(ast.Module(body=[node],type_ignores=[]),'production-residual','exec'),env)

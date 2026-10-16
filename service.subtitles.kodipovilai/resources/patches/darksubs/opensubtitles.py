@@ -45,7 +45,7 @@ sub_color='orange'
 ###### Requests Params ##############
 REQUEST_MAX_RETRIES_NUMBER = 8
 REQUEST_RETRY_DELAY_IN_MS = 500
-OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4
+OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 5
 #########################################
 
 def _base_search_query(lang_string):
@@ -352,7 +352,7 @@ def download(download_data,MySubFolder):
         else:
             OS_API_KEY_NAME,OS_API_KEY_VALUE = get_random_key()
 
-        log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles | api_key_attempt_number={api_key_attempt_number} | OS_API_KEY_NAME={OS_API_KEY_NAME} | OS_API_KEY_VALUE={OS_API_KEY_VALUE}")
+        log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles | api_key_attempt_number={api_key_attempt_number} | OS_API_KEY_NAME={OS_API_KEY_NAME}")
 
         headers = {
             "User-Agent": USER_AGENT,

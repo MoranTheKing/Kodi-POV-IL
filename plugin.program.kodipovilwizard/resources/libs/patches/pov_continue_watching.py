@@ -461,7 +461,8 @@ def choose_season(params, native):
                       and row.get('air_date') and row['air_date'] <= str(current)[:10]})
     if not seasons:
         return kodi_utils.notify_error()
-    index = kodi_utils.dialog.select('סמן עונה כנצפתה', ['עונה %s' % number for number in seasons])
+    import xbmcgui
+    index = xbmcgui.Dialog().select('סמן עונה כנצפתה', ['עונה %s' % number for number in seasons])
     if index < 0 or index >= len(seasons):
         return
     return native['mark_as_watched_unwatched_season'](dict(params, season=seasons[index]))

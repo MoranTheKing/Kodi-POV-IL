@@ -748,6 +748,26 @@ if CONFIG.get_setting('buildname'):
     except Exception as _modular_err:
         logging.log("[ModularUpdater] Startup check failed: {0}".format(_modular_err),
                     level=xbmc.LOGERROR)
+    # Content add-ons the headless installer registered without a source
+    # repository are never offered an update by Kodi (see addon_origins).
+    # Register each to the one repository that serves it; the build's own
+    # add-ons -- everything the manifest ships -- are never touched.
+    try:
+        from resources.libs import addon_origins
+        from resources.libs import db as _origins_db
+        _owned = ()
+        try:
+            _addons = (getattr(_mu, '_manifest', None) or {}).get('addons') or {}
+            _owned = tuple(_addons.keys() if isinstance(_addons, dict)
+                           else (a.get('id') for a in _addons))
+        except Exception:
+            _owned = ()
+        addon_origins.repair(
+            os.path.join(CONFIG.DATABASE, _origins_db.latest_db('Addons')),
+            _owned, log=lambda _m: logging.log(_m, level=xbmc.LOGINFO))
+    except Exception as _origins_err:
+        logging.log('[AddonOrigins] repair failed: {0}'.format(_origins_err),
+                    level=xbmc.LOGWARNING)
     # Repair installed add-ons even when the manifest server is unavailable or
     # the updater raises. An upstream POV update can erase these hooks while
     # the network is down; patching must not depend on OTA success.

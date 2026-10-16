@@ -1,0 +1,14 @@
+# Upstream versions the build's patches were last verified against.
+#
+# These add-ons update themselves on users' devices from their developers'
+# repositories. tools/check_upstream_addons.py compares the live
+# repositories with this file, and .github/workflows/check-upstream-pov.yml
+# opens an issue when one moves. After re-running the patchers against the
+# new version (wizard patch engine, MoranSubs host patchers) and fixing any
+# moved anchor, update the line here.
+plugin.video.pov: 6.10.05
+plugin.video.idanplus: 4.0.2
+skin.arctic.fuse.3: 3.3.12
+plugin.video.umbrella: 6.7.92
+plugin.video.otaku: 5.3.3
+script.module.acctmgr: 1.2.0a

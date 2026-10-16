@@ -563,23 +563,158 @@ def verify(ref_srt_text, cand_srt_text, min_vote=None, min_overlap=None,
               require_tight=require_tight), cand_all)
 
 
+# ---- bitmap (PGS / VobSub) display events ---------------------------------
+# A bitmap subtitle track's container index lists every display EVENT: the
+# instant a caption appears and the instant it is cleared, both as cue starts.
+# Read as cues, half of them are the gaps between lines, so a text subtitle's
+# onsets also "match" the clear events one caption-length away and the offset
+# vote splits.  Measured on a PGS-only Blu-ray rip: vote 51%, 9/15 trusted
+# windows for a subtitle whose timing family matched the disc, against 89% and
+# 15/15 once the text subtitle is read the same way -- every start AND end an
+# event.  A text file's ends sit a little off the disc's clear events
+# (-80..-170 ms on a remux whose subtitle is in sync by the audio), so the
+# events only find the map; the final offset is measured again on caption
+# STARTS alone.
+_EVENT_MIN_MS = 600
+_EVENT_MAX_MS = 3000
+_ONSET_MATCH_MS = 450
+_ONSET_MIN_MATCHES = 30
+# Measured on a Blu-ray remux whose subtitles are in sync by the audio: 74-77%
+# of caption starts land within 450 ms of a display event, and 67-81% of those
+# within 150 ms of their median.  A subtitle whose starts are all 600 ms early
+# but whose ends match the disc (the events alone call it in sync) reaches
+# 41% and 32%.
+_ONSET_MIN_FRACTION = 0.55
+_ONSET_TIGHT_MS = 150
+_ONSET_MIN_TIGHT = 0.50
+
+
+def bitmap_events(cues):
+    """A cue list seen the way a bitmap track's index is read: every start and
+    every end is an event, with the synthetic durations SubSync gives index
+    starts (next event - 100 ms, clamped to 0.6-3 s)."""
+    points = sorted({int(c['start']) for c in cues or []}
+                    | {int(c['end']) for c in cues or []})
+    out = []
+    for i, start in enumerate(points):
+        nxt = points[i + 1] if i + 1 < len(points) else start + _EVENT_MAX_MS
+        out.append({'start': start,
+                    'end': start + max(_EVENT_MIN_MS,
+                                       min(_EVENT_MAX_MS, nxt - start - 100))})
+    return out
+
+
+def _onset_offset(ref, cand, scale, offset, lo=None, hi=None,
+                  min_matches=_ONSET_MIN_MATCHES):
+    """Median residual of caption starts against the nearest display event the
+    map predicts, or None when too few starts land near one."""
+    starts = [float(r['start']) for r in ref]
+    diffs = []
+    considered = 0
+    for c in cand:
+        s = float(c['start'])
+        if (lo is not None and s < lo) or (hi is not None and s >= hi):
+            continue
+        considered += 1
+        predicted = (s - offset) / scale
+        j = bisect.bisect_left(starts, predicted)
+        best = None
+        for k in (j - 1, j):
+            if 0 <= k < len(starts):
+                d = s - (scale * starts[k] + offset)
+                if best is None or abs(d) < abs(best):
+                    best = d
+        if best is not None and abs(best) <= _ONSET_MATCH_MS:
+            diffs.append(best)
+    if (len(diffs) < min_matches
+            or len(diffs) < _ONSET_MIN_FRACTION * considered):
+        return None
+    diffs.sort()
+    median = diffs[len(diffs) // 2]
+    tight = sum(1 for d in diffs if abs(d - median) <= _ONSET_TIGHT_MS)
+    if tight < _ONSET_MIN_TIGHT * len(diffs):
+        return None
+    return offset + median
+
+
+def _refine_on_onsets(ref, cand, verdict):
+    """Re-measure an events verdict's offset on caption starts (see above).
+    A verdict the starts do not support is refused: the events alone can read
+    a subtitle whose every start is wrong as in sync, if its ends are right."""
+    status = verdict.get('status')
+    if status not in (STATUS_CONFIRMED, STATUS_FIXABLE):
+        return verdict
+    a = float(verdict.get('scale') or 1.0)
+    b = float(verdict.get('offset_ms') or 0.0)
+    out = dict(verdict)
+
+    def refuse(reason):
+        return dict(verdict, status=STATUS_UNKNOWN, reason=reason,
+                    diag=(verdict.get('diag') or '') + ' [bitmap events: %s]' % reason)
+
+    segments = verdict.get('segments')
+    if segments:
+        fixed, refined_any = [], 0
+        for i, seg in enumerate(segments):
+            lo = seg.get('cand_from_ms')
+            hi = segments[i + 1].get('cand_from_ms') if i + 1 < len(segments) else None
+            seg_b = float(seg.get('offset_ms') or 0.0)
+            refined = _onset_offset(ref, cand, a, seg_b, lo, hi, min_matches=8)
+            if refined is None:
+                return refuse('bitmap_onsets_unmatched')
+            if abs(refined - seg_b) > _ONSET_MATCH_MS:
+                return refuse('bitmap_onsets_disagree')
+            fixed.append(dict(seg, offset_ms=refined))
+            refined_any += 1
+        out['segments'] = fixed
+        out['offset_ms'] = float(fixed[0].get('offset_ms') or 0.0)
+        return out
+    refined = _onset_offset(ref, cand, a, b)
+    if refined is None:
+        return refuse('bitmap_onsets_unmatched')
+    if abs(refined - b) > _ONSET_MATCH_MS:
+        return refuse('bitmap_onsets_disagree')
+    out['offset_ms'] = refined
+    out['diag'] = (verdict.get('diag') or '') + ' [bitmap events; onset offset %+dms]' % int(refined)
+    if status == STATUS_CONFIRMED and abs(refined) > CONFIRM_OFFSET_MS:
+        # The starts say the subtitle is off by more than the in-sync band
+        # that the events allowed.  Neither confirm nor fix on a shift no
+        # gate has checked.
+        out['status'] = STATUS_UNKNOWN
+        out['reason'] = 'bitmap_onsets_disagree'
+    elif status == STATUS_FIXABLE and a == 1.0 and abs(refined) <= CONFIRM_OFFSET_MS:
+        out['status'] = STATUS_CONFIRMED
+        out.pop('mode', None)
+    return out
+
+
 def verify_cues(ref_cues, cand_srt_text, min_vote=None, min_overlap=None,
                 scales=None, max_offset_ms=None, allow_piecewise=True,
-                require_tight=True):
+                require_tight=True, ref_events=False):
     """verify() variant whose reference is a raw cue list (start/end ms) --
     e.g. embedded-track timestamps from the mkv_probe container probe, where
     there is no text to filter. Same gate, same verdict shape. min_vote /
     min_overlap override the gate thresholds; `scales` restricts the scale
     candidates and `max_offset_ms` the offset window (MANDATORY discipline
-    for sparse audio-VAD references -- see _gate notes)."""
+    for sparse audio-VAD references -- see _gate notes). `ref_events` says
+    the reference is a bitmap track's display events (see bitmap_events)."""
     ref, ref_error = _preflight_cues(ref_cues)
     if ref_error:
         return _preflight_unknown('reference: ' + ref_error)
     cand_all, cand_error = _preflight_srt(cand_srt_text)
     if cand_error:
         return _preflight_unknown('candidate: ' + cand_error)
+    cand = dialogue_cues(cand_all)
+    if ref_events:
+        verdict = _refine_on_onsets(ref, cand, _gate(
+            ref, bitmap_events(cand),
+            min_vote=min_vote, min_overlap=min_overlap,
+            scales=scales, max_offset_ms=max_offset_ms,
+            allow_piecewise=allow_piecewise,
+            require_tight=require_tight))
+        return _snap_piecewise_boundaries(verdict, cand_all)
     return _snap_piecewise_boundaries(
-        _gate(ref, dialogue_cues(cand_all),
+        _gate(ref, cand,
               min_vote=min_vote, min_overlap=min_overlap,
               scales=scales, max_offset_ms=max_offset_ms,
               allow_piecewise=allow_piecewise,
@@ -2779,6 +2914,20 @@ def apply_verdict(cand_srt_text, verdict):
                     <= _MICRO_MAX_SEGMENTS)
             except (TypeError, ValueError):
                 native_lane = False
+        # A file whose only subtitles are PGS: the map was learned from the
+        # disc's own PGS track and another PGS language of the same disc
+        # accepted it.  Same strength as native_lane, mirrored for bitmaps.
+        native_pgs = False
+        if verdict.get('validation_proof') == 'native-disc-pgs-v1':
+            try:
+                native_pgs = bool(
+                    int(verdict.get('pgs_lane_tracks') or 0) >= 1
+                    and float(verdict.get('holdout_score_min') or 0.0) >= 0.85
+                    and float(verdict.get('holdout_gain_min') or 0.0) >= 0.15
+                    and 3 <= len(verdict.get('segments') or [])
+                    <= _MICRO_MAX_SEGMENTS)
+            except (TypeError, ValueError):
+                native_pgs = False
         # The playing file's own audio as the independent family: the Hebrew
         # text sat on several envelope plateaus (or one large shift) and the
         # frozen map lands it on a single near-zero plateau of strong windows.
@@ -2800,7 +2949,8 @@ def apply_verdict(cand_srt_text, verdict):
         if (validation_folds < 4
                 or (timing_families < 2 and not same_disc_quorum
                     and not field_certificate and not matched_oracle
-                    and not envelope_proof and not native_lane)):
+                    and not envelope_proof and not native_lane
+                    and not native_pgs)):
             raise ValueError('piecewise proposal lacks holdout/family validation')
     _all_cues, preflight_error = _preflight_srt(cand_srt_text)
     if preflight_error:
