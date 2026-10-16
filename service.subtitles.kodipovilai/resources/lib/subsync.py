@@ -847,6 +847,7 @@ def _audio_probe_reference(info, playing, second_pass=False):
 # its own entry; the old file is split once and removed.
 _PROBE_DIR_NAME = 'subsync_probe'
 _PROBE_MIGRATE_LOCK = threading.Lock()
+_PROBE_MIGRATED = [False]
 
 
 def _probe_entries_dir():
@@ -868,9 +869,18 @@ def _store_probe_entry(cache_key, bundle):
         return False
     os.makedirs(os.path.dirname(fpath), exist_ok=True)
     tmp = '%s.%d.tmp' % (fpath, threading.get_ident())
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump({'key': cache_key, 'entry': bundle}, f)
-    os.replace(tmp, fpath)
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump({'key': cache_key, 'entry': bundle}, f)
+        # Windows refuses while a reader has the file open; never leave the
+        # temporary copy behind (prune only looks at *.json).
+        os.replace(tmp, fpath)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        raise
     try:
         # Pruning keeps the newest by file time; a migrated entry keeps its age.
         stamp = float(bundle.get('ts') or 0)
@@ -906,12 +916,17 @@ def _prune_probe_entries():
 
 def _migrate_probe_cache():
     """Split the legacy single-file cache into per-entry files, once."""
+    if _PROBE_MIGRATED[0]:
+        return
     path = _probe_cache_path()
     if not path or not os.path.isfile(path):
         return
     with _PROBE_MIGRATE_LOCK:
-        if not os.path.isfile(path):
+        if _PROBE_MIGRATED[0] or not os.path.isfile(path):
             return
+        # Once per interpreter, even if the old file cannot be removed: a
+        # failed remove must not turn every lookup into a full parse again.
+        _PROBE_MIGRATED[0] = True
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f) or {}

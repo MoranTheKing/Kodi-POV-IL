@@ -101,6 +101,25 @@ class ProbeCacheSplitTests(unittest.TestCase):
         Path(path).write_text(json.dumps(doc), encoding='utf-8')
         self.assertIsNone(self.sub._read_probe_entry('media:a'))
 
+    def test_a_failed_replace_leaves_no_temporary_file(self):
+        with patch.object(self.sub.os, 'replace', side_effect=PermissionError('open elsewhere')):
+            self.assertFalse(self.sub._write_probe_cache('media:a', self.entry(1)))
+        self.assertEqual(list(self.folder.iterdir()), [])
+
+    def test_an_unremovable_old_file_is_parsed_only_once(self):
+        self.legacy.write_text(json.dumps({'media:x': self.entry(10)}), encoding='utf-8')
+        loads = []
+        real = json.load
+        with patch.object(self.sub.os, 'remove', side_effect=PermissionError('locked')),                 patch.object(self.sub.json, 'load', side_effect=lambda f: loads.append(1) or real(f)):
+            for _ in range(3):
+                self.assertIsNotNone(self.sub._read_probe_entry('media:x'))
+        self.assertEqual(len(loads), 4)       # one split + three single-entry reads
+
+    def test_the_service_splits_the_old_file_at_startup(self):
+        src = (LIB.parents[1] / 'service.py').read_text(encoding='utf-8')
+        body = src[src.index('def _start_subsync_drainer('):]
+        self.assertLess(body.index('_migrate_probe_cache()'), body.index('drain_queue_once()'))
+
     def test_no_reader_parses_the_whole_cache_anymore(self):
         src = (LIB / 'subsync.py').read_text(encoding='utf-8')
         self.assertNotIn('_read_probe_cache(', src)
