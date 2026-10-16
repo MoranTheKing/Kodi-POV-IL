@@ -45,6 +45,23 @@ def repair_changed(addons, previous, current, window, monitor):
     xbmc.log('[POV IL] Host-update patch repair: {} acknowledged={}'.format(stats, healthy), xbmc.LOGINFO)
     return healthy
 
+def warm_bytecode(addons, monitor):
+    """Write .pyc files Kodi never writes itself (see pyc_warm); next pass time."""
+    import xbmc
+    started = time.monotonic()
+    try:
+        from resources.libs import pyc_warm
+        player = xbmc.Player()
+        compiled, current, failed = pyc_warm.warm(
+            addons, should_stop=monitor.abortRequested,
+            should_pause=player.isPlayingVideo,
+            sleep=monitor.waitForAbort)
+        xbmc.log('[POV IL] bytecode: {} compiled, {} current, {} skipped in {:.1f}s'.format(
+            compiled, current, failed, time.monotonic() - started), xbmc.LOGINFO)
+    except Exception as exc:
+        xbmc.log('[POV IL] bytecode pass failed: {!r}'.format(exc), xbmc.LOGWARNING)
+
+
 def signature(addons):
     result = []
     for addon in ('plugin.video.pov', 'plugin.video.umbrella',
@@ -75,12 +92,20 @@ def run():
     pending = None
     retry_at = 0
     attempts = 0
+    # Bytecode passes count idle 10 s polls: the first once start-up and the
+    # home widgets have settled (~70 s), then about every 6 hours for Kodi's
+    # own add-on updates, and soon after a host repair rewrote files.
+    idle_polls, warm_after = 0, 6
     try:
         while not monitor.waitForAbort(10):
             current = signature(addons)
             if current == previous:
                 pending = None
                 attempts = 0
+                idle_polls += 1
+                if idle_polls >= warm_after and not xbmc.Player().isPlayingVideo():
+                    warm_bytecode(addons, monitor)
+                    idle_polls, warm_after = 0, 6 * 360
                 continue
             if xbmc.Player().isPlayingVideo():
                 continue
@@ -103,6 +128,8 @@ def run():
                 previous = current
                 pending = None
                 attempts = 0
+                # The host's files just changed: recompile them soon.
+                idle_polls, warm_after = 0, min(warm_after, 3)
             else:
                 attempts += 1
                 # Fast recovery for a file lock, then bounded idle backoff for
