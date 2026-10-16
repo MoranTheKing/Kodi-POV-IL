@@ -57,11 +57,14 @@ class MDBListMyServicesTests(unittest.TestCase):
             return next(i for i, item in enumerate(items)
                         if item.label == 'MDBLIST')
 
-        gui.dialog = types.SimpleNamespace(select=select)
+        # POV 6.10.06's kodi_utils.dialog is the Dialog class; the menu must
+        # open its own Dialog(), so POV's attribute is left out on purpose.
+        xbmcgui = types.ModuleType('xbmcgui')
+        xbmcgui.Dialog = lambda: types.SimpleNamespace(select=select)
         modules = types.ModuleType('modules')
         modules.kodi_utils = gui
         myservices = types.ModuleType('modules.myservices')
-        stubs = {'xbmc': xbmc, 'xbmcaddon': addon, 'modules': modules,
+        stubs = {'xbmc': xbmc, 'xbmcaddon': addon, 'xbmcgui': xbmcgui, 'modules': modules,
                  'modules.kodi_utils': gui, 'modules.myservices': myservices}
         with patch.dict(sys.modules, stubs):
             spec = importlib.util.spec_from_file_location('wizard_myservices_test', FILE)

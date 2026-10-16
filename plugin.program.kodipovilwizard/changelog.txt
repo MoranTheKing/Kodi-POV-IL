@@ -1,3 +1,10 @@
+0.4.49
+- POV 6.10.06: "Connect services" (חיבור שירותים), marking a season watched from a show and MDBList AI search open again instead of failing with a POV error.
+- Keep POV's background service running when Kodi updates POV during start-up; the update used to end it with a POV error on screen.
+- Keep the shorter POV network retries on POV 6.10.06, whose network module is unchanged.
+- Register POV, Otaku and Account Manager to the repositories they are installed from, so Kodi installs their updates; until now a wizard install kept them on the version it started with. The build's own add-ons, FENtastic included, are never registered to an outside repository.
+- Stop re-enabling repository.Fishenzon on every start; the needless call could hang Kodi on the start that completes a MoranSubs update.
+
 0.4.48
 - Deliver MoranSubs updates to devices that already run the modular MoranSubs instead of holding them until the POV migration completes; a legacy MoranSubs keeps waiting for that migration.
 - Keep every entry in POV Shortcut Folders: the fanart fix now lands in the folder contents and removes the copy that hid the folders on POV 6.10.

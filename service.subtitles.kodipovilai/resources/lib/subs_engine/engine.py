@@ -936,7 +936,7 @@ def bing_api_machine_translate(text, encoding):
                 
                 count_key = random.randint(0, amount - 1) # Generate random number from 0 to keys count
                 nm,key,location,amount = bing_select_key(count_key)
-                log.warning(f"DarkSubs Bing API: bing_translator_name={nm} | bing_api_key={key} | total_keys_amount={amount}")
+                log.warning(f"DarkSubs Bing API: bing_translator_name={nm} | total_keys_amount={amount}")
                 headers = {
                     'Ocp-Apim-Subscription-Key': key,
                     # location required if you're using a multi-service or regional (not global) resource.
