@@ -21,7 +21,79 @@ permissions:
   issues: write
 
 jobs:
+  # A legacy device moves to the modular build only onto the official POV the
+  # migration pin names, and the Wizard never downgrades POV. Kodi updates POV
+  # by itself about once a week, so a pin left behind strands every device not
+  # yet migrated (field log 16 Oct 2026). Move the pin -- only after the Wizard
+  # patch engine is proven on the new official POV -- and publish it at once.
+  pov-pin:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    # Shares the rolling release and manifest.json with the release workflow.
+    concurrency:
+      group: build-and-release
+      cancel-in-progress: false
+    steps:
+      - name: Move the clean-host POV pin when a newer POV fits our patches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_SLUG: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO_SLUG}.git" repo
+          cd repo
+          STATUS=0
+          OUT=$(python3 tools/auto_bump_pov_pin.py "$RUNNER_TEMP/pov-pin") || STATUS=$?
+          echo "$OUT"
+          case "$OUT" in
+            current*)
+              exit 0 ;;
+            blocked*)
+              VER=${OUT#blocked }
+              VER=${VER%%:*}
+              TITLE="POV $VER: migration pin NOT moved (patches need attention)"
+              if gh issue list --repo "$REPO_SLUG" --state open --search "in:title \"$TITLE\"" \
+                   --json title --jq 'length' | grep -qv '^0$'; then
+                echo "Issue already open."
+              else
+                gh issue create --repo "$REPO_SLUG" --title "$TITLE" --body "$OUT
+
+          Devices still on legacy MoranSubs 0.2.x cannot migrate once Kodi installs this POV. Fix the moved anchors in patches_config.py; the next run moves the pin by itself."
+              fi
+              exit 0 ;;
+            bumped*) ;;
+            *)
+              echo "unexpected output (exit $STATUS)" >&2
+              exit 1 ;;
+          esac
+          read -r _ OLD NEW ZIP <<< "$OUT"
+          NAME=$(basename "$ZIP")
+          # The manifest keeps every module and config as published and moves
+          # only the pin (dist/ is empty here).
+          python3 .github/scripts/gen_manifest.py
+          mkdir -p "$RUNNER_TEMP/pov-verify"
+          if ! gh release view addons-latest --repo "$REPO_SLUG" --json assets -q '.assets[].name' \
+               | grep -Fxq "$NAME"; then
+            gh release upload addons-latest --repo "$REPO_SLUG" "$ZIP"
+          fi
+          gh release download addons-latest --repo "$REPO_SLUG" -p "$NAME" -D "$RUNNER_TEMP/pov-verify"
+          cmp "$ZIP" "$RUNNER_TEMP/pov-verify/$NAME"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/pov-host-migration.json UPSTREAM_VERSIONS.txt manifest.json
+          git commit -m "chore(pov): move the clean-host migration pin to POV $NEW [skip ci]"
+          git push origin HEAD:main
+          gh issue create --repo "$REPO_SLUG" \
+            --title "POV $NEW: migration pin moved automatically ($OLD -> $NEW)" \
+            --body "$OUT
+
+          The Wizard patch engine was verified on the official zip (every enabled patch applied, nothing missing, idempotent). Legacy devices on POV $NEW can migrate again. Close this issue after a look."
+
   check:
+    needs: pov-pin
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Compare upstream repositories with the verified versions
