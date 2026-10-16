@@ -29,6 +29,10 @@ iconx=xbmcaddon.Addon().getAddonInfo('icon')
 MyScriptID = xbmcaddon.Addon().getAddonInfo('id')
 break_all=False
 _lingering_provider_threads=[]
+# True once a search (any pass, including the all-language retry) stopped at
+# max_search_time or was refused while a timed-out provider still ran: its
+# result is incomplete. The bridge resets it before each search.
+last_search_cut_short=False
 
 
 class ProviderSearchBusy(RuntimeError):
@@ -329,6 +333,7 @@ def _finish_timing_timeout(threads, all_sources, timeout_s=0.5):
     return result
         
 def c_get_subtitles(video_data, all_lang_override=False, timing_only=False):
+    global last_search_cut_short
         
     log.warning(f"DEBUG | c_get_subtitles | START | all_lang_override={all_lang_override} | timing_only={timing_only}")
     
@@ -348,6 +353,7 @@ def c_get_subtitles(video_data, all_lang_override=False, timing_only=False):
     # that worker can wake up and overwrite a later search. Never reset or
     # launch providers until every quarantined worker has actually ended.
     if not _provider_workers_ready():
+        last_search_cut_short = True
         log.warning('DEBUG | c_get_subtitles | Refusing overlapping search; '
                     'a timed-out provider worker is still alive')
         if timing_only:
@@ -452,6 +458,7 @@ def c_get_subtitles(video_data, all_lang_override=False, timing_only=False):
         
         if  elapsed_time>ExcludeTime: 
             break_all=True
+            last_search_cut_short = True
             if timing_only:
                 try:
                     f_result = _finish_timing_timeout(thread, all_sources)

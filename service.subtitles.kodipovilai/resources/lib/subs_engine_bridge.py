@@ -360,10 +360,12 @@ def search(info, modal_progress=True):
         # waiting 24h for it to expire.
         if cached:
             return cached
-        # Kodi's own subtitle dialog (modal_progress) is an explicit request
-        # and always searches.
-        if not modal_progress and _recently_empty(info):
-            return []
+    # Kodi's own subtitle dialog (modal_progress) is an explicit request and
+    # always searches.
+    if not modal_progress:
+        recent = _recent_get(info)
+        if recent is not None:
+            return recent
     try:
         started = time.monotonic()
         out = _search_inner(info, modal_progress=modal_progress)
@@ -371,11 +373,12 @@ def search(info, modal_progress=True):
         # (429) or network hiccup returns [] -- caching that would hide every
         # source for 24h (the user sees only the community pool). DarkSubs's
         # cache does the same: it returns an empty result without storing it.
-        # It is only remembered for a few minutes (_EMPTY_TTL), in memory.
+        # Any finished search, empty or not, is reused for two minutes from
+        # memory (_RECENT_TTL).
         if cacheable and out:
             _cache_put(info, out)
-        elif cacheable and _search_finished(time.monotonic() - started):
-            _mark_empty(info)
+        if _search_finished(time.monotonic() - started):
+            _recent_put(info, out)
         return out
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.search failed: {0}'.format(e),
@@ -415,61 +418,76 @@ def _cache_key(info):
         mid, info.get('season') or '0', info.get('episode') or '0', sig)
 
 
-# A search that found nothing is remembered for two minutes, in Kodi's
-# memory only. Measured in a user's log: the automatic search at the start of
-# an episode found no subtitle in any language, and pressing "בחירת כתוביות"
-# 12 s later ran every provider again -- 6.4 s on a streaming box before the
-# window opened, to find the same nothing. Only a search that FINISHED counts:
-# the engine also returns nothing when it hits max_search_time (a link busy
-# buffering the video) or refuses to start while a timed-out provider is
-# still running, and that must be searched again. Never on disk.
-_EMPTY_TTL = 120
+# Every search that FINISHED is kept for two minutes in Kodi's memory, found
+# subtitles or not. Measured in two user logs from an Android box: pressing
+# "בחירת כתוביות" re-ran every provider each time (6.4 s, then 4.5 s per
+# press), although the automatic search had just run -- the 24 h disk cache
+# needs a release name and never stores an empty result. The same media,
+# sources and release name give the same list, so two minutes of reuse
+# changes nothing but the wait. A search cut short (max_search_time hit while
+# the link buffers the video, or refused while a timed-out provider is still
+# running) is not kept, and Kodi's own subtitle dialog always searches.
+_RECENT_TTL = 120
 
 
-def _search_finished(took):
+def _search_finished(took=None):
     """True when the engine searched every provider to the end."""
     try:
         from resources.lib.subs_engine import engine
-        if getattr(engine, '_lingering_provider_threads', None):
-            return False
-        limit = float(kodi_utils.addon().getSetting('max_search_time') or 10)
+        return not (getattr(engine, 'last_search_cut_short', True)
+                    or getattr(engine, '_lingering_provider_threads', None))
     except Exception:
         return False
-    return took < limit - 0.5
 
 
-def _empty_prop(info):
+def _recent_prop(info):
     key = _cache_key(info)
-    return ('moransubs.engine_empty.' + key) if key else None
+    return ('moransubs.engine_recent.' + key) if key else None
 
 
-def _mark_empty(info):
-    prop = _empty_prop(info)
+def _release_key(info):
+    """What the match % of the results depends on."""
+    for k in ('picked_release', 'tagline', 'li_filename'):
+        v = (info.get(k) or '').strip()
+        if v:
+            return v
+    fp = (info.get('filepath') or '').strip()
+    return fp if fp and '://' not in fp else ''
+
+
+def _recent_put(info, out):
+    prop = _recent_prop(info)
     if not prop:
         return
     try:
         import xbmcgui
-        xbmcgui.Window(10000).setProperty(prop, str(int(time.time())))
+        xbmcgui.Window(10000).setProperty(prop, json.dumps(
+            {'t': time.time(), 'rel': _release_key(info), 'out': out or []},
+            ensure_ascii=False))
     except Exception:
         pass
 
 
-def _recently_empty(info):
-    prop = _empty_prop(info)
+def _recent_get(info):
+    """The finished search of the last two minutes for this media, or None."""
+    prop = _recent_prop(info)
     if not prop:
-        return False
+        return None
     try:
         import xbmcgui
-        stamp = xbmcgui.Window(10000).getProperty(prop)
-        age = time.time() - float(stamp) if stamp else None
+        raw = xbmcgui.Window(10000).getProperty(prop)
+        rec = json.loads(raw) if raw else None
+        age = time.time() - float(rec['t']) if rec else None
     except Exception:
-        return False
-    if age is None or not 0 <= age < _EMPTY_TTL:
-        return False
-    kodi_utils.log('subs_engine_bridge: no subtitle found for this title {0:.0f}s '
-                   'ago -- not searching every source again'.format(age),
-                   level='INFO')
-    return True
+        return None
+    if (age is None or not 0 <= age < _RECENT_TTL
+            or rec.get('rel', '') != _release_key(info)):
+        return None
+    out = rec.get('out') or []
+    kodi_utils.log('subs_engine_bridge: reusing the search from {0:.0f}s ago '
+                   '({1} result(s)) -- not searching every source again'.format(
+                       age, len(out)), level='INFO')
+    return out
 
 
 def _cache_dir():
@@ -564,6 +582,7 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
     # language flags break it. Safe to call every time.
     ensure_engine_settings()
     from resources.lib.subs_engine import engine, general
+    engine.last_search_cut_short = False
 
     video_data = build_video_data(info)
     kodi_utils.log('subs_engine_bridge: searching engine for '
