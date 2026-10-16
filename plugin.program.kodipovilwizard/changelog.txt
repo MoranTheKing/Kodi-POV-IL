@@ -1,3 +1,8 @@
+0.4.52
+- Saved lists: every POV list -- home rows, tiles, categories, "Continue watching" -- opens from the finished list saved on the previous visit, without rebuilding it (QA: 21 titles in 4-60 ms instead of 0.3-3 s; on an Android box "Continue watching" took 10-12 s right after Kodi started). Fresh lists are served before POV even loads.
+- Saved lists are never out of date: watching or marking something, progress, a setting, a sync, POV fetching the list again or a cleared cache rebuilds the list at once. A list that is merely old or from yesterday (e.g. the first click right after Kodi starts) is shown at once -- before POV loads -- and rebuilt in the background; when the new one differs, the open list or the home rows refresh themselves within seconds. Home rows and full-screen lists are saved apart, as POV builds them differently. Search and child profiles are not saved.
+- Estuary 4.0.8: the loading background shows the POV IL build artwork instead of the old RealDebrid KODI logo.
+
 0.4.51
 - Faster lists and home rows on every skin: Kodi never saves compiled Python, so each list, row and category recompiled its add-on code from scratch on every visit. The build now writes that compiled code once in the background (about 40 s on a PC, never while a video plays) and refreshes it after updates. QA, home screen fully loaded after a cold start: FENtastic 10.2 -> 7.0 s, NOX 8.0 -> 5.2 s; single rows such as "Continue watching" 1.56 -> 0.46 s.
 - Each POV list asked Kodi's screen twice whether a child profile is active; it now asks once.
