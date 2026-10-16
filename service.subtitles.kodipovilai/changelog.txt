@@ -1,6 +1,6 @@
 0.3.33
 - "בחירת כתוביות" answers at once: playback pauses and Kodi's busy spinner shows while the list is prepared, instead of seconds of playback with no sign the press was taken.
-- When the automatic search at the start of a title found no subtitle at all, opening "בחירת כתוביות" in the next few minutes no longer searches every source again.
+- When a search that ran to the end found no subtitle at all (as at the start of a title no source has), opening "בחירת כתוביות" in the next two minutes no longer searches every source again; a search that ran out of time is repeated, and Kodi's own subtitle dialog always searches.
 
 0.3.32
 - AI translation: read far more of an Arabic reference without vowel marks -- feminine and masculine verb endings, commands, questions and forms of address -- so the gender check finds far more errors when no Hebrew subtitle exists (19 instead of 1 in two measured episodes).
