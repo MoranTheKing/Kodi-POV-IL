@@ -1932,6 +1932,13 @@ def _start_subsync_drainer(monitor):
             if monitor.waitForAbort(1.0):
                 return
             from resources.lib import subsync as _ss
+            try:
+                # Split the old one-file probe cache now, at startup, rather
+                # than at the first episode's first lookup (a one-time parse
+                # of up to ~11 MB that holds the interpreter lock).
+                _ss._migrate_probe_cache()
+            except Exception:
+                pass
             while not monitor.abortRequested():
                 try:
                     _ss.drain_queue_once()

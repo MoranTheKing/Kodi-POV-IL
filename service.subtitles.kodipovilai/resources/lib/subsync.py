@@ -756,15 +756,9 @@ def _audio_probe_reference(info, playing, second_pass=False):
             return None
         rel_key = 'audio2:' + transport_key
         cpath = _probe_cache_path()
-        data = {}
         prior = []
-        if cpath and os.path.isfile(cpath):
-            try:
-                with open(cpath, 'r', encoding='utf-8') as f:
-                    data = json.load(f) or {}
-            except Exception:
-                data = {}
-            ent = data.get(rel_key)
+        if cpath:
+            ent = _read_probe_entry(rel_key)
             if ent is not None and ent.get('pv') != _PROBE_CACHE_VERSION:
                 ent = None   # older engine (un-rebased origin) -- redo
             if ent is not None:
@@ -832,58 +826,157 @@ def _audio_probe_reference(info, playing, second_pass=False):
                     merged.append(c)
             merged.sort(key=lambda c: c['start'])
             cues = merged
-        try:
-            if cpath:
-                data[rel_key] = {'ts': time.time(), 'cues': cues,
-                                 'pv': _PROBE_CACHE_VERSION}
-                if second_pass:
-                    data[rel_key]['pass2'] = True
-                if len(data) > _MAX_PROBE_ENTRIES:
-                    data = dict(sorted(data.items(),
-                                       key=lambda kv: kv[1].get('ts', 0),
-                                       reverse=True)[:_MAX_PROBE_ENTRIES])
-                os.makedirs(os.path.dirname(cpath), exist_ok=True)
-                tmp = cpath + '.tmp'
-                with open(tmp, 'w', encoding='utf-8') as f:
-                    json.dump(data, f)
-                os.replace(tmp, cpath)
-        except Exception:
-            pass
+        if cpath:
+            entry = {'ts': time.time(), 'cues': cues,
+                     'pv': _PROBE_CACHE_VERSION}
+            if second_pass:
+                entry['pass2'] = True
+            _write_probe_cache(rel_key, entry)
         return cues or None
     except Exception as e:
         _log('audio reference failed: %r' % e, level='WARNING')
         return None
 
 
-def _read_probe_cache():
+# One small file per media profile in subsync_probe/. The old single
+# subsync_probe_cache.json grew to 11 MB (60 multi-track profiles), and it was
+# read whole about six times at the start of every episode. json.load parses
+# in C without ever releasing the interpreter lock -- 0.1-0.15 s each on a PC,
+# seconds on an Android box -- and while it runs no other script can start
+# (the "בחירת כתוביות" button waited behind it). Now each lookup reads only
+# its own entry; the old file is split once and removed.
+_PROBE_DIR_NAME = 'subsync_probe'
+_PROBE_MIGRATE_LOCK = threading.Lock()
+_PROBE_MIGRATED = [False]
+
+
+def _probe_entries_dir():
+    path = _probe_cache_path()
+    return os.path.join(os.path.dirname(path), _PROBE_DIR_NAME) if path else ''
+
+
+def _probe_entry_path(cache_key):
+    folder = _probe_entries_dir()
+    if not folder or not cache_key:
+        return ''
+    name = hashlib.sha1(cache_key.encode('utf-8')).hexdigest()[:32]
+    return os.path.join(folder, name + '.json')
+
+
+def _store_probe_entry(cache_key, bundle):
+    fpath = _probe_entry_path(cache_key)
+    if not fpath:
+        return False
+    os.makedirs(os.path.dirname(fpath), exist_ok=True)
+    tmp = '%s.%d.tmp' % (fpath, threading.get_ident())
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump({'key': cache_key, 'entry': bundle}, f)
+        # Windows refuses while a reader has the file open; never leave the
+        # temporary copy behind (prune only looks at *.json).
+        os.replace(tmp, fpath)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        raise
+    try:
+        # Pruning keeps the newest by file time; a migrated entry keeps its age.
+        stamp = float(bundle.get('ts') or 0)
+        if stamp > 0:
+            os.utime(fpath, (stamp, stamp))
+    except Exception:
+        pass
+    return True
+
+
+def _prune_probe_entries():
+    folder = _probe_entries_dir()
+    try:
+        paths = [os.path.join(folder, n) for n in os.listdir(folder)
+                 if n.endswith('.json')]
+    except Exception:
+        return
+    if len(paths) <= _MAX_PROBE_ENTRIES:
+        return
+
+    def age(p):
+        try:
+            return os.path.getmtime(p)
+        except Exception:
+            return 0.0
+
+    for old in sorted(paths, key=age, reverse=True)[_MAX_PROBE_ENTRIES:]:
+        try:
+            os.remove(old)
+        except Exception:
+            pass
+
+
+def _migrate_probe_cache():
+    """Split the legacy single-file cache into per-entry files, once."""
+    if _PROBE_MIGRATED[0]:
+        return
     path = _probe_cache_path()
     if not path or not os.path.isfile(path):
-        return path, {}
+        return
+    with _PROBE_MIGRATE_LOCK:
+        if _PROBE_MIGRATED[0] or not os.path.isfile(path):
+            return
+        # Once per interpreter, even if the old file cannot be removed: a
+        # failed remove must not turn every lookup into a full parse again.
+        _PROBE_MIGRATED[0] = True
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f) or {}
+        except Exception:
+            data = {}
+        moved = 0
+        for key, ent in (data.items() if isinstance(data, dict) else ()):
+            if (isinstance(ent, dict) and key
+                    and not os.path.isfile(_probe_entry_path(key))):
+                try:
+                    moved += bool(_store_probe_entry(key, ent))
+                except Exception:
+                    pass
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+        _prune_probe_entries()
+        _log('probe cache: split %d entr%s into %s/'
+             % (moved, 'y' if moved == 1 else 'ies', _PROBE_DIR_NAME))
+
+
+def _read_probe_entry(cache_key):
+    """One cached media profile (dict) or None."""
+    if not cache_key:
+        return None
+    _migrate_probe_cache()
+    fpath = _probe_entry_path(cache_key)
+    if not fpath or not os.path.isfile(fpath):
+        return None
     try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return path, (json.load(f) or {})
+        with open(fpath, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
     except Exception:
-        return path, {}
+        return None
+    if not isinstance(doc, dict) or doc.get('key') != cache_key:
+        return None
+    ent = doc.get('entry')
+    return ent if isinstance(ent, dict) else None
 
 
 def _write_probe_cache(cache_key, bundle):
-    """Atomically merge one media profile into the bounded probe cache."""
+    """Atomically store one media profile in the bounded probe cache."""
     if not cache_key or not isinstance(bundle, dict):
         return False
-    cpath, data = _read_probe_cache()
-    if not cpath:
-        return False
+    _migrate_probe_cache()
     try:
-        data[cache_key] = bundle
-        if len(data) > _MAX_PROBE_ENTRIES:
-            data = dict(sorted(data.items(),
-                               key=lambda kv: kv[1].get('ts', 0),
-                               reverse=True)[:_MAX_PROBE_ENTRIES])
-        os.makedirs(os.path.dirname(cpath), exist_ok=True)
-        tmp = cpath + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(data, f)
-        os.replace(tmp, cpath)
+        if not _store_probe_entry(cache_key, bundle):
+            return False
+        _prune_probe_entries()
         return True
     except Exception as e:
         _log('probe cache store failed: %r' % e, level='WARNING')
@@ -903,8 +996,7 @@ def _known_cut_signature(info, playing=''):
     cache_key = _transport_cache_key(info)
     if not cache_key:
         return ''
-    _path, data = _read_probe_cache()
-    ent = data.get(cache_key)
+    ent = _read_probe_entry(cache_key)
     if not isinstance(ent, dict) or ent.get('pv') != _PROBE_CACHE_VERSION:
         return ''
     sig = (ent.get('cut_signature') or '').strip().lower()
@@ -951,8 +1043,7 @@ def _learn_cut_signature(info):
     if not re.fullmatch(r'cut1:[0-9a-f]{32}', sig):
         return ''
     cache_key = _transport_cache_key(info)
-    _path, data = _read_probe_cache()
-    old = data.get(cache_key) if cache_key else None
+    old = _read_probe_entry(cache_key) if cache_key else None
     if not isinstance(old, dict) or old.get('pv') != _PROBE_CACHE_VERSION:
         old = {}
     bundle = dict(old)
@@ -1028,8 +1119,8 @@ def _probe_reference_bundle_unlocked(info, playing):
     if not _probe_enabled():
         return {}
     cache_key = _transport_cache_key(info)
-    cpath, data = _read_probe_cache()
-    ent = data.get(cache_key) if cache_key else None
+    cpath = _probe_cache_path()
+    ent = _read_probe_entry(cache_key) if cache_key else None
     if ent is not None and ent.get('pv') != _PROBE_CACHE_VERSION:
         ent = None
     if ent:
@@ -1221,8 +1312,7 @@ def _cached_reference_bundle(info):
     cache_key = _transport_cache_key(info)
     if not cache_key:
         return {}
-    _path, data = _read_probe_cache()
-    ent = data.get(cache_key)
+    ent = _read_probe_entry(cache_key)
     if (not isinstance(ent, dict)
             or ent.get('pv') != _PROBE_CACHE_VERSION
             or not ent.get('cues')):
@@ -2230,8 +2320,28 @@ def _track_span(profile):
     return max(0.0, float(cues[-1]['end']) - float(cues[0]['start']))
 
 
+# Kodi runs every add-on's Python under one interpreter lock. Measured in QA
+# Kodi (21, Python 3.11): while one thread runs a CPU-bound loop that never
+# sleeps, a NEW script -- e.g. our own "בחירת כתוביות" button -- does not even
+# start until that loop ends (15.8 s behind a 20 s loop, 0.3 s idle); a 1 ms
+# sleep every ~20 ms brings it back to 0.3 s. Field logs from an Android box
+# showed the same 5-11 s waits behind SubSync's deep check at playback start.
+# The long loops here call _breathe(): about 5% slower in the background,
+# never in the way of the viewer.
+_BREATHE_SLICE = 0.02
+_breath = [0.0]
+
+
+def _breathe():
+    now = time.monotonic()
+    if now - _breath[0] >= _BREATHE_SLICE:
+        time.sleep(0.001)
+        _breath[0] = time.monotonic()
+
+
 def _onset_coverage(source, target, tolerance_ms=250.0):
     """Fraction of source onsets with a nearby target onset (linear scan)."""
+    _breathe()
     left = sorted(float(cue['start']) for cue in source or [])
     right = sorted(float(cue['start']) for cue in target or [])
     if not left or not right:
@@ -2315,6 +2425,7 @@ def _shift_invariant_shape_coverage(source, target, tolerance_ms=350.0,
 
     best = 0.0
     for offset in offsets:
+        _breathe()
         matched = 0
         cursor = 0
         for cue in left:
