@@ -35,7 +35,7 @@ class ManifestHostPinTests(unittest.TestCase):
     def test_official_pin_is_emitted_and_bad_hash_is_rejected(self):
         official = generator._pov_host_migration()
         self.assertEqual(official['id'], 'plugin.video.pov')
-        self.assertEqual(official['version'], '6.10.05')
+        self.assertEqual(official['version'], '6.10.06')
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / 'manifest.json'
             # This unit test checks pin propagation, independent of whether
@@ -54,6 +54,17 @@ class ManifestHostPinTests(unittest.TestCase):
             with mock.patch.object(generator, 'POV_HOST_MIGRATION', str(pin_path)):
                 with self.assertRaises(ValueError):
                     generator._pov_host_migration()
+
+
+    def test_pin_follows_the_verified_upstream_pov(self):
+        # Field report 16 Oct: POV auto-updated to 6.10.06 while this pin stayed
+        # on 6.10.05, so ModularUpdater refused the "downgrade" and every device
+        # not yet migrated kept the legacy MoranSubs (and its broken patches).
+        # When UPSTREAM_VERSIONS.txt moves to a new POV, the pin must move too.
+        upstream = (ROOT / 'UPSTREAM_VERSIONS.txt').read_text(encoding='utf-8')
+        pov = [line.split(':', 1)[1].strip() for line in upstream.splitlines()
+               if line.startswith('plugin.video.pov:')]
+        self.assertEqual(pov, [generator._pov_host_migration()['version']])
 
 
 if __name__ == '__main__':
