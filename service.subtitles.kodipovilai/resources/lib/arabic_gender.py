@@ -834,7 +834,11 @@ _AR_IMP_F = re.compile(
 # short feminine (تعالِ), but subtitlers also put it on a man's "خذِ", so a
 # kasra is read as neither. Left out: forms that are also a past tense or an
 # "I ..." verb (اتصل "he called", أخبرني "he told me", أخرج "I go out"); the
-# commonest of those count only as a whole utterance ("توقف!", "انتظر،").
+# commonest of those count only as a whole utterance opening a subtitle line
+# or a dash turn ("توقف!", "أحب إصبعك - توقف -"); "قلت له: توقف." is
+# reported speech.
+_AR_MARKS = u'[\\s\u200e\u200f\u202a-\u202e]*'
+_AR_LINE_START = u'(?:^|\n|\\s-)' + _AR_MARKS + u'(?:-' + _AR_MARKS + u')?'
 _AR_IMP_M = re.compile(
     _AR_START + u'(?:و|ف)?' + _ar_words((u'تعال', u'قل', u'خذ', u'دعني', u'دعنا'))
     + u'(?![\u0621-\u064a\u0650])'
@@ -845,17 +849,19 @@ _AR_IMP_M = re.compile(
         u'ادخل', u'صدقني',
         u'أعطني', u'اعطني', u'اتركني', u'أرني', u'ارني', u'خذني', u'اسمعني',
         u'اركض', u'اهرب')) + u'(?![\u0621-\u064a\u0650])'
-    u'|' + _AR_CLAUSE + u'(?:و|ف)?' + _ar_words((
+    u'|' + _AR_LINE_START + u'(?:و|ف)?' + _ar_words((
         u'توقف', u'انتظر', u'إنتظر', u'انتبه', u'إنتبه', u'تمهل', u'تحرك',
-        u'استيقظ', u'أسرع', u'اسرع')) + u'(?![\u0621-\u064a\u0650])' + u'\\s*[.!\u060c,\\-\u2026]')
+        u'استيقظ', u'أسرع', u'اسرع')) + u'(?![\u0621-\u064a\u0650])'
+    + _AR_MARKS + u'[.!\u060c,\\-\u2026]')
 # "أنت" + a second-person imperfect: the verb's own ending says which.
 _AR_ANTA = (_AR_START + u'(?:أ|هل\\s+|و|ف)?(?:أنت|انت)[\u064b-\u0652]*\\s+'
             u'(?:(?:لا|لم|لن|لست|لازلت|فعلاً|فعلا|حقاً|حقا|فقط|دائماً|دائما)\\s+)?')
 _AR_ANTA_VERB = re.compile(_AR_ANTA + u'(ت[' + _AR_L + u']{2,9})' + _AR_END)
 _AR_CLITICS = (u'هما', u'ني', u'ها', u'هم', u'هن', u'نا', u'كم', u'ه', u'ك')
 # t- words after أنت that are not a second-person verb: an adjective or noun
-# (ة, tanween, ى), a past tense (ت), and a few frequent function words.
-_AR_NOT_IMPERFECT = (u'ة', u'ت', u'ا', u'ى', u'\u064b', u'\u064c', u'\u064d')
+# (ة, tanween), a past tense (ت, also before an object: تركتني), and a few
+# frequent function words. ى stays: ترى / تنسى are second-person verbs.
+_AR_NOT_IMPERFECT = (u'ة', u'ت', u'ا', u'\u064b', u'\u064c', u'\u064d')
 _AR_T_NOT_VERBS = frozenset((u'تلك', u'تحت', u'تماما', u'تقريبا', u'تحديدا',
                              u'تماماً', u'تقريباً', u'تحديداً', u'تاريخ', u'تجربة'))
 # ... or + an adjective from the speaker list and a few more (ة = feminine).
@@ -865,29 +871,29 @@ _AR_ADDR_ADJ = _ar_words(_AR_SPEAKER_ADJ + (
 _AR_ANTA_ADJ_F = re.compile(_AR_ANTA + _AR_ADDR_ADJ + u'ة' + _AR_END)
 _AR_ANTA_ADJ_M = re.compile(_AR_ANTA + _AR_ADDR_ADJ + u'(?:اً|ًا|ا)?' + _AR_END)
 # "تبدو" + a masculine accusative adjective (the feminine says تبدين). تبدو
-# is also "she looks", so only the written tanween counts ("تبدو جميلاً").
-_AR_YOU_LOOK_M = re.compile(_AR_START + u'تبدو\\s+[' + _AR_L + u']{3,}(?:اً|ًا)' + _AR_END)
-# Vocatives. A bare endearment counts only when something sets it off -- a
-# comma before it ("أمابيلا، عزيزتي هل ...") or punctuation after it:
-# "صديقتي الجديدة" is "my new friend" and "حبيبتي تركتني" "my girlfriend
-# left me", somebody else.
+# is also "she looks", so only an adjective with written tanween counts
+# ("تبدو جميلاً"); an adverb wears it too ("تبدو تماماً مثل أمها").
+_AR_YOU_LOOK_M = re.compile(_AR_START + u'تبدو\\s+' + _AR_ADDR_ADJ + u'(?:اً|ًا)' + _AR_END)
+# Vocatives. A bare endearment counts only after a comma ("أمابيلا، عزيزتي
+# هل ...") or as a clause of its own ("عزيزي، اسمع"): "حبيبتي تركتني" and
+# "تركتني حبيبتي." are "my girlfriend left me", somebody else. "ابنتي" and
+# "صديقي" read as "my daughter / my friend" too often; they count after يا.
 _AR_AFTER_COMMA = u'[\u060c,]\\s*'
 _AR_VSEP_END = u'\\s*(?:[.!?\u061f\u060c,:\\-\u2026"]|$)'
-_AR_VOC_F_BARE = _ar_words((u'عزيزتي', u'حبيبتي', u'صغيرتي', u'ابنتي', u'بنيتي',
-                            u'سيدتي', u'آنستي'))
-_AR_VOC_M_BARE = _ar_words((u'عزيزي', u'حبيبي', u'سيدي', u'صديقي'))
+_AR_VOC_F_BARE = _ar_words((u'عزيزتي', u'حبيبتي', u'صغيرتي', u'سيدتي', u'آنستي'))
+_AR_VOC_M_BARE = _ar_words((u'عزيزي', u'حبيبي', u'سيدي'))
 _AR_VOC_F = re.compile(
     _AR_START + u'يا\\s+' + _ar_words((
         u'فتاة', u'امرأة', u'سيدة', u'آنسة', u'أمي', u'امي', u'صديقتي', u'عزيزتي',
         u'حبيبتي', u'ابنتي', u'سيدتي', u'أختي', u'اختي', u'جميلة')) + _AR_END
     + u'|' + _AR_AFTER_COMMA + _AR_VOC_F_BARE + _AR_END
-    + u'|' + _AR_START + _AR_VOC_F_BARE + _AR_VSEP_END)
+    + u'|' + _AR_CLAUSE + _AR_VOC_F_BARE + _AR_VSEP_END)
 _AR_VOC_M = re.compile(
     _AR_START + u'يا\\s+' + _ar_words((
         u'رجل', u'صاح', u'سيدي', u'أبي', u'ابي', u'بني', u'فتى', u'صديقي', u'عزيزي',
         u'حبيبي', u'أخي', u'اخي')) + _AR_END
     + u'|' + _AR_AFTER_COMMA + _AR_VOC_M_BARE + _AR_END
-    + u'|' + _AR_START + _AR_VOC_M_BARE + _AR_VSEP_END)
+    + u'|' + _AR_CLAUSE + _AR_VOC_M_BARE + _AR_VSEP_END)
 # A question: هل + a t-imperfect, or the a- question prefix on a verb whose
 # own first person is not a+t ("أتعرف" asks, "أتفق" is "I agree"; أتفهم is
 # also "I understand", أتعرف على "I get to know"). The same
@@ -929,8 +935,9 @@ def _ar_more_addressee(text, signal_text):
              or _AR_VOC_M.search(text))
     for mt in _AR_ANTA_VERB.finditer(text):
         word = mt.group(1)
-        if word in _AR_T_NOT_VERBS or word.endswith(_AR_NOT_IMPERFECT):
-            continue          # تعيسة, تحت, تماماً ... or a past tense / plural
+        bare = _ar_strip_clitic(word)
+        if word in _AR_T_NOT_VERBS or bare.endswith(_AR_NOT_IMPERFECT):
+            continue          # تعيسة, تحت, تماماً ... or a past tense (تركتني)
         g = _ar_verb_gender(word)
         f, m = f or g == 'F', m or g == 'M'
     if _AR_ANTA_ADJ_F.search(text):

@@ -1026,7 +1026,7 @@ PATCH_CONFIG = [
             "sys.path.append(p) if p not in sys.path else None\n"
             "import pov_http_session\n"
             "pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/session.py'), "
-            "pov_http_session.pov_version())\n"
+            "getattr(pov_http_session, 'pov_version', str)())\n"
         )
     },
     {
@@ -1045,7 +1045,7 @@ PATCH_CONFIG = [
             "sys.path.append(p) if p not in sys.path else None\n"
             "import pov_http_session\n"
             "pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/session.py'), "
-            "pov_http_session.pov_version())\n"
+            "getattr(pov_http_session, 'pov_version', str)())\n"
         )
     },
     {
