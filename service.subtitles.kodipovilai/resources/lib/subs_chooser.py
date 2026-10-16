@@ -732,6 +732,17 @@ def _human_hebrew_rows(cands):
     return n
 
 
+def _is_ai_row(c):
+    """A row that starts an AI translation when picked."""
+    import json
+    import urllib.parse
+    try:
+        p = json.loads(urllib.parse.unquote(c.get('link') or '')) or {}
+        return p.get('type') in ('ai', 'embedded_ai')
+    except Exception:
+        return False
+
+
 def _chooser_items(info, translate, quick=False):
     """The chooser's rows: list_candidates, the timing rank when it has a
     human Hebrew row to work on, and only rows that can be picked."""
@@ -892,7 +903,8 @@ def _show():
                         self.setFocusId(100)
                     except Exception:
                         pass
-                    if self.pending:
+                    if self.pending and not self.started:
+                        self.started = True
                         import threading
                         t = threading.Thread(target=self._complete)
                         t.daemon = True
@@ -900,14 +912,21 @@ def _show():
                 except Exception as e:
                     _log('xml onInit failed: {0}'.format(e), level='WARNING')
 
-            def _fill(self):
+            def _fill(self, items=None):
+                with self.lock:
+                    self._redraw(self.items if items is None else items)
+
+            def _redraw(self, items):
+                lst = self.getControl(100)
+                pos = lst.getSelectedPosition() if lst.size() else -1
+                was = (self.items[pos].get('link')
+                       if 0 <= pos < len(self.items) else None)
+                real = [c for c in items if not c.get('_placeholder')]
                 self.setProperty('subs.count', 'מחפש כתוביות נוספות…'
                                  if self.pending else
-                                 'נמצאו {0} כתוביות'.format(len(self.items)))
-                lst = self.getControl(100)
-                keep = lst.getSelectedPosition() if lst.size() else 0
+                                 'נמצאו {0} כתוביות'.format(len(real)))
                 rows = []
-                for c in self.items:
+                for c in items:
                     if c.get('_placeholder'):
                         rows.append(xbmcgui.ListItem(
                             '[COLOR FF9AA0A6]{0}[/COLOR]'.format(c['filename'])))
@@ -931,6 +950,9 @@ def _show():
                     rows.append(li)
                 lst.reset()
                 lst.addItems(rows)
+                self.items = items
+                keep = next((i for i, c in enumerate(items)
+                             if was and c.get('link') == was), 0)
                 if 0 < keep < len(rows):
                     lst.selectItem(keep)
 
@@ -948,10 +970,12 @@ def _show():
                     len(items), time.monotonic() - t))
                 if self.closed:
                     return
-                self.items = items
+                if not items:
+                    items = [{'filename': 'לא נמצאו כתוביות לכותר הזה',
+                              'language': '', 'link': '', '_placeholder': True}]
                 self.pending = False
                 try:
-                    self._fill()
+                    self._fill(items)
                 except Exception as e:
                     _log('chooser refresh failed: {0}'.format(e), level='WARNING')
 
@@ -982,12 +1006,26 @@ def _show():
                             pass
                         return
                     if controlId == 100:
-                        i = self.getControl(100).getSelectedPosition()
-                        if i is None or i < 0 or i >= len(self.items):
+                        if not self.lock.acquire(timeout=2):
                             return
-                        if self.items[i].get('_placeholder'):
+                        try:
+                            i = self.getControl(100).getSelectedPosition()
+                            item = (self.items[i] if i is not None
+                                    and 0 <= i < len(self.items) else None)
+                            pending = self.pending
+                        finally:
+                            self.lock.release()
+                        if item is None or item.get('_placeholder'):
                             return
-                        _deliver_pick(self.items[i], self.info, self.close)
+                        if pending and _is_ai_row(item):
+                            try:
+                                from resources.lib import kodi_utils
+                                kodi_utils.notify('עוד מחפש כתוביות מוכנות -- '
+                                                  'רגע ותוכל לבחור', time_ms=2500)
+                            except Exception:
+                                pass
+                            return
+                        _deliver_pick(item, self.info, self.close)
                 except Exception as e:
                     _log('xml onClick failed: {0}'.format(e), level='WARNING')
 
@@ -1000,9 +1038,12 @@ def _show():
         addon_path = xbmcaddon.Addon(ADDON_ID).getAddonInfo('path')
         w = _ChooserXML('script.moransubs.chooser.xml', addon_path,
                         'Default', '1080i')
+        import threading
         w.info = info
         w.items = items
         w.pending = pending
+        w.started = False
+        w.lock = threading.Lock()
         w.translate = translate
         w.doModal()
         del w
