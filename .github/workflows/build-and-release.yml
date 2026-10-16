@@ -148,6 +148,10 @@ jobs:
           elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null \
                | grep -qFx '.github/pov-host-migration.json'; then
             HOST_CHANGED=true
+          elif ! python -c 'import json,sys; m=json.load(open("manifest.json", encoding="utf-8")).get("pov_host_migration") or {}; p=json.load(open(".github/pov-host-migration.json", encoding="utf-8")); sys.exit(0 if (m.get("version"), m.get("sha256")) == (p["version"], p["sha256"]) else 1)'; then
+            # The published manifest still carries an older pin (e.g. the run
+            # that should have moved it failed): catch up on this run.
+            HOST_CHANGED=true
           fi
           echo "host=$HOST_CHANGED" >> "$GITHUB_OUTPUT"
 
@@ -203,6 +207,9 @@ jobs:
           # existing manifest (or rollback) already references.
           mkdir -p dist-verify
           ASSETS=$(gh release view "$TAG" --json assets -q '.assets[].name')
+          # A host-pin-only change builds no add-on zip; an unmatched glob
+          # must mean "nothing to publish", not a literal 'dist/*.zip'.
+          shopt -s nullglob
           for file in dist/*.zip; do
             name=$(basename "$file")
             case "$name" in *-latest.zip) continue ;; esac
