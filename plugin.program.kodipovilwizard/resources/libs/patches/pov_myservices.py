@@ -9,6 +9,7 @@ Replaces the native POV authorization UI with a centralized Account Manager
 import sys
 import xbmc
 import xbmcaddon
+import xbmcgui
 
 # Addon IDs
 ACCOUNT_MANAGER_ID = 'script.module.acctmgr'
@@ -165,7 +166,7 @@ def get_authorize_override(orig_authorize):
                     if not self.token:
                         return run_account_manager(prefix + 'Auth')
 
-                    choice = kodi_utils.dialog.select(title, [
+                    choice = xbmcgui.Dialog().select(title, [
                         'סנכרון החשבון לכל התוספים',
                         'ניתוק החשבון מכל התוספים'
                     ])
@@ -253,7 +254,7 @@ def get_authorize_override(orig_authorize):
                 yield item
 
         services = tuple(available_services)
-        selected_index = kodi_utils.dialog.select(DIALOG_TITLE, list(build_dialog_items()), useDetails=True)
+        selected_index = xbmcgui.Dialog().select(DIALOG_TITLE, list(build_dialog_items()), useDetails=True)
         if selected_index < 0:
             return None
 

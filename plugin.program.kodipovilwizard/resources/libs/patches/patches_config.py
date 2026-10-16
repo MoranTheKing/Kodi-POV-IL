@@ -452,11 +452,11 @@ PATCH_CONFIG = [
     {
         "id": "pov_addon_window_import",
         "name": "POV Addon Window Patcher (Import Scope)",
-        "description": "Waits out Kodi's unknown-addon window on import to prevent background service death.",
+        "description": "Waits out Kodi's unknown-addon window on import and on every later Addon() call (POV 6.10.06 builds it per settings read) to prevent background service death.",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/kodi_utils.py",
-        "marker": "# WIZARD_POV_ADDON_WINDOW_IMPORT_v2",
+        "marker": "# WIZARD_POV_ADDON_WINDOW_IMPORT_v3",
         "anchor": "from xbmcaddon import Addon",
         "action": "append_after",
         "hook": (
@@ -464,15 +464,16 @@ PATCH_CONFIG = [
             "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
             "sys.path.append(p) if p not in sys.path else None\n"
             "import pov_addon_window\n"
-            "pov_addon_window.wait_for_window()"
+            "pov_addon_window.wait_for_window()\n"
+            "Addon = pov_addon_window.patient_addon(Addon)"
         )
     },
     {
         "id": "pov_addon_window_func",
         "name": "POV Addon Window Patcher (Function Scope)",
-        "description": "Shadows addon() to retry fetching the addon object during the restart window.",
+        "description": "Retired: POV 6.10.06 defines addon() after this block, so it no longer took effect; the import-scope patch now makes every Addon() call wait out the restart window.",
         "addon_id": "plugin.video.pov",
-        "enabled": True,
+        "enabled": False,
         "target_file": "resources/lib/modules/kodi_utils.py",
         "marker": "# WIZARD_POV_ADDON_WINDOW_FUNC_v2",
         "anchor": "def addon_installed(addon_id):",

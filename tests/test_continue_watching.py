@@ -319,7 +319,11 @@ class ContinuationTests(unittest.TestCase):
             self.assertEqual(menu.list,rows)
 
     def test_show_season_picker_uses_only_positive_aired_seasons_and_native_handler(self):
-        self.utils.dialog=types.SimpleNamespace(select=Mock(return_value=1))
+        # POV 6.10.06 made kodi_utils.dialog the Dialog class itself; the
+        # picker opens its own Dialog() and never touches POV's.
+        self.utils.dialog=None
+        picker=types.SimpleNamespace(select=Mock(return_value=1))
+        gui=types.SimpleNamespace(Dialog=lambda:picker)
         settings=types.SimpleNamespace(metadata_user_info=lambda:{})
         native={'get_datetime':lambda:'2026-10-09',
             'metadata':types.SimpleNamespace(tvshow_meta=lambda *a:{'season_data':[
@@ -329,12 +333,13 @@ class ContinuationTests(unittest.TestCase):
                 {'season_number':4,'episode_count':5,'air_date':'2027-01-01'}]}),
             'mark_as_watched_unwatched_season':Mock(return_value=True)}
         params=dict(tmdb_id='1396',title='Show',season='choose',action='mark_as_watched')
-        with patch.dict(sys.modules,{'modules':types.SimpleNamespace(kodi_utils=self.utils,settings=settings)}):
+        with patch.dict(sys.modules,{'modules':types.SimpleNamespace(kodi_utils=self.utils,settings=settings),
+                                     'xbmcgui':gui}):
             self.assertTrue(helper.choose_season(params,native))
-            self.utils.dialog.select.assert_called_once_with('סמן עונה כנצפתה',['עונה 1','עונה 3'])
+            picker.select.assert_called_once_with('סמן עונה כנצפתה',['עונה 1','עונה 3'])
             native['mark_as_watched_unwatched_season'].assert_called_once_with(dict(params,season=3))
             self.assertEqual(params['season'],'choose')
-            self.utils.dialog.select.return_value=-1
+            picker.select.return_value=-1
             native['mark_as_watched_unwatched_season'].reset_mock()
             self.assertIsNone(helper.choose_season(params,native))
             native['mark_as_watched_unwatched_season'].assert_not_called()
