@@ -179,7 +179,15 @@ class PersonGenderTests(unittest.TestCase):
                 (u'هل تمزح معي؟', None),                    # idiom, said to anyone
                 (u'تعالِ إلى هنا', None),                    # kasra: not masculine
                 (u'هل تحققت من الكابحات بسيارتي', None),     # a past tense
-                (u'أعرف ما يعني رغبة الحصول على اشياء', None)):
+                (u'أعرف ما يعني رغبة الحصول على اشياء', None),
+                # review findings: not verbs, past tenses, "I ...", possessives
+                (u'أنت تعيسة', None), (u'أنت تلك الفتاة', None), (u'أنت تحت الاعتقال', None),
+                (u'اتصل بي أبي، لكنك محقة', None), (u'أنا أتفهم ذلك', None),
+                (u'يسعدني أن أتعرف عليك', None), (u'سوف أعطيك', None),
+                (u'بعد توقفي عن التدخين', None), (u'ابنتي في المستشفى', None),
+                (u'حبيبتي تركتني', None), (u'صديقي يعمل هنا', None),
+                (u'هي تبدو هكذا', None), (u'تبدو وكأنها مريضة', None), (u'وتنانين', None),
+                (u'- توقف -', 'M'), (u'توقفي عن هذا', 'F')):
             self.assertEqual(ag.reference_addressee_gender(text, 'ar'), want, msg=text)
         for text, want in (
                 (u'آسفة على التأخير', 'F'), (u'فأنا متأكدة', 'F'), (u'إنني سعيدة', 'F'),
