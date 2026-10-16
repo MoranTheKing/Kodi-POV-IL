@@ -139,6 +139,15 @@ class _SessionModule(types.ModuleType):
         return getattr(self.load(), name)
 
 
+def pov_version():
+    """POV's version, or '' while Kodi has it unregistered (mid-update)."""
+    try:
+        import xbmcaddon
+        return xbmcaddon.Addon('plugin.video.pov').getAddonInfo('version')
+    except Exception:
+        return ''
+
+
 def install(path, version):
     """Only the verified upstream contract is deferred; other hosts pass through."""
     with _install_lock:
