@@ -8,12 +8,15 @@ box). Python still READS a valid .pyc, so we write them ourselves:
 
 * in Kodi's own interpreter, so the magic number, cache tag and optimisation
   level are exactly the ones the import system looks for;
-* timestamp-checked (source mtime + size, the CPython default): a file the
-  patch engine or an add-on update rewrites gets a new pyc on the next pass,
-  and until then Python simply compiles it as before;
-* in the background, one file at a time with a short sleep in between, never
-  while a video plays -- Kodi's add-on interpreters share one lock, and a
-  long uninterrupted compile would hold back every other script.
+* hash-checked (PEP 552 CHECKED_HASH): the pyc carries a hash of the exact
+  bytes that were compiled and Python verifies it on every import, so a file
+  rewritten during or after the compile (patch engine, add-on update) can
+  never run stale code -- Python just compiles it as before until the next
+  pass writes a fresh pyc;
+* in the background, one file at a time with a pause at least twice as long
+  as the compile, never while a video plays -- Kodi's add-on interpreters
+  share one lock, and a long uninterrupted compile holds back every other
+  script; very large files are left alone for the same reason.
 """
 import importlib.util
 import os
@@ -27,29 +30,33 @@ PRIORITY = ('plugin.video.pov', 'plugin.program.kodipovilwizard',
             'script.module.urllib3', 'script.module.certifi', 'script.module.idna',
             'script.module.chardet')
 SKIP_DIRS = {'__pycache__', '.git', 'tests', 'test'}
-MAX_SOURCE_BYTES = 2 * 1024 * 1024
+MAX_SOURCE_BYTES = 512 * 1024
+MAX_WRITE_ERRORS = 20      # read-only or full storage: stop the pass
 PAUSE_S = 0.02
 
 
 def _pyc_current(source, cfile):
-    """True when cfile is a timestamp pyc for source as it is now."""
+    """True when cfile is a checked-hash pyc of source's current bytes."""
     try:
-        st = os.stat(source)
         with open(cfile, 'rb') as fh:
             head = fh.read(16)
+        if len(head) < 16 or head[:4] != importlib.util.MAGIC_NUMBER:
+            return False
+        if struct.unpack('<I', head[4:8])[0] != 0b11:     # hash-based, checked
+            return False
+        with open(source, 'rb') as fh:
+            return importlib.util.source_hash(fh.read()) == head[8:16]
     except OSError:
         return False
-    if len(head) < 16 or head[:4] != importlib.util.MAGIC_NUMBER:
-        return False
-    flags, mtime, size = struct.unpack('<III', head[4:16])
-    return flags == 0 and mtime == (int(st.st_mtime) & 0xFFFFFFFF) and size == (st.st_size & 0xFFFFFFFF)
 
 
 def sources(addons_dir):
     """Python sources of every add-on under addons_dir, PRIORITY add-ons first."""
     try:
+        # Hidden folders are the Wizard's own staging and rollback trees.
         names = sorted(n for n in os.listdir(addons_dir)
-                       if n not in ('packages', 'temp') and os.path.isdir(os.path.join(addons_dir, n)))
+                       if n not in ('packages', 'temp') and not n.startswith('.')
+                       and os.path.isdir(os.path.join(addons_dir, n)))
     except OSError:
         return
     order = [n for n in PRIORITY if n in names] + [n for n in names if n not in PRIORITY]
@@ -65,6 +72,7 @@ def warm(addons_dir, should_stop=lambda: False, should_pause=lambda: False,
          sleep=time.sleep, pause_s=PAUSE_S):
     """One pass: (compiled, current, failed). Stops early when should_stop()."""
     compiled = current = failed = 0
+    write_errors = 0
     for source in sources(addons_dir):
         while should_pause():
             if should_stop():
@@ -81,11 +89,18 @@ def warm(addons_dir, should_stop=lambda: False, should_pause=lambda: False,
         if _pyc_current(source, cfile):
             current += 1
             continue
+        started = time.monotonic()
         try:
             py_compile.compile(source, cfile=cfile, doraise=True,
-                               invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP)
+                               invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH)
             compiled += 1
-        except (py_compile.PyCompileError, OSError, ValueError, SyntaxError):
-            failed += 1   # Python 2 leftovers, read-only trees: leave them as they are
-        sleep(pause_s)
+            write_errors = 0
+        except OSError:
+            failed += 1
+            write_errors += 1
+            if write_errors >= MAX_WRITE_ERRORS:
+                break
+        except (py_compile.PyCompileError, ValueError, SyntaxError):
+            failed += 1   # Python 2 leftovers: leave them as they are
+        sleep(max(pause_s, 2 * (time.monotonic() - started)))
     return compiled, current, failed

@@ -93,9 +93,9 @@ def run():
     retry_at = 0
     attempts = 0
     # Bytecode passes count idle 10 s polls: the first once start-up and the
-    # home widgets have settled (~45 s), then about every 6 hours for Kodi's
+    # home widgets have settled (~70 s), then about every 6 hours for Kodi's
     # own add-on updates, and soon after a host repair rewrote files.
-    idle_polls, warm_after = 0, 4
+    idle_polls, warm_after = 0, 6
     try:
         while not monitor.waitForAbort(10):
             current = signature(addons)
