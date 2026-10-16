@@ -110,7 +110,8 @@ class PycWarmSafetyTests(PycWarmTests):
             self.run_warm()
         loader = importlib.machinery.SourceFileLoader('entry_race_check', str(src))
         ns = {}
-        exec(loader.get_code('entry_race_check'), ns)
+        with mock.patch.object(sys, 'dont_write_bytecode', True):     # as in Kodi
+            exec(loader.get_code('entry_race_check'), ns)
         self.assertEqual(ns['X'], 99)                      # the hash rejects the stale pyc
         self.assertEqual(self.run_warm(), (1, 0, 1))       # and the next pass rewrites it
 
