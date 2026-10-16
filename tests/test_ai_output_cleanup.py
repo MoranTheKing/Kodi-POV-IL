@@ -221,6 +221,10 @@ class WiringTests(unittest.TestCase):
         # 503 left 20 detected gender errors on screen).
         self.assertEqual(text.count('_repair_generate('), 3)
         self.assertIn('except (gemini.OverloadError, gemini.RateLimited) as e:', text)
+        # ...and a reply that answers none of the proven contradictions is asked
+        # once more; the log says what happened to every entry.
+        self.assertIn('if not _answers(reply):', text)
+        self.assertIn('not proven {4}, refused by the shape checks {5}', text)
         # A chunk that passes on the fallback reference is topped up too.
         alt = text.index('passed with fallback reference')
         self.assertIn('_top_up_missing(', text[alt:alt + 600])
