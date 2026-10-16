@@ -126,33 +126,54 @@ class BingProvider(BaseProvider):
         return url
 
 
-class TmdbProvider(BaseProvider):
+def _pov_tmdb_token():
+    """POV's own TMDb read token, read at run time and never stored here."""
+    try:
+        return xbmcaddon.Addon("plugin.video.pov").getSetting("tmdb_read_token").strip()
+    except Exception:
+        return ""
 
-    BASE_URL = "https://www.themoviedb.org/search/multi?{endpoint}"
+
+class TmdbProvider(BaseProvider):
+    # themoviedb.org's web search started answering automated requests with a
+    # 403 JavaScript challenge (Oct 2026), so the keyboard showed no titles at
+    # all. Use the official API with POV's read token, and fall back to Google
+    # suggestions whenever TMDb gives nothing.
+
+    BASE_URL = "https://api.themoviedb.org/3/search/multi?{endpoint}"
     FOLDER = "TMDB"
 
     def __init__(self, *args, **kwargs):
         super(TmdbProvider, self).__init__(*args, **kwargs)
 
     def build_url(self, query):
-        url = f"language={self.language}&query={query}"
+        url = f"language={self.language}&query={query}&include_adult=false"
         return url
 
+    def fetch_data(self, search_str):
+        token = _pov_tmdb_token()
+        if token:
+            url = self.BASE_URL.format(endpoint=self.build_url(quote_plus(search_str)))
+            headers = dict(self.HEADERS, Authorization="Bearer " + token, Accept="application/json")
+            out = self.process_result(get_JSON_response(url=url, headers=headers, folder=self.FOLDER))
+            if out:
+                return out
+        return GoogleProvider(limit=self.limit).fetch_data(search_str)
+
     def process_result(self, result):
-        if not result or not result.get("results"):
+        if not isinstance(result, dict) or not result.get("results"):
             return []
         out = []
-        results = result.get("results")
-        for i in results:
-            title = None
+        for i in result.get("results"):
             media_type = i.get("media_type")
             if media_type == "movie":
-                title = i["title"]
-            elif media_type in ["tv", "person"]:
-                title = i["name"]
+                title = i.get("title") or i.get("original_title")
+            elif media_type in ("tv", "person"):
+                title = i.get("name") or i.get("original_name")
             else:
-                title = i
-            out.append(title)
+                title = None
+            if title and title not in out:
+                out.append(title)
         return out
 
 
