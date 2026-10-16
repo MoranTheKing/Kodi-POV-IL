@@ -468,9 +468,14 @@ def _recent_put(info, out):
     if not key:
         return
     now = time.time()
-    rows = [r for r in _recent_entries()
-            if isinstance(r, dict) and r.get('key') != key
-            and 0 <= now - float(r.get('t') or 0) < _RECENT_TTL]
+    rows = []
+    for r in _recent_entries():
+        try:
+            if (isinstance(r, dict) and r.get('key') != key
+                    and 0 <= now - float(r.get('t') or 0) < _RECENT_TTL):
+                rows.append(r)
+        except Exception:
+            continue          # a malformed entry is simply dropped
     rows.append({'key': key, 't': now, 'rel': _release_key(info),
                  'out': out or []})
     try:
