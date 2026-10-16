@@ -3442,9 +3442,14 @@ def _verify_file_bundle(bundle, text):
     all_profiles = list(raw_profiles)
     raw_profiles = _distinct_track_families(raw_profiles)
     # The one PGS representative read as display events (see _verify_profile).
-    events_profile = next((profile for profile in raw_profiles
-                           if _track_codec_family(profile.get('track') or {})
-                           == 'pgs'), None)
+    # Complete and non-forced first: a sparse forced (signs) track would only
+    # ever answer UNKNOWN.
+    pgs_profiles = [profile for profile in raw_profiles
+                    if _track_codec_family(profile.get('track') or {}) == 'pgs']
+    events_profile = max(pgs_profiles, key=lambda profile: (
+        0 if (profile.get('track') or {}).get('forced') else 1,
+        _track_span(profile), len(profile.get('cues') or [])),
+        default=None)
 
     # A zero-shift answer can be settled cheaply before testing every FPS
     # ratio and edit map.  Check each track independently with the same final
