@@ -97,7 +97,7 @@ class ResidualRepair(unittest.TestCase):
                      src_text=source,out_blocks=list(current),source_lang='en',progressive_cb=None,
                      _gemini_rate_gate=gate,_rpm_interval=2,api_key='synthetic',model='test',
                      max_output_tokens=8192,top_p=None,thinking_budget=None,thinking_level='medium',
-                     gemini_timeout=90,gemini=types.SimpleNamespace(generate=api,REQUEST_TIMEOUT=90),
+                     gemini_timeout=90,gemini=types.SimpleNamespace(generate=api,REQUEST_TIMEOUT=90),_repair_generate=lambda **kw:api(**kw),
                      kodi_utils=types.SimpleNamespace(log=Mock()))
             with patch.dict(sys.modules,{'resources':pkg,'resources.lib':lib,'xbmc':xbmc}):
                 exec(compile(ast.Module(body=[node],type_ignores=[]),'production-residual','exec'),env)
