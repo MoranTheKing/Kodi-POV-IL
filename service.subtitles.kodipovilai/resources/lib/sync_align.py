@@ -148,6 +148,7 @@ def parse_srt(text):
         return cues
     text = text.lstrip('﻿')
     for block in re.split(r'\r?\n\r?\n+', text):
+        _breathe()
         m = _TIME_RE.search(block)
         if not m:
             continue
@@ -179,6 +180,7 @@ def _preflight_srt(text):
     if not blocks:
         return [], 'empty subtitle'
     for number, block in enumerate(blocks, 1):
+        _breathe()
         # More than one timing arrow means missing block separation; no parser
         # should silently keep the first cue and throw the remainder away.
         if block.count('-->') != 1:
@@ -259,6 +261,7 @@ def _preflight_unknown(error):
 
 
 def _is_dialogue(c):
+    _breathe()
     t = (c.get('text') or '').strip()
     if not t or t.startswith(('♪', '♫', '#')):
         return False
@@ -1612,6 +1615,7 @@ _ENV_STAIR_MS = 3000.0
 def _envelope_scores(prefix, size, spans, lags):
     scores = []
     for lag in lags:
+        _breathe()
         total = 0.0
         for begin, end in spans:
             a = begin - lag
@@ -2732,6 +2736,7 @@ def retime(cand_srt_text, scale, offset_ms, segments=None, strict=False):
     idx = 0
     text = cand_srt_text.lstrip('﻿')
     for block in re.split(r'\r?\n\r?\n+', text):
+        _breathe()
         m = _TIME_RE.search(block)
         if not m:
             continue
@@ -2760,6 +2765,7 @@ def _timed_signature(text):
     """Original-order timing/text signature for post-transform invariants."""
     out = []
     for block in re.split(r'\r?\n\r?\n+', (text or '').lstrip('﻿')):
+        _breathe()
         m = _TIME_RE.search(block)
         if not m:
             continue
