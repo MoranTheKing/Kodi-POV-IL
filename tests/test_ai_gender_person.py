@@ -125,6 +125,11 @@ class PersonGenderTests(unittest.TestCase):
         self.assertFalse(ag.person_roles_fixed('שלום לכולם', [('speaker', 'M')]))
         self.assertTrue(ag.person_roles_fixed('אל תדאג לתינוק', [('addressee', 'M')]))
         self.assertFalse(ag.person_roles_fixed('אל תדאגי לתינוק', [('addressee', 'M')]))
+        # a rewrite that still contradicts the Hebrew reference is no fix
+        # (measured: only the verb changed, the stuttered pronoun stayed)
+        ref = '‫אתה נראה נחמד. באמת נחמד.‬'
+        self.assertFalse(ag.person_roles_fixed('וואו!\nאת-את נראה נחמד.', [('addressee', 'M')], ref))
+        self.assertTrue(ag.person_roles_fixed('וואו!\nאתה-אתה נראה נחמד.', [('addressee', 'M')], ref))
         # both forms at once is a hedge, never proof (measured in a repair)
         self.assertFalse(ag.person_roles_fixed('תוכל/י להיות נחמדה?', [('addressee', 'F')]))
 
