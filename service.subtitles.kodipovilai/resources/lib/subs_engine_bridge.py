@@ -360,14 +360,19 @@ def search(info, modal_progress=True):
         # waiting 24h for it to expire.
         if cached:
             return cached
+        if _recently_empty(info):
+            return []
     try:
         out = _search_inner(info, modal_progress=modal_progress)
         # NEVER cache an empty / failed search. A transient timeout, rate-limit
         # (429) or network hiccup returns [] -- caching that would hide every
         # source for 24h (the user sees only the community pool). DarkSubs's
         # cache does the same: it returns an empty result without storing it.
+        # It is only remembered for a few minutes (_EMPTY_TTL), in memory.
         if cacheable and out:
             _cache_put(info, out)
+        elif cacheable:
+            _mark_empty(info)
         return out
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.search failed: {0}'.format(e),
@@ -405,6 +410,49 @@ def _cache_key(info):
         sig = ''
     return '{0}_s{1}_e{2}_{3}'.format(
         mid, info.get('season') or '0', info.get('episode') or '0', sig)
+
+
+# A search that found nothing is remembered for a few minutes, in Kodi's
+# memory only. Measured in a user's log: the automatic search at the start of
+# an episode found no subtitle in any language, and pressing "בחירת כתוביות"
+# 12 s later ran every provider again -- 6.4 s on a streaming box before the
+# window opened, to find the same nothing. Short, so a hiccup that returned
+# nothing is retried soon; never on disk, so a restart forgets it.
+_EMPTY_TTL = 300
+
+
+def _empty_prop(info):
+    key = _cache_key(info)
+    return ('moransubs.engine_empty.' + key) if key else None
+
+
+def _mark_empty(info):
+    prop = _empty_prop(info)
+    if not prop:
+        return
+    try:
+        import xbmcgui
+        xbmcgui.Window(10000).setProperty(prop, str(int(time.time())))
+    except Exception:
+        pass
+
+
+def _recently_empty(info):
+    prop = _empty_prop(info)
+    if not prop:
+        return False
+    try:
+        import xbmcgui
+        stamp = xbmcgui.Window(10000).getProperty(prop)
+        age = time.time() - float(stamp) if stamp else None
+    except Exception:
+        return False
+    if age is None or not 0 <= age < _EMPTY_TTL:
+        return False
+    kodi_utils.log('subs_engine_bridge: no subtitle found for this title {0:.0f}s '
+                   'ago -- not searching every source again'.format(age),
+                   level='INFO')
+    return True
 
 
 def _cache_dir():
