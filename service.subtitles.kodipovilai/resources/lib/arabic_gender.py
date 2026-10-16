@@ -871,6 +871,16 @@ def person_roles_fixed(body, roles, ref_text=None):
     hpg = _hpg()
     if hpg is not None and hpg.fixed(body, roles, ref_text):
         return True
+    # With the Hebrew reference at hand, a rewrite that still contradicts it
+    # for the role is no fix -- measured: only the verb changed and
+    # "את-את נראה נחמד" kept the feminine pronoun.
+    if hpg is not None and ref_text:
+        try:
+            left = set(r for r, _g in hpg.conflicts(body, ref_text))
+        except Exception:
+            left = set()
+        if any(role in left for role, _gender in roles):
+            return False
     for role, gender in roles:
         if role != 'addressee':
             return False

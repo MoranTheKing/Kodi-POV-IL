@@ -12,6 +12,7 @@ def repair(source,refs,reply):
     calls=[]
     def generate(**kw):calls.append(kw);return reply
     ns=dict(gemini=types.SimpleNamespace(REQUEST_TIMEOUT=60,generate=generate),srt=srt,arabic_gender=ag,
+            _repair_generate=lambda **kw:generate(**kw),
             kodi_utils=types.SimpleNamespace(log=lambda *a,**kw:None),api_key='fixture',model='fixture',max_output_tokens=8192,
             top_p=1.0,thinking_budget=None,thinking_level=None,gemini_timeout=None,_rpm_interval=0,
             _gemini_rate_gate=lambda x:None,src_text='\n\n'.join(source),_ar_map=refs,_ref_lang='he')
