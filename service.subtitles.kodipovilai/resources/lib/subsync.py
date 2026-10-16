@@ -137,8 +137,10 @@ _MAX_VERDICTS = 400
 # watches, not from viewers. A cue-level region planner now proves the
 # repeated act-break pads of disc remuxes that fixed windows missed, and
 # region cuts skip non-dialogue lines instead of stacking them. Every
-# older verdict must recompute.
-_VERDICT_VERSION = 28
+# older verdict must recompute. v29: a PGS/VobSub track is read as display
+# events (appear AND clear) and its offset re-measured on caption starts, so
+# PGS-only files decide where they used to abstain.
+_VERDICT_VERSION = 29
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -2154,6 +2156,73 @@ def _track_codec_family(track):
     return 'other'
 
 
+# A PGS track's index lists two display EVENTS per caption -- the instant it
+# appears and the instant it is cleared -- and the remote reader turns every
+# one of them into a cue.  Measured on a Blu-ray remux: the English PGS track's
+# even events coincide with 98% of the English text track's starts and its odd
+# events with none, i.e. the track strictly alternates appear/clear.  Paired
+# back into captions it reads like a text track: the cue-level region planner
+# then recovers the same six act-break regions from the PGS alone that it
+# found from the text track (offsets within 2 ms, 4/5 held-out folds).
+_PGS_PAIR_MIN_MEDIAN_MS = 800
+_PGS_PAIR_MAX_MEDIAN_MS = 6000
+_PGS_PAIR_MAX_LONG = 0.05      # captions longer than 10 s
+# One missing clear (two captions back to back share a timestamp) flips every
+# later pair into clear -> next appear, a gap that is usually under 400 ms.
+# Measured on two Blu-ray remuxes: every cleanly alternating PGS track (25 of
+# them, 12 languages) has NO pair under 400 ms; the tracks whose alternation
+# breaks part-way have 22-27%.  A median check alone accepted a track whose
+# later half was flipped.
+_PGS_PAIR_SHORT_MS = 400
+_PGS_PAIR_MAX_SHORT = 0.02
+
+
+def _paired_bitmap_cues(cues):
+    """A PGS track's appear/clear events paired into captions, or None when
+    neither alignment of the pairs looks like captions (median display time
+    0.8-6 s, at most 5% over 10 s) -- the measured wrong pairing gives a
+    167 ms median, the gaps between lines."""
+    try:
+        points = sorted({int(c['start']) for c in cues or []})
+    except (KeyError, TypeError, ValueError):
+        return None
+    for parity in (0, 1):
+        pairs = [{'start': points[i], 'end': points[i + 1]}
+                 for i in range(parity, len(points) - 1, 2)]
+        if len(pairs) < MIN_REMOTE_CUES:
+            return None
+        durations = sorted(p['end'] - p['start'] for p in pairs)
+        median = durations[len(durations) // 2]
+        long_share = sum(1 for d in durations if d > 10000) / float(len(durations))
+        short_share = (sum(1 for d in durations if d < _PGS_PAIR_SHORT_MS)
+                       / float(len(durations)))
+        if (_PGS_PAIR_MIN_MEDIAN_MS <= median <= _PGS_PAIR_MAX_MEDIAN_MS
+                and long_share <= _PGS_PAIR_MAX_LONG
+                and short_share <= _PGS_PAIR_MAX_SHORT):
+            return pairs
+    return None
+
+
+def _verify_profile(profile, text, bitmap_events=False, **kwargs):
+    """verify_cues against one file track.  The preferred PGS representative
+    (``bitmap_events``) is first compared event to event
+    (sync_align.bitmap_events, whose offset is re-measured on caption starts
+    and refused when they disagree); when that reaches no decision the classic
+    comparison runs exactly as before, so no earlier answer can be lost.  Only
+    one track pays for the second pass -- each costs ~2x the classic check."""
+    cues = profile.get('cues') or []
+    if bitmap_events and _track_codec_family(profile.get('track') or {}) == 'pgs':
+        try:
+            verdict = sync_align.verify_cues(cues, text, ref_events=True,
+                                             **kwargs)
+            if verdict.get('status') in (sync_align.STATUS_CONFIRMED,
+                                         sync_align.STATUS_FIXABLE):
+                return verdict
+        except TypeError:
+            pass          # an older sync_align still in memory after an update
+    return sync_align.verify_cues(cues, text, **kwargs)
+
+
 def _track_span(profile):
     cues = profile.get('cues') or []
     if not cues:
@@ -2306,6 +2375,79 @@ def _timing_profiles_distinct(left, right):
     return max(left_shape, right_shape) < 0.65
 
 
+def _validated_pgs_only_piecewise(pgs_tracks, text, planner, validator,
+                                  family_judge):
+    """Act-break regions for a file whose only subtitles are PGS.
+
+    The map is learned from the disc's own PGS track (paired into captions --
+    see _paired_bitmap_cues) and must pass the same strong held-out folds as
+    the text-track path (>=4 of 5, score >= 0.85, gain >= 0.15).  Like
+    native-disc-lane-v1 it then needs the disc to agree: at least one other
+    PGS language must accept the frozen map, and any that already fitted well
+    and is damaged by it vetoes.  A file with a single PGS track gets no
+    rewrite from this path (a PGS muxed in from another cut would pass its own
+    held-out folds).
+    """
+    ranked = sorted(pgs_tracks, key=lambda profile: (
+        1 if _track_language_rank(profile.get('track') or {}) == 1 else 0,
+        0 if (profile.get('track') or {}).get('forced') else 1,
+        _track_span(profile), len(profile.get('cues') or [])), reverse=True)
+    primary = ranked[0]
+    paired = _paired_bitmap_cues(primary.get('cues') or [])
+    if not paired:
+        return None
+    try:
+        proposal = planner(paired, text)
+        verdict = (validator(paired, text, proposal)
+                   if proposal is not None else None)
+    except Exception:
+        verdict = None
+    if not verdict or verdict.get('status') != sync_align.STATUS_FIXABLE:
+        return None
+    try:
+        folds = int(verdict.get('validation_folds') or 0)
+        holdout_min = float(verdict.get('holdout_score_min') or 0.0)
+        gain_min = float(verdict.get('holdout_gain_min') or 0.0)
+    except (TypeError, ValueError):
+        return None
+    if folds < 4 or holdout_min < 0.85 or gain_min < 0.15:
+        return None
+    primary_lang = ((primary.get('track') or {}).get('lang') or '').lower()
+    accepting = set()
+    for profile in ranked[1:]:
+        lang = ((profile.get('track') or {}).get('lang') or '').lower()
+        other = _paired_bitmap_cues(profile.get('cues') or [])
+        if not other:
+            continue
+        try:
+            metrics = family_judge(other, text, verdict)
+        except Exception:
+            metrics = None
+        if (metrics and metrics.get('before_score', 0.0) >= 0.78
+                and metrics.get('after_score', 0.0)
+                < metrics.get('before_score', 0.0) - 0.03):
+            return None
+        if (metrics and metrics.get('accepted') and lang
+                and lang != primary_lang
+                and lang not in ('und', 'unk', 'mul', 'zxx', 'mis')):
+            accepting.add(lang)
+    if not accepting:
+        return None
+    track = primary.get('track') or {}
+    verdict = dict(verdict)
+    verdict.update({
+        'validation_proof': 'native-disc-pgs-v1',
+        'pgs_lane_tracks': len(accepting),
+        'timing_families': ['pgs'],
+        'validation_primary_track': '#%s/%s' % (
+            track.get('num', '?'), track.get('lang', '?')),
+        'diag': ('%s; map learned from the disc PGS track (paired '
+                 'appear/clear events), accepted by PGS %s'
+                 % (verdict.get('diag', ''), ', '.join(sorted(accepting)))),
+    })
+    return {'track': track, 'cues': paired, 'verdict': verdict}
+
+
 def _validated_micro_piecewise(profiles, text):
     """Prove repeated short edits without counting duplicate tracks twice.
 
@@ -2330,7 +2472,9 @@ def _validated_micro_piecewise(profiles, text):
         if (family == 'text' and not track.get('forced')
                 and _track_language_rank(track) == 1):
             text_tracks.append(profile)
-    if not text_tracks or not pgs_tracks:
+    # A file whose only subtitles are PGS learns from the disc track itself
+    # (_validated_pgs_only_piecewise, below).
+    if not pgs_tracks:
         return None
 
     try:
@@ -2349,6 +2493,9 @@ def _validated_micro_piecewise(profiles, text):
 
     text_tracks = complete_family(text_tracks)
     pgs_tracks = complete_family(pgs_tracks)
+    if not text_tracks and pgs_tracks:
+        return _validated_pgs_only_piecewise(
+            pgs_tracks, text, planner, validator, family_judge)
     if not text_tracks or not pgs_tracks:
         return None
 
@@ -3294,6 +3441,10 @@ def _verify_file_bundle(bundle, text):
     # pruning below is only for the expensive per-track verdicts.
     all_profiles = list(raw_profiles)
     raw_profiles = _distinct_track_families(raw_profiles)
+    # The one PGS representative read as display events (see _verify_profile).
+    events_profile = next((profile for profile in raw_profiles
+                           if _track_codec_family(profile.get('track') or {})
+                           == 'pgs'), None)
 
     # A zero-shift answer can be settled cheaply before testing every FPS
     # ratio and edit map.  Check each track independently with the same final
@@ -3307,7 +3458,9 @@ def _verify_file_bundle(bundle, text):
         kwargs = dict(_probe_gate_kwargs(cues))
         kwargs.update({'scales': (1.0,), 'allow_piecewise': False})
         try:
-            verdict = sync_align.verify_cues(cues, text, **kwargs)
+            verdict = _verify_profile(
+                profile, text, bitmap_events=profile is events_profile,
+                **kwargs)
         except Exception:
             continue
         identity_checked.append({'track': profile['track'],
@@ -3360,8 +3513,9 @@ def _verify_file_bundle(bundle, text):
     for profile in raw_profiles:
         cues = profile.get('cues') or []
         try:
-            verdict = sync_align.verify_cues(
-                cues, text, **_probe_gate_kwargs(cues))
+            verdict = _verify_profile(
+                profile, text, bitmap_events=profile is events_profile,
+                **_probe_gate_kwargs(cues))
         except Exception:
             continue
         profiles.append({'track': profile.get('track') or {},

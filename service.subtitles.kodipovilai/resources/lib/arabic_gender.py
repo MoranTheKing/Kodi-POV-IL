@@ -221,10 +221,16 @@ def _arabic_for_blocks(src_blocks, ar_cues, a, b, segments=None):
     return out
 
 
-def align_one(src_text, src_blocks, ar_text):
+def align_one(src_text, src_blocks, ar_text, timing_text=None):
     """Try to align ONE Arabic SRT to the source. Returns (ar_for_blocks, diag)
-    on success, or (None, diag) when the alignment isn't trustworthy."""
-    en = [c for c in _parse(src_text) if _is_dialogue(c['text'])]
+    on success, or (None, diag) when the alignment isn't trustworthy.
+
+    `timing_text` is the source as it was cued before same-time captions were
+    merged. The gate measures the clock on those original cues (measured: a
+    Netflix file that aligns cleanly cue-by-cue fails local consistency once
+    its split captions are merged), and the hints are then placed on
+    `src_blocks`, whose merged captions keep the exact same timecodes."""
+    en = [c for c in _parse(timing_text or src_text) if _is_dialogue(c['text'])]
     ar = [c for c in _parse(ar_text) if _is_dialogue(c['text'])]
     if len(en) < 8 or len(ar) < 8:
         return None, 'too few dialogue cues (en=%d ar=%d)' % (len(en), len(ar))
@@ -463,8 +469,9 @@ class ReferencePlan(object):
     reference. Thread-safe (parallel chunk workers may pull a fallback at once)
     and fully guarded: any failure yields (None, None), never raises."""
 
-    def __init__(self, src_text, src_blocks, ordered, total):
+    def __init__(self, src_text, src_blocks, ordered, total, timing_text=None):
         self._src_text = src_text
+        self._timing_text = timing_text
         self._src_blocks = src_blocks
         self._ordered = ordered      # [(lang, candidate), ...] in chain order
         self.total = total
@@ -504,8 +511,13 @@ class ReferencePlan(object):
                         if not ref_text:
                             continue
                         try:
-                            mapping, diag = align_one(
-                                self._src_text, self._src_blocks, ref_text)
+                            if self._timing_text:
+                                mapping, diag = align_one(
+                                    self._src_text, self._src_blocks, ref_text,
+                                    timing_text=self._timing_text)
+                            else:
+                                mapping, diag = align_one(
+                                    self._src_text, self._src_blocks, ref_text)
                         except Exception as e:
                             _log('align [{0}] crashed: {1}'.format(lang, e),
                                  level='WARNING')
@@ -730,6 +742,191 @@ def reference_addressee_gender(ref_text, lang):
         return None
 
 
+# The SPEAKER's own gender, read off a non-Hebrew reference. Only first-person
+# forms that cannot be anything else: Arabic "أنا"/"لست" + an adjective
+# (feminine ends in ة; masculine from a short reviewed list -- an Arabic word
+# without ة is not by itself masculine), and Russian/Ukrainian "я" + a
+# past-tense verb or short adjective (-ла / -л, уверена / уверен). Anything
+# else is None, and None never triggers a rewrite.
+_AR_ME = u'(?<![ء-ي])(?:أنا|لست)\\s+'
+_AR_SPEAKER_ADJ = (u'آسف', u'متأكد', u'سعيد', u'مستعد', u'جاهز', u'خائف', u'متعب',
+                   u'مشغول', u'متأسف', u'غاضب', u'حزين', u'جائع', u'مسرور', u'موافق',
+                   u'قلق', u'فخور', u'مخطئ', u'محق', u'متزوج', u'وحيد', u'مريض',
+                   u'نادم')
+# Feminine from the same reviewed list (+ة). "Any word ending in ة" also
+# matched gender-neutral phrases -- "أنا بحاجة" (I need), "أنا عادة" (I usually).
+_AR_SPEAKER_F = re.compile(
+    _AR_ME + u'(?:' + u'|'.join(w + u'\u0629' for w in _AR_SPEAKER_ADJ)
+    + u')(?![\u0621-\u064a])')
+_AR_SPEAKER_M = re.compile(
+    _AR_ME + u'(?:آسف|متأكد|سعيد|'
+    u'مستعد|جاهز|خائف|متعب|'
+    u'مشغول|متأسف|غاضب|حزين|'
+    u'جائع|مسرور|موافق|قلق|'
+    u'فخور|مخطئ|محق|متزوج|'
+    u'وحيد|مريض|نادم)(?![ء-ي])')
+_SLAVIC_ME = u'(?<![а-яёії])я\\s+(?:не\\s+)?'
+_SLAVIC_SPEAKER_F = re.compile(
+    _SLAVIC_ME + u'(?:[а-яёії]{2,}ла|уверена|'
+    u'рада|готова|должна)'
+    u'(?![а-яёії])', re.I)
+_SLAVIC_SPEAKER_M = re.compile(
+    _SLAVIC_ME + u'(?:[а-яёії]{2,}л|уверен|'
+    u'рад|готов|должен)'
+    u'(?![а-яёії])', re.I)
+
+
+# The same first-person reading for the rest of the chain, only where the
+# ending itself carries person AND gender -- the counterpart of
+# _ADDRESSEE_MARKERS. Polish -łam/-łem is anchored to "ja", a negation or the
+# line start, because instrumental nouns end the same way ("przed stołem",
+# "całym ciałem"); "zdołam" is a future, not a past. Portuguese thanks agree
+# with the speaker. Spanish/Italian/French adjectives stay out for the reason
+# given above _ADDRESSEE_MARKERS' callers: a feminine noun looks the same.
+_PL_ANCHOR = r'(?:^|[.!?\-]\s*|\b(?:ja|nie|już|też|tylko|właśnie|zawsze|nigdy|nawet)\s+)'
+_SPEAKER_MARKERS = {
+    'pl': (_rx(_PL_ANCHOR + r'(?!zdołam\b|podołam\b)\w{2,}łam\b',
+               r'\bjestem\s+(?:pewna|gotowa|zmęczona|szczęśliwa|wdzięczna)\b'),
+           _rx(_PL_ANCHOR + r'\w{2,}łem\b',
+               r'\bjestem\s+(?:pewien|pewny|gotowy|zmęczony|szczęśliwy|wdzięczny)\b')),
+    'cs': (_rx(r'\b\w+la\s+jsem\b', r'\bjsem\s+\w+la\b'),
+           _rx(r'\b\w+l\s+jsem\b', r'\bjsem\s+\w+l\b')),
+    'sk': (_rx(r'\b\w+la\s+som\b', r'\bsom\s+\w+la\b'),
+           _rx(r'\b\w+l\s+som\b', r'\bsom\s+\w+l\b')),
+    'sr': (_rx(r'\b\w+la\s+sam\b', r'\bsam\s+\w+la\b'),
+           _rx(r'\b\w+(?:ao|io)\s+sam\b', r'\bsam\s+\w+(?:ao|io)\b')),
+    'hr': (_rx(r'\b\w+la\s+sam\b', r'\bsam\s+\w+la\b'),
+           _rx(r'\b\w+(?:ao|io)\s+sam\b', r'\bsam\s+\w+(?:ao|io)\b')),
+    # Thanks only: at the start of a clause or after "muito". As a participle
+    # ("ela foi obrigada", she was forced) it is about somebody else.
+    'pt': (_rx(r'(?:^|[.!?,;:"\-]\s*|\bmuit[oí]ssimo\s+|\bmuito\s+)obrigada\b'),
+           _rx(r'(?:^|[.!?,;:"\-]\s*|\bmuit[oí]ssimo\s+|\bmuito\s+)obrigado\b')),
+}
+
+
+def reference_speaker_gender(ref_text, lang):
+    """'F', 'M' or None: the speaker's gender in a non-Hebrew reference line."""
+    if not ref_text:
+        return None
+    try:
+        if lang == 'ar':
+            f, m = bool(_AR_SPEAKER_F.search(ref_text)), bool(_AR_SPEAKER_M.search(ref_text))
+        elif lang in ('ru', 'uk'):
+            f = bool(_SLAVIC_SPEAKER_F.search(ref_text))
+            m = bool(_SLAVIC_SPEAKER_M.search(ref_text))
+        elif lang in _SPEAKER_MARKERS:
+            fem_pats, masc_pats = _SPEAKER_MARKERS[lang]
+            f = any(p.search(ref_text) for p in fem_pats)
+            m = any(p.search(ref_text) for p in masc_pats)
+        else:
+            return None
+        if f != m:
+            return 'F' if f else 'M'
+    except Exception:
+        pass
+    return None
+
+
+_HPG = []
+
+
+def _hpg():
+    """he_person_gender, as a package module or (standalone load) its file."""
+    if _HPG:
+        return _HPG[0]
+    mod = None
+    try:
+        from resources.lib import he_person_gender as mod
+    except Exception:
+        try:
+            import importlib.util
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                'he_person_gender.py')
+            spec = importlib.util.spec_from_file_location('he_person_gender', path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        except Exception:
+            mod = None
+    _HPG.append(mod)
+    return mod
+
+
+_SLASH_FORM = re.compile(u'[\u05d0-\u05ea]/[\u05d0-\u05ea]')
+
+
+def person_roles_fixed(body, roles, ref_text=None):
+    """True when a rewritten line provably carries the required genders.
+
+    roles: [(role, 'F'|'M')]. Speaker roles need positive proof from the
+    person-form reader -- or, given the HEBREW reference line, the
+    reference's own word for that person. An addressee role also passes on
+    the older rule -- the opposite address form is gone and nothing reads
+    as the opposite -- because the older check flags forms outside that
+    reader's lexicon.
+    """
+    # Both forms at once ("תוכל/י") is a hedge, not a choice -- measured
+    # in a repair the older addressee rule below let through.
+    if _SLASH_FORM.search(body or ''):
+        return False
+    hpg = _hpg()
+    if hpg is not None and hpg.fixed(body, roles, ref_text):
+        return True
+    for role, gender in roles:
+        if role != 'addressee':
+            return False
+        if (addresses_male(body) if gender == 'F' else addresses_female(body)):
+            return False
+        if hpg is not None:
+            seen = [t['addressee'] for t in hpg.read(body) if t['addressee']]
+            if any(g != gender for g in seen):
+                return False
+    return True
+
+
+def person_gender_conflicts(blocks, ref_map, lang):
+    """{entry_number: [(role, reference_gender)]} where the Hebrew output
+    contradicts the human reference about the SPEAKER or the ADDRESSEE.
+
+    A Hebrew reference is compared word for word (he_person_gender.conflicts);
+    any other language is read for its own speaker/addressee marking and
+    compared with what the Hebrew line says, single-speaker lines only.
+    Unknown on either side is never a conflict. Never raises.
+    """
+    out = {}
+    if not ref_map:
+        return out
+    hpg = _hpg()
+    if hpg is None:
+        return out
+    for block in blocks:
+        try:
+            lines = block.split('\n')
+            if len(lines) < 3 or not lines[0].strip().isdigit():
+                continue
+            num = int(lines[0].strip())
+            ref = ref_map.get(num)
+            if not ref:
+                continue
+            body = '\n'.join(lines[2:])
+            if lang == 'he':
+                found = hpg.conflicts(body, ref)
+            else:
+                turns = hpg.read(body)
+                if len(turns) != 1:
+                    continue
+                found = []
+                for role, want in (
+                        ('speaker', reference_speaker_gender(ref, lang)),
+                        ('addressee', reference_addressee_gender(ref, lang))):
+                    if want and turns[0][role] and turns[0][role] != want:
+                        found.append((role, want))
+            if found:
+                out[num] = found
+        except Exception:
+            continue
+    return out
+
+
 def addresses_female(text):
     """Conservative feminine-address candidate; not speaker/referent identity."""
     return _he_addresses_female(text or '')
@@ -777,7 +974,7 @@ def wrong_gender_entries(blocks, ref_map, lang, both_directions=False):
     return out
 
 
-def begin(info, src_text):
+def begin(info, src_text, timing_text=None):
     """ENTRY POINT (lazy). When the feature is on, find gender-reference
     candidates for `info` and return a ReferencePlan that yields aligned maps in
     PRIORITY-CHAIN order (Hebrew, Arabic, then the other gender-marking
@@ -867,7 +1064,8 @@ def begin(info, src_text):
     langs_present = [l for l in _REF_CHAIN if l in by_lang]
     _log('reference candidates: {0} across {1}'.format(
         total, ','.join(langs_present)))
-    return (ReferencePlan(src_text, src_blocks, ordered, total),
+    return (ReferencePlan(src_text, src_blocks, ordered, total,
+                          timing_text=timing_text),
             {'reason': 'pending', 'cands': total})
 
 

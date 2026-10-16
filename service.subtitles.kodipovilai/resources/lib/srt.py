@@ -1235,6 +1235,100 @@ def count_entries(text):
     return len(parse_blocks(text))
 
 
+# WebVTT class spans (<c.white><c.mono_sans>...</c.mono_sans></c.white>) that
+# some Netflix rips carry into SRT. They style nothing Kodi renders, and they
+# sit in front of the dialogue, where they hide the line's real start from the
+# RTL punctuation fix -- measured: the period landed before the first word.
+_VTT_CLASS_TAG = re.compile(r'</?c(?:\.[A-Za-z0-9_-]+)*\s*>', re.I)
+
+
+def strip_vtt_class_tags(text):
+    if not text or ('<c' not in text and '</c' not in text
+                    and '<C' not in text and '</C' not in text):
+        return text
+    return _VTT_CLASS_TAG.sub('', text)
+
+
+# A translator's working note written into the subtitle instead of kept to
+# itself -- measured on a real episode: "(Walter speaking to Walter Jr., male
+# addressee)" as a second line under the Hebrew. Only a line WITHOUT Hebrew
+# that talks about speakers/addressees qualifies; dialogue never does.
+_MODEL_NOTE = re.compile(
+    r'^\s*[\(\[][^֐-׿]*\b(?:speaking\s+to|speaks\s+to|talking\s+to|'
+    r'addressee|addressing|speaker|male|female|masculine|feminine|'
+    r'translator|translation\s+note)\b[^֐-׿]*[\)\]]\s*$', re.I)
+
+
+# ...or just the speaker's name in parentheses under the Hebrew line --
+# measured: "(Skyler)" under the Hebrew "Skyler." where the source had
+# only "Skyler.". Bracketed text in the source is removed before
+# translation, so a Latin name in parentheses beside a Hebrew line is
+# always the model's own.
+_NAME_NOTE = re.compile(
+    r"^\s*\(\s*[A-Z][A-Za-z.'-]*(?:\s+[A-Z][A-Za-z.'-]*){0,2}\s*\)\s*$")
+
+
+def drop_model_notes(block):
+    """Remove translator-note lines from one SRT block (keeps index/timecode,
+    keeps at least one text line)."""
+    lines = (block or '').split('\n')
+    ti = _block_timecode_index(lines)
+    if ti < 0:
+        return block
+    text = lines[ti + 1:]
+    hebrew = any(_HAS_HEBREW_RE.search(l) for l in text)
+    kept = [l for l in text if not (_MODEL_NOTE.match(l)
+                                    or (hebrew and _NAME_NOTE.match(l)))]
+    if not kept or len(kept) == len(text):
+        return block
+    return '\n'.join(lines[:ti + 1] + kept)
+
+
+def merge_same_time_cues(text, max_lines=3):
+    """Join consecutive entries that share one exact timecode into one cue.
+
+    Netflix "cc" subtitles split every two-line caption into two entries with
+    the same start and end. On screen they are one caption; to the model they
+    are two numbered entries, and measured on a real episode it merged pairs
+    of them, renumbered, and the stitched result lost 21 lines and doubled 5.
+    One entry per caption, renumbered in order, is the shape the model keeps.
+    A subtitle with no such pairs is returned byte-for-byte unchanged.
+    """
+    blocks = parse_blocks(text)
+    if len(blocks) < 2:
+        return text
+    merged, changed = [], False
+    prev_tc = None
+    for block in blocks:
+        lines = block.split('\n')
+        ti = _block_timecode_index(lines)
+        if ti < 0:
+            merged.append([None, block])
+            prev_tc = None
+            continue
+        tc = lines[ti].strip()
+        body = [l for l in lines[ti + 1:] if l.strip()]
+        if (merged and tc == prev_tc and merged[-1][0] is not None
+                and len(merged[-1][2]) + len(body) <= max_lines):
+            merged[-1][2].extend(body)
+            changed = True
+            continue
+        merged.append([tc, None, body])
+        prev_tc = tc
+    if not changed:
+        return text
+    out = []
+    for n, item in enumerate(merged, 1):
+        if item[0] is None:
+            lines = item[1].split('\n')
+            ti = _block_timecode_index(lines)
+            out.append('\n'.join([str(n)] + lines[max(ti, 0):] if ti >= 0
+                                 else [str(n)] + lines[1:]))
+        else:
+            out.append('\n'.join([str(n), item[0]] + item[2]))
+    return '\n\n'.join(out) + '\n'
+
+
 def looks_hebrew(text, min_alpha=120, min_ratio=0.5):
     """Rough sanity check that `text` is genuinely a Hebrew translation and not
     a failed / mostly-untranslated one. Among the alphabetic characters, Hebrew
@@ -1404,6 +1498,44 @@ _HE_TAG_RE = re.compile(
     u'[ \t]*:[ \t]*(?=\\S)')
 _HE_TAG_WORDS = 2
 
+# Narration and interview subtitles tag the speaker in Title case instead
+# ("Celeste: <i>Look at me.</i>", "- Stu:<i> Thing about...</i>" -- measured
+# on Big Little Lies, where the model kept "Celeste:" or wrote "סלסט:").
+# Title case is also ordinary dialogue ("Look: I don't know"), so such a tag
+# is trusted only when the file itself marks it as a name: the tag opens an
+# italic narration line, or the same tag opens three or more lines.
+_TITLE_TAG_RE = re.compile(
+    r"^(?P<name>[A-Z][a-z][A-Za-z'\-]*(?: [A-Z][a-z][A-Za-z'\-]*)?)[ \t]*:[ \t]*(?P<italic><i>)?")
+_TITLE_TAG_STOP = frozenset((
+    'Look', 'Listen', 'Note', 'Warning', 'Remember', 'Answer', 'Question',
+    'Rule', 'Step', 'Lesson', 'Hint', 'Fact', 'Update', 'Okay', 'Well', 'So',
+    'Yes', 'No', 'Hey', 'Oh', 'Now', 'Then', 'Example', 'Problem', 'Option',
+    'Reason', 'Result', 'Chapter', 'Part', 'Level', 'Round', 'Day', 'Time',
+    'Location', 'Subject', 'Breaking', 'News', 'Exhibit', 'Plan', 'Truth',
+    'First', 'Second', 'Third', 'Last', 'Also', 'Plus', 'Previously', 'Next',
+    'Translation', 'Caution', 'Attention', 'Danger', 'Admit', 'Face', 'Okay'))
+_LATIN_TITLE_TAG_RE = re.compile(
+    u'^(?P<pre>[ \t' + _INVISIBLE_BIDI + u']*'
+    u'(?:<[^>\n]{1,40}>[ \t]*)?(?:-[ \t]*)?)'
+    u"(?P<name>[A-Z][a-z][A-Za-z'\\-]*(?: [A-Z][a-z][A-Za-z'\\-]*)?)"
+    u'[ \t]*:[ \t]*(?=\\S)')
+
+
+def _title_tag_names(source_text):
+    """The Title-case speaker names this source file itself vouches for."""
+    seen, italic = {}, set()
+    for line in (source_text or '').split('\n'):
+        t = line.strip()
+        if t.startswith('-'):
+            t = t[1:].lstrip()
+        m = _TITLE_TAG_RE.match(t)
+        if not m or m.group('name') in _TITLE_TAG_STOP:
+            continue
+        seen[m.group('name')] = seen.get(m.group('name'), 0) + 1
+        if m.group('italic'):
+            italic.add(m.group('name'))
+    return set(n for n, c in seen.items() if c >= 3 or n in italic)
+
 
 def strip_hebrew_speaker_prefix(text, source_text):
     """Remove a speaker tag the model rendered in Hebrew ("איאן: לא, לא.").
@@ -1427,6 +1559,7 @@ def strip_hebrew_speaker_prefix(text, source_text):
         # The number is the only key there is, so two blocks sharing one would
         # share a licence, and the untagged one would spend the tagged one's.
         src_tags, seen = {}, set()
+        names = _title_tag_names(source_text)
         for blk in parse_blocks(source_text):
             lines = blk.split('\n')
             if (len(lines) < 3 or not _INDEX_RE.match(lines[0].strip())
@@ -1444,6 +1577,10 @@ def strip_hebrew_speaker_prefix(text, source_text):
                     s = s[1:].lstrip()
                 if _SPEAKER_RE.match(s):
                     at.add(i)
+                else:
+                    tm = _TITLE_TAG_RE.match(s)
+                    if tm and tm.group('name') in names:
+                        at.add(i)
             if at:
                 src_tags[n] = (at, len(lines) - 2)
         if not src_tags:
@@ -1514,6 +1651,11 @@ def strip_hebrew_speaker_prefix(text, source_text):
                 pos += 1
                 if licensed and pos in tags_at and _HAS_HEBREW_RE.search(body):
                     m = _HE_TAG_RE.match(body)
+                    if not m:
+                        # the model copied the Title-case tag as it was
+                        lm = _LATIN_TITLE_TAG_RE.match(body)
+                        if lm and lm.group('name') in names:
+                            m = lm
                     # a tag is a NAME, not a sentence: at most two words, and
                     # the line must still have Hebrew left once it is gone
                     # (otherwise the "tag" was the whole line, and removing it
@@ -1853,6 +1995,110 @@ def fold_foreign_in_hebrew_word(text):
                 body = _FOREIGN_RUN_RE.sub(_sub, body)
             out.append(body + cr)
         return '\n'.join(out)
+    except Exception:
+        return text
+
+
+
+# The Latin form of the same slip: one English letter standing in for the
+# Hebrew letter that sounds like it -- measured in Kodi runs of the free
+# Flash-Lite model: "בהTחשב", "חbרה", "בואi". Latin is far more common in a
+# Hebrew subtitle than Cyrillic is (a prefix glued to a brand, "בNetflix",
+# "הDJ"), so this one is narrower still: exactly ONE Latin letter, either
+# between two Hebrew letters or, lower-case, closing a Hebrew word of at
+# least two letters. A run of two Latin letters, or one after a lone prefix
+# letter ("בA"), is a word and stays. Letters without one clear Hebrew
+# counterpart (a, e, j, x) are left as written; c reads as k ("עצמc").
+_LATIN2HE = dict(zip(u'bcdfghiklmnopqrstuvwyz',
+                     u'בכדפגהיכלמנופקרסתווויז'))
+_STRAY_LATIN_RE = re.compile(
+    u'(?<=[\u05d0-\u05ea])([A-Za-z])(?=[\u05d0-\u05ea])'
+    u'|(?<=[\u05d0-\u05ea]{2})([a-z])(?![A-Za-z\u05d0-\u05ea])')
+
+
+def fold_stray_latin_letter(text):
+    """Spell a single stray Latin letter inside a Hebrew word in Hebrew.
+    Adds Hebrew and removes nothing else. Never raises."""
+    if not text:
+        return text
+    if _PROTECTED_RE.search(text):
+        return _map_unprotected(text, fold_stray_latin_letter)
+    try:
+        if not _STRAY_LATIN_RE.search(text):
+            return text
+
+        def _sub(m):
+            inside, last = m.group(1), m.group(2)
+            he = _LATIN2HE.get((inside or last).lower())
+            if not he:
+                return m.group(0)
+            return _HE_FINAL.get(he, he) if last else he
+        out = _STRAY_LATIN_RE.sub(_sub, text)
+        return text if out == text else out
+    except Exception:
+        return text
+
+
+# A hearing-impaired sound cue written in capitals without brackets ("HEAVY
+# BREATHING", "DOORBELL BUZZES" -- BBC style) gets past the bracket-based HI
+# cleaner, and the model hands it back in English. Shouted dialogue in
+# capitals is translated, so a cue is dropped only when the model returned
+# it VERBATIM: no Hebrew, all capitals, and the very same line is in the
+# source cue that starts at the same time. Never in an all-capitals file
+# (broadcast captions write every line that way), never one line out of a
+# longer cue, and never a line that speaks to or about someone.
+_SOUND_CUE_RE = re.compile(r"^[A-Z][A-Z' -]*[A-Z]$")
+_SPOKEN_RE = re.compile(r"\b(?:I|I'M|I'LL|ME|MY|WE|US|OUR|YOU|YOUR|YOU'RE|HE|SHE|THEY|"
+                        r"IT'S|DON'T|CAN'T|WON'T|WHAT|WHY|WHERE|NO|YES|OK|OKAY|HEY|"
+                        r"PLEASE|COME|GET|GO|STOP|LOOK|WAIT)\b")
+_CUE_TAG_RE = re.compile(r'<[^>]*>')
+
+
+def _cue_line(line):
+    return re.sub(u'[\u200e\u200f\u202a-\u202e\u2066-\u2069]', '',
+                  _CUE_TAG_RE.sub('', line)).strip(' -\r')
+
+
+def drop_untranslated_sound_cues(text, source_text):
+    """Remove capitalised sound cues the model left untranslated. A cue left
+    with no text is removed whole. Returns `text` unchanged (the same object)
+    when there is nothing to remove. Never raises."""
+    try:
+        if not text or not source_text:
+            return text
+        by_start = {}
+        latin_lines = mixed_lines = 0
+        for block in parse_blocks(source_text):
+            lines = block.split('\n')
+            ti = _block_timecode_index(lines)
+            if ti < 0:
+                continue
+            text_lines = [_cue_line(l) for l in lines[ti + 1:]]
+            for visible in text_lines:
+                if re.search(r'[A-Za-z]', visible):
+                    latin_lines += 1
+                    if re.search(r'[a-z]', visible):
+                        mixed_lines += 1
+            if (len(text_lines) == 1 and _SOUND_CUE_RE.match(text_lines[0])
+                    and len(text_lines[0]) >= 4
+                    and not _SPOKEN_RE.search(text_lines[0])):
+                by_start.setdefault(lines[ti].strip()[:12], set()).add(text_lines[0])
+        if not by_start or mixed_lines < 0.7 * latin_lines:
+            return text
+        out, changed = [], False
+        for block in parse_blocks(text):
+            lines = block.split('\n')
+            ti = _block_timecode_index(lines)
+            cues = by_start.get(lines[ti].strip()[:12]) if ti >= 0 else None
+            if not cues:
+                out.append(block)
+                continue
+            body = [l for l in lines[ti + 1:] if _cue_line(l)]
+            if len(body) != 1 or _cue_line(body[0]) not in cues:
+                out.append(block)
+                continue
+            changed = True
+        return stitch_blocks(out) if changed else text
     except Exception:
         return text
 

@@ -22,7 +22,7 @@ TARGET_REL_DIR = os.path.join('resources', 'sources')
 PATCH_REL_DIR = os.path.join('resources', 'patches', 'darksubs')
 OPEN_SUBS_FILE = 'opensubtitles.py'
 KEYS_FILE = 'darksubs_opensubtitles_api.json'
-MARKER = 'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4'
+MARKER = 'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 5'
 
 
 def _log(msg, level='INFO'):
