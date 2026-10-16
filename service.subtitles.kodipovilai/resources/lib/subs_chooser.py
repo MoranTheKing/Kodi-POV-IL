@@ -708,12 +708,15 @@ def _close_notice(bar):
 
 def _human_hebrew_rows(cands):
     """How many rows SubSync's picker rank could reorder (the same test as
-    subsync._is_human_hebrew_candidate), without importing SubSync."""
+    subsync._is_human_hebrew_candidate), without importing SubSync. The row
+    on screen ("» נוכחית") is set aside by the rank, so it does not count."""
     import json
     import urllib.parse
     n = 0
     for c in cands or []:
         try:
+            if (c.get('filename') or '').startswith('» נוכחית'):
+                continue
             if (c.get('language') or '').strip().lower() not in ('he', 'heb', 'hebrew'):
                 continue
             p = json.loads(urllib.parse.unquote(c.get('link') or '')) or {}
