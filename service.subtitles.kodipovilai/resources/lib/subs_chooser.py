@@ -973,9 +973,11 @@ def _show():
                 if not items:
                     items = [{'filename': 'לא נמצאו כתוביות לכותר הזה',
                               'language': '', 'link': '', '_placeholder': True}]
-                self.pending = False
                 try:
-                    self._fill(items)
+                    # pending and the rows change together, under the click lock
+                    with self.lock:
+                        self.pending = False
+                        self._redraw(items)
                 except Exception as e:
                     _log('chooser refresh failed: {0}'.format(e), level='WARNING')
 

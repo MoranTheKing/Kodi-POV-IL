@@ -202,7 +202,7 @@ class ChooserTests(unittest.TestCase):
         # the background pass is the normal (network) list, into the open window
         complete = show[show.index('def _complete(self):'):]
         self.assertIn('_chooser_items(dict(self.info), self.translate)', complete)
-        self.assertLess(complete.index('if self.closed:'), complete.index('self._fill(items)'))
+        self.assertLess(complete.index('if self.closed:'), complete.index('self._redraw(items)'))
 
     def test_the_quick_list_makes_no_network_request(self):
         src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
@@ -238,7 +238,7 @@ class ChooserTests(unittest.TestCase):
         src = (LIB / 'subs_chooser.py').read_text(encoding='utf-8').replace('\r\n', '\n')
         complete = src[src.index('def _complete(self):'):]
         self.assertLess(complete.index("'לא נמצאו כתוביות לכותר הזה'"),
-                        complete.index('self._fill(items)'))
+                        complete.index('self._redraw(items)'))
 
     def test_placeholder_rows_cannot_be_picked(self):
         src = (LIB / 'subs_chooser.py').read_text(encoding='utf-8').replace('\r\n', '\n')
