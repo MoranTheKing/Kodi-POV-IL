@@ -217,6 +217,10 @@ class WiringTests(unittest.TestCase):
                      'srt.drop_untranslated_sound_cues(final, src_text)',
                      'script_residual.repair('):
             self.assertIn(call, text)
+        # The repair requests retry a transient overload (measured: one HTTP
+        # 503 left 20 detected gender errors on screen).
+        self.assertEqual(text.count('_repair_generate('), 3)
+        self.assertIn('except (gemini.OverloadError, gemini.RateLimited) as e:', text)
         # A chunk that passes on the fallback reference is topped up too.
         alt = text.index('passed with fallback reference')
         self.assertIn('_top_up_missing(', text[alt:alt + 600])
