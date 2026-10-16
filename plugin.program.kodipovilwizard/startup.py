@@ -43,7 +43,42 @@ from resources.libs import skin
 from resources.libs import update
 
 
-def show_notification():
+# A new update note announces what the manifest now ships, so it is shown
+# only once this device runs it: after the modular update check, and only when
+# every module and the config are at the manifest version (no package still
+# installing, no MoranSubs swap waiting for the next restart). Until then the
+# note waits for a later start; after NOTE_MAX_WAIT_BOOTS starts it shows
+# anyway, so a device that cannot finish still learns about the update.
+NOTE_MAX_WAIT_BOOTS = 3
+NOTE_WAIT_FILE = 'kodipovil.note_wait.json'
+
+
+def _note_waited(note_id):
+    """Count this start against note_id; return how many starts it waited."""
+    import json
+    path = os.path.join(CONFIG.USERDATA, NOTE_WAIT_FILE)
+    try:
+        with open(path, 'r', encoding='utf-8') as source:
+            state = json.load(source)
+    except Exception:
+        state = {}
+    if not isinstance(state, dict):
+        state = {}
+    try:
+        previous = int(state.get('count', 0))
+    except (TypeError, ValueError):
+        previous = 0
+    count = previous + 1 if state.get('id') == note_id else 1
+    try:
+        with open(path, 'w', encoding='utf-8') as target:
+            json.dump({'id': note_id, 'count': count}, target)
+    except Exception:
+        # Cannot count starts here: never let the note wait forever.
+        return NOTE_MAX_WAIT_BOOTS
+    return count
+
+
+def show_notification(build_current=True):
     note_id, msg = window.split_notify(CONFIG.NOTIFICATION)
     if note_id:
         try:
@@ -59,6 +94,14 @@ def show_notification():
             else:
                 logging.log('[Notifications] No new notifications.', level=xbmc.LOGINFO)
         elif remote_id > current_id:
+            if not build_current:
+                waited = _note_waited(note_id)
+                if waited < NOTE_MAX_WAIT_BOOTS:
+                    logging.log('[Notifications] Note {0} waits until this device '
+                                'runs the update (start {1} of {2})'
+                                .format(note_id, waited, NOTE_MAX_WAIT_BOOTS),
+                                level=xbmc.LOGINFO)
+                    return
             logging.log('[Notifications] Showing notification {0}'
                         .format(note_id))
             CONFIG.set_setting('noteid', note_id)
@@ -615,12 +658,14 @@ if not build_profiles.is_master() and not os.path.isfile(os.path.join(CONFIG.USE
 # boot. Must run BEFORE the first-launch notification/contact modals below.
 first_boot_stabilize_if_needed()
 
-# SHOW NOTIFICATIONS
+# SHOW NOTIFICATIONS -- decided here, shown after the modular update gate
+# below (see show_notification): a note must never announce an update before
+# this device has it.
 from resources.libs.patches import profile_age_guard
-if profile_age_guard.active_policy() is None and CONFIG.ENABLE_NOTIFICATION == 'Yes' and (CONFIG.get_setting('buildname') or
-        os.path.isfile(os.path.join(CONFIG.ADDONS, 'plugin.video.pov', 'addon.xml'))):
-    show_notification()
-else:
+_notes_enabled = bool(
+    profile_age_guard.active_policy() is None and CONFIG.ENABLE_NOTIFICATION == 'Yes' and (CONFIG.get_setting('buildname') or
+        os.path.isfile(os.path.join(CONFIG.ADDONS, 'plugin.video.pov', 'addon.xml'))))
+if not _notes_enabled:
     logging.log('[Notifications] Not Enabled', level=xbmc.LOGINFO)
     
 ######################################
@@ -731,6 +776,7 @@ except Exception as _early_widget_error:
     logging.log('[FENtastic widgets] early repair deferred: ' + type(_early_widget_error).__name__,
                 level=xbmc.LOGWARNING)
 
+_mu = None
 if CONFIG.get_setting('buildname'):
     logging.log('[Startup] entering modular update gate', level=xbmc.LOGINFO)
     try:
@@ -778,6 +824,12 @@ if CONFIG.get_setting('buildname'):
         logging.log("[PatchEngine] Boot-cycle run failed: {0}".format(_patch_err),
                     level=xbmc.LOGERROR)
 ######################################
+
+if _notes_enabled:
+    try:
+        show_notification(build_current=bool(getattr(_mu, 'build_current', False)))
+    except Exception as _note_err:
+        logging.log('[Notifications] failed: {0}'.format(_note_err), level=xbmc.LOGWARNING)
 
 # KOD-RD-IL - New Kodi ANDROID/WINDOWS version check on startup
 try:
