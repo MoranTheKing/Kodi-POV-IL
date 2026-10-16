@@ -1,5 +1,14 @@
 0.3.32
 - Arctic Fuse 3 3.3.12: keep the discover grid on POV while typing a search; the redesigned discover tab no longer stops the fix from applying.
+- AI translation: check who is speaking and who is spoken to against the human reference, not only the person addressed, and use the reference's own words to catch "את אוהבת" said to a man or "אני יודעת" said by one; rewrite only lines that then carry the right gender.
+- AI translation: read the speaker's gender from Polish, Czech, Slovak, Serbian, Croatian and Portuguese references too.
+- AI translation: keep the Hebrew reference working on Netflix subtitles that split each caption in two, and translate such captions as one line, without lost or doubled lines.
+- AI translation: include an episode's guest characters in the cast, so their gender is known.
+- AI translation: repair lines where the free model mixed in letters from another alphabet (Thai, Chinese, Korean...), drop translator notes and sound cues it left in English, fix single English letters inside Hebrew words, and remove speaker names such as "Celeste:".
+- AI translation: entries a fallback reference left out are requested again instead of staying in English.
+- Show the Gemini daily quota by Google's reset time (midnight Pacific, about 10:00 in Israel) instead of UTC midnight.
+- Never write the OpenSubtitles or Bing keys to the Kodi log.
+- SubSync: read the image (PGS) subtitles of Blu-ray rips as the captions they are, so files with only PGS tracks can confirm an in-sync subtitle, and fix TV/web subtitles across the disc's act breaks when held-out parts of the disc track and a second PGS language of the same disc confirm the map.
 
 0.3.31
 - Stop the Nox player OSD fix from shrinking neighbouring buttons on later starts, and restore the buttons it already shrank.

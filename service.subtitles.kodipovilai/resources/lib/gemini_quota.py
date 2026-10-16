@@ -6,7 +6,10 @@
 #   * gemini-3.8-flash / 3.7-flash / 3.6-flash / 3.5-flash / 3.1-flash /
 #     2.5-flash (regular Flash) -> only ~20 requests/day (a very tight free
 #     cap; regular Flash on the free tier is really a paid-key model).
-# The count resets at UTC midnight. We persist it in hidden addon
+# The count resets when Google's does: at midnight PACIFIC time (about
+# 10:00 in Israel), not at UTC midnight -- counting from UTC midnight showed
+# a fresh 500 from 03:00 while Google still counted the night's requests
+# against the old day (measured in a QA run). We persist it in hidden addon
 # settings alongside the model it belongs to, and surface it in two
 # places: appended to the end-of-translation toast, and as a dedicated
 # "ניצול היום" entry in the My Services -> Gemini menu.
@@ -61,6 +64,7 @@ DEFAULT_LIMIT = 500
 MODEL_TRACKED = 'gemini-3.5-flash-lite'
 
 SETTING_COUNT = '_usage_count'
+# Historical name: the value is now the PACIFIC quota day (see _today_utc).
 SETTING_DATE  = '_usage_date_utc'
 SETTING_MODEL = '_usage_model'
 
@@ -69,8 +73,23 @@ SETTING_MODEL = '_usage_model'
 _LOCK = threading.Lock()
 
 
-def _today_utc():
-    return datetime.datetime.utcnow().strftime('%Y-%m-%d')
+def _pacific_offset(utc):
+    """Pacific time's offset from UTC at `utc`: -7h during US daylight time
+    (second Sunday of March 02:00 PST to first Sunday of November 02:00 PDT),
+    else -8h. Computed by hand -- Kodi's Python on some boxes has no tz data."""
+    year = utc.year
+    march_sun = 1 + (6 - datetime.datetime(year, 3, 1).weekday()) % 7 + 7
+    november_sun = 1 + (6 - datetime.datetime(year, 11, 1).weekday()) % 7
+    starts = datetime.datetime(year, 3, march_sun, 10)
+    ends = datetime.datetime(year, 11, november_sun, 9)
+    return datetime.timedelta(hours=-7 if starts <= utc < ends else -8)
+
+
+def _today_utc(now=None):
+    """The quota day: today's date in Pacific time, when Google resets
+    the free daily limit. (The name predates the switch from UTC.)"""
+    utc = now or datetime.datetime.utcnow()
+    return (utc + _pacific_offset(utc)).strftime('%Y-%m-%d')
 
 
 def _norm(model):
@@ -102,7 +121,7 @@ def _stored_model():
 def note_request(model):
     """Record one successful Gemini call. No-op if `model` isn't a
     tracked free model or if Kodi storage is unavailable. The count is
-    scoped to (day, model): switching model or crossing UTC midnight
+    scoped to (day, model): switching model or crossing Pacific midnight
     starts a fresh count so the two families never conflate."""
     try:
         if not is_tracked(model) or kodi_utils is None:
@@ -175,7 +194,7 @@ def format_status_long(model=None):
         'מודל: {model}\n'
         'נוצלו היום: {count} מתוך {limit} ({percent}%)\n'
         'נותרו עד איפוס: {remaining}\n\n'
-        'איפוס המכסה: חצות UTC (~02:00 בישראל).\n'
+        'איפוס המכסה: חצות בשעון קליפורניה (~10:00 בבוקר בישראל).\n'
         'הספירה מקומית למכשיר הזה ונספרת רק עבור מודלים חינמיים '
         '(Flash / Flash-Lite).'
     ).format(**u) + note
