@@ -94,9 +94,25 @@ class AutoBumpTests(unittest.TestCase):
         for data in (pov_zip('6.10.08'), pov_zip('6.10.07', addon_id='plugin.video.other'),
                      pov_zip('6.10.07', extra={'evil/../x.py': ''}), b'<html>404</html>'):
             code, line = self.run_bump('6.10.07', data)
-            self.assertEqual(code, 2, line)
-            self.assertIn('official zip unusable', line)
+            self.assertEqual(code, 3, line)
+            self.assertTrue(line.startswith('unavailable 6.10.07: official zip unusable'), line)
         self.assertEqual(json.loads(self.pin.read_text())['version'], '6.10.06')
+
+    def test_a_failure_after_the_pin_was_written_restores_both_files(self):
+        before = (self.pin.read_bytes(), self.upstream.read_bytes())
+        with mock.patch.object(bump, 'set_upstream_pov', side_effect=ValueError('two pov lines')):
+            code, _line = self.run_bump('6.10.07', pov_zip('6.10.07'))
+        self.assertEqual(code, 2)
+        self.assertEqual((self.pin.read_bytes(), self.upstream.read_bytes()), before)
+
+    def test_a_beta_version_is_not_published(self):
+        code, line = self.run_bump('6.11.0~beta1', pov_zip('6.11.0~beta1'))
+        self.assertEqual(code, 2)
+        self.assertIn('not a plain release version', line)
+
+    def test_check_mode_reports_without_downloading(self):
+        self.assertEqual(bump.pending(fetcher=lambda url: index('6.10.07')), ('6.10.06', '6.10.07'))
+        self.assertEqual(bump.pending(fetcher=lambda url: index('6.10.06')), ('6.10.06', None))
 
     def test_an_older_upstream_never_moves_the_pin_back(self):
         code, line = self.run_bump('6.10.05', pov_zip('6.10.05'))

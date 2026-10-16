@@ -22,8 +22,12 @@ What it does (no secret needed):
      On any failure the pin is left untouched and the reason is printed.
 
 Usage:  python3 tools/auto_bump_pov_pin.py OUTDIR
-Prints one line: "current <ver>", "bumped <old> <new> <zip path>" or
-"blocked <ver>: <reason>" (exit 2).
+Prints one line: "current <ver>", "bumped <old> <new> <zip path>",
+"blocked <ver>: <reason>" (exit 2: our patches do not fit, or not a plain
+release version) or "unavailable <ver>: <reason>" (exit 3: the official zip
+could not be fetched or is not that POV -- usually transient).
+"python3 tools/auto_bump_pov_pin.py --check" only prints "newer <ver>" or
+"current <ver>" (no download).
 """
 
 import contextlib
@@ -82,6 +86,8 @@ def official_zip(version, getter=_get):
                 if not names or any(not n.startswith('plugin.video.pov/') or '..' in n
                                     for n in names):
                     raise ValueError('unexpected member paths')
+                if sum(i.file_size for i in package.infolist()) > 8 * MAX_BYTES:
+                    raise ValueError('unpacks too large')
                 head = package.read('plugin.video.pov/addon.xml').decode('utf-8', 'replace')
             tag = re.search(r'<addon\b[^>]*>', head, re.S)
             attrs = dict(re.findall(r'\b(id|version)\s*=\s*"([^"]*)"', tag.group(0) if tag else ''))
@@ -121,35 +127,55 @@ def set_upstream_pov(text, version):
     return '\n'.join(lines)
 
 
-def run(outdir, fetcher=None, getter=_get, verifier=None):
+def pending(fetcher=None):
+    """(pin version, newer upstream POV or None) -- no download."""
     pin = json.loads(PIN.read_text('utf-8'))
     latest, version_key = newest_pov(fetcher)
     if not latest or version_key(latest) <= version_key(pin['version']):
-        return 0, 'current %s' % pin['version']
+        return pin['version'], None
+    return pin['version'], latest
+
+
+def run(outdir, fetcher=None, getter=_get, verifier=None):
+    current, latest = pending(fetcher)
+    if not latest:
+        return 0, 'current %s' % current
+    if not re.fullmatch(r'[0-9]+(?:\.[0-9]+)+', latest):
+        return 2, 'blocked %s: not a plain release version' % latest
     try:
         data, upstream_url = official_zip(latest, getter)
     except Exception as exc:
-        return 2, 'blocked %s: official zip unusable: %s' % (latest, exc)
+        return 3, 'unavailable %s: official zip unusable: %s' % (latest, exc)
     candidate = pin_for(latest, data, upstream_url)
     old_pin_text = PIN.read_text('utf-8')
-    _write_text_keep_eol(PIN, json.dumps(candidate, indent=2) + '\n')
+    old_upstream = UPSTREAM.read_text('utf-8')
+    done = False
     try:
+        _write_text_keep_eol(PIN, json.dumps(candidate, indent=2) + '\n')
         if verifier is None:
             verifier = _load('verify_pov_patches', ROOT / '.github' / 'scripts' / 'verify_pov_patches.py').verify
         # The verifier reports its counts on stdout; keep stdout to our one line.
         with contextlib.redirect_stdout(sys.stderr):
             verifier(ROOT, data)
+        _write_text_keep_eol(UPSTREAM, set_upstream_pov(old_upstream, latest))
+        done = True
     except Exception as exc:
-        _write_text_keep_eol(PIN, old_pin_text)
         return 2, 'blocked %s: patches do not fit: %s' % (latest, exc)
-    _write_text_keep_eol(UPSTREAM, set_upstream_pov(UPSTREAM.read_text('utf-8'), latest))
+    finally:
+        if not done:
+            _write_text_keep_eol(PIN, old_pin_text)
+            _write_text_keep_eol(UPSTREAM, old_upstream)
     out = Path(outdir) / ('official-' + candidate['filename'])
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(data)
-    return 0, 'bumped %s %s %s' % (pin['version'], latest, out)
+    return 0, 'bumped %s %s %s' % (current, latest, out)
 
 
 if __name__ == '__main__':
+    if sys.argv[1:] == ['--check']:
+        current, latest = pending()
+        print('newer %s' % latest if latest else 'current %s' % current)
+        sys.exit(0)
     code, line = run(sys.argv[1] if len(sys.argv) > 1 else 'pov-pin-out')
     print(line)
     sys.exit(code)

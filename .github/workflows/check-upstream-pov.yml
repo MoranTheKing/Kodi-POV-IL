@@ -26,11 +26,41 @@ jobs:
   # by itself about once a week, so a pin left behind strands every device not
   # yet migrated (field log 16 Oct 2026). Move the pin -- only after the Wizard
   # patch engine is proven on the new official POV -- and publish it at once.
+  #
+  # Detection takes no lock: joining the release concurrency group on every
+  # run would cancel a release that is waiting in it.
+  pov-pin-detect:
+    if: github.repository == 'MoranTheKing/Kodi-POV-IL'
+    runs-on: ubuntu-latest
+    outputs:
+      newer: ${{ steps.check.outputs.newer }}
+    steps:
+      - name: Is upstream POV newer than the migration pin?
+        id: check
+        env:
+          REPO_SLUG: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --filter=blob:none --sparse \
+            "https://github.com/${REPO_SLUG}.git" repo
+          cd repo
+          git sparse-checkout set --no-cone /tools/auto_bump_pov_pin.py \
+            /tools/check_upstream_addons.py /.github/pov-host-migration.json
+          OUT=$(python3 tools/auto_bump_pov_pin.py --check)
+          echo "$OUT"
+          case "$OUT" in
+            newer*) echo "newer=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "newer=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
   pov-pin:
+    needs: pov-pin-detect
+    if: needs.pov-pin-detect.outputs.newer == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write
+      actions: read
     # Shares the rolling release and manifest.json with the release workflow.
     concurrency:
       group: build-and-release
@@ -42,6 +72,14 @@ jobs:
           REPO_SLUG: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # A release that is still queued or running owns manifest.json and
+          # main; leave this to the next run (every 6 hours).
+          BUSY=$(gh run list --repo "$REPO_SLUG" --workflow build-and-release.yml \
+                   --json status --jq '[.[] | select(.status != "completed")] | length')
+          if [ "$BUSY" != "0" ]; then
+            echo "A release run is in progress; trying again on the next schedule."
+            exit 0
+          fi
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO_SLUG}.git" repo
           cd repo
           STATUS=0
@@ -49,6 +87,9 @@ jobs:
           echo "$OUT"
           case "$OUT" in
             current*)
+              exit 0 ;;
+            unavailable*)
+              # Usually a repository that has not finished publishing; retry later.
               exit 0 ;;
             blocked*)
               VER=${OUT#blocked }
@@ -70,8 +111,12 @@ jobs:
           esac
           read -r _ OLD NEW ZIP <<< "$OUT"
           NAME=$(basename "$ZIP")
-          # The manifest keeps every module and config as published and moves
-          # only the pin (dist/ is empty here).
+          # gen_manifest.py treats dist/<id>-<version>.zip as freshly built;
+          # the clone tracks old package zips there. Start empty, as the
+          # release workflow does: every module and the config carry over
+          # and only the pin moves.
+          rm -rf dist
+          mkdir dist
           python3 .github/scripts/gen_manifest.py
           mkdir -p "$RUNNER_TEMP/pov-verify"
           if ! gh release view addons-latest --repo "$REPO_SLUG" --json assets -q '.assets[].name' \
@@ -79,7 +124,10 @@ jobs:
             gh release upload addons-latest --repo "$REPO_SLUG" "$ZIP"
           fi
           gh release download addons-latest --repo "$REPO_SLUG" -p "$NAME" -D "$RUNNER_TEMP/pov-verify"
-          cmp "$ZIP" "$RUNNER_TEMP/pov-verify/$NAME"
+          if ! cmp "$ZIP" "$RUNNER_TEMP/pov-verify/$NAME"; then
+            echo "addons-latest already holds a different $NAME (re-published upstream?)" >&2
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/pov-host-migration.json UPSTREAM_VERSIONS.txt manifest.json
@@ -89,7 +137,12 @@ jobs:
             --title "POV $NEW: migration pin moved automatically ($OLD -> $NEW)" \
             --body "$OUT
 
-          The Wizard patch engine was verified on the official zip (every enabled patch applied, nothing missing, idempotent). Legacy devices on POV $NEW can migrate again. Close this issue after a look."
+          Verified automatically: the official zip is POV $NEW, and every enabled Wizard patch applies to it (nothing missing, idempotent). Legacy devices on POV $NEW can migrate again.
+
+          NOT verified -- still to do by hand:
+          - the MoranSubs POV host patchers (service.subtitles.kodipovilai/resources/lib/pov_*_patcher.py and others that edit POV);
+          - runtime version gates such as pov_http_session._VERIFIED_VERSIONS (an unlisted POV silently runs without the deferred HTTP clients);
+          - real Kodi QA on the new POV."
 
   check:
     needs: pov-pin
