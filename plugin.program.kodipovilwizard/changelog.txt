@@ -1,6 +1,7 @@
 0.4.51
 - Faster lists and home rows on every skin: Kodi never saves compiled Python, so each list, row and category recompiled its add-on code from scratch on every visit. The build now writes that compiled code once in the background (about 40 s on a PC, never while a video plays) and refreshes it after updates. QA, home screen fully loaded after a cold start: FENtastic 10.2 -> 7.0 s, NOX 8.0 -> 5.2 s; single rows such as "Continue watching" 1.56 -> 0.46 s.
 - Each POV list asked Kodi's screen twice whether a child profile is active; it now asks once.
+- The compiled code is hash-checked: Python verifies it against the file's current content on every load, so a file that an update rewrites can never run its old version.
 
 0.4.50
 - An update note pops up only after the update it describes is installed on the device: after the start-up update check, once every add-on and the build config are current (a MoranSubs swap that waits for the next restart counts as not yet installed). A device that cannot finish still sees the note on its third start.
