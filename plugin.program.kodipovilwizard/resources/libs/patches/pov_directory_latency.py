@@ -21,6 +21,12 @@ def install(native):
     original = native['routing']
     if getattr(original, '_povil_latency', False):
         return
+    # Saved lists sit inside the timing, so timing lines measure replays too.
+    try:
+        import pov_list_snapshot
+        original = pov_list_snapshot.wrap(original, native)
+    except Exception:
+        pass
     # A reused interpreter can call Router long after entry import. Count that
     # import only on its first invocation, rather than the entire idle session.
     entry_started = native.get('_povil_entry_started')
