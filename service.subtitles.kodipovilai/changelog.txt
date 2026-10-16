@@ -1,3 +1,8 @@
+0.3.36
+- "בחירת כתוביות" should open much sooner at the start of an episode. On a slow Android box the button waited 5-11 s for MoranSubs' own background work to let go: Kodi cannot start a new script while another add-on's Python runs without a pause.
+- SubSync's long timing calculations (alignment, subtitle parsing, audio envelope, MKV/MP4 index reading) now take a 1 ms pause at most every 20 ms -- about 5% slower in the background, out of the viewer's way.
+- SubSync's file-probe cache is now one small file per video (subsync_probe/) instead of a single file that grew to ~11 MB and was read whole about six times per episode start; each lookup now reads ~1 ms instead of ~120 ms on a PC (seconds on a streamer). The old file is split once when Kodi starts.
+
 0.3.35
 - "בחירת כתוביות" opens at once with what needs no network -- the subtitles inside the video, the AI translations and a search made in the last minutes -- and fills in the subtitle sources and the community pool by itself when their search finishes ("מחפש כתוביות נוספות…" shows meanwhile). The highlighted subtitle stays the same when the list grows, an AI translation row can be picked once the search is done (the pool may hold it ready-made), and a title with nothing at all says so in the window.
 
