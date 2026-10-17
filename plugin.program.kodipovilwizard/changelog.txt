@@ -1,3 +1,10 @@
+0.4.54
+- POV's menus open from saved copies too: genres, years, networks, "My content", the movie/TV main menus and shortcut folders -- what NOX and FENtastic open as categories (each click used to load all of POV, 1-1.5 s on a phone). They follow POV's menu database, its settings and the account manager (rows of disconnected services stay hidden); the years menu follows the date.
+- The Wizard's start-up work (update check, notices, profile checks) now waits until the home rows stop loading (at most 15 s), so the rows do not share the CPU with it.
+- Idan Plus home rows (NOX: Reshet 13, mako, live TV) are saved too: shown at once from the copy saved last time, then rebuilt behind the scenes when older than 10 minutes or after an Idan Plus settings change; the rows refresh themselves when the content changed. Browsing inside Idan Plus, searches and playback are untouched. QA NOX cold start: last home row 5.2 -> 3.7-4.0 s after the home screen, each Idan Plus row 0.04-0.13 s.
+- Several home rows that changed together refresh the home screen once instead of once each, and a damaged saved list is simply rebuilt (it used to leave its row empty until the next visit).
+- Saved lists are shown at once up to a week old (was a day) and refreshed right after: people often come back to Kodi after a day.
+
 0.4.53
 - Saved lists start much faster: each home row is a fresh Python interpreter, and while Kodi starts a dozen add-on services, importing json alone took 0.3-1.2 s (QA, NOX). Serving a saved list now imports none of json, hashlib, sqlite3, re or urllib: the record is read with marshal and "nothing changed" is proven by file sizes and times, falling back to a light content check (C sqlite module, crc32) when a file was rewritten. QA NOX cold start: check 0.7 s -> 0.1 s per row, first rows on screen 0.25-0.4 s after the home screen instead of 1.0-1.2 s.
 - Home rows no longer import POV just to replay its view-mode call (a no-op for rows): 0.6 s less per row at start-up.

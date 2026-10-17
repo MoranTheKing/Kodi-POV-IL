@@ -3912,6 +3912,42 @@ def _maybe_reload_estuary_skin():
         pass
 
 
+ROWS_PROPERTY = 'povil.rows.last'
+
+
+def wait_for_home_rows(monitor, settle=1.5, first=5.0, cap=15.0):
+    """Hold start-up work while the home rows load: every row is a Python
+    interpreter of its own, and the build's services starting beside them
+    stretched the last home row by ~0.8 s on a PC (QA, NOX) -- more on a
+    phone. POV's saved lists stamp ROWS_PROPERTY when they serve a row; go
+    on once none arrived for `settle` seconds (or none at all within `first`
+    seconds of Home), and never wait more than `cap` seconds."""
+    import time
+    start = time.time()
+    home_at = None
+    try:
+        import xbmc, xbmcgui
+        win = xbmcgui.Window(10000)
+    except Exception:
+        return
+    while time.time() - start < cap:
+        now = time.time()
+        if home_at is None and xbmc.getCondVisibility('Window.IsVisible(home)'):
+            home_at = now
+        if home_at is not None:
+            try:
+                last = float(win.getProperty(ROWS_PROPERTY) or 0)
+            except ValueError:
+                last = 0.0
+            if last >= home_at - 1.0:
+                if now - last >= settle:
+                    return
+            elif now - home_at >= first:
+                return
+        if monitor.waitForAbort(0.25):
+            return
+
+
 def main():
     if xbmc is None:
         return
@@ -3950,6 +3986,16 @@ def main():
     # turn a settled fix / a long clean watch into a community sync report.
     try:
         _start_subsync_delay_watch(xbmc.Monitor())
+    except Exception:
+        pass
+
+    # Everything below is start-up housekeeping (patchers parse skin XML,
+    # prune caches): let the home rows load first.
+    # A disabled POV empties every home row: bring it back before waiting.
+    _ensure_pov_enabled()
+
+    try:
+        wait_for_home_rows(monitor)
     except Exception:
         pass
 
