@@ -462,7 +462,7 @@ class ProvisioningGateTests(unittest.TestCase):
             _config_pending=lambda _manifest: False,
             _resolve_phase_two_bounded=lambda: (_ for _ in ()).throw(
                 RuntimeError('repository unavailable')),
-            _native_install_fallback=lambda ids, per_addon_timeout:
+            _native_install_fallback=lambda ids, per_addon_timeout, progress=None:
                 attempted.append((ids, per_addon_timeout)),
             _fresh_install_complete=lambda _manifest: False,
             CORE_PROVISION_IDS=(), _enable_addon=lambda _aid: None)

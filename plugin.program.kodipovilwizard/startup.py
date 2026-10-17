@@ -600,8 +600,27 @@ def wait_for_gui_ready(timeout=90):
         return False
 
 
+def _start_watch(name, target):
+    """Run a long-lived watch loop as a thread of this service. Kodi tells
+    services that it is closing; a script started with RunScript never hears
+    it in time and was killed after 5 s each -- 10 s added to every exit
+    (QA, Oct 2026). Not a daemon: it keeps this service alive after the
+    startup steps below finish or exit early."""
+    import threading
+    try:
+        worker = threading.Thread(target=target, name=name)
+        worker.start()
+    except Exception as watch_error:
+        logging.log('[{0}] start failed: {1}'.format(name, watch_error), level=xbmc.LOGWARNING)
+
+
+def _profile_guard():
+    import profile_service
+    profile_service.run()
+
+
 # Don't run the script while video is playing :)
-xbmc.executebuiltin('RunScript({})'.format(os.path.join(CONFIG.ADDON_PATH, 'profile_service.py')))
+_start_watch('POVILProfileGuard', _profile_guard)
 check_for_video()
 # A native secondary profile does not include build addon_data/favourites.
 # Repair missing defaults before interpreting it as a fresh APK installation.
@@ -908,9 +927,9 @@ except Exception as _skin_upd_err:
 
 # The normal startup patch pass is not enough if Kodi updates POV later in
 # this same session. A separate small interpreter watches host identities.
-try:
-    xbmc.executebuiltin('RunScript({})'.format(os.path.join(
-        CONFIG.ADDON_PATH, 'host_patch_service.py')))
-except Exception as _host_watch_error:
-    logging.log('[Host patch watch] start failed: {}'.format(_host_watch_error),
-                level=xbmc.LOGWARNING)
+def _host_watch():
+    from resources.libs.host_patch_watch import run as _run_host_watch
+    _run_host_watch()
+
+
+_start_watch('POVILHostPatchWatch', _host_watch)
