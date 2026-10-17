@@ -3,6 +3,7 @@ but never once something it depends on has changed."""
 
 import importlib.util
 import json
+import marshal
 import os
 import sqlite3
 import sys
@@ -90,11 +91,13 @@ class Env(object):
                        'Container.FolderPath': 'plugin://plugin.video.pov/?mode=navigator'}
         self.labels_gui = dict(self.parent)
         self.query = ''
+        self.child = False
         self.opens_window = True    # False: a home row (the home screen stays)
         self.builtins = []
         self.xbmc = types.SimpleNamespace(log=lambda *a: None, LOGINFO=1, LOGWARNING=2, Actor=FakeActor,
                                           getInfoLabel=lambda k: env.labels_gui.get(k, ''),
-                                          executebuiltin=lambda c: env.builtins.append(c))
+                                          executebuiltin=lambda c: env.builtins.append(c),
+                                          getCondVisibility=lambda c: env.child and 'POVILChild' in c)
         self.xbmcgui = types.SimpleNamespace(ListItem=FakeListItem)
         self.xbmcvfs = types.SimpleNamespace(translatePath=lambda p: str(
             self.root / p.replace('special://profile/', '').replace('special://home/', 'home/')).rstrip('/\\') + os.sep
@@ -218,9 +221,9 @@ class SnapshotTests(unittest.TestCase):
 
     def test_an_old_list_is_shown_then_rebuilt_for_the_next_visit(self):
         self.open()
-        path = next((self.env.profile / 'povil_snapshots').glob('*.json'))
-        data = json.loads(path.read_text()); data['created'] -= 5 * 3600
-        path.write_text(json.dumps(data))
+        path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
+        data = marshal.loads(path.read_bytes()); data['created'] -= 5 * 3600
+        path.write_bytes(marshal.dumps(data))
         self.env.label = 'Today'
         sent = self.open()
         self.assertEqual(self.labels(sent)[0], 'Movie 0')                 # shown at once
@@ -230,9 +233,9 @@ class SnapshotTests(unittest.TestCase):
 
     def test_too_old_lists_are_built_normally(self):
         self.open()
-        path = next((self.env.profile / 'povil_snapshots').glob('*.json'))
-        data = json.loads(path.read_text()); data['created'] -= 25 * 3600
-        path.write_text(json.dumps(data))
+        path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
+        data = marshal.loads(path.read_bytes()); data['created'] -= 25 * 3600
+        path.write_bytes(marshal.dumps(data))
         self.open()
         self.assertEqual(self.env.built, 2)
 
@@ -240,7 +243,7 @@ class SnapshotTests(unittest.TestCase):
         self.env.extra_arg = object()
         self.open(); self.open()
         self.assertEqual(self.env.built, 2)
-        self.assertFalse(list((self.env.profile / 'povil_snapshots').glob('*.json')) if
+        self.assertFalse(list((self.env.profile / 'povil_snapshots').glob('*.snap')) if
                          (self.env.profile / 'povil_snapshots').exists() else [])
 
     def test_search_child_profiles_and_the_kill_switch_bypass_it(self):
@@ -268,9 +271,9 @@ class SnapshotTests(unittest.TestCase):
             self.assertTrue(self.m.serve_early(argv))
             self.assertIn('endOfDirectory', [s[0] for s in self.env.sent])
             self.assertIn('view', [s[0] for s in self.env.sent])          # view mode after the list
-            path = next((self.env.profile / 'povil_snapshots').glob('*.json'))
-            data = json.loads(path.read_text()); data['created'] -= 5 * 3600
-            path.write_text(json.dumps(data))
+            path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
+            data = marshal.loads(path.read_bytes()); data['created'] -= 5 * 3600
+            path.write_bytes(marshal.dumps(data))
             self.env.sent = []
             self.env.labels_gui = dict(self.env.parent)
             self.assertFalse(self.m.serve_early(argv))                     # old: shown, then POV rebuilds it
@@ -285,9 +288,9 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo)'])  # it changed
 
     def _age_day(self, day):
-        path = next((self.env.profile / 'povil_snapshots').glob('*.json'))
-        data = json.loads(path.read_text()); data['day'] = day
-        path.write_text(json.dumps(data))
+        path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
+        data = marshal.loads(path.read_bytes()); data['day'] = day
+        path.write_bytes(marshal.dumps(data))
 
     def test_a_list_from_yesterday_is_shown_then_refreshed_in_place(self):
         q = '?mode=build_next_episode'
@@ -338,7 +341,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(self.env.builtins, ['Container.Refresh'])
         self.assertEqual(self.labels(self.open())[0], 'Today 0')           # replaced, from the parent
         self.assertEqual(self.env.built, 2)
-        self.assertEqual(len(list((self.env.profile / 'povil_snapshots').glob('*.json'))), 1)
+        self.assertEqual(len(list((self.env.profile / 'povil_snapshots').glob('*.snap'))), 1)
 
     def test_labels_are_pinned_in_menus_kept_from_an_earlier_request(self):
         menu = types.SimpleNamespace(get_infolabel=self.env.ku.get_infolabel)   # reused interpreter
@@ -356,6 +359,140 @@ class SnapshotTests(unittest.TestCase):
             self.open()
         self.assertEqual(seen, [self.env.parent['Container.FolderPath']] * 2)
         self.assertIs(menu.get_infolabel, self.env.ku.get_infolabel)       # restored
+
+    def _age_files(self):
+        old = time.time() - 600
+        for f in self.env.profile.iterdir():
+            if f.is_file():
+                os.utime(f, (old, old))
+
+    def _early(self, query=None):
+        argv = ['plugin://plugin.video.pov/', '9', query or self.QUERY]
+        fake_pov = types.SimpleNamespace(kodi_utils=self.env.ku)
+        with mock.patch.dict(sys.modules, {'modules': fake_pov, 'modules.kodi_utils': self.env.ku}):
+            self.env.sent = []
+            self.env.labels_gui = dict(self.env.parent)
+            self.env.query = query or self.QUERY
+            return self.m.serve_early(argv)
+
+    def test_unchanged_files_serve_without_reading_any_database(self):
+        self._age_files()
+        self.open()
+        imported = []
+        real_import = __import__
+
+        def spy(name, *a, **k):
+            imported.append(name)
+            return real_import(name, *a, **k)
+        with mock.patch.object(self.m, '_deps', side_effect=AssertionError('deps read')),                 mock.patch('builtins.__import__', spy):
+            self.assertTrue(self._early())
+        self.assertIn('endOfDirectory', [x[0] for x in self.env.sent])
+        heavy = {'json', 'hashlib', 'sqlite3', 're', 'urllib.parse', 'tempfile', 'profile_age_guard'}
+        self.assertFalse(heavy & set(imported), imported)
+
+    def test_a_written_file_is_checked_by_content(self):
+        self._age_files()
+        self.open()
+        older = time.time() - 300
+        os.utime(self.env.profile / 'settings.xml', (older, older))        # rewritten, same content
+        self.assertTrue(self._early())                                     # content proves it
+        with mock.patch.object(self.m, '_deps', side_effect=AssertionError('deps read')):
+            self.assertTrue(self._early())                                 # new times recorded
+        c = sqlite3.connect(str(self.env.profile / 'watched.db'))
+        c.execute("insert into watched_status values ('movie','1',0,0,'2026-10-17 10:00:00','x')")
+        c.commit(); c.close()
+        self.assertFalse(self._early())                                    # a real change: rebuilt
+        self.assertEqual(self.env.built, 1)
+
+    def test_the_content_check_avoids_heavy_imports_too(self):
+        self.open()
+        os.utime(self.env.profile / 'settings.xml', (time.time() - 300,) * 2)
+        imported = []
+        real_import = __import__
+
+        def spy(name, *a, **k):
+            imported.append(name)
+            return real_import(name, *a, **k)
+        with mock.patch('builtins.__import__', spy):
+            self.assertTrue(self._early())
+        heavy = {'json', 'hashlib', 'sqlite3', 're', 'urllib.parse', 'tempfile', 'profile_age_guard'}
+        self.assertFalse(heavy & set(imported), imported)
+        self.assertIn('_sqlite3', imported)
+
+    def test_dropped_show_stamps_do_not_count_but_shows_do(self):
+        f = self.env.profile / 'povil_dropped_trakt.json'
+        f.write_text('{"version":1,"items":[],"complete":false,"checked":1,"retry_at":5}')
+        self.open()
+        f.write_text('{"version":1,"items":[],"complete":false,"checked":2,"retry_at":9}')
+        self.open()
+        self.assertEqual(self.env.built, 1)
+        f.write_text('{"version":1,"items":[["tv","1"]],"complete":false,"checked":2,"retry_at":9}')
+        self.open()
+        self.assertEqual(self.env.built, 2)
+
+    def test_an_expired_list_row_is_noticed_without_any_file_write(self):
+        self._age_files()
+        self.open()
+        path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
+        data = marshal.loads(path.read_bytes())
+        self.assertIsNotNone(data['sig'])
+        data['expires'] = time.time() - 1                                  # POV's row ran out
+        path.write_bytes(marshal.dumps(data))
+        with mock.patch.object(self.m, '_deps', wraps=self.m._deps) as deps:
+            self._early()
+        self.assertTrue(deps.called)
+
+    def test_child_profiles_and_encoded_requests_are_left_to_pov(self):
+        self._age_files()
+        self.open()
+        self.env.child = True
+        self.assertFalse(self._early())
+        self.env.child = False
+        self.assertFalse(self._early('?mode=build_movie_list&action=tmdb%5Fmovies_popular'))
+        self.assertTrue(self._early())
+
+    def test_home_rows_skip_povs_no_op_view_mode(self):
+        loaded = []
+        calls = [['ku.set_view_mode', ['view.movies', 'movies', True], {}]]     # is_widget=True
+        self.m.replay({'items': [], 'calls': calls}, 9, lambda: loaded.append(1) or self.env.ku,
+                      self.env.xbmc, self.env.xbmcgui, self.env.xbmcplugin)
+        self.assertEqual(loaded, [])                                       # POV never imported
+        calls[0][1][2] = False
+        self.m.replay({'items': [], 'calls': calls}, 9, lambda: loaded.append(1) or self.env.ku,
+                      self.env.xbmc, self.env.xbmcgui, self.env.xbmcplugin)
+        self.assertEqual(loaded, [1])
+
+    def test_trakt_charts_are_public_and_account_lists_personal(self):
+        for action in ('trakt_tv_trending', 'trakt_movies_most_watched', 'trakt_tvanime_trending'):
+            self.assertFalse(self.m._personal({'mode': 'build_tvshow_list', 'action': action}), action)
+            self.assertFalse(self.m._account_list({'mode': 'build_tvshow_list', 'action': action}), action)
+        for action in ('trakt_watchlist', 'trakt_collection_lists', 'trakt_recommendations', 'mdblist_watchlist'):
+            self.assertTrue(self.m._account_list({'mode': 'build_movie_list', 'action': action}), action)
+
+    def test_guard_file_names_match_profile_age_guard(self):
+        spec = importlib.util.spec_from_file_location('pag_test', MOD.parent / 'profile_age_guard.py')
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        self.assertEqual(self.m.GUARD_POLICY_FILE, guard.POLICY_FILE)
+        self.assertEqual(self.m.GUARD_CHILD_MARKER, guard.CHILD_MARKER)
+
+    def test_a_menu_imported_during_the_build_gets_the_real_labels_back(self):
+        menu = types.SimpleNamespace()
+        route = self.env.route
+
+        def importing(sys_obj):
+            menu.get_infolabel = self.env.ku.get_infolabel                 # first import, pinned alias
+            sys.modules['menus.tvshows'] = menu
+            route(sys_obj)
+        self.env.route = importing
+        try:
+            self.routing = self.m.wrap(lambda so: self.env.route(so), {'kodi_utils': self.env.ku})
+            self.open()
+        finally:
+            sys.modules.pop('menus.tvshows', None)
+        self.assertIs(menu.get_infolabel, self.env.ku.get_infolabel)
+        self.env.labels_gui['Container.FolderPath'] = 'now'
+        self.assertEqual(menu.get_infolabel('Container.FolderPath'), 'now')
 
     def test_full_screen_lists_are_saved_per_parent_folder(self):
         self.env.parent['Container.FolderPath'] = 'plugin://plugin.video.pov/?mode=a'
@@ -379,7 +516,7 @@ class SnapshotTests(unittest.TestCase):
             self.open(); self.open()
         self.assertEqual(self.env.built, 2)
         self.assertFalse((self.env.profile / 'povil_snapshots').exists() and
-                         list((self.env.profile / 'povil_snapshots').glob('*.json')))
+                         list((self.env.profile / 'povil_snapshots').glob('*.snap')))
 
     def test_a_recording_failure_still_sends_real_items(self):
         orig = self.m.Recorder._index

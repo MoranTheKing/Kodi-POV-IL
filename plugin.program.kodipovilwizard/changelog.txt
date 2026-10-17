@@ -1,3 +1,8 @@
+0.4.53
+- Saved lists start much faster: each home row is a fresh Python interpreter, and while Kodi starts a dozen add-on services, importing json alone took 0.3-1.2 s (QA, NOX). Serving a saved list now imports none of json, hashlib, sqlite3, re or urllib: the record is read with marshal and "nothing changed" is proven by file sizes and times, falling back to a light content check (C sqlite module, crc32) when a file was rewritten. QA NOX cold start: check 0.7 s -> 0.1 s per row, first rows on screen 0.25-0.4 s after the home screen instead of 1.0-1.2 s.
+- Home rows no longer import POV just to replay its view-mode call (a no-op for rows): 0.6 s less per row at start-up.
+- Trakt charts (trending, most watched) count as public lists: a Trakt sync no longer throws them away at every start (field log: 3.3 s rebuild of "Trakt trending" on each launch).
+
 0.4.52
 - Saved lists: every POV list -- home rows, tiles, categories, "Continue watching" -- opens from the finished list saved on the previous visit, without rebuilding it (QA: 21 titles in 4-60 ms instead of 0.3-3 s; on an Android box "Continue watching" took 10-12 s right after Kodi started). Fresh lists are served before POV even loads.
 - Saved lists are never out of date: watching or marking something, progress, a setting, a sync, POV fetching the list again or a cleared cache rebuilds the list at once. A list that is merely old or from yesterday (e.g. the first click right after Kodi starts) is shown at once -- before POV loads -- and rebuilt in the background; when the new one differs, the open list or the home rows refresh themselves within seconds. Home rows and full-screen lists are saved apart, as POV builds them differently. Search and child profiles are not saved.
