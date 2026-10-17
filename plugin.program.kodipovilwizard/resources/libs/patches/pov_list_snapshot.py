@@ -398,7 +398,7 @@ MENU_MODULES = ('menus.movies', 'menus.tvshows')
 PREBUILD_PROPERTY = 'povil.prebuild'
 
 
-def _labels(xbmc, argv=None):
+def _labels(xbmc, argv=None, consume=False):
     """What POV reads from the screen while it builds a list:
     * Container.PluginName -- external_browse(): a home row or another
       add-on's list is built differently (context menus, hidden watched
@@ -417,6 +417,12 @@ def _labels(xbmc, argv=None):
             try:
                 if len(parts) == 4 and float(parts[0]) > time.time() and parts[1] == (
                         argv[2] if len(argv) > 2 else ''):
+                    if consume:
+                        # Read by the build itself (wrap), one request only: a
+                        # real click on the same entry from another screen
+                        # must read its own screen. serve_early must not clear
+                        # it -- POV builds after it, in the same request.
+                        xbmc.executebuiltin('ClearProperty(%s,home)' % PREBUILD_PROPERTY)
                     return {'Container.PluginName': parts[2], 'Container.FolderPath': parts[3]}
             except ValueError:
                 pass
@@ -538,6 +544,26 @@ def proven(snap, sig, now=None):
     return expires is None or now < expires
 
 
+MENUS_INDEX = '_menus.idx'
+
+
+def _note_menu(folder, path, snap):
+    """Remember which records are POV menus, so building lists ahead reads
+    those few instead of every record."""
+    if not snap.get('menu'):
+        return
+    index = os.path.join(folder, MENUS_INDEX)
+    name = os.path.basename(path)
+    try:
+        with open(index, 'r', encoding='utf-8') as fh:
+            if name in fh.read().split():
+                return
+    except OSError:
+        pass
+    with open(index, 'a', encoding='utf-8') as fh:
+        fh.write(name + '\n')
+
+
 def save(path, snap):
     folder = os.path.dirname(path)
     os.makedirs(folder, exist_ok=True)
@@ -554,6 +580,10 @@ def save(path, snap):
         except OSError:
             pass
         raise
+    try:
+        _note_menu(folder, path, snap)
+    except OSError:
+        pass
     try:
         now = time.time()
         entries = [os.path.join(folder, n) for n in os.listdir(folder)]
@@ -1165,8 +1195,32 @@ def prebuild_targets(profile, versions, limit=PREBUILD_PER_MENU):
         names = [n for n in os.listdir(folder) if n.endswith(SUFFIX)]
     except OSError:
         return [], 0
+    index = os.path.join(folder, MENUS_INDEX)
+    if not os.path.exists(index):
+        # Records saved before the index existed: find the menus once.
+        found = []
+        for name in names:
+            try:
+                with open(os.path.join(folder, name), 'rb') as fh:
+                    data = fh.read()
+                snap = marshal.loads(zlib.decompress(data[1:]) if data[:1] == b'Z' else data)
+                if (_query([None, None, ast.literal_eval(snap['key'])[2]]) or {}).get(
+                        'mode', '').startswith('navigator.'):
+                    found.append(name)
+            except Exception:
+                continue
+        try:
+            with open(index, 'w', encoding='utf-8') as fh:
+                fh.write(''.join(n + '\n' for n in found))
+        except OSError:
+            pass
+    try:
+        with open(index, 'r', encoding='utf-8') as fh:
+            menus = sorted(set(fh.read().split()) & set(names))
+    except OSError:
+        return [], 0
     targets, seen = [], set()
-    for name in sorted(names):
+    for name in menus:
         path = os.path.join(folder, name)
         try:
             with open(path, 'rb') as fh:
@@ -1262,7 +1316,7 @@ def wrap(original, native):
             personal = _personal(params)
             # After serve_early() the copy is on screen and the labels show
             # it, so the rebuild uses what was read before it was shown.
-            labels = early[1] if early else _labels(xbmc, argv)
+            labels = early[1] if early else _labels(xbmc, argv, consume=True)
             context = _context(labels, params)
             deps = _deps(profile, params)
             path, raw = _path(profile, argv, _versions(xbmcaddon), context)
@@ -1321,7 +1375,8 @@ def wrap(original, native):
                 deps, sig = _settled_sig(profile, lambda: _deps(profile, params))
                 new = recorder.snapshot(deps)
                 if new is not None:
-                    new.update(key=raw, sig=sig, expires=_expiry(deps))
+                    new.update(key=raw, sig=sig, expires=_expiry(deps),
+                               menu=(params.get('mode') or '').startswith('navigator.'))
             if new is not None:
                 prev = read(path, raw)
                 # Another request may have rebuilt (and refreshed) this list

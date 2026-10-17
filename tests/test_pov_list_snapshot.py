@@ -552,11 +552,26 @@ class SnapshotTests(unittest.TestCase):
         self.env.labels_gui = dict(self.env.parent)
         mark = ''.join((repr(time.time() + 30), child_q % 28, 'plugin.video.pov', parent))
         props = {'Window(10000).Property(povil.prebuild)': mark}
-        real = self.env.xbmc.getInfoLabel
+        real, real_builtin = self.env.xbmc.getInfoLabel, self.env.xbmc.executebuiltin
         self.env.xbmc.getInfoLabel = lambda k: props.get(k) or real(k)
+
+        def builtin(cmd):                       # like Kodi: the property really goes away
+            real_builtin(cmd)
+            if cmd == 'ClearProperty(povil.prebuild,home)':
+                props.clear()
+        self.env.xbmc.executebuiltin = builtin
         self.env.query = child_q % 28
-        self.routing(types.SimpleNamespace(argv=['plugin://plugin.video.pov/', '5', child_q % 28]))
-        self.env.xbmc.getInfoLabel = real
+        argv = ['plugin://plugin.video.pov/', '5', child_q % 28]
+        fake_pov = types.SimpleNamespace(kodi_utils=self.env.ku)
+        with mock.patch.dict(sys.modules, {'modules': fake_pov, 'modules.kodi_utils': self.env.ku}):
+            self.assertFalse(self.m.serve_early(argv))                     # router.py first: no record
+        self.assertTrue(props)                                             # ...and the screen is still named
+        self.routing(types.SimpleNamespace(argv=argv))                     # then POV builds it
+        self.assertFalse(props)
+        self.env.xbmc.getInfoLabel, self.env.xbmc.executebuiltin = real, real_builtin
+        self.assertIn('ClearProperty(povil.prebuild,home)', self.env.builtins)   # one request only
+        index = (self.env.profile / 'povil_snapshots' / '_menus.idx').read_text().split()
+        self.assertEqual(len(index), 1)                                    # the menu, not its lists
         built = self.env.built
         targets, _count = self.m.prebuild_targets(str(self.env.profile) + os.sep, ['1.0', '1.0'])
         self.assertEqual([t[1] for t in targets], [child_q % 35])
