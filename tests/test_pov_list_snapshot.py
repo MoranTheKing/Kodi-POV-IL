@@ -202,11 +202,22 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(cast.args, ('A', 'B', 1, 't.jpg'))           # actors rebuilt
         self.assertEqual([s[0] for s in second], [s[0] for s in first])  # same calls, same order
 
-    def test_a_watch_change_rebuilds_at_once(self):
+    def test_a_watch_change_shows_the_list_then_rebuilds_it(self):
+        self.env.parent['Container.FolderPath'] = 'plugin://plugin.video.pov/' + self.QUERY  # back from the player
+        self.env.opens_window = False
         self.open()
         c = sqlite3.connect(str(self.env.profile / 'watched.db'))
         c.execute("insert into watched_status values ('movie','1',0,0,'2026-10-17 10:00:00','x')")
         c.commit(); c.close()
+        self.env.label = 'Updated'
+        self.assertEqual(self.labels(self.open())[0], 'Movie 0')          # at once
+        self.assertEqual(self.env.built, 2)                                # rebuilt right after
+        self.assertEqual(self.labels(self.open())[0], 'Updated 0')         # and served from now on
+        self.assertEqual(self.env.built, 2)
+
+    def test_other_changes_still_rebuild_before_showing(self):
+        self.open()
+        (self.env.profile / 'settings.xml').write_text('<settings><x/></settings>')
         self.env.label = 'Updated'
         self.assertEqual(self.labels(self.open())[0], 'Updated 0')
         self.assertEqual(self.env.built, 2)

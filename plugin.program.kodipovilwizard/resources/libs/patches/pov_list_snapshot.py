@@ -907,6 +907,15 @@ def _adult_profile():
 EARLY = {}
 
 
+def _watch_only_change(old, new):
+    """True when the only dependencies that differ are watch-state marks
+    (watched/progress in POV's, Trakt's and MDBList's databases)."""
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return False
+    changed = {k for k in set(old) | set(new) if old.get(k) != new.get(k)}
+    return bool(changed) and changed <= set(WATCH_DBS)
+
+
 def _stale(snap, age, personal):
     return age >= (PERSONAL_TTL_S if personal else GENERAL_TTL_S) or snap.get('day') != _today()
 
@@ -1007,6 +1016,7 @@ def serve_early(argv):
         if age is None:
             return False      # missing or too old: the normal route builds it
         checked = None
+        watch_changed = False
         if not proven(snap, sig, now):
             fresh = None
             if sig is not None and snap.get('sig') is not None and isinstance(snap.get('deps'), dict):
@@ -1016,10 +1026,15 @@ def serve_early(argv):
                 if snap.get('expires') is not None and now >= snap['expires']:
                     fresh |= {'list', 'tmdblist'}
             deps, sig = _settled_sig(profile, lambda: _deps(profile, params, snap.get('deps'), fresh))
-            if not _trusted(deps) or snap.get('deps') != deps:
-                return False  # changed: the normal route builds it
-            checked = (deps, sig)
-        stale = _stale(snap, age, personal)
+            if not _trusted(deps):
+                return False
+            if snap.get('deps') != deps:
+                if not _watch_only_change(snap.get('deps'), deps):
+                    return False  # changed: the normal route builds it
+                watch_changed = True  # shown now, rebuilt and refreshed right after
+            else:
+                checked = (deps, sig)
+        stale = watch_changed or _stale(snap, age, personal)
     except Exception:
         return False
     started = time.perf_counter()
@@ -1453,6 +1468,7 @@ def wrap(original, native):
                 or not _adult_profile()):
             return original(sys_obj)
         early = EARLY.pop(handle, None)
+        watch_stale = False
         try:
             profile = _profile_dir(xbmcvfs)
             personal = _personal(params)
@@ -1463,6 +1479,14 @@ def wrap(original, native):
             deps = _deps(profile, params)
             path, raw = _path(profile, argv, _versions(xbmcaddon), context)
             snap, age = (None, None) if early else load(path, raw, deps)
+            if snap is None and not early and _trusted(deps):
+                # Only the watch state changed (an episode was just watched and
+                # Kodi returns to this list): show the saved copy at once and
+                # rebuild it right after -- it refreshes in place.
+                old = read(path, raw)
+                old_age = _age(old, time.time()) if old is not None else None
+                if old_age is not None and _watch_only_change(old.get('deps'), deps):
+                    snap, age, watch_stale = old, old_age, True
         except Exception:
             snap, age, path, context, labels = None, None, None, None, None
         shadow = False
@@ -1489,7 +1513,7 @@ def wrap(original, native):
                 xbmc.log('[POV IL snapshot] replay failed: %s' % type(exc).__name__, xbmc.LOGWARNING)
                 return None
             if snap is not None:
-                stale = _stale(snap, age, personal)
+                stale = watch_stale or _stale(snap, age, personal)
                 stamp(xbmcgui)
                 xbmc.log('[POV IL snapshot] hit mode=%s items=%d age_s=%d ms=%d%s' % (
                     params.get('mode'), count, age, round((time.perf_counter() - started) * 1000),
