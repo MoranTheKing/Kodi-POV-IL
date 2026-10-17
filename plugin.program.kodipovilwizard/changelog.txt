@@ -1,3 +1,6 @@
+0.4.61
+- A tap on an episode or movie while Kodi is busy gets an answer at once: if POV's sources window is not up 1.5 s after the tap, a short "searching for sources..." notice shows (none once POV's sources window, results list or background progress bar is up, once playing, or once POV's route has returned -- no results, cancelled; router.py now reports that, as atexit runs only after the timer). Field log (Shield, right after start): ~6 s between the tap and the sources window with nothing on screen, and people tapped again. QA: a tap right after start reached the sources window in 1.3 s on a PC (no notice); with the threshold lowered for the test the notice showed before the window.
+
 0.4.60
 - An episode or movie picked right after Kodi starts gets the CPU first: while it is looking for sources (the mark set by 0.4.58's tap guard), a saved list's background rebuild is skipped -- the copy on screen stays until the next visit -- and the Wizard's start-up work (update check, notices) waits for it, up to 30 s. Field log (Shield, start-up): a "next episodes" rebuild took 5.7 s right beside the first tap, which reached the sources window only ~10 s later.
 
