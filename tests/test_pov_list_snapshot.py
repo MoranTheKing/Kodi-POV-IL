@@ -596,6 +596,66 @@ class SnapshotTests(unittest.TestCase):
         self.open(q % 28)                                                  # its own rows cleared
         self.assertEqual(self.env.built, 2)
 
+    def test_idle_resign_lets_the_next_start_skip_the_content_check(self):
+        self._age_files()
+        self.open()
+        older = time.time() - 300
+        os.utime(self.env.profile / 'traktcache.db', (older, older))       # a sync, same content
+        self.assertEqual(self.m.resign(str(self.env.profile) + os.sep), 1)
+        with mock.patch.object(self.m, '_deps', side_effect=AssertionError('deps read')):
+            self.assertTrue(self._early())                                 # by file times alone
+        c = sqlite3.connect(str(self.env.profile / 'watched.db'))
+        c.execute("insert into watched_status values ('movie','1',0,0,'2026-10-17 10:00:00','x')")
+        c.commit(); c.close()
+        os.utime(self.env.profile / 'watched.db', (older + 10, older + 10))
+        self.assertEqual(self.m.resign(str(self.env.profile) + os.sep), 0)  # a real change stays a change
+        self.assertFalse(self._early())
+
+    def test_the_skins_home_rows_and_tiles_are_targets_from_home(self):
+        skin = self.env.root / 'skin'
+        (skin / 'xml').mkdir(parents=True)
+        (skin / 'addon.xml').write_text('<addon/>')
+        (skin / 'xml' / 'Home.xml').write_text(
+            '<content>plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_my_movies</content>'
+            '<onclick>ActivateWindow(videos,"plugin://plugin.video.pov/?mode=navigator.genres&amp;menu_type=movie",return)</onclick>'
+            '<content>plugin://plugin.video.pov/?mode=build_next_episode</content>'
+            '<content>plugin://plugin.video.pov/?mode=build_movie_list&amp;query=$INFO[x]</content>')
+        targets, _n = self.m.prebuild_targets(str(self.env.profile) + os.sep, ['1.0', '1.0'], skin_dir=str(skin))
+        self.assertEqual([t[1] for t in targets], ['?mode=build_movie_list&action=tmdb_my_movies',
+                                                   '?mode=navigator.genres&menu_type=movie'])
+        self.assertEqual(targets[0][2], {'Container.PluginName': '', 'Container.FolderPath': ''})
+
+    def test_only_dependencies_of_changed_files_are_read_again(self):
+        self._age_files()
+        self.open()
+        older = time.time() - 300
+        os.utime(self.env.profile / 'maincache.db', (older, older))        # POV's list cache written
+        read = []
+        real = self.m._db_marks
+        with mock.patch.object(self.m, '_db_marks', side_effect=lambda *a, **k: read.append(a[0]) or real(*a, **k)):
+            self.assertTrue(self._early())
+        self.assertEqual(read, [])                                         # no watch database opened
+        os.utime(self.env.profile / 'watched.db', (older + 1, older + 1))
+        c = sqlite3.connect(str(self.env.profile / 'watched.db'))
+        c.execute("insert into watched_status values ('movie','1',0,0,'2026-10-17 10:00:00','x')")
+        c.commit(); c.close()
+        os.utime(self.env.profile / 'watched.db', (older + 2, older + 2))
+        self.assertFalse(self._early())                                    # a real change is still seen
+
+    def test_a_list_that_saves_nothing_does_not_hold_up_the_others(self):
+        props, asked = {}, []
+        win = types.SimpleNamespace(getProperty=lambda k: props.get(k, ''),
+                                    setProperty=lambda k, v: props.__setitem__(k, v),
+                                    clearProperty=lambda k: props.pop(k, None))
+        xbmc = types.SimpleNamespace(
+            Player=lambda: types.SimpleNamespace(isPlayingVideo=lambda: False),
+            getGlobalIdleTime=lambda: 100, log=lambda *a: None, LOGINFO=1, LOGWARNING=2,
+            executeJSONRPC=lambda req: asked.append(json.loads(req)['params']['directory']))
+        targets = [('plugin://plugin.video.pov/?a=%d' % n, '?a=%d' % n, dict(self.m.HOME_LABELS)) for n in (1, 2)]
+        with mock.patch.dict(sys.modules, {'xbmcgui': types.SimpleNamespace(Window=lambda wid: win)}),                 mock.patch.object(self.m, 'prebuild_targets', return_value=(targets, 5)),                 mock.patch.object(self.m, 'resign', return_value=0),                 mock.patch.object(self.m, '_adult_profile', return_value=True):
+            self.m.prebuild_tick(xbmc); self.m.prebuild_tick(xbmc); self.m.prebuild_tick(xbmc)
+        self.assertEqual(asked, ['plugin://plugin.video.pov/?a=1', 'plugin://plugin.video.pov/?a=2'])
+
     def test_guard_file_names_match_profile_age_guard(self):
         spec = importlib.util.spec_from_file_location('pag_test', MOD.parent / 'profile_age_guard.py')
         guard = importlib.util.module_from_spec(spec)

@@ -1,3 +1,9 @@
+0.4.57
+- Fresh installs: the "completing system installs (Native)" step showed 0% for minutes. It now shows which add-on it installs (n of N), gives the repository lookup 60 s instead of 15 s on a slow connection (a timeout sent every add-on to Kodi's one-by-one installer), and keeps waiting while Kodi is still downloading an add-on (up to 4 minutes) instead of moving on after 60 s and leaving it without its modules (field report: YouTube without urllib3, the account manager without requests).
+- Kodi closes about 10 seconds faster: the Wizard's two watch loops ran as RunScript scripts, which Kodi never tells it is closing -- each was killed after 5 seconds. They now run inside the Wizard's service and stop at once.
+- First home rows after a start: a saved list checks only what the files that changed feed (often just POV's list cache) instead of everything; on Kodi's way out, and while idle, recent lists record the current file times. QA: the first rows checked by file times in 0.04-0.07 s (field log: 0.5 s each).
+- Building lists ahead also covers the skin's own home rows and tiles and personal lists ("My movies", watchlists), starts after 30 s and waits for 15 s without input.
+
 0.4.56
 - Building lists ahead reads only POV's saved menus (a small index) instead of every saved list on each idle check -- light on a phone.
 - The screen a list is built ahead for applies to that one request only, so a real click on the same entry at that moment reads its own screen.

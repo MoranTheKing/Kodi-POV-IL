@@ -61,6 +61,32 @@ def prebuild_lists():
         pass
 
 
+def resign_lists():
+    """On Kodi's way out, after this session's last cache and sync writes:
+    record the current file times of the most recent saved lists whose
+    content did not change, so the first home rows of the next start are
+    proven by file times alone. Files and SQLite only -- no GUI call (the
+    GUI thread is waiting for this interpreter). Bounded to 1.5 s."""
+    import sys
+    import xbmcvfs
+    try:
+        patches = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')
+        if patches not in sys.path:
+            sys.path.append(patches)
+        import pov_list_snapshot
+        import xbmc
+        pov_list_snapshot.DB_TIMEOUT = 0.3     # Kodi is closing: never wait on a lock
+        done = pov_list_snapshot.resign(xbmcvfs.translatePath('special://profile/addon_data/plugin.video.pov/'),
+                                        limit=12, budget_s=1.5)
+        xbmc.log('[POV IL snapshot] on exit: {} saved list(s) re-checked'.format(done), xbmc.LOGINFO)
+    except Exception as error:
+        try:
+            import xbmc
+            xbmc.log('[POV IL snapshot] on exit: re-check skipped ({})'.format(type(error).__name__), xbmc.LOGINFO)
+        except Exception:
+            pass
+
+
 def warm_bytecode(addons, monitor):
     """Write .pyc files Kodi never writes itself (see pyc_warm); next pass time."""
     import xbmc
@@ -119,7 +145,7 @@ def run():
                 pending = None
                 attempts = 0
                 idle_polls += 1
-                if idle_polls >= 6:
+                if idle_polls >= 3:
                     prebuild_lists()
                 if idle_polls >= warm_after and not xbmc.Player().isPlayingVideo():
                     warm_bytecode(addons, monitor)
@@ -160,5 +186,6 @@ def run():
             # Window property getters acquire its GUI lock and can deadlock.
             # Queue cleanup without reading that lock; the key is profile-local.
             xbmc.executebuiltin('ClearProperty({},home)'.format(prop))
+            resign_lists()
         elif window.getProperty(prop) == token:
             window.clearProperty(prop)
