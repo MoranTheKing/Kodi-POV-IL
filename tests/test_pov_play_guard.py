@@ -13,11 +13,13 @@ MOD = Path(__file__).resolve().parents[1] / 'plugin.program.kodipovilwizard' / '
 class GuardTests(unittest.TestCase):
     def setUp(self):
         self.props, self.playing, self.exits = {}, False, []
+        self.visible, self.timers = False, []
         win = types.SimpleNamespace(getProperty=lambda k: self.props.get(k, ''),
                                     setProperty=lambda k, v: self.props.__setitem__(k, v),
                                     clearProperty=lambda k: self.props.pop(k, None))
         self.toasts = []
         mods = {'xbmc': types.SimpleNamespace(Player=lambda: types.SimpleNamespace(isPlaying=lambda: self.playing),
+                                              getCondVisibility=lambda c: self.visible,
                                               Monitor=lambda: types.SimpleNamespace(waitForAbort=lambda s: True),
                                               log=lambda *a: None, LOGINFO=1),
                 'xbmcgui': types.SimpleNamespace(Window=lambda wid: win, Dialog=lambda: types.SimpleNamespace(
@@ -31,6 +33,10 @@ class GuardTests(unittest.TestCase):
         reg = mock.patch('atexit.register', lambda fn, *a: self.exits.append((fn, a)))
         reg.start()
         self.addCleanup(reg.stop)
+        timer = mock.patch('threading.Timer', lambda delay, fn, args: types.SimpleNamespace(
+            start=lambda: self.timers.append((delay, fn, args))))
+        timer.start()
+        self.addCleanup(timer.stop)
 
     def tap(self, mode='play_media', reused=False):
         if not reused:
@@ -62,6 +68,30 @@ class GuardTests(unittest.TestCase):
     def test_a_stale_mark_does_not_block(self):
         self.props[self.m.PROPERTY] = repr(1.0)     # left by a killed request long ago
         self.assertFalse(self.tap())
+
+    def test_a_slow_start_says_the_tap_counted(self):
+        self.tap()
+        delay, fn, args = self.timers[0]
+        self.assertEqual(delay, self.m.NOTICE_AFTER_S)
+        fn(*args)                                   # nothing on screen yet
+        self.assertEqual(len(self.toasts), 1)
+
+    def test_no_notice_once_sources_show_or_the_request_ended(self):
+        self.tap()
+        fn, args = self.timers[0][1:]
+        self.visible = True
+        fn(*args)                                   # POV's sources window is up
+        self.visible = False
+        self.playing = True
+        fn(*args)                                   # already playing
+        self.playing = False
+        self.exits[0][0](*self.exits[0][1])         # the request is over
+        fn(*args)
+        self.assertEqual(self.toasts, [])
+
+    def test_dropped_taps_start_no_notice_timer(self):
+        self.tap(); self.tap()
+        self.assertEqual(len(self.timers), 1)
 
 
 if __name__ == '__main__':
