@@ -45,6 +45,22 @@ def repair_changed(addons, previous, current, window, monitor):
     xbmc.log('[POV IL] Host-update patch repair: {} acknowledged={}'.format(stats, healthy), xbmc.LOGINFO)
     return healthy
 
+def prebuild_lists():
+    """Build one POV list ahead of its first visit while Kodi is idle (see
+    pov_list_snapshot.prebuild_tick). Never fails the watch loop."""
+    import sys
+    import xbmc
+    import xbmcvfs
+    try:
+        patches = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')
+        if patches not in sys.path:
+            sys.path.append(patches)
+        import pov_list_snapshot
+        pov_list_snapshot.prebuild_tick(xbmc)
+    except Exception:
+        pass
+
+
 def warm_bytecode(addons, monitor):
     """Write .pyc files Kodi never writes itself (see pyc_warm); next pass time."""
     import xbmc
@@ -103,6 +119,8 @@ def run():
                 pending = None
                 attempts = 0
                 idle_polls += 1
+                if idle_polls >= 6:
+                    prebuild_lists()
                 if idle_polls >= warm_after and not xbmc.Player().isPlayingVideo():
                     warm_bytecode(addons, monitor)
                     idle_polls, warm_after = 0, 6 * 360
