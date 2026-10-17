@@ -515,6 +515,42 @@ def check_for_video():
         xbmc.sleep(1000)
 
 
+ROWS_PROPERTY = 'povil.rows.last'
+
+
+def wait_for_home_rows(monitor, settle=1.5, first=5.0, cap=15.0):
+    """Hold start-up work while the home rows load: every row is a Python
+    interpreter of its own, and the build's services starting beside them
+    stretched the last home row by ~0.8 s on a PC (QA, NOX) -- more on a
+    phone. POV's saved lists stamp ROWS_PROPERTY when they serve a row; go
+    on once none arrived for `settle` seconds (or none at all within `first`
+    seconds of Home), and never wait more than `cap` seconds."""
+    import time
+    start = time.time()
+    home_at = None
+    try:
+        import xbmc, xbmcgui
+        win = xbmcgui.Window(10000)
+    except Exception:
+        return
+    while time.time() - start < cap:
+        now = time.time()
+        if home_at is None and xbmc.getCondVisibility('Window.IsVisible(home)'):
+            home_at = now
+        if home_at is not None:
+            try:
+                last = float(win.getProperty(ROWS_PROPERTY) or 0)
+            except ValueError:
+                last = 0.0
+            if last >= home_at - 1.0:
+                if now - last >= settle:
+                    return
+            elif now - home_at >= first:
+                return
+        if monitor.waitForAbort(0.25):
+            return
+
+
 def wait_for_gui_ready(timeout=90):
     """This script is an xbmc.service with start="startup", so it runs
     before Kodi's GUI/Home window exists. Showing a modal dialog
@@ -539,6 +575,12 @@ def wait_for_gui_ready(timeout=90):
                 # advancing lets the background update run immediately.
                 logging.log('[GUI Ready] Home visible after {0}s'.format(waited),
                             level=xbmc.LOGINFO)
+                rows_wait = time.time()
+                wait_for_home_rows(monitor)
+                if monitor.abortRequested():
+                    return False
+                logging.log('[GUI Ready] home rows settled after {0:.1f}s'.format(
+                    time.time() - rows_wait), level=xbmc.LOGINFO)
                 return True
             if not login_checked and xbmc.getCondVisibility('Window.IsActive(loginscreen)'):
                 login_checked = True

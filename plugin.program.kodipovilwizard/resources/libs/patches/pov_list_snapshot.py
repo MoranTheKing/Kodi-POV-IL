@@ -19,7 +19,7 @@ When a saved list may be used:
   list cache); a POV or Wizard update starts over as well;
 * while fresh (general lists such as popular/new 3 hours, personal lists 30
   minutes) it is simply shown;
-* while merely old (up to 24 hours -- e.g. the first list after Kodi starts
+* while merely old (up to a week -- e.g. the first list after Kodi starts
   in the morning) or saved on an earlier day (next/in-progress episodes
   depend on the date) it is shown at once AND rebuilt right after, in the
   same call; when the rebuilt list differs, the open list or the home rows
@@ -47,11 +47,24 @@ SUFFIX = '.snap'
 # A file written this recently may be written again within the same tick of
 # its modification time, so its time proves nothing yet.
 FRESH_STAT_S = 2.0
+# POV's own menus (genres, years, networks, "My content", the main menus,
+# shortcut folders): what skins open as categories. Built from POV's menu
+# database, its settings and the account manager's (the Wizard hides rows of
+# services that are not connected); the years list follows the date.
+NAVIGATOR_MODES = frozenset((
+    'navigator.main', 'navigator.genres', 'navigator.years', 'navigator.networks',
+    'navigator.anime_genres', 'navigator.anime_years', 'navigator.my_content',
+    'navigator.because_you_watched', 'navigator.favorites',
+    'navigator.shortcut_folders', 'navigator.build_shortcut_folder_list'))
 ROUTES = frozenset(('build_movie_list', 'build_tvshow_list',
-                    'build_next_episode', 'build_in_progress_episode'))
+                    'build_next_episode', 'build_in_progress_episode')) | NAVIGATOR_MODES
+NAVIGATOR_DB = 'navigator.db'
+ACCTMGR_SETTINGS = os.path.join(os.pardir, 'script.module.acctmgr', 'settings.xml')
 GENERAL_TTL_S = 3 * 3600
 PERSONAL_TTL_S = 30 * 60
-MAX_AGE_S = 24 * 3600
+# Shown at once up to a week old (rebuilt right after when old): people come
+# back to Kodi after half a day or a day, and that first screen matters most.
+MAX_AGE_S = 7 * 24 * 3600
 MAX_FILES = 100
 # What a list depends on, by CONTENT: Kodi and POV's syncs rewrite these files
 # at every start without changing them, so file times would discard every
@@ -61,8 +74,8 @@ WATCH_TABLES = ('watched_status', 'progress', 'dropped', 'favorites')
 HASHED_FILES = ('settings.xml', 'povil_dropped_trakt.json', 'povil_dropped_mdblist.json')
 # Sizes and times of every file above (and POV's list cache): unchanged files
 # mean unchanged dependencies, without opening a database.
-STAT_FILES = HASHED_FILES + tuple(name + suffix for name in WATCH_DBS + ('maincache.db',)
-                                  for suffix in ('', '-wal'))
+STAT_FILES = HASHED_FILES + (ACCTMGR_SETTINGS,) + tuple(
+    name + suffix for name in WATCH_DBS + ('maincache.db', NAVIGATOR_DB) for suffix in ('', '-wal'))
 # profile_age_guard's files (a test keeps these equal to its constants).
 GUARD_POLICY_FILE = 'povil_profiles.json'
 GUARD_CHILD_MARKER = 'povil.child-profile'
@@ -172,7 +185,11 @@ class _RecItem(object):
 
 
 def _build(item_ops, xbmc, xbmcgui):
-    li = xbmcgui.ListItem(offscreen=True)
+    if item_ops and item_ops[0][0] == 'N':      # recorded constructor call
+        li = xbmcgui.ListItem(*_live(item_ops[0][2], xbmc), **_live(item_ops[0][3], xbmc))
+        item_ops = item_ops[1:]
+    else:
+        li = xbmcgui.ListItem(offscreen=True)
     tag = None
     for kind, name, args, kwargs in item_ops:
         args, kwargs = _live(args, xbmc), _live(kwargs, xbmc)
@@ -240,6 +257,20 @@ def _json_items(raw):
         return text[start + 8:end].encode('utf-8')
     import json
     return json.dumps(json.loads(text).get('items')).encode('utf-8')
+
+
+def _rows_crc(path, table):
+    """Every row of a small table (POV's menus), as one checksum."""
+    sqlite3 = _db_module()
+    if not os.path.isfile(path):
+        return None
+    con = sqlite3.connect(path, timeout=2)
+    try:
+        return _crc(repr(con.execute('SELECT * FROM "%s" ORDER BY 1, 2' % table).fetchall()).encode('utf-8'))
+    except sqlite3.Error:
+        return 'error'
+    finally:
+        con.close()
 
 
 def _table_marks(con, table):
@@ -314,6 +345,13 @@ def _deps(profile, params):
     for name in WATCH_DBS:
         out[name] = _db_marks(os.path.join(profile, name), WATCH_TABLES,
                               hidden=(name == 'traktcache.db'))
+    if (params.get('mode') or '').startswith('navigator.'):
+        out[NAVIGATOR_DB] = _rows_crc(os.path.join(profile, NAVIGATOR_DB), 'navigator')
+        try:
+            with open(os.path.join(profile, ACCTMGR_SETTINGS), 'rb') as fh:
+                out['acctmgr'] = _crc(fh.read())
+        except OSError:
+            out['acctmgr'] = None
     if _account_list(params):
         for name, table in ACCOUNT_CACHES:
             out[name + ':' + table] = _db_marks(os.path.join(profile, name), (table,))
@@ -496,15 +534,19 @@ class Recorder(object):
     """Swaps POV's list-building entry points for recording ones."""
 
     PLUGIN_CALLS = ('addDirectoryItems', 'addDirectoryItem', 'setContent',
-                    'setPluginCategory', 'addSortMethod', 'endOfDirectory')
+                    'setPluginCategory', 'addSortMethod', 'endOfDirectory', 'setResolvedUrl')
     UTIL_CALLS = ('set_view_mode', 'focus_index')
 
-    def __init__(self, kodi_utils, xbmcplugin, xbmcgui, handle, shadow=False, labels=None):
+    def __init__(self, kodi_utils, xbmcplugin, xbmcgui, handle, shadow=False, labels=None,
+                 listitem_class=False):
         # shadow: rebuild after a replay already ended this handle -- record
         # only, nothing reaches Kodi. labels: screen labels POV is shown
         # while it builds (see _labels).
         self.ku, self.xp, self.xg, self.handle = kodi_utils, xbmcplugin, xbmcgui, handle
         self.shadow, self.labels = shadow, labels or {}
+        # listitem_class: the host builds xbmcgui.ListItem(...) itself (Idan
+        # Plus) instead of POV's kodi_utils.make_listitem().
+        self.listitem_class = listitem_class
         self.state = {'unsupported': None, 'ended': False}
         self.items, self.calls, self.saved, self.menus, self.pinned = [], [], {}, [], None
 
@@ -521,9 +563,22 @@ class Recorder(object):
     def __enter__(self):
         self._ids = {}
         ku, xp, xg, state = self.ku, self.xp, self.xg, self.state
-        self.saved['make_listitem'] = ku.make_listitem
-        ku.make_listitem = lambda: _RecItem(xg.ListItem(offscreen=True), state)
-        if self.labels and hasattr(ku, 'get_infolabel'):
+        if ku is not None:
+            self.saved['ku.make_listitem'] = ku.make_listitem
+            ku.make_listitem = lambda: _RecItem(xg.ListItem(offscreen=True), state)
+        if self.listitem_class:
+            real_cls = xg.ListItem
+            self.saved['xg.ListItem'] = real_cls
+
+            def listitem(*args, **kwargs):
+                li = _RecItem(real_cls(*args, **kwargs), state)
+                try:
+                    li._ops.append(['N', 'ListItem', _plain(list(args)), _plain(kwargs)])
+                except Unsupported as exc:
+                    state['unsupported'] = 'ListItem(%s)' % exc
+                return li
+            xg.ListItem = listitem
+        if self.labels and ku is not None and hasattr(ku, 'get_infolabel'):
             real_label, labels = ku.get_infolabel, self.labels
             self.saved['ku.get_infolabel'] = real_label
             pinned = lambda name: (labels[name] if name in labels and not state['ended']
@@ -541,8 +596,24 @@ class Recorder(object):
 
         def plugin_call(name, original):
             def call(handle, *args, **kwargs):
+                if name == 'setResolvedUrl':
+                    # Playback, never a list: Kodi gets the real item.
+                    state['unsupported'] = 'playback'
+                    args = tuple(getattr(a, '_real', a) for a in args)
+                    kwargs = {k: getattr(v, '_real', v) for k, v in kwargs.items()}
+                    return original(handle, *args, **kwargs)
                 if handle != self.handle:
                     return original(handle, *args, **kwargs)
+                if name == 'addDirectoryItem' and not args and 'url' in kwargs:
+                    # Keyword call (Idan Plus): record it in positional form.
+                    args = [kwargs.pop('url'), kwargs.pop('listitem')]
+                    if 'isFolder' in kwargs or 'totalItems' in kwargs:
+                        args.append(kwargs.pop('isFolder', False))
+                    if 'totalItems' in kwargs:
+                        args.append(kwargs.pop('totalItems'))
+                    args = tuple(args)
+                elif name == 'addDirectoryItems' and not args and 'items' in kwargs:
+                    args = (kwargs.pop('items'),)
                 try:
                     if name == 'addDirectoryItems':
                         rows = [[url, self._index(li), bool(folder)] for url, li, folder in args[0]]
@@ -568,6 +639,8 @@ class Recorder(object):
             return call
 
         for name in self.PLUGIN_CALLS:
+            if not hasattr(xp, name):
+                continue
             self.saved['xp.' + name] = getattr(xp, name)
             setattr(xp, name, plugin_call(name, self.saved['xp.' + name]))
 
@@ -583,10 +656,17 @@ class Recorder(object):
             return call
 
         for name in self.UTIL_CALLS:
-            if hasattr(ku, name):
+            if ku is not None and hasattr(ku, name):
                 self.saved['ku.' + name] = getattr(ku, name)
                 setattr(ku, name, util_call(name, self.saved['ku.' + name]))
         return self
+
+    def stop_listitems(self, reason):
+        """From here on the host gets real ListItems (it is about to play
+        one); this request is not a list and is never saved."""
+        self.state['unsupported'] = reason
+        if 'xg.ListItem' in self.saved:
+            self.xg.ListItem = self.saved['xg.ListItem']
 
     def __exit__(self, *exc):
         for menu, real in self.menus:
@@ -600,10 +680,9 @@ class Recorder(object):
                 if menu is not None and getattr(menu, 'get_infolabel', None) is pinned:
                     menu.get_infolabel = real_label
             self.pinned = None
-        self.ku.make_listitem = self.saved.pop('make_listitem')
         for key, value in self.saved.items():
-            owner, name = (self.xp, key[3:]) if key.startswith('xp.') else (self.ku, key[3:])
-            setattr(owner, name, value)
+            owner = {'xp.': self.xp, 'xg.': self.xg, 'ku.': self.ku}[key[:3]]
+            setattr(owner, key[3:], value)
         self.saved = {}
         return False
 
@@ -615,10 +694,26 @@ class Recorder(object):
                 'items': self.items, 'calls': self.calls}
 
 
-def replay(snap, handle, kodi_utils, xbmc, xbmcgui, xbmcplugin):
+class BadRecord(Exception):
+    """The saved record cannot be replayed; nothing was sent to Kodi yet."""
+
+
+def replay(snap, handle, kodi_utils, xbmc, xbmcgui, xbmcplugin, widget=False):
     """kodi_utils may be a zero-argument loader: POV's view-mode helpers run
-    after endOfDirectory, so the list is on screen before POV is imported."""
-    items = [_build(ops, xbmc, xbmcgui) for ops in snap['items']]
+    after endOfDirectory, so the list is on screen before POV is imported.
+    Everything is built and checked before the first call reaches Kodi: a
+    damaged record raises BadRecord and the list is simply built as usual."""
+    try:
+        items = [_build(ops, xbmc, xbmcgui) for ops in snap['items']]
+        for name, args, kwargs in snap['calls']:
+            if not isinstance(args, list) or not isinstance(kwargs, dict):
+                raise ValueError(name)
+            if name == 'addDirectoryItems':
+                [items[row[1]] for row in args[0]]
+            elif name == 'addDirectoryItem':
+                items[args[1]]
+    except Exception as exc:
+        raise BadRecord('%s: %s' % (type(exc).__name__, exc))
     for name, args, kwargs in snap['calls']:
         args, kwargs = _live(args, xbmc), _live(kwargs, xbmc)
         if name == 'addDirectoryItems':
@@ -626,7 +721,9 @@ def replay(snap, handle, kodi_utils, xbmc, xbmcgui, xbmcplugin):
         elif name == 'addDirectoryItem':
             xbmcplugin.addDirectoryItem(handle, args[0], items[args[1]], *args[2:], **kwargs)
         elif name.startswith('ku.'):
-            if name == 'ku.set_view_mode' and (args[2:3] == [True] or kwargs.get('is_widget') is True):
+            is_widget = args[2] if len(args) > 2 else kwargs.get('is_widget')
+            if name == 'ku.set_view_mode' and (is_widget is True or (
+                    is_widget is None and widget and xbmcgui.getCurrentWindowId() != 10025)):
                 continue      # POV returns at once for home rows; importing it costs ~0.6 s
             if callable(kodi_utils) and not hasattr(kodi_utils, name[3:]):
                 kodi_utils = kodi_utils()
@@ -637,6 +734,26 @@ def replay(snap, handle, kodi_utils, xbmc, xbmcgui, xbmcplugin):
 
 
 # ------------------------------------------------------------------ install --
+
+ROWS_PROPERTY = 'povil.rows.last'
+
+
+def stamp(xbmcgui):
+    """Tell the build's own services a list was just served: they hold
+    their start-up work until the home rows stop arriving (shared CPU)."""
+    try:
+        xbmcgui.Window(10000).setProperty(ROWS_PROPERTY, '%.3f' % time.time())
+    except Exception:
+        pass
+
+
+def _discard(path, xbmc):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+    xbmc.log('[POV IL snapshot] damaged record removed; building the list', xbmc.LOGWARNING)
+
 
 def _adult_profile():
     try:
@@ -659,7 +776,32 @@ def _same(a, b):
     return a['items'] == b['items'] and a['calls'] == b['calls']
 
 
-def _refresh_shown(xbmc, argv, context):
+REFRESHED_PROPERTY = 'povil.rows.refreshed'
+
+
+def _refresh_widgets(xbmc, saved_at):
+    """POV's widget_refresh(), once for every row that changed around the
+    same time: each refresh asks every home row again."""
+    try:
+        import xbmcgui
+        win = xbmcgui.Window(10000)
+        monitor = xbmc.Monitor()
+    except Exception:
+        win = monitor = None
+    if win is not None:
+        if monitor.waitForAbort(1.0):
+            return 'abort'
+        try:
+            if float(win.getProperty(REFRESHED_PROPERTY) or 0) >= saved_at:
+                return 'joined'          # another row's refresh already covers this one
+        except ValueError:
+            pass
+        win.setProperty(REFRESHED_PROPERTY, repr(time.time()))
+    xbmc.executebuiltin('UpdateLibrary(video,special://skin/foo)')
+    return 'widgets'
+
+
+def _refresh_shown(xbmc, argv, context, saved_at=None):
     """The rebuilt list differs from the copy on screen: show the new one --
     the open list (also when a home tile opened it) or the home rows."""
     shown = xbmc.getInfoLabel('Container.FolderPath')
@@ -667,8 +809,7 @@ def _refresh_shown(xbmc, argv, context):
         xbmc.executebuiltin('Container.Refresh')
         return 'container'
     if context[0]:
-        xbmc.executebuiltin('UpdateLibrary(video,special://skin/foo)')   # POV's widget_refresh()
-        return 'widgets'
+        return _refresh_widgets(xbmc, time.time() if saved_at is None else saved_at)
     return 'none'
 
 
@@ -741,7 +882,10 @@ def serve_early(argv):
         from modules import kodi_utils
         return kodi_utils
     try:
-        count = replay(snap, handle, pov_utils, xbmc, xbmcgui, xbmcplugin)
+        count = replay(snap, handle, pov_utils, xbmc, xbmcgui, xbmcplugin, widget=_context(labels, params)[0])
+    except BadRecord:
+        _discard(path, xbmc)
+        return False          # nothing sent: POV builds it as usual
     except Exception as exc:
         try:
             os.remove(path)
@@ -749,6 +893,7 @@ def serve_early(argv):
             pass
         xbmc.log('[POV IL snapshot] early replay failed: %s' % type(exc).__name__, xbmc.LOGWARNING)
         return True           # this handle was already answered (partly)
+    stamp(xbmcgui)
     xbmc.log('[POV IL snapshot] hit early mode=%s items=%d age_s=%d ms=%d check_ms=%d%s%s' % (
         params.get('mode'), count, age, round((time.perf_counter() - started) * 1000),
         round((started - begun) * 1000), ' (files)' if checked is None else ' (content)',
@@ -764,6 +909,144 @@ def serve_early(argv):
     if stale:
         EARLY[handle] = (snap, labels)
         return False          # POV loads and rebuilds it; nothing more is shown
+    return True
+
+
+IDANPLUS = 'plugin.video.idanplus'
+# Idan Plus lists come from the broadcasters' sites (no local dependency to
+# watch), so its saved rows work as "show, then refresh": shown at once, and
+# rebuilt behind the scenes once older than this or after a settings change.
+IDANPLUS_FRESH_S = 10 * 60
+IDANPLUS_LIVE_FRESH_S = 2 * 60      # live TV/radio rows show what is on now
+# Listings only (no playback, dialogs, favourites editing or channel edits).
+IDANPLUS_LIST_MODES = frozenset(('-1', '1', '2', '3', '10', '12', '13', '14'))
+
+
+# Idan Plus's own data a row is built from: settings, favourites (mode 10),
+# the channel list and the user's channel edits (order, names, logos).
+IDANPLUS_FILES = ('settings.xml', 'favorites.json', 'channels.json', 'displayChannels.json')
+
+
+def _idanplus_deps(profile):
+    deps = {}
+    for name in IDANPLUS_FILES:
+        try:
+            with open(os.path.join(profile, name), 'rb') as fh:
+                deps[name] = _crc(fh.read())
+        except OSError:
+            deps[name] = None
+    try:
+        logos = os.path.join(profile, 'logos')
+        deps['logos'] = _crc(repr(sorted((n, os.stat(os.path.join(logos, n)).st_mtime_ns)
+                                         for n in os.listdir(logos))).encode('utf-8'))
+    except OSError:
+        deps['logos'] = None
+    return deps
+
+
+def _idanplus_eligible(params):
+    if params.get('module'):
+        return True     # a broadcaster's listing; its playback items never end a directory
+    return params.get('mode', '-1') in IDANPLUS_LIST_MODES
+
+
+def idanplus(argv):
+    """From Idan Plus's default.py (after its child-profile guard): serve a
+    home row from the copy saved last time and/or build it under the
+    recorder. True when this request was answered here (the caller exits);
+    False for everything else -- full-screen browsing, searches, playback --
+    which runs exactly as before."""
+    begun = time.perf_counter()
+    try:
+        import xbmc, xbmcgui, xbmcplugin, xbmcvfs, xbmcaddon
+        argv = list(argv)
+        handle = int(argv[1]) if len(argv) > 1 else -1
+        query = argv[2] if len(argv) > 2 else ''
+        params = _query([None, None, query]) or {}
+        if (handle < 0 or 'search' in query.lower() or not _idanplus_eligible(params)
+                or os.path.exists(xbmcvfs.translatePath(KILL_SWITCH))):
+            return False
+        labels = _labels(xbmc)
+        if 'idanplus' in labels['Container.PluginName']:
+            return False      # browsing Idan Plus itself: not a home row
+        adult = _adult_fast(xbmc, xbmcvfs)
+        if not (_adult_profile() if adult is None else adult):
+            return False
+        profile = xbmcvfs.translatePath('special://profile/addon_data/%s/' % IDANPLUS)
+        versions = [xbmcaddon.Addon(IDANPLUS).getAddonInfo('version'),
+                    xbmcaddon.Addon('plugin.program.kodipovilwizard').getAddonInfo('version')]
+        path, raw = _path(profile, argv, versions, ['idanplus-row'])
+        deps = _idanplus_deps(profile)
+        now = time.time()
+        snap = read(path, raw)
+        age = _age(snap, now) if snap is not None else None
+    except Exception:
+        return False
+    shown = None
+    if age is not None:
+        started = time.perf_counter()
+        try:
+            count = replay(snap, handle, None, xbmc, xbmcgui, xbmcplugin, widget=True)
+        except BadRecord:
+            _discard(path, xbmc)
+            age = None        # nothing sent: build it below as usual
+        except Exception as exc:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            xbmc.log('[POV IL snapshot] idanplus replay failed: %s' % type(exc).__name__, xbmc.LOGWARNING)
+            return True
+    if age is not None:
+        stamp(xbmcgui)
+        limit = IDANPLUS_LIVE_FRESH_S if params.get('mode') in ('1', '3') and not params.get('module') \
+            else IDANPLUS_FRESH_S
+        fresh = age < limit and snap.get('deps') == deps
+        xbmc.log('[POV IL snapshot] hit idanplus items=%d age_s=%d ms=%d check_ms=%d%s' % (
+            count, age, round((time.perf_counter() - started) * 1000),
+            round((started - begun) * 1000), '' if fresh else ' (refreshing)'), xbmc.LOGINFO)
+        if fresh:
+            return True
+        shown = snap
+    from resources.main import route
+    from resources.lib import common as idan_common
+    recorder = Recorder(None, xbmcplugin, xbmcgui, handle, shadow=shown is not None,
+                        listitem_class=True)
+    play_stream = idan_common.PlayStream
+
+    def playing(*args, **kwargs):
+        recorder.stop_listitems('playback')
+        return play_stream(*args, **kwargs)
+    idan_common.PlayStream = playing
+    try:
+        with recorder:
+            try:
+                route(argv[2])
+            except Exception:
+                if shown is None:
+                    raise
+    finally:
+        idan_common.PlayStream = play_stream
+    if shown is None:
+        stamp(xbmcgui)
+    try:
+        new = recorder.snapshot(deps)
+        if new is not None:
+            new.update(key=raw, sig=None, expires=None)
+            prev = read(path, raw)
+            # The same row asked twice (Kodi loads the home twice after a
+            # profile login): the first rebuild already refreshed the rows.
+            done = (shown is not None and prev is not None and
+                    prev.get('created', 0) > shown.get('created', 0) and _same(prev, new))
+            save(path, new)
+            if shown is not None and not done and not _same(new, shown):
+                how = _refresh_widgets(xbmc, new['created'])
+                xbmc.log('[POV IL snapshot] changed idanplus refresh=%s' % how, xbmc.LOGINFO)
+        elif recorder.state['unsupported']:
+            xbmc.log('[POV IL snapshot] idanplus not saved: %s' % recorder.state['unsupported'][:80],
+                     xbmc.LOGINFO)
+    except Exception:
+        pass
     return True
 
 
@@ -808,7 +1091,10 @@ def wrap(original, native):
         elif snap is not None:
             started = time.perf_counter()
             try:
-                count = replay(snap, handle, ku, xbmc, xbmcgui, xbmcplugin)
+                count = replay(snap, handle, ku, xbmc, xbmcgui, xbmcplugin, widget=context[0])
+            except BadRecord:
+                _discard(path, xbmc)
+                snap = count = None   # nothing sent: build it as usual
             except Exception as exc:
                 # A partial replay already talked to Kodi for this handle;
                 # drop the record and let Kodi's next request build it fresh.
@@ -818,14 +1104,16 @@ def wrap(original, native):
                     pass
                 xbmc.log('[POV IL snapshot] replay failed: %s' % type(exc).__name__, xbmc.LOGWARNING)
                 return None
-            stale = _stale(snap, age, personal)
-            xbmc.log('[POV IL snapshot] hit mode=%s items=%d age_s=%d ms=%d%s' % (
-                params.get('mode'), count, age, round((time.perf_counter() - started) * 1000),
-                ' (refreshing)' if stale else ''), xbmc.LOGINFO)
-            if not stale:
-                return None
-            shadow = True      # shown already; rebuild today's list
-            shown = snap
+            if snap is not None:
+                stale = _stale(snap, age, personal)
+                stamp(xbmcgui)
+                xbmc.log('[POV IL snapshot] hit mode=%s items=%d age_s=%d ms=%d%s' % (
+                    params.get('mode'), count, age, round((time.perf_counter() - started) * 1000),
+                    ' (refreshing)' if stale else ''), xbmc.LOGINFO)
+                if not stale:
+                    return None
+                shadow = True      # shown already; rebuild today's list
+                shown = snap
         recorder = Recorder(ku, xbmcplugin, xbmcgui, handle, shadow=shadow, labels=labels)
         with recorder:
             try:
@@ -834,6 +1122,8 @@ def wrap(original, native):
                 if not shadow:
                     raise
                 result = None
+        if not shadow:
+            stamp(xbmcgui)
         try:
             # Taken after the build: POV writes its own caches while building.
             new = None
@@ -850,7 +1140,7 @@ def wrap(original, native):
                         prev.get('created', 0) > shown.get('created', 0) and _same(prev, new))
                 save(path, new)
                 if shown is not None and not done and not _same(new, shown):
-                    how = _refresh_shown(xbmc, argv, context)
+                    how = _refresh_shown(xbmc, argv, context, new['created'])
                     xbmc.log('[POV IL snapshot] changed mode=%s refresh=%s' % (params.get('mode'), how), xbmc.LOGINFO)
             elif recorder.state['unsupported']:
                 xbmc.log('[POV IL snapshot] not saved: %s' % recorder.state['unsupported'][:80], xbmc.LOGINFO)

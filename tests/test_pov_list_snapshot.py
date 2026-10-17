@@ -27,7 +27,8 @@ class FakeTag(object):
 
 
 class FakeListItem(object):
-    def __init__(self, offscreen=True):
+    def __init__(self, label='', offscreen=True, **kwargs):
+        self.ctor = (label, kwargs)
         self.log = []
         self.props = {}
 
@@ -98,7 +99,8 @@ class Env(object):
                                           getInfoLabel=lambda k: env.labels_gui.get(k, ''),
                                           executebuiltin=lambda c: env.builtins.append(c),
                                           getCondVisibility=lambda c: env.child and 'POVILChild' in c)
-        self.xbmcgui = types.SimpleNamespace(ListItem=FakeListItem)
+        self.window_id = 10000
+        self.xbmcgui = types.SimpleNamespace(ListItem=FakeListItem, getCurrentWindowId=lambda: env.window_id)
         self.xbmcvfs = types.SimpleNamespace(translatePath=lambda p: str(
             self.root / p.replace('special://profile/', '').replace('special://home/', 'home/')).rstrip('/\\') + os.sep
             if p.endswith('/') else str(self.root / p.replace('special://profile/', '')))
@@ -234,7 +236,7 @@ class SnapshotTests(unittest.TestCase):
     def test_too_old_lists_are_built_normally(self):
         self.open()
         path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
-        data = marshal.loads(path.read_bytes()); data['created'] -= 25 * 3600
+        data = marshal.loads(path.read_bytes()); data['created'] -= 8 * 24 * 3600
         path.write_bytes(marshal.dumps(data))
         self.open()
         self.assertEqual(self.env.built, 2)
@@ -469,6 +471,53 @@ class SnapshotTests(unittest.TestCase):
         for action in ('trakt_watchlist', 'trakt_collection_lists', 'trakt_recommendations', 'mdblist_watchlist'):
             self.assertTrue(self.m._account_list({'mode': 'build_movie_list', 'action': action}), action)
 
+    def test_pov_menus_are_saved_and_follow_menu_and_account_changes(self):
+        c = sqlite3.connect(str(self.env.profile / 'navigator.db'))
+        c.execute('create table navigator (list_name, list_type, list_contents)')
+        c.execute("insert into navigator values ('MovieList', 'default', '[]')")
+        c.commit(); c.close()
+        q = '?mode=navigator.genres&menu_type=movie'
+        self.open(q); self.open(q)
+        self.assertEqual(self.env.built, 1)
+        c = sqlite3.connect(str(self.env.profile / 'navigator.db'))
+        c.execute("update navigator set list_contents = '[1]'"); c.commit(); c.close()
+        self.open(q)
+        self.assertEqual(self.env.built, 2)                                # menu edited
+        acct = self.env.profile.parent / 'script.module.acctmgr'
+        acct.mkdir()
+        (acct / 'settings.xml').write_text('<settings><setting id="trakt.token">x</setting></settings>')
+        self.open(q)
+        self.assertEqual(self.env.built, 3)                                # an account connected
+        self.open(q)
+        self.assertEqual(self.env.built, 3)
+        self.assertFalse(self.m.eligible({'mode': 'navigator.search'}))
+        self.assertFalse(self.m.eligible({'mode': 'navigator.downloads'}))
+
+    def test_rows_changed_together_refresh_the_home_once(self):
+        props = {}
+        win = types.SimpleNamespace(getProperty=lambda k: props.get(k, ''),
+                                    setProperty=lambda k, v: props.__setitem__(k, v))
+        self.env.xbmc.Monitor = lambda: types.SimpleNamespace(waitForAbort=lambda s: False)
+        with mock.patch.dict(sys.modules, {'xbmcgui': types.SimpleNamespace(Window=lambda wid: win)}):
+            saved = time.time()
+            self.assertEqual(self.m._refresh_widgets(self.env.xbmc, saved), 'widgets')
+            self.assertEqual(self.m._refresh_widgets(self.env.xbmc, saved), 'joined')
+            self.assertEqual(self.m._refresh_widgets(self.env.xbmc, time.time() + 5), 'widgets')
+        self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo)'] * 2)
+
+    def test_a_damaged_record_is_dropped_and_the_list_built_as_usual(self):
+        self.open()
+        path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
+        data = marshal.loads(path.read_bytes()); data['items'] = data['items'][:1]
+        path.write_bytes(marshal.dumps(data))
+        sent = self.open()
+        self.assertEqual(len(self.labels(sent)), 3)                        # full list, once
+        self.assertEqual(len([x for x in sent if x[0] == 'endOfDirectory']), 1)
+        self.assertEqual(self.env.built, 2)
+        path.write_bytes(marshal.dumps(dict(data, items=[])))
+        self.assertFalse(self._early())                                    # early path: POV builds it
+        self.assertEqual(self.env.sent, [])
+
     def test_guard_file_names_match_profile_age_guard(self):
         spec = importlib.util.spec_from_file_location('pag_test', MOD.parent / 'profile_age_guard.py')
         guard = importlib.util.module_from_spec(spec)
@@ -526,6 +575,126 @@ class SnapshotTests(unittest.TestCase):
         self.assertTrue(all(isinstance(li, FakeListItem) for _u, li, _f in rows))
         self.open()
         self.assertEqual(self.env.built, 2)                                # not saved
+
+
+class IdanPlusTests(unittest.TestCase):
+    URL = '?mode=1&url=&module=&moredata='
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.env = Env(tmp.name)
+        (self.env.root / 'addon_data' / 'plugin.video.idanplus').mkdir(parents=True)
+        (self.env.root / 'addon_data' / 'plugin.video.idanplus' / 'settings.xml').write_text('<settings/>')
+        self.env.labels_gui['Container.PluginName'] = ''                   # home row
+        self.built = 0
+        self.title = 'Channel'
+        env = self.env
+
+        def route(query):
+            self.built += 1
+            for n in range(3):
+                li = sys.modules['xbmcgui'].ListItem('%s %d' % (self.title, n))
+                li.setArt({'thumb': 't%d.png' % n})
+                env.xbmcplugin.addDirectoryItem(handle=7, url='plugin://x/?c=%d' % n, listitem=li, isFolder=False)
+            env.xbmcplugin.endOfDirectory(7)
+        main = types.SimpleNamespace(route=route)
+        common = types.SimpleNamespace(PlayStream=lambda *a, **k: None)
+        lib = types.SimpleNamespace(common=common)
+        mods = dict(self.env.modules(), **{'resources': types.SimpleNamespace(main=main, lib=lib),
+                                           'resources.main': main, 'resources.lib': lib,
+                                           'resources.lib.common': common})
+        self.patch = mock.patch.dict(sys.modules, mods)
+        self.patch.start()
+        self.addCleanup(self.patch.stop)
+        spec = importlib.util.spec_from_file_location('snap_idan', MOD)
+        self.m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.m)
+
+    def call(self, query=None):
+        self.env.sent = []
+        return self.m.idanplus(['plugin://plugin.video.idanplus/', '7', query or self.URL])
+
+    def rows(self):
+        items = [x for x in self.env.sent if x[0] == 'addDirectoryItem']
+        return [(x[2][0], x[2][1].ctor[0], x[2][2]) for x in items]
+
+    def test_a_home_row_is_saved_then_served_without_idan_plus(self):
+        self.assertTrue(self.call())
+        first = self.rows()
+        self.assertTrue(self.call())
+        self.assertEqual(self.built, 1)
+        self.assertEqual(self.rows(), first)
+        self.assertEqual(first[0], ('plugin://x/?c=0', 'Channel 0', False))
+
+    def test_an_old_copy_is_shown_rebuilt_and_the_rows_refreshed(self):
+        self.call()
+        path = next((self.env.root / 'addon_data' / 'plugin.video.idanplus' / 'povil_snapshots').glob('*.snap'))
+        data = marshal.loads(path.read_bytes()); data['created'] -= 3600
+        path.write_bytes(marshal.dumps(data))
+        self.title = 'New'
+        self.assertTrue(self.call())
+        self.assertEqual(self.rows()[0][1], 'Channel 0')                   # shown at once
+        self.assertEqual(self.built, 2)
+        self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo)'])
+        self.call()
+        self.assertEqual(self.rows()[0][1], 'New 0')
+        self.assertEqual(self.built, 2)
+
+    def test_playing_from_a_home_row_gets_a_real_listitem_and_saves_nothing(self):
+        resolved = []
+        env = self.env
+        env.xbmcplugin.setResolvedUrl = lambda handle, *a, **k: resolved.append((a, k)) or True
+        common = types.SimpleNamespace()
+
+        def play_stream(url, quality='best', name='', iconimage='', adaptive=False):
+            li = sys.modules['xbmcgui'].ListItem(name, path=url)
+            env.xbmcplugin.setResolvedUrl(handle=7, succeeded=True, listitem=li)
+        common.PlayStream = play_stream
+
+        def route(query):
+            sys.modules['resources.lib.common'].PlayStream('http://x/live.m3u8', name='ch')
+            env.xbmcplugin.endOfDirectory(7)
+        main = types.SimpleNamespace(route=route)
+        lib = types.SimpleNamespace(common=common)
+        with mock.patch.dict(sys.modules, {'resources.main': main, 'resources.lib': lib,
+                                           'resources.lib.common': common,
+                                           'resources': types.SimpleNamespace(main=main, lib=lib)}):
+            self.assertTrue(self.call('?mode=3&module=keshet&url=x'))
+        self.assertIsInstance(resolved[0][1]['listitem'], FakeListItem)    # not a recording proxy
+        self.assertIs(common.PlayStream, play_stream)
+        self.assertFalse(list((self.env.root / 'addon_data' / 'plugin.video.idanplus').rglob('*.snap')))
+
+    def test_favourites_and_channel_edits_rebuild_the_row(self):
+        self.call(); self.call()
+        self.assertEqual(self.built, 1)
+        data = self.env.root / 'addon_data' / 'plugin.video.idanplus'
+        (data / 'favorites.json').write_text('[{"name": "x"}]')
+        self.call()
+        self.assertEqual(self.built, 2)
+        (data / 'displayChannels.json').write_text('[1, 2]')
+        self.call()
+        self.assertEqual(self.built, 3)
+        self.call()
+        self.assertEqual(self.built, 3)
+
+    def test_a_damaged_idan_plus_record_is_rebuilt_at_once(self):
+        self.call()
+        path = next((self.env.root / 'addon_data' / 'plugin.video.idanplus' / 'povil_snapshots').glob('*.snap'))
+        data = marshal.loads(path.read_bytes()); data['items'] = []
+        path.write_bytes(marshal.dumps(data))
+        self.assertTrue(self.call())
+        self.assertEqual(len(self.rows()), 3)
+        self.assertEqual(self.built, 2)
+
+    def test_browsing_idan_plus_searches_and_playback_are_untouched(self):
+        self.env.labels_gui['Container.PluginName'] = 'plugin.video.idanplus'
+        self.assertFalse(self.call())
+        self.env.labels_gui['Container.PluginName'] = ''
+        self.assertFalse(self.call('?mode=5&url=x&module='))               # play live
+        self.assertFalse(self.call('?mode=4&url=search'))
+        self.assertEqual(self.built, 0)
+        self.assertIs(sys.modules['xbmcgui'].ListItem, FakeListItem)       # class restored
 
 
 if __name__ == '__main__':
