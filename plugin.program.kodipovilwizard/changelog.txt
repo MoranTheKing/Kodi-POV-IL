@@ -1,3 +1,8 @@
+0.4.58
+- Taps on episodes while Kodi is still busy starting up no longer start several episodes one after another once it frees up: while one episode is finding its sources (less than a minute, nothing playing yet), further play requests are dropped. Playback in progress (POV's next episode) and any tap after the first one finished or was cancelled work as before. (Field video: four episodes started back to back after the add-on services finished loading.)
+- A dropped tap shows a short notice; the mark clears as soon as a video plays (a tap right after stopping a bad source starts a new search), and with POV's fast navigation a new request ends the previous one's mark.
+- The hooks in POV's and Idan Plus's entry files can no longer break them if a Wizard file is missing (an update half-way): they fall back to the normal path.
+
 0.4.57
 - Fresh installs: the "completing system installs (Native)" step showed 0% for minutes. It now shows which add-on it installs (n of N), gives the repository lookup 60 s instead of 15 s on a slow connection (a timeout sent every add-on to Kodi's one-by-one installer), and keeps waiting while Kodi is still downloading an add-on (up to 4 minutes) instead of moving on after 60 s and leaving it without its modules (field report: YouTube without urllib3, the account manager without requests).
 - Kodi closes about 10 seconds faster: the Wizard's two watch loops ran as RunScript scripts, which Kodi never tells it is closing -- each was killed after 5 seconds. They now run inside the Wizard's service and stop at once.
