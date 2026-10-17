@@ -39,6 +39,7 @@ to the content checks below (and records the new times once they match).
 """
 import marshal
 import os
+import zlib
 import sys
 import time
 
@@ -65,7 +66,9 @@ PERSONAL_TTL_S = 30 * 60
 # Shown at once up to a week old (rebuilt right after when old): people come
 # back to Kodi after half a day or a day, and that first screen matters most.
 MAX_AGE_S = 7 * 24 * 3600
-MAX_FILES = 100
+MAX_FILES = 400
+# Lists built ahead of a first visit stop here, leaving room for visited ones.
+PREBUILD_MAX_FILES = 300
 # What a list depends on, by CONTENT: Kodi and POV's syncs rewrite these files
 # at every start without changing them, so file times would discard every
 # saved list. Watch state = row count, last row and last watch per table.
@@ -186,7 +189,12 @@ class _RecItem(object):
 
 def _build(item_ops, xbmc, xbmcgui):
     if item_ops and item_ops[0][0] == 'N':      # recorded constructor call
-        li = xbmcgui.ListItem(*_live(item_ops[0][2], xbmc), **_live(item_ops[0][3], xbmc))
+        kwargs = _live(item_ops[0][3], xbmc)
+        # offscreen: the item is only handed to the directory; without it every
+        # setter waits for Kodi's GUI lock (0.4-0.8 s for a 662-entry row on a
+        # phone at start-up, field log).
+        kwargs.setdefault('offscreen', True)
+        li = xbmcgui.ListItem(*_live(item_ops[0][2], xbmc), **kwargs)
         item_ops = item_ops[1:]
     else:
         li = xbmcgui.ListItem(offscreen=True)
@@ -320,11 +328,26 @@ def _list_marks(path, action):
         con.close()
 
 
+# POV caches a parameterised list under action_<value>_<page>
+# (tmdb_movies_genres_28_1, tmdb_tv_year_2024_1, tmdb_tv_networks_213_1):
+# each genre/year/network is its own list, so browsing one leaves the others.
+LIST_PARAMS = ('genre_id', 'year', 'network_id', 'collection_id', 'tmdb_id', 'company_id', 'key_id')
+
+
+def _list_rows(path, action, params):
+    value = next((params[k] for k in LIST_PARAMS if params.get(k)), '')
+    if value and value.replace(',', '').isalnum():
+        rows = _list_marks(path, '%s_%s' % (action, value))
+        if rows:          # else: the list's rows are gone (cache cleared) or named differently
+            return rows
+    return _list_marks(path, action)
+
+
 def _deps(profile, params):
     out = {}
     action = params.get('action') or ''
     if action:
-        out['list'] = _list_marks(os.path.join(profile, 'maincache.db'), action)
+        out['list'] = _list_rows(os.path.join(profile, 'maincache.db'), action, params)
         if action.startswith(('tmdb_watchlist', 'tmdb_favorites', 'tmdb_recommendations')):
             out['tmdblist'] = _list_marks(os.path.join(profile, 'maincache.db'), TMDB_ACCOUNT_CACHE)
     for name in HASHED_FILES:
@@ -372,7 +395,10 @@ PINNED_LABELS = ('Container.PluginName', 'Container.FolderPath')
 MENU_MODULES = ('menus.movies', 'menus.tvshows')
 
 
-def _labels(xbmc):
+PREBUILD_PROPERTY = 'povil.prebuild'
+
+
+def _labels(xbmc, argv=None):
     """What POV reads from the screen while it builds a list:
     * Container.PluginName -- external_browse(): a home row or another
       add-on's list is built differently (context menus, hidden watched
@@ -381,7 +407,19 @@ def _labels(xbmc):
       (exit_list_params) unless the request already carries one.
     Read once per request; the build sees exactly these values (Recorder
     pins them until endOfDirectory), because Kodi switches both the moment
-    a list -- or a saved copy -- reaches the screen."""
+    a list -- or a saved copy -- reaches the screen.
+    A list built ahead of its first visit (prebuild) is built for the screen
+    it will be opened from, which the Wizard names in PREBUILD_PROPERTY."""
+    if argv is not None:
+        mark = xbmc.getInfoLabel('Window(10000).Property(%s)' % PREBUILD_PROPERTY)
+        if mark:
+            parts = mark.split('\x1f')
+            try:
+                if len(parts) == 4 and float(parts[0]) > time.time() and parts[1] == (
+                        argv[2] if len(argv) > 2 else ''):
+                    return {'Container.PluginName': parts[2], 'Container.FolderPath': parts[3]}
+            except ValueError:
+                pass
     return {name: xbmc.getInfoLabel(name) for name in PINNED_LABELS}
 
 
@@ -464,8 +502,9 @@ def read(path, raw):
     """The saved record for this full key, or None."""
     try:
         with open(path, 'rb') as fh:
-            snap = marshal.loads(fh.read())
-    except (OSError, ValueError, EOFError, TypeError):
+            data = fh.read()
+        snap = marshal.loads(zlib.decompress(data[1:]) if data[:1] == b'Z' else data)
+    except (OSError, ValueError, EOFError, TypeError, zlib.error):
         return None
     if not isinstance(snap, dict) or snap.get('format') != FORMAT or snap.get('key') != raw:
         return None
@@ -506,7 +545,8 @@ def save(path, snap):
     tmp = '%s.%d.%d.tmp' % (path, os.getpid(), int(time.perf_counter() * 1e9) ^ id(snap))
     try:
         with open(tmp, 'xb') as fh:
-            fh.write(marshal.dumps(snap))
+            # ~5x smaller; decompressing a list costs about a millisecond.
+            fh.write(b'Z' + zlib.compress(marshal.dumps(snap), 1))
         os.replace(tmp, path)
     except Exception:
         try:
@@ -553,15 +593,16 @@ class Recorder(object):
     def _index(self, li):
         if not isinstance(li, _RecItem):
             raise Unsupported('ListItem not built by make_listitem')
-        try:
-            return self._ids[id(li)]
-        except KeyError:
-            self._ids[id(li)] = len(self.items)
+        # The item carries its own index: a host that drops each ListItem
+        # after adding it (Idan Plus) lets Python reuse id() values, so an
+        # id-keyed table replayed later items as earlier ones.
+        index = li.__dict__.get('_index')
+        if index is None:
+            index = li.__dict__['_index'] = len(self.items)
             self.items.append(li._ops)
-            return self._ids[id(li)]
+        return index
 
     def __enter__(self):
-        self._ids = {}
         ku, xp, xg, state = self.ku, self.xp, self.xg, self.state
         if ku is not None:
             self.saved['ku.make_listitem'] = ku.make_listitem
@@ -714,8 +755,15 @@ def replay(snap, handle, kodi_utils, xbmc, xbmcgui, xbmcplugin, widget=False):
                 items[args[1]]
     except Exception as exc:
         raise BadRecord('%s: %s' % (type(exc).__name__, exc))
+    pending = []        # consecutive single items, sent as one addDirectoryItems call
     for name, args, kwargs in snap['calls']:
         args, kwargs = _live(args, xbmc), _live(kwargs, xbmc)
+        if name == 'addDirectoryItem' and len(args) <= 3 and not kwargs:
+            pending.append((args[0], items[args[1]], bool(args[2]) if len(args) > 2 else False))
+            continue
+        if pending:
+            xbmcplugin.addDirectoryItems(handle, pending, len(pending))
+            pending = []
         if name == 'addDirectoryItems':
             xbmcplugin.addDirectoryItems(handle, [(url, items[i], folder) for url, i, folder in args[0]], **kwargs)
         elif name == 'addDirectoryItem':
@@ -730,6 +778,8 @@ def replay(snap, handle, kodi_utils, xbmc, xbmcgui, xbmcplugin, widget=False):
             getattr(kodi_utils, name[3:])(*args, **kwargs)
         else:
             getattr(xbmcplugin, name)(handle, *args, **kwargs)
+    if pending:
+        xbmcplugin.addDirectoryItems(handle, pending, len(pending))
     return len(items)
 
 
@@ -745,6 +795,32 @@ def stamp(xbmcgui):
         xbmcgui.Window(10000).setProperty(ROWS_PROPERTY, '%.3f' % time.time())
     except Exception:
         pass
+
+
+def _wait_rows_quiet(xbmc, quiet=1.5, cap=20.0):
+    """Before rebuilding a list that is already on screen: let the other home
+    rows load first (they share one CPU), and skip it while a video plays (the
+    old copy stays until the next visit). False: do not rebuild now."""
+    try:
+        import xbmcgui
+        win = xbmcgui.Window(10000)
+        monitor = xbmc.Monitor()
+    except Exception:
+        return True
+    start = time.time()
+    while time.time() - start < cap:
+        try:
+            last = float(win.getProperty(ROWS_PROPERTY) or 0)
+        except ValueError:
+            last = 0.0
+        if time.time() - last >= quiet:
+            break
+        if monitor.waitForAbort(0.25):
+            return False
+    try:
+        return not xbmc.Player().isPlayingVideo()
+    except Exception:
+        return True
 
 
 def _discard(path, xbmc):
@@ -859,7 +935,7 @@ def serve_early(argv):
             return False
         profile = _profile_dir(xbmcvfs)
         personal = _personal(params)
-        labels = _labels(xbmc)
+        labels = _labels(xbmc, argv)
         path, raw = _path(profile, argv, _versions(xbmcaddon), _context(labels, params))
         now = time.time()
         sig = _stat_sig(profile, now)
@@ -907,6 +983,8 @@ def serve_early(argv):
         except Exception:
             pass
     if stale:
+        if not _wait_rows_quiet(xbmc):
+            return True       # shown; rebuilt on a later visit
         EARLY[handle] = (snap, labels)
         return False          # POV loads and rebuilds it; nothing more is shown
     return True
@@ -915,8 +993,9 @@ def serve_early(argv):
 IDANPLUS = 'plugin.video.idanplus'
 # Idan Plus lists come from the broadcasters' sites (no local dependency to
 # watch), so its saved rows work as "show, then refresh": shown at once, and
-# rebuilt behind the scenes once older than this or after a settings change.
-IDANPLUS_FRESH_S = 10 * 60
+# rebuilt behind the scenes once older than this or after a change to Idan
+# Plus's own data.
+IDANPLUS_FRESH_S = 6 * 3600       # broadcasters' programme lists change slowly
 IDANPLUS_LIVE_FRESH_S = 2 * 60      # live TV/radio rows show what is on now
 # Listings only (no playback, dialogs, favourites editing or channel edits).
 IDANPLUS_LIST_MODES = frozenset(('-1', '1', '2', '3', '10', '12', '13', '14'))
@@ -975,7 +1054,7 @@ def idanplus(argv):
         profile = xbmcvfs.translatePath('special://profile/addon_data/%s/' % IDANPLUS)
         versions = [xbmcaddon.Addon(IDANPLUS).getAddonInfo('version'),
                     xbmcaddon.Addon('plugin.program.kodipovilwizard').getAddonInfo('version')]
-        path, raw = _path(profile, argv, versions, ['idanplus-row'])
+        path, raw = _path(profile, argv, versions, ['idanplus-row', 2])   # 2: per-item records
         deps = _idanplus_deps(profile)
         now = time.time()
         snap = read(path, raw)
@@ -1005,7 +1084,7 @@ def idanplus(argv):
         xbmc.log('[POV IL snapshot] hit idanplus items=%d age_s=%d ms=%d check_ms=%d%s' % (
             count, age, round((time.perf_counter() - started) * 1000),
             round((started - begun) * 1000), '' if fresh else ' (refreshing)'), xbmc.LOGINFO)
-        if fresh:
+        if fresh or not _wait_rows_quiet(xbmc):
             return True
         shown = snap
     from resources.main import route
@@ -1051,6 +1130,114 @@ def idanplus(argv):
     return True
 
 
+# Built ahead of a first visit: POV's catalogue lists (not personal ones,
+# searches or episode lists), at most this many children per menu.
+PREBUILD_PER_MENU = 40
+PREBUILD_IDLE_S = 20
+
+
+def _children(snap):
+    """Folder entries of a saved list: (argv0, argv2) of each."""
+    out = []
+    for name, args, _kwargs in snap.get('calls', ()):
+        rows = args[0] if name == 'addDirectoryItems' else ([[args[0], None, args[2]]]
+                                                              if name == 'addDirectoryItem' and len(args) > 2 else [])
+        for url, _index, folder in rows:
+            if folder and isinstance(url, str) and url.startswith('plugin://plugin.video.pov/?'):
+                out.append(('plugin://plugin.video.pov/', url[len('plugin://plugin.video.pov/'):]))
+    return out
+
+
+def _prebuild_eligible(argv2):
+    params = _query([None, None, argv2])
+    if not params or not eligible(params) or _personal(params):
+        return False
+    return params.get('mode') in NAVIGATOR_MODES or params.get('mode') in ('build_movie_list', 'build_tvshow_list')
+
+
+def prebuild_targets(profile, versions, limit=PREBUILD_PER_MENU):
+    """Lists one click away from a saved POV menu that have no saved copy
+    yet, each with the screen it would be opened from: the menu itself, in
+    the Videos window."""
+    import ast
+    folder = _store_dir(profile)
+    try:
+        names = [n for n in os.listdir(folder) if n.endswith(SUFFIX)]
+    except OSError:
+        return [], 0
+    targets, seen = [], set()
+    for name in sorted(names):
+        path = os.path.join(folder, name)
+        try:
+            with open(path, 'rb') as fh:
+                data = fh.read()
+            snap = marshal.loads(zlib.decompress(data[1:]) if data[:1] == b'Z' else data)
+            key = ast.literal_eval(snap['key'])
+        except Exception:
+            continue
+        parent_argv2 = key[2]
+        if not (_query([None, None, parent_argv2]) or {}).get('mode', '').startswith('navigator.'):
+            continue
+        parent = key[1] + parent_argv2
+        for argv0, argv2 in _children(snap)[:limit]:
+            if (argv0, argv2, parent) in seen or not _prebuild_eligible(argv2):
+                continue
+            seen.add((argv0, argv2, parent))
+            labels = {'Container.PluginName': 'plugin.video.pov', 'Container.FolderPath': parent}
+            child, _raw = _path(profile, [argv0, '0', argv2], versions,
+                                _context(labels, _query([None, None, argv2]) or {}))
+            if not os.path.exists(child):
+                targets.append((argv0 + argv2, argv2, labels))
+    return targets, len(names)
+
+
+def prebuild_tick(xbmc, budget=1):
+    """From the Wizard's idle loop: build up to `budget` lists ahead of their
+    first visit, while Kodi is idle (no video, no key press for a while).
+    Returns how many were requested."""
+    try:
+        import xbmcaddon, xbmcgui, xbmcvfs
+        if (xbmc.Player().isPlayingVideo() or xbmc.getGlobalIdleTime() < PREBUILD_IDLE_S
+                or os.path.exists(xbmcvfs.translatePath(KILL_SWITCH)) or not _adult_profile()):
+            return 0
+        win = xbmcgui.Window(10000)
+        try:
+            if time.time() < float(win.getProperty(PREBUILD_PROPERTY + '.next') or 0):
+                return 0          # nothing was left to build a few minutes ago
+        except ValueError:
+            pass
+        profile = _profile_dir(xbmcvfs)
+        targets, count = prebuild_targets(profile, _versions(xbmcaddon))
+        if count >= PREBUILD_MAX_FILES or not targets:
+            win.setProperty(PREBUILD_PROPERTY + '.next', repr(time.time() + 600))
+            return 0
+        done = 0
+        for url, argv2, labels in targets[:budget]:
+            win.setProperty(PREBUILD_PROPERTY, '\x1f'.join((
+                repr(time.time() + 30), argv2, labels['Container.PluginName'],
+                labels['Container.FolderPath'])))
+            try:
+                xbmc.executeJSONRPC('{"jsonrpc": "2.0", "id": 1, "method": "Files.GetDirectory", '
+                                    '"params": {"directory": %s, "media": "files"}}' % _json_string(url))
+            finally:
+                win.clearProperty(PREBUILD_PROPERTY)
+            done += 1
+            xbmc.log('[POV IL snapshot] prebuilt %s' % (_query([None, None, argv2]) or {}).get('mode'),
+                     xbmc.LOGINFO)
+        return done
+    except Exception as exc:
+        try:
+            xbmc.log('[POV IL snapshot] prebuild skipped: %s' % type(exc).__name__, xbmc.LOGWARNING)
+        except Exception:
+            pass
+        return 0
+
+
+def _json_string(text):
+    import json
+    return json.dumps(text)
+
+
 def wrap(original, native):
     """routing(sys_obj) that serves saved lists; install() order: before the
     latency wrapper, so timing lines also measure replays."""
@@ -1075,7 +1262,7 @@ def wrap(original, native):
             personal = _personal(params)
             # After serve_early() the copy is on screen and the labels show
             # it, so the rebuild uses what was read before it was shown.
-            labels = early[1] if early else _labels(xbmc)
+            labels = early[1] if early else _labels(xbmc, argv)
             context = _context(labels, params)
             deps = _deps(profile, params)
             path, raw = _path(profile, argv, _versions(xbmcaddon), context)
@@ -1112,6 +1299,8 @@ def wrap(original, native):
                     params.get('mode'), count, age, round((time.perf_counter() - started) * 1000),
                     ' (refreshing)' if stale else ''), xbmc.LOGINFO)
                 if not stale:
+                    return None
+                if not _wait_rows_quiet(xbmc):
                     return None
                 shadow = True      # shown already; rebuild today's list
                 shown = snap
