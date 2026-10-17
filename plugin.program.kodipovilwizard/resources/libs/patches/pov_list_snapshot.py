@@ -67,6 +67,8 @@ PERSONAL_TTL_S = 30 * 60
 # back to Kodi after half a day or a day, and that first screen matters most.
 MAX_AGE_S = 7 * 24 * 3600
 MAX_FILES = 400
+# How long a dependency read waits for a locked database (shorter on exit).
+DB_TIMEOUT = 2.0
 # Lists built ahead of a first visit stop here, leaving room for visited ones.
 PREBUILD_MAX_FILES = 300
 # What a list depends on, by CONTENT: Kodi and POV's syncs rewrite these files
@@ -272,7 +274,7 @@ def _rows_crc(path, table):
     sqlite3 = _db_module()
     if not os.path.isfile(path):
         return None
-    con = sqlite3.connect(path, timeout=2)
+    con = sqlite3.connect(path, timeout=DB_TIMEOUT)
     try:
         return _crc(repr(con.execute('SELECT * FROM "%s" ORDER BY 1, 2' % table).fetchall()).encode('utf-8'))
     except sqlite3.Error:
@@ -293,7 +295,7 @@ def _db_marks(path, tables, hidden=False):
     sqlite3 = _db_module()
     if not os.path.isfile(path):
         return None
-    con = sqlite3.connect(path, timeout=2)
+    con = sqlite3.connect(path, timeout=DB_TIMEOUT)
     try:
         out = {t: _table_marks(con, t) for t in tables}
         if hidden:
@@ -317,7 +319,7 @@ def _list_marks(path, action):
     if not os.path.isfile(path):
         return None
     pattern = action.replace('\\', '\\\\').replace('_', '\\_').replace('%', '\\%') + '\\_%'
-    con = sqlite3.connect(path, timeout=2)
+    con = sqlite3.connect(path, timeout=DB_TIMEOUT)
     try:
         return [list(r) for r in con.execute(
             "SELECT id, expires FROM maincache WHERE id LIKE ? ESCAPE '\\' AND expires > ? ORDER BY id",
@@ -343,14 +345,40 @@ def _list_rows(path, action, params):
     return _list_marks(path, action)
 
 
-def _deps(profile, params):
+def _dep_file(key):
+    """The file a dependency is read from (its -wal file counts too)."""
+    if key in ('list', 'tmdblist'):
+        return 'maincache.db'
+    if key == 'acctmgr':
+        return ACCTMGR_SETTINGS
+    return key.split(':')[0]
+
+
+def _changed_keys(old_sig, new_sig, deps):
+    """Dependencies whose file changed between two file-time signatures."""
+    changed = {name[:-4] if name.endswith('-wal') else name
+               for name in set(old_sig) | set(new_sig) if old_sig.get(name) != new_sig.get(name)}
+    return {key for key in deps if _dep_file(key) in changed}
+
+
+def _deps(profile, params, keep=None, fresh=None):
+    """Everything a list depends on. With keep (the record's dependencies)
+    and fresh (the keys to read again), only those are read; the rest are
+    taken from keep -- their files have not changed."""
+    def reuse(key):
+        return keep is not None and fresh is not None and key not in fresh and key in keep
     out = {}
     action = params.get('action') or ''
     if action:
-        out['list'] = _list_rows(os.path.join(profile, 'maincache.db'), action, params)
+        out['list'] = keep['list'] if reuse('list') else _list_rows(
+            os.path.join(profile, 'maincache.db'), action, params)
         if action.startswith(('tmdb_watchlist', 'tmdb_favorites', 'tmdb_recommendations')):
-            out['tmdblist'] = _list_marks(os.path.join(profile, 'maincache.db'), TMDB_ACCOUNT_CACHE)
+            out['tmdblist'] = keep['tmdblist'] if reuse('tmdblist') else _list_marks(
+                os.path.join(profile, 'maincache.db'), TMDB_ACCOUNT_CACHE)
     for name in HASHED_FILES:
+        if reuse(name):
+            out[name] = keep[name]
+            continue
         try:
             with open(os.path.join(profile, name), 'rb') as fh:
                 raw = fh.read()
@@ -366,18 +394,23 @@ def _deps(profile, params):
                 pass
         out[name] = _crc(raw)
     for name in WATCH_DBS:
-        out[name] = _db_marks(os.path.join(profile, name), WATCH_TABLES,
-                              hidden=(name == 'traktcache.db'))
+        out[name] = keep[name] if reuse(name) else _db_marks(
+            os.path.join(profile, name), WATCH_TABLES, hidden=(name == 'traktcache.db'))
     if (params.get('mode') or '').startswith('navigator.'):
-        out[NAVIGATOR_DB] = _rows_crc(os.path.join(profile, NAVIGATOR_DB), 'navigator')
-        try:
-            with open(os.path.join(profile, ACCTMGR_SETTINGS), 'rb') as fh:
-                out['acctmgr'] = _crc(fh.read())
-        except OSError:
-            out['acctmgr'] = None
+        out[NAVIGATOR_DB] = keep[NAVIGATOR_DB] if reuse(NAVIGATOR_DB) else _rows_crc(
+            os.path.join(profile, NAVIGATOR_DB), 'navigator')
+        if reuse('acctmgr'):
+            out['acctmgr'] = keep['acctmgr']
+        else:
+            try:
+                with open(os.path.join(profile, ACCTMGR_SETTINGS), 'rb') as fh:
+                    out['acctmgr'] = _crc(fh.read())
+            except OSError:
+                out['acctmgr'] = None
     if _account_list(params):
         for name, table in ACCOUNT_CACHES:
-            out[name + ':' + table] = _db_marks(os.path.join(profile, name), (table,))
+            key = name + ':' + table
+            out[key] = keep[key] if reuse(key) else _db_marks(os.path.join(profile, name), (table,))
     return out
 
 
@@ -975,7 +1008,14 @@ def serve_early(argv):
             return False      # missing or too old: the normal route builds it
         checked = None
         if not proven(snap, sig, now):
-            deps, sig = _settled_sig(profile, lambda: _deps(profile, params))
+            fresh = None
+            if sig is not None and snap.get('sig') is not None and isinstance(snap.get('deps'), dict):
+                # Only what the changed files feed (often just POV's list
+                # cache) -- plus the list rows once they have expired.
+                fresh = _changed_keys(snap['sig'], sig, snap['deps'])
+                if snap.get('expires') is not None and now >= snap['expires']:
+                    fresh |= {'list', 'tmdblist'}
+            deps, sig = _settled_sig(profile, lambda: _deps(profile, params, snap.get('deps'), fresh))
             if not _trusted(deps) or snap.get('deps') != deps:
                 return False  # changed: the normal route builds it
             checked = (deps, sig)
@@ -1163,7 +1203,14 @@ def idanplus(argv):
 # Built ahead of a first visit: POV's catalogue lists (not personal ones,
 # searches or episode lists), at most this many children per menu.
 PREBUILD_PER_MENU = 40
-PREBUILD_IDLE_S = 20
+PREBUILD_IDLE_S = 15
+# Targets tried this session (argv2 + screen -> time). A list that saves
+# nothing (empty, an expired account, offline) must not be requested again on
+# every idle poll and hold up the others.
+_TRIED = {}
+PREBUILD_RETRY_S = 3600
+HOME_LABELS = {'Container.PluginName': '', 'Container.FolderPath': ''}
+_SKIN_URLS = {}
 
 
 def _children(snap):
@@ -1179,24 +1226,56 @@ def _children(snap):
 
 
 def _prebuild_eligible(argv2):
+    # Episode lists (next/in-progress) are left out: they follow the date and
+    # every watch, and Kodi stalled fetching them over JSON-RPC in QA.
     params = _query([None, None, argv2])
-    if not params or not eligible(params) or _personal(params):
+    if not params or not eligible(params):
         return False
     return params.get('mode') in NAVIGATOR_MODES or params.get('mode') in ('build_movie_list', 'build_tvshow_list')
 
 
-def prebuild_targets(profile, versions, limit=PREBUILD_PER_MENU):
-    """Lists one click away from a saved POV menu that have no saved copy
-    yet, each with the screen it would be opened from: the menu itself, in
-    the Videos window."""
+def skin_targets(skin_dir):
+    """POV lists the active skin opens from its home screen (rows and tiles),
+    read once per skin version from its XML."""
+    import re
+    try:
+        stamp = os.path.getmtime(os.path.join(skin_dir, 'addon.xml'))
+    except OSError:
+        return []
+    cached = _SKIN_URLS.get(skin_dir)
+    if cached and cached[0] == stamp:
+        return cached[1]
+    found = []
+    pattern = re.compile(r'plugin://plugin\.video\.pov/(\?[^"<\s,)]+)')
+    for root, _dirs, files in os.walk(skin_dir):
+        for name in files:
+            if not name.endswith('.xml'):
+                continue
+            try:
+                with open(os.path.join(root, name), encoding='utf-8', errors='replace') as fh:
+                    text = fh.read()
+            except OSError:
+                continue
+            for argv2 in pattern.findall(text):
+                argv2 = argv2.replace('&amp;', '&')
+                if '$' not in argv2 and '[' not in argv2 and argv2 not in found:
+                    found.append(argv2)
+    _SKIN_URLS[skin_dir] = (stamp, found)
+    return found
+
+
+def prebuild_targets(profile, versions, limit=PREBUILD_PER_MENU, skin_dir=None):
+    """Lists with no saved copy yet, each with the screen it would be opened
+    from: the skin's home rows and tiles (the home screen), and the entries
+    of saved POV menus (the menu itself, in the Videos window)."""
     import ast
     folder = _store_dir(profile)
     try:
         names = [n for n in os.listdir(folder) if n.endswith(SUFFIX)]
     except OSError:
-        return [], 0
+        names = []
     index = os.path.join(folder, MENUS_INDEX)
-    if not os.path.exists(index):
+    if names and not os.path.exists(index):
         # Records saved before the index existed: find the menus once.
         found = []
         for name in names:
@@ -1218,8 +1297,17 @@ def prebuild_targets(profile, versions, limit=PREBUILD_PER_MENU):
         with open(index, 'r', encoding='utf-8') as fh:
             menus = sorted(set(fh.read().split()) & set(names))
     except OSError:
-        return [], 0
+        menus = []
     targets, seen = [], set()
+    # The skin's own home rows and tiles, opened from the home screen.
+    for argv2 in (skin_targets(skin_dir) if skin_dir else [])[:60]:
+        if not _prebuild_eligible(argv2) or ('', argv2) in seen:
+            continue
+        seen.add(('', argv2))
+        child, _raw = _path(profile, ['plugin://plugin.video.pov/', '0', argv2], versions,
+                            _context(HOME_LABELS, _query([None, None, argv2]) or {}))
+        if not os.path.exists(child):
+            targets.append(('plugin://plugin.video.pov/' + argv2, argv2, dict(HOME_LABELS)))
     for name in menus:
         path = os.path.join(folder, name)
         try:
@@ -1245,6 +1333,43 @@ def prebuild_targets(profile, versions, limit=PREBUILD_PER_MENU):
     return targets, len(names)
 
 
+def resign(profile, limit=40, budget_s=3.0):
+    """Records whose dependency files were written since they were checked
+    (Trakt syncs, POV's caches, settings saved on exit) pay the content check
+    on their next visit -- half a second each for the first home rows on a
+    phone at start-up. While Kodi is idle, check them now and record the new
+    file times when nothing really changed. Returns how many were updated."""
+    import ast
+    folder = _store_dir(profile)
+    try:
+        names = sorted((n for n in os.listdir(folder) if n.endswith(SUFFIX)),
+                       key=lambda n: os.path.getmtime(os.path.join(folder, n)), reverse=True)[:limit]
+    except OSError:
+        return 0
+    started, done = time.time(), 0
+    for name in names:
+        if time.time() - started > budget_s:
+            break
+        path = os.path.join(folder, name)
+        try:
+            with open(path, 'rb') as fh:
+                data = fh.read()
+            snap = marshal.loads(zlib.decompress(data[1:]) if data[:1] == b'Z' else data)
+            if snap.get('format') != FORMAT or 'deps' not in snap:
+                continue
+            if proven(snap, _stat_sig(profile)):
+                continue
+            params = _query([None, None, ast.literal_eval(snap['key'])[2]]) or {}
+            deps, sig = _settled_sig(profile, lambda: _deps(profile, params))
+            if sig is not None and _trusted(deps) and deps == snap['deps']:
+                snap['sig'], snap['expires'] = sig, _expiry(deps)
+                save(path, snap)
+                done += 1
+        except Exception:
+            continue
+    return done
+
+
 def prebuild_tick(xbmc, budget=1):
     """From the Wizard's idle loop: build up to `budget` lists ahead of their
     first visit, while Kodi is idle (no video, no key press for a while).
@@ -1255,18 +1380,28 @@ def prebuild_tick(xbmc, budget=1):
                 or os.path.exists(xbmcvfs.translatePath(KILL_SWITCH)) or not _adult_profile()):
             return 0
         win = xbmcgui.Window(10000)
-        try:
-            if time.time() < float(win.getProperty(PREBUILD_PROPERTY + '.next') or 0):
-                return 0          # nothing was left to build a few minutes ago
-        except ValueError:
-            pass
         profile = _profile_dir(xbmcvfs)
-        targets, count = prebuild_targets(profile, _versions(xbmcaddon))
+        if time.time() >= _float(win.getProperty(PREBUILD_PROPERTY + '.signed')):
+            # Re-check saved lists whose files changed since (a sync, a cache
+            # write), so the next start shows them by file times alone.
+            win.setProperty(PREBUILD_PROPERTY + '.signed', repr(time.time() + 600))
+            resign(profile)
+        if time.time() < _float(win.getProperty(PREBUILD_PROPERTY + '.next')):
+            return 0              # nothing was left to build a few minutes ago
+        targets, count = prebuild_targets(profile, _versions(xbmcaddon),
+                                          skin_dir=xbmcvfs.translatePath('special://skin/'))
         if count >= PREBUILD_MAX_FILES or not targets:
             win.setProperty(PREBUILD_PROPERTY + '.next', repr(time.time() + 600))
             return 0
         done = 0
-        for url, argv2, labels in targets[:budget]:
+        now = time.time()
+        fresh_targets = [t for t in targets
+                         if now - _TRIED.get((t[1], t[2]['Container.FolderPath']), 0) > PREBUILD_RETRY_S]
+        if not fresh_targets:
+            win.setProperty(PREBUILD_PROPERTY + '.next', repr(time.time() + 600))
+            return 0
+        for url, argv2, labels in fresh_targets[:budget]:
+            _TRIED[(argv2, labels['Container.FolderPath'])] = time.time()
             win.setProperty(PREBUILD_PROPERTY, '\x1f'.join((
                 repr(time.time() + 30), argv2, labels['Container.PluginName'],
                 labels['Container.FolderPath'])))
@@ -1285,6 +1420,13 @@ def prebuild_tick(xbmc, budget=1):
         except Exception:
             pass
         return 0
+
+
+def _float(text):
+    try:
+        return float(text or 0)
+    except ValueError:
+        return 0.0
 
 
 def _json_string(text):

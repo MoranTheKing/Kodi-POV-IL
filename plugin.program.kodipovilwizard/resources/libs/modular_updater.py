@@ -807,7 +807,7 @@ class ModularUpdater:
         except Exception:
             return False
 
-    def _native_install_fallback(self, ids, per_addon_timeout=60):
+    def _native_install_fallback(self, ids, per_addon_timeout=60, progress=None):
         """Last-resort native install for addons the headless resolver could not
         place (e.g. a dependency only in a repo we don't ship). Uses Kodi's own
         InstallAddon so Kodi pulls the remaining deps, with a MINIMAL confirmer
@@ -851,15 +851,29 @@ class ModularUpdater:
         watcher.daemon = True
         watcher.start()
         try:
-            for addon_id in ids:
+            for position, addon_id in enumerate(ids):
                 if monitor.abortRequested():
                     break
                 if xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
                     continue
+                if progress is not None:
+                    # A fresh install sat at "0%" for minutes here with no
+                    # sign of what it was doing (field report, Oct 2026).
+                    try:
+                        progress(position, len(ids), addon_id)
+                    except Exception:
+                        pass
+                started = time.time()
                 logging.log("[Provisioning] native install {0}".format(addon_id),
                             level=xbmc.LOGINFO)
                 xbmc.executebuiltin('InstallAddon({0})'.format(addon_id))
                 deadline = time.time() + int(per_addon_timeout)
+                # A slow connection: Kodi is still downloading this add-on or
+                # its dependencies. Moving on queued the next install behind
+                # it and left the first one without its modules (field report:
+                # YouTube without urllib3). Wait while Kodi shows a download,
+                # up to 4 minutes per add-on.
+                hard_deadline = started + max(int(per_addon_timeout), 240)
                 landed = False
                 while time.time() < deadline:
                     if monitor.waitForAbort(1):
@@ -867,10 +881,16 @@ class ModularUpdater:
                     if xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
                         landed = True
                         break
+                    if (xbmc.getCondVisibility('Window.IsActive(extendedprogressdialog)') and
+                            deadline - time.time() < 5 and deadline < hard_deadline):
+                        deadline = min(deadline + 10, hard_deadline)
                 if not landed:
                     logging.log("[Provisioning] native install did not confirm {0} "
                                 "within {1}s (will self-heal next launch)".format(
                                     addon_id, per_addon_timeout), level=xbmc.LOGWARNING)
+                else:
+                    logging.log("[Provisioning] native install {0} landed after {1:.0f}s".format(
+                        addon_id, time.time() - started), level=xbmc.LOGINFO)
         finally:
             stop.set()
             watcher.join(5)
@@ -944,7 +964,7 @@ class ModularUpdater:
             return False
         return True
 
-    def _resolve_phase_two_bounded(self, timeout=15):
+    def _resolve_phase_two_bounded(self, timeout=60):
         """Keep a slow repository from holding the installation dialog forever.
 
         Repository resolution only reads indexes and prepares jobs. If it
@@ -1248,7 +1268,14 @@ class ModularUpdater:
             try:
                 bg = xbmcgui.DialogProgressBG()
                 bg.create(CONFIG.ADDONTITLE, "משלים התקנות מערכת (Native)...")
-                self._native_install_fallback(self._missing_native, per_addon_timeout=60)
+
+                def _native_progress(position, total, addon_id):
+                    bg.update(int(100 * position / max(total, 1)),
+                              message="מתקין {0} ({1}/{2})...".format(addon_id, position + 1, total))
+                logging.log("[Provisioning] native phase for {0}".format(self._missing_native),
+                            level=xbmc.LOGINFO)
+                self._native_install_fallback(self._missing_native, per_addon_timeout=60,
+                                              progress=_native_progress)
                 bg.close()
             except Exception as e:
                 logging.log("[ModularUpdater] Native fallback failed: {0}".format(e), level=xbmc.LOGERROR)
