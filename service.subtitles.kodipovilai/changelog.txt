@@ -1,3 +1,6 @@
+0.3.38
+- Start-up housekeeping (skin patchers, cache pruning) waits until the home rows stop loading (at most 15 s): every home row is a Python interpreter of its own and shares the CPU with it.
+
 0.3.37
 - Start-up no longer rewrites the player's "choose subtitles" skin settings when they are already right; each needless write makes the skin re-check the home screen.
 - Ships with Wizard 0.4.51, which saves compiled code for faster lists (MoranSubs' own code included).
