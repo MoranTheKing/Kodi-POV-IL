@@ -1039,8 +1039,9 @@ def idanplus(argv):
             done = (shown is not None and prev is not None and
                     prev.get('created', 0) > shown.get('created', 0) and _same(prev, new))
             save(path, new)
+            saved_at = time.time()          # the refresh must come after the file is in place
             if shown is not None and not done and not _same(new, shown):
-                how = _refresh_widgets(xbmc, new['created'])
+                how = _refresh_widgets(xbmc, saved_at)
                 xbmc.log('[POV IL snapshot] changed idanplus refresh=%s' % how, xbmc.LOGINFO)
         elif recorder.state['unsupported']:
             xbmc.log('[POV IL snapshot] idanplus not saved: %s' % recorder.state['unsupported'][:80],
@@ -1139,8 +1140,9 @@ def wrap(original, native):
                 done = (shown is not None and isinstance(prev, dict) and
                         prev.get('created', 0) > shown.get('created', 0) and _same(prev, new))
                 save(path, new)
+                saved_at = time.time()      # the refresh must come after the file is in place
                 if shown is not None and not done and not _same(new, shown):
-                    how = _refresh_shown(xbmc, argv, context, new['created'])
+                    how = _refresh_shown(xbmc, argv, context, saved_at)
                     xbmc.log('[POV IL snapshot] changed mode=%s refresh=%s' % (params.get('mode'), how), xbmc.LOGINFO)
             elif recorder.state['unsupported']:
                 xbmc.log('[POV IL snapshot] not saved: %s' % recorder.state['unsupported'][:80], xbmc.LOGINFO)
