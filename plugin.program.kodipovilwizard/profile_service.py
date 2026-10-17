@@ -41,7 +41,11 @@ def run():
         if state != published:
             window.setProperty('POVIL.ChildProfile', state[1])
             published = state
-        if policy is None or not player.isPlaying():
+        playing = player.isPlaying()
+        if playing and window.getProperty('povil.play.started'):
+            # A video started: taps from now on are new choices (pov_play_guard).
+            window.clearProperty('povil.play.started')
+        if policy is None or not playing:
             last = None
             continue
         if policy.get('blocked'):
