@@ -1,3 +1,11 @@
+0.4.55
+- Fixed: Idan Plus home rows from a saved copy could show the wrong title or picture on entries (0.4.54). Idan Plus drops each item once it is added, Python reused the freed item's identity and the recorder took it for the earlier item -- a 49-channel row was saved as 2 items. Each recorded item now carries its own number; old Idan Plus copies are rebuilt.
+- Lists one click away from a saved menu (each genre, year, network) are built ahead while Kodi is idle (no video, no key press for 20 s), one at a time, for the menu they will be opened from -- so the first visit is instant too (QA: a never-opened year list 0.3 s instead of 0.8-2.5 s).
+- One genre/year/network list no longer throws away the others: they follow POV's cache rows of that list only (each was invalidated whenever another one was fetched).
+- Idan Plus rows replay much faster: items are created offscreen (a 662-entry row took 0.4-0.8 s on a phone waiting for Kodi's GUI lock) and added in one call; their programme lists refresh every 6 hours (live TV/radio: 2 minutes) instead of every 10 minutes.
+- An old copy's background rebuild waits until the other home rows have loaded, and is skipped while a video plays.
+- Saved lists are compressed (~5x smaller) to leave room for lists built ahead.
+
 0.4.54
 - POV's menus open from saved copies too: genres, years, networks, "My content", the movie/TV main menus and shortcut folders -- what NOX and FENtastic open as categories (each click used to load all of POV, 1-1.5 s on a phone). They follow POV's menu database, its settings and the account manager (rows of disconnected services stay hidden); the years menu follows the date.
 - The Wizard's start-up work (update check, notices, profile checks) now waits until the home rows stop loading (at most 15 s), so the rows do not share the CPU with it.
