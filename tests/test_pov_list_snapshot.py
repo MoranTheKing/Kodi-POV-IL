@@ -18,6 +18,12 @@ ROOT = Path(__file__).resolve().parents[1]
 MOD = ROOT / 'plugin.program.kodipovilwizard' / 'resources' / 'libs' / 'patches' / 'pov_list_snapshot.py'
 
 
+def rec_load(path):
+    import zlib
+    data = Path(path).read_bytes()
+    return marshal.loads(zlib.decompress(data[1:]) if data[:1] == b'Z' else data)
+
+
 class FakeTag(object):
     def __init__(self, log):
         self.log = log
@@ -27,8 +33,8 @@ class FakeTag(object):
 
 
 class FakeListItem(object):
-    def __init__(self, label='', offscreen=True, **kwargs):
-        self.ctor = (label, kwargs)
+    def __init__(self, label='', offscreen=False, **kwargs):     # Kodi's default
+        self.ctor = (label, dict(kwargs, offscreen=offscreen))
         self.log = []
         self.props = {}
 
@@ -224,7 +230,7 @@ class SnapshotTests(unittest.TestCase):
     def test_an_old_list_is_shown_then_rebuilt_for_the_next_visit(self):
         self.open()
         path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
-        data = marshal.loads(path.read_bytes()); data['created'] -= 5 * 3600
+        data = rec_load(path); data['created'] -= 5 * 3600
         path.write_bytes(marshal.dumps(data))
         self.env.label = 'Today'
         sent = self.open()
@@ -236,7 +242,7 @@ class SnapshotTests(unittest.TestCase):
     def test_too_old_lists_are_built_normally(self):
         self.open()
         path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
-        data = marshal.loads(path.read_bytes()); data['created'] -= 8 * 24 * 3600
+        data = rec_load(path); data['created'] -= 8 * 24 * 3600
         path.write_bytes(marshal.dumps(data))
         self.open()
         self.assertEqual(self.env.built, 2)
@@ -274,7 +280,7 @@ class SnapshotTests(unittest.TestCase):
             self.assertIn('endOfDirectory', [s[0] for s in self.env.sent])
             self.assertIn('view', [s[0] for s in self.env.sent])          # view mode after the list
             path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
-            data = marshal.loads(path.read_bytes()); data['created'] -= 5 * 3600
+            data = rec_load(path); data['created'] -= 5 * 3600
             path.write_bytes(marshal.dumps(data))
             self.env.sent = []
             self.env.labels_gui = dict(self.env.parent)
@@ -291,7 +297,7 @@ class SnapshotTests(unittest.TestCase):
 
     def _age_day(self, day):
         path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
-        data = marshal.loads(path.read_bytes()); data['day'] = day
+        data = rec_load(path); data['day'] = day
         path.write_bytes(marshal.dumps(data))
 
     def test_a_list_from_yesterday_is_shown_then_refreshed_in_place(self):
@@ -436,7 +442,7 @@ class SnapshotTests(unittest.TestCase):
         self._age_files()
         self.open()
         path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
-        data = marshal.loads(path.read_bytes())
+        data = rec_load(path)
         self.assertIsNotNone(data['sig'])
         data['expires'] = time.time() - 1                                  # POV's row ran out
         path.write_bytes(marshal.dumps(data))
@@ -508,7 +514,7 @@ class SnapshotTests(unittest.TestCase):
     def test_a_damaged_record_is_dropped_and_the_list_built_as_usual(self):
         self.open()
         path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
-        data = marshal.loads(path.read_bytes()); data['items'] = data['items'][:1]
+        data = rec_load(path); data['items'] = data['items'][:1]
         path.write_bytes(marshal.dumps(data))
         sent = self.open()
         self.assertEqual(len(self.labels(sent)), 3)                        # full list, once
@@ -517,6 +523,63 @@ class SnapshotTests(unittest.TestCase):
         path.write_bytes(marshal.dumps(dict(data, items=[])))
         self.assertFalse(self._early())                                    # early path: POV builds it
         self.assertEqual(self.env.sent, [])
+
+    def test_lists_one_click_from_a_saved_menu_are_built_ahead_for_that_menu(self):
+        route = self.env.route
+        menu_q = '?mode=navigator.genres&menu_type=movie'
+        child_q = '?mode=build_movie_list&action=tmdb_movies_genres&genre_id=%d'
+
+        def routes(sys_obj):
+            if 'navigator' in sys_obj.argv[2]:
+                self.env.built += 1
+                for n in (28, 35):
+                    li = self.env.ku.make_listitem(); li.setLabel('genre %d' % n)
+                    self.env.xbmcplugin.addDirectoryItem(int(sys_obj.argv[1]),
+                                                         'plugin://plugin.video.pov/' + child_q % n, li, True)
+                self.env.xbmcplugin.endOfDirectory(int(sys_obj.argv[1]))
+            else:
+                route(sys_obj)
+        self.env.route = routes
+        self.routing = self.m.wrap(lambda so: self.env.route(so), {'kodi_utils': self.env.ku})
+        self.open(menu_q)                                                  # the menu, saved
+        targets, _count = self.m.prebuild_targets(str(self.env.profile) + os.sep, ['1.0', '1.0'])
+        self.assertEqual([t[1] for t in targets], [child_q % 28, child_q % 35])
+        parent = 'plugin://plugin.video.pov/' + menu_q
+        self.assertEqual(targets[0][2], {'Container.PluginName': 'plugin.video.pov',
+                                         'Container.FolderPath': parent})
+        # The Wizard's prebuild of the first one, while Kodi shows the home screen.
+        self.env.parent = {'Container.PluginName': '', 'Container.FolderPath': ''}
+        self.env.labels_gui = dict(self.env.parent)
+        mark = ''.join((repr(time.time() + 30), child_q % 28, 'plugin.video.pov', parent))
+        props = {'Window(10000).Property(povil.prebuild)': mark}
+        real = self.env.xbmc.getInfoLabel
+        self.env.xbmc.getInfoLabel = lambda k: props.get(k) or real(k)
+        self.env.query = child_q % 28
+        self.routing(types.SimpleNamespace(argv=['plugin://plugin.video.pov/', '5', child_q % 28]))
+        self.env.xbmc.getInfoLabel = real
+        built = self.env.built
+        targets, _count = self.m.prebuild_targets(str(self.env.profile) + os.sep, ['1.0', '1.0'])
+        self.assertEqual([t[1] for t in targets], [child_q % 35])
+        # The real first click, from inside the menu: no build.
+        self.env.parent = {'Container.PluginName': 'plugin.video.pov', 'Container.FolderPath': parent}
+        self.open(child_q % 28)
+        self.assertEqual(self.env.built, built)
+
+    def test_one_genre_list_is_not_thrown_away_by_another(self):
+        q = '?mode=build_movie_list&action=tmdb_movies_genres&genre_id=%d'
+        c = sqlite3.connect(str(self.env.profile / 'maincache.db'))
+        c.execute("insert into maincache values ('tmdb_movies_genres_28_1', ?, '[]')", (int(time.time()) + 3600,))
+        c.commit(); c.close()
+        self.open(q % 28)
+        c = sqlite3.connect(str(self.env.profile / 'maincache.db'))
+        c.execute("insert into maincache values ('tmdb_movies_genres_35_1', ?, '[]')", (int(time.time()) + 3600,))
+        c.commit(); c.close()                                              # another genre fetched
+        self.open(q % 28)
+        self.assertEqual(self.env.built, 1)
+        c = sqlite3.connect(str(self.env.profile / 'maincache.db'))
+        c.execute("delete from maincache where id like 'tmdb_movies_genres_28%'"); c.commit(); c.close()
+        self.open(q % 28)                                                  # its own rows cleared
+        self.assertEqual(self.env.built, 2)
 
     def test_guard_file_names_match_profile_age_guard(self):
         spec = importlib.util.spec_from_file_location('pag_test', MOD.parent / 'profile_age_guard.py')
@@ -616,8 +679,13 @@ class IdanPlusTests(unittest.TestCase):
         return self.m.idanplus(['plugin://plugin.video.idanplus/', '7', query or self.URL])
 
     def rows(self):
-        items = [x for x in self.env.sent if x[0] == 'addDirectoryItem']
-        return [(x[2][0], x[2][1].ctor[0], x[2][2]) for x in items]
+        out = []
+        for x in self.env.sent:
+            if x[0] == 'addDirectoryItem':
+                out.append((x[2][0], x[2][1].ctor[0], x[2][2]))
+            elif x[0] == 'addDirectoryItems':           # a replay sends them in one call
+                out.extend((u, li.ctor[0], f) for u, li, f in x[2][0])
+        return out
 
     def test_a_home_row_is_saved_then_served_without_idan_plus(self):
         self.assertTrue(self.call())
@@ -630,7 +698,7 @@ class IdanPlusTests(unittest.TestCase):
     def test_an_old_copy_is_shown_rebuilt_and_the_rows_refreshed(self):
         self.call()
         path = next((self.env.root / 'addon_data' / 'plugin.video.idanplus' / 'povil_snapshots').glob('*.snap'))
-        data = marshal.loads(path.read_bytes()); data['created'] -= 3600
+        data = rec_load(path); data['created'] -= 3600
         path.write_bytes(marshal.dumps(data))
         self.title = 'New'
         self.assertTrue(self.call())
@@ -681,11 +749,40 @@ class IdanPlusTests(unittest.TestCase):
     def test_a_damaged_idan_plus_record_is_rebuilt_at_once(self):
         self.call()
         path = next((self.env.root / 'addon_data' / 'plugin.video.idanplus' / 'povil_snapshots').glob('*.snap'))
-        data = marshal.loads(path.read_bytes()); data['items'] = []
+        data = rec_load(path); data['items'] = []
         path.write_bytes(marshal.dumps(data))
         self.assertTrue(self.call())
         self.assertEqual(len(self.rows()), 3)
         self.assertEqual(self.built, 2)
+
+    def test_items_dropped_after_adding_keep_their_own_content(self):
+        env = self.env
+
+        def route(query):
+            self.built += 1
+            for n in range(50):          # each ListItem is dropped right after it is added
+                env.xbmcplugin.addDirectoryItem(handle=7, url='plugin://x/?c=%d' % n,
+                                                listitem=sys.modules['xbmcgui'].ListItem('Show %d' % n), isFolder=True)
+            env.xbmcplugin.endOfDirectory(7)
+        sys.modules['resources.main'].route = route
+        shown = []
+        # Like Kodi: the item is copied, the Python object is not kept.
+        env.xbmcplugin.addDirectoryItem = lambda handle, url, listitem, isFolder=False, *a: shown.append(
+            listitem.ctor[0]) or True
+        env.xbmcplugin.addDirectoryItems = lambda handle, items, total=0: shown.extend(
+            li.ctor[0] for _u, li, _f in items) or True
+        self.call()
+        shown[:] = []
+        self.call()
+        self.assertEqual(self.built, 1)
+        self.assertEqual(shown, ['Show %d' % n for n in range(50)])
+
+    def test_replayed_items_are_offscreen_and_sent_in_one_call(self):
+        self.call(); self.call()
+        batches = [x for x in self.env.sent if x[0] == 'addDirectoryItems']
+        self.assertEqual(len(batches), 1)
+        self.assertEqual([x[0] for x in self.env.sent].count('addDirectoryItem'), 0)
+        self.assertTrue(all(li.ctor[1].get('offscreen') is True for _u, li, _f in batches[0][2][0]))
 
     def test_browsing_idan_plus_searches_and_playback_are_untouched(self):
         self.env.labels_gui['Container.PluginName'] = 'plugin.video.idanplus'
