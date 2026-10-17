@@ -667,6 +667,26 @@ class SnapshotTests(unittest.TestCase):
             self.m.prebuild_tick(xbmc); self.m.prebuild_tick(xbmc); self.m.prebuild_tick(xbmc)
         self.assertEqual(asked, ['plugin://plugin.video.pov/?a=1', 'plugin://plugin.video.pov/?a=2'])
 
+    def test_a_rebuild_gives_way_to_an_episode_that_is_starting(self):
+        props = {}
+        win = types.SimpleNamespace(getProperty=lambda k: props.get(k, ''))
+        xbmc = types.SimpleNamespace(
+            Player=lambda: types.SimpleNamespace(isPlayingVideo=lambda: False),
+            Monitor=lambda: types.SimpleNamespace(waitForAbort=lambda s: False))
+        with mock.patch.dict(sys.modules, {'xbmcgui': types.SimpleNamespace(Window=lambda wid: win)}):
+            self.assertTrue(self.m._wait_rows_quiet(xbmc))
+            props[self.m.PLAY_PROPERTY] = repr(time.time() - 5)
+            self.assertFalse(self.m._wait_rows_quiet(xbmc))
+            props[self.m.PLAY_PROPERTY] = repr(time.time() - 120)          # an old mark
+            self.assertTrue(self.m._wait_rows_quiet(xbmc))
+
+    def test_play_property_matches_the_play_guard(self):
+        spec = importlib.util.spec_from_file_location('ppg_test', MOD.parent / 'pov_play_guard.py')
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        self.assertEqual(self.m.PLAY_PROPERTY, guard.PROPERTY)
+        self.assertEqual(self.m.PLAY_WINDOW_S, guard.WINDOW_S)
+
     def test_guard_file_names_match_profile_age_guard(self):
         spec = importlib.util.spec_from_file_location('pag_test', MOD.parent / 'profile_age_guard.py')
         guard = importlib.util.module_from_spec(spec)
