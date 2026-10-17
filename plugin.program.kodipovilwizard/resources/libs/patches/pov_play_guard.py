@@ -25,11 +25,16 @@ PROPERTY = 'povil.play.started'
 PLAY_MODES = ('play_media',)
 WINDOW_S = 60.0
 NOTICE_AFTER_S = 1.5
-SOURCES_WINDOW = 'progress_media.xml'
+# POV's own progress (full screen or background bar) or its results list.
+POV_WINDOWS = ('Window.IsVisible(progress_media.xml) | Window.IsVisible(sources_results.xml)'
+               ' | Window.IsActive(extendedprogressdialog)')
 # The mark this interpreter set last. With POV's "fast navigation" the
 # interpreter is reused and never exits between requests: a new request here
 # means the previous one is over.
 _LAST = [None]
+# Marks of requests whose POV route returned (router.py, after Router()()):
+# atexit runs only after the notice timer, and never with fast navigation.
+_OVER = set()
 
 
 def _mode(argv):
@@ -84,13 +89,19 @@ def _slow_notice(started):
         import xbmc
         import xbmcgui
         win = xbmcgui.Window(10000)
-        if win.getProperty(PROPERTY) != repr(started) or xbmc.Player().isPlaying():
+        if started in _OVER or win.getProperty(PROPERTY) != repr(started) or xbmc.Player().isPlaying():
             return
-        if xbmc.getCondVisibility('Window.IsVisible(%s)' % SOURCES_WINDOW):
+        if xbmc.getCondVisibility(POV_WINDOWS):
             return
         xbmcgui.Dialog().notification('POV IL', 'מחפש מקורות...', time=3000, sound=False)
     except Exception:
         pass
+
+
+def request_over():
+    """POV's route returned (no results, cancelled, or playback over)."""
+    if _LAST[0] is not None:
+        _OVER.add(_LAST[0])
 
 
 def _finished(started):

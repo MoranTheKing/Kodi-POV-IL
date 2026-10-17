@@ -85,9 +85,21 @@ class GuardTests(unittest.TestCase):
         self.playing = True
         fn(*args)                                   # already playing
         self.playing = False
-        self.exits[0][0](*self.exits[0][1])         # the request is over
+        self.m.request_over()                       # POV's route returned (no results / cancelled)
         fn(*args)
         self.assertEqual(self.toasts, [])
+
+    def test_a_later_request_keeps_its_own_notice(self):
+        clock = iter([1000.0, 1001.0])
+        mock.patch.object(self.m.time, 'time', lambda: next(clock)).start()
+        self.addCleanup(mock.patch.stopall)
+        self.tap()
+        first = self.timers[0][1:]
+        self.m.request_over()                       # fast navigation: the same interpreter
+        self.assertFalse(self.tap(reused=True))
+        second = self.timers[1][1:]
+        first[0](*first[1]); second[0](*second[1])
+        self.assertEqual(len(self.toasts), 1)       # only the request still running
 
     def test_dropped_taps_start_no_notice_timer(self):
         self.tap(); self.tap()
