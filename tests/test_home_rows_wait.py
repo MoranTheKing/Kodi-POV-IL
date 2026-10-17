@@ -14,7 +14,7 @@ SOURCES = (ROOT / 'plugin.program.kodipovilwizard' / 'startup.py',
 
 def _load(path):
     tree = ast.parse(path.read_text(encoding='utf-8'))
-    body = [n for n in tree.body if (isinstance(n, ast.FunctionDef) and n.name == 'wait_for_home_rows')
+    body = [n for n in tree.body if (isinstance(n, ast.FunctionDef) and n.name in ('wait_for_home_rows', '_play_starting'))
             or (isinstance(n, ast.Assign) and any(getattr(t, 'id', '') == 'ROWS_PROPERTY' for t in n.targets))]
     ns = {}
     exec(compile(ast.Module(body=body, type_ignores=[]), str(path), 'exec'), ns)
@@ -32,14 +32,18 @@ class Clock(object):
 
 
 class WaitTests(unittest.TestCase):
-    def run_wait(self, fn, clock, rows):
+    def run_wait(self, fn, clock, rows, play_until=None):
         props = {}
+        if play_until is not None:
+            props['povil.play.started'] = repr(clock.now)
         win = types.SimpleNamespace(getProperty=lambda k: props.get(k, ''))
 
         def wait(seconds):
             clock.now += seconds
             for t in [t for t in rows if t <= clock.now]:
                 props['povil.rows.last'] = '%.3f' % t
+            if play_until is not None and clock.now >= play_until:
+                props.pop('povil.play.started', None)
             return False
         xbmc = types.SimpleNamespace(getCondVisibility=lambda c: clock.now >= clock.home_at)
         xbmcgui = types.SimpleNamespace(Window=lambda wid: win)
@@ -65,6 +69,16 @@ class WaitTests(unittest.TestCase):
             clock = Clock()
             rows = [1001.0 + i for i in range(40)]                         # rows forever
             self.assertLessEqual(self.run_wait(fn, clock, rows=rows) - 1000.0, 15.5, path.name)
+
+    def test_the_wizard_waits_for_an_episode_that_is_starting(self):
+        fn = _load(SOURCES[0])
+        clock = Clock()
+        done = self.run_wait(fn, clock, rows=[1001.5], play_until=1012.0)
+        self.assertGreaterEqual(done, 1012.0)
+        self.assertLess(done, 1012.5)
+        clock = Clock()                 # a mark that is never cleared expires
+        done = self.run_wait(fn, clock, rows=[1001.5], play_until=10 ** 6)
+        self.assertLessEqual(done - 1000.0, 60.5)
 
 
 if __name__ == '__main__':

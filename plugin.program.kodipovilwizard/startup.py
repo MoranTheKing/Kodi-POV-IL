@@ -544,11 +544,25 @@ def wait_for_home_rows(monitor, settle=1.5, first=5.0, cap=15.0):
                 last = 0.0
             if last >= home_at - 1.0:
                 if now - last >= settle:
-                    return
+                    break
             elif now - home_at >= first:
-                return
+                break
         if monitor.waitForAbort(0.25):
             return
+    # An episode picked meanwhile is looking for sources: it gets the CPU first.
+    end = time.time() + 30.0
+    while time.time() < end and _play_starting(win):
+        if monitor.waitForAbort(0.25):
+            return
+
+
+def _play_starting(win):
+    import time
+    try:
+        started = float(win.getProperty('povil.play.started') or 0)
+    except ValueError:
+        return False
+    return 0 <= time.time() - started < 60.0
 
 
 def wait_for_gui_ready(timeout=90):

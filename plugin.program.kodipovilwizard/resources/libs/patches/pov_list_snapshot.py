@@ -849,6 +849,8 @@ def replay(snap, handle, kodi_utils, xbmc, xbmcgui, xbmcplugin, widget=False):
 # ------------------------------------------------------------------ install --
 
 ROWS_PROPERTY = 'povil.rows.last'
+PLAY_PROPERTY = 'povil.play.started'   # pov_play_guard.PROPERTY
+PLAY_WINDOW_S = 60.0
 
 
 def stamp(xbmcgui):
@@ -862,8 +864,9 @@ def stamp(xbmcgui):
 
 def _wait_rows_quiet(xbmc, quiet=1.5, cap=20.0):
     """Before rebuilding a list that is already on screen: let the other home
-    rows load first (they share one CPU), and skip it while a video plays (the
-    old copy stays until the next visit). False: do not rebuild now."""
+    rows load first (they share one CPU), and skip it while a video plays or
+    an episode is starting (its source search needs the CPU; the old copy
+    stays until the next visit). False: do not rebuild now."""
     try:
         import xbmcgui
         win = xbmcgui.Window(10000)
@@ -872,6 +875,8 @@ def _wait_rows_quiet(xbmc, quiet=1.5, cap=20.0):
         return True
     start = time.time()
     while time.time() - start < cap:
+        if _play_starting(win):
+            return False
         try:
             last = float(win.getProperty(ROWS_PROPERTY) or 0)
         except ValueError:
@@ -880,10 +885,23 @@ def _wait_rows_quiet(xbmc, quiet=1.5, cap=20.0):
             break
         if monitor.waitForAbort(0.25):
             return False
+    if _play_starting(win):
+        return False
     try:
         return not xbmc.Player().isPlayingVideo()
     except Exception:
         return True
+
+
+def _play_starting(win):
+    """An episode or movie was picked less than a minute ago and is still
+    looking for sources (pov_play_guard sets the mark; it is cleared once the
+    request ends or a video plays)."""
+    try:
+        started = float(win.getProperty(PLAY_PROPERTY) or 0)
+    except ValueError:
+        return False
+    return 0 <= time.time() - started < PLAY_WINDOW_S
 
 
 def _discard(path, xbmc):
