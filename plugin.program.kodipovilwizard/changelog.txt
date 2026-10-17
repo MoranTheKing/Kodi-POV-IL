@@ -1,3 +1,6 @@
+0.4.60
+- An episode or movie picked right after Kodi starts gets the CPU first: while it is looking for sources (the mark set by 0.4.58's tap guard), a saved list's background rebuild is skipped -- the copy on screen stays until the next visit -- and the Wizard's start-up work (update check, notices) waits for it, up to 30 s. Field log (Shield, start-up): a "next episodes" rebuild took 5.7 s right beside the first tap, which reached the sources window only ~10 s later.
+
 0.4.59
 - Back from the player: the list you return to ("Continue watching", a home row) used to be rebuilt from scratch before it showed -- the episode just watched changed the watch history (field log, Shield: 5.7 s). When only the watch state changed, the saved copy is shown at once and rebuilt right after; the open list or the home rows refresh themselves when the new one is ready. Any other change (settings, a list refetched, a cleared cache) still rebuilds before showing.
 
