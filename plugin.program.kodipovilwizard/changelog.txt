@@ -1,3 +1,7 @@
+0.4.56
+- Building lists ahead reads only POV's saved menus (a small index) instead of every saved list on each idle check -- light on a phone.
+- The screen a list is built ahead for applies to that one request only, so a real click on the same entry at that moment reads its own screen.
+
 0.4.55
 - Fixed: Idan Plus home rows from a saved copy could show the wrong title or picture on entries (0.4.54). Idan Plus drops each item once it is added, Python reused the freed item's identity and the recorder took it for the earlier item -- a 49-channel row was saved as 2 items. Each recorded item now carries its own number; old Idan Plus copies are rebuilt.
 - Lists one click away from a saved menu (each genre, year, network) are built ahead while Kodi is idle (no video, no key press for 20 s), one at a time, for the menu they will be opened from -- so the first visit is instant too (QA: a never-opened year list 0.3 s instead of 0.8-2.5 s).
