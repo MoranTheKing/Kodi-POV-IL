@@ -7,7 +7,7 @@ per list, and 10 s for "Continue watching" right after Kodi starts while a
 dozen add-on services start beside it (field logs, Oct 2026).
 
 A list built normally is RECORDED: every ListItem/InfoTag call POV makes and
-every xbmcplugin call for the handle, in order, as plain JSON. The next visit
+every xbmcplugin call for the handle, in order, as plain data (marshal). The next visit
 REPLAYS that record -- the same calls on fresh ListItems -- without importing
 POV's menus, without metadata, threads or network.
 
@@ -28,14 +28,25 @@ When a saved list may be used:
 Search/discover routes and child profiles are never saved. Anything the
 recorder cannot reproduce exactly (an unknown argument type, a ListItem it did
 not create) leaves the list unsaved: it simply keeps working as before.
+
+Start-up cost matters more than the replay: every home row is a new Python
+interpreter, and while Kodi starts a dozen add-on services, importing json
+took 0.3-1.2 s, hashlib and sqlite3 0.1-0.3 s each (QA log, Oct 2026). The
+path that serves a saved list therefore imports none of them: the record is
+read with marshal (built in), and "nothing changed" is first proven by the
+files' sizes and times. Only when a file was written since does it fall back
+to the content checks below (and records the new times once they match).
 """
-import hashlib
-import json
+import marshal
 import os
 import sys
 import time
 
-FORMAT = 3
+FORMAT = 5
+SUFFIX = '.snap'
+# A file written this recently may be written again within the same tick of
+# its modification time, so its time proves nothing yet.
+FRESH_STAT_S = 2.0
 ROUTES = frozenset(('build_movie_list', 'build_tvshow_list',
                     'build_next_episode', 'build_in_progress_episode'))
 GENERAL_TTL_S = 3 * 3600
@@ -48,6 +59,13 @@ MAX_FILES = 100
 WATCH_DBS = ('watched.db', 'traktcache.db', 'mdblcache.db')
 WATCH_TABLES = ('watched_status', 'progress', 'dropped', 'favorites')
 HASHED_FILES = ('settings.xml', 'povil_dropped_trakt.json', 'povil_dropped_mdblist.json')
+# Sizes and times of every file above (and POV's list cache): unchanged files
+# mean unchanged dependencies, without opening a database.
+STAT_FILES = HASHED_FILES + tuple(name + suffix for name in WATCH_DBS + ('maincache.db',)
+                                  for suffix in ('', '-wal'))
+# profile_age_guard's files (a test keeps these equal to its constants).
+GUARD_POLICY_FILE = 'povil_profiles.json'
+GUARD_CHILD_MARKER = 'povil.child-profile'
 # Emergency switch: this file in the Wizard's profile folder turns saved lists off.
 KILL_SWITCH = 'special://profile/addon_data/plugin.program.kodipovilwizard/povil_snapshots_off'
 # Account lists (Trakt/MDBList/TMDb lists) also follow POV's list caches;
@@ -60,6 +78,9 @@ PERSONAL_PREFIXES = ('tmdb_my', 'trakt_', 'mdblist_', 'in_progress', 'next_episo
                      'tmdb_watchlist', 'tmdb_favorites', 'tmdb_recommendations',
                      'favorites_', 'watched_')
 EPISODE_ROUTES = ('build_next_episode', 'build_in_progress_episode')
+# Trakt's public charts (POV's trakt_main: trending, most watched, ...) are
+# the same for everyone; only the account's own Trakt lists follow its syncs.
+TRAKT_PUBLIC_PREFIXES = ('trakt_movies_', 'trakt_tv_', 'trakt_moviesanime_', 'trakt_tvanime_')
 _LISTITEM_RECORDED = ('set', 'add', 'select')
 
 
@@ -68,7 +89,7 @@ class Unsupported(Exception):
 
 
 def _plain(value):
-    """JSON-safe copy of a call argument, or Unsupported."""
+    """Plain-data copy of a call argument, or Unsupported."""
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, tuple):
@@ -170,15 +191,19 @@ def _profile_dir(xbmcvfs):
     return xbmcvfs.translatePath('special://profile/addon_data/plugin.video.pov/')
 
 
+def _personal_action(action):
+    return action.startswith(PERSONAL_PREFIXES) and not action.startswith(TRAKT_PUBLIC_PREFIXES)
+
+
 def _personal(params):
     mode = params.get('mode', '')
     action = params.get('action', '') or ''
-    return mode in ('build_next_episode', 'build_in_progress_episode') or action.startswith(PERSONAL_PREFIXES)
+    return mode in EPISODE_ROUTES or _personal_action(action)
 
 
 def _account_list(params):
     action = params.get('action', '') or ''
-    return params.get('mode') in ('build_movie_list', 'build_tvshow_list') and action.startswith(PERSONAL_PREFIXES)
+    return params.get('mode') in ('build_movie_list', 'build_tvshow_list') and _personal_action(action)
 
 
 def eligible(params):
@@ -186,6 +211,35 @@ def eligible(params):
         return False
     action = (params.get('action') or '')
     return not any(word in action for word in ('search', 'discover'))
+
+
+def _db_module():
+    """The C sqlite module alone: sqlite3/dbapi2 also imports datetime and
+    friends, 0.1-0.3 s in a fresh interpreter while Kodi starts."""
+    try:
+        import _sqlite3 as db
+        db.connect
+        return db
+    except (ImportError, AttributeError):
+        import sqlite3 as db
+        return db
+
+
+def _crc(data):
+    import binascii
+    return '%08x' % binascii.crc32(data)
+
+
+def _json_items(raw):
+    """The "items" of a dropped-shows file, which its writer stores compactly
+    as {...,"items":[...],"complete":...}; json only if that ever changes."""
+    text = raw.decode('utf-8')
+    start = text.find('"items":')
+    end = text.find(',"complete"', start) if start >= 0 else -1
+    if end > start >= 0:
+        return text[start + 8:end].encode('utf-8')
+    import json
+    return json.dumps(json.loads(text).get('items')).encode('utf-8')
 
 
 def _table_marks(con, table):
@@ -197,7 +251,7 @@ def _table_marks(con, table):
 
 
 def _db_marks(path, tables, hidden=False):
-    import sqlite3
+    sqlite3 = _db_module()
     if not os.path.isfile(path):
         return None
     con = sqlite3.connect(path, timeout=2)
@@ -206,7 +260,7 @@ def _db_marks(path, tables, hidden=False):
         if hidden:
             # Trakt shows hidden from progress steer "Continue watching".
             rows = con.execute("SELECT id, data FROM trakt_data WHERE id LIKE '%hidden%' ORDER BY id").fetchall()
-            out['hidden'] = hashlib.sha1(json.dumps(rows).encode('utf-8')).hexdigest()
+            out['hidden'] = _crc(repr(rows).encode('utf-8'))
         return out
     except sqlite3.Error:
         return 'error'
@@ -220,7 +274,7 @@ def _list_marks(path, action):
     POV re-fetching the list (its data lives 2 days), a cleared cache or an
     expired row all change this, so the saved list is rebuilt from fresh data
     exactly when POV's list changes."""
-    import sqlite3
+    sqlite3 = _db_module()
     if not os.path.isfile(path):
         return None
     pattern = action.replace('\\', '\\\\').replace('_', '\\_').replace('%', '\\%') + '\\_%'
@@ -253,10 +307,10 @@ def _deps(profile, params):
             # Only the dropped shows themselves; retry/check stamps change
             # on every check without changing any list.
             try:
-                raw = json.dumps(json.loads(raw.decode('utf-8')).get('items')).encode('utf-8')
+                raw = _json_items(raw)
             except (ValueError, AttributeError, UnicodeDecodeError):
                 pass
-        out[name] = hashlib.sha1(raw).hexdigest()
+        out[name] = _crc(raw)
     for name in WATCH_DBS:
         out[name] = _db_marks(os.path.join(profile, name), WATCH_TABLES,
                               hidden=(name == 'traktcache.db'))
@@ -299,9 +353,56 @@ def _context(labels, params):
     return [widget, folder]
 
 
+def _fnv64(text):
+    h = 0xcbf29ce484222325
+    for byte in text.encode('utf-8'):
+        h = ((h ^ byte) * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF
+    return '%016x' % h
+
+
 def _key(argv, versions, context):
-    raw = json.dumps([FORMAT, argv[0], argv[2] if len(argv) > 2 else '', versions, context])
-    return hashlib.sha1(raw.encode('utf-8')).hexdigest()
+    """(file name, full key). The name is a short hash; the full key is kept
+    in the file and compared on load, so a hash collision is just a miss."""
+    raw = repr([FORMAT, argv[0], argv[2] if len(argv) > 2 else '', versions, context])
+    return _fnv64(raw), raw
+
+
+def _path(profile, argv, versions, context):
+    name, raw = _key(argv, versions, context)
+    return os.path.join(_store_dir(profile), name + SUFFIX), raw
+
+
+def _stat_sig(profile, now=None):
+    """Size and modification time of every dependency file, or None when one
+    was written too recently to prove anything."""
+    now = time.time() if now is None else now
+    out = {}
+    for name in STAT_FILES:
+        try:
+            st = os.stat(os.path.join(profile, name))
+        except OSError:
+            out[name] = None
+            continue
+        if now - st.st_mtime < FRESH_STAT_S:
+            return None
+        out[name] = (st.st_mtime_ns, st.st_size)
+    return out
+
+
+def _expiry(deps):
+    """When POV's cached rows for this list start expiring (they leave the
+    'list' dependency without any file being written)."""
+    ends = [row[1] for key in ('list', 'tmdblist') if isinstance(deps.get(key), list)
+            for row in deps[key] if isinstance(row, (list, tuple)) and len(row) > 1]
+    return min(ends) if ends else None
+
+
+def _settled_sig(profile, take_deps):
+    """(deps, sig): sig only when no file changed while deps were read."""
+    before = _stat_sig(profile)
+    deps = take_deps()
+    after = _stat_sig(profile)
+    return deps, (before if before is not None and before == after else None)
 
 
 def _store_dir(profile):
@@ -321,32 +422,53 @@ def _today():
     return time.strftime('%Y-%m-%d')
 
 
-def load(path, deps, now=None):
+def read(path, raw):
+    """The saved record for this full key, or None."""
+    try:
+        with open(path, 'rb') as fh:
+            snap = marshal.loads(fh.read())
+    except (OSError, ValueError, EOFError, TypeError):
+        return None
+    if not isinstance(snap, dict) or snap.get('format') != FORMAT or snap.get('key') != raw:
+        return None
+    return snap
+
+
+def _age(snap, now):
+    age = now - float(snap.get('created', 0))
+    return age if 0 <= age < MAX_AGE_S else None
+
+
+def load(path, raw, deps, now=None):
     """(snapshot, age_s) when the saved list may be shown, else (None, None)."""
     now = time.time() if now is None else now
     if not _trusted(deps):
         return None, None
-    try:
-        with open(path, 'r', encoding='utf-8') as fh:
-            snap = json.load(fh)
-    except (OSError, ValueError):
+    snap = read(path, raw)
+    if snap is None or snap.get('deps') != deps:
         return None, None
-    if not isinstance(snap, dict) or snap.get('format') != FORMAT or snap.get('deps') != deps:
-        return None, None
-    age = now - float(snap.get('created', 0))
-    if not 0 <= age < MAX_AGE_S:
-        return None, None
-    return snap, age
+    age = _age(snap, now)
+    return (snap, age) if age is not None else (None, None)
+
+
+def proven(snap, sig, now=None):
+    """True when the files show nothing changed since the record was taken,
+    so its dependencies need not be read again."""
+    now = time.time() if now is None else now
+    if sig is None or snap.get('sig') is None or snap['sig'] != sig:
+        return False
+    expires = snap.get('expires')
+    return expires is None or now < expires
 
 
 def save(path, snap):
-    import tempfile
     folder = os.path.dirname(path)
     os.makedirs(folder, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(suffix='.tmp', dir=folder)   # two interpreters may save at once
+    # Two interpreters may save at once: a private temporary name each.
+    tmp = '%s.%d.%d.tmp' % (path, os.getpid(), int(time.perf_counter() * 1e9) ^ id(snap))
     try:
-        with os.fdopen(fd, 'w', encoding='utf-8') as fh:
-            json.dump(snap, fh, separators=(',', ':'))
+        with open(tmp, 'xb') as fh:
+            fh.write(marshal.dumps(snap))
         os.replace(tmp, path)
     except Exception:
         try:
@@ -357,9 +479,10 @@ def save(path, snap):
     try:
         now = time.time()
         entries = [os.path.join(folder, n) for n in os.listdir(folder)]
-        for stray in [e for e in entries if e.endswith('.tmp') and now - os.path.getmtime(e) > 600]:
+        for stray in [e for e in entries if (e.endswith('.tmp') and now - os.path.getmtime(e) > 600)
+                      or e.endswith('.json')]:        # format 3 and older
             os.remove(stray)
-        names = [e for e in entries if e.endswith('.json')]
+        names = [e for e in entries if e.endswith(SUFFIX)]
         if len(names) > MAX_FILES:
             for old in sorted(names, key=os.path.getmtime)[:len(names) - MAX_FILES]:
                 os.remove(old)
@@ -383,7 +506,7 @@ class Recorder(object):
         self.ku, self.xp, self.xg, self.handle = kodi_utils, xbmcplugin, xbmcgui, handle
         self.shadow, self.labels = shadow, labels or {}
         self.state = {'unsupported': None, 'ended': False}
-        self.items, self.calls, self.saved, self.menus = [], [], {}, []
+        self.items, self.calls, self.saved, self.menus, self.pinned = [], [], {}, [], None
 
     def _index(self, li):
         if not isinstance(li, _RecItem):
@@ -406,6 +529,7 @@ class Recorder(object):
             pinned = lambda name: (labels[name] if name in labels and not state['ended']
                                    else real_label(name))
             ku.get_infolabel = pinned
+            self.pinned = (pinned, real_label)
             # POV's menus keep their own alias (get_infolabel =
             # kodi_utils.get_infolabel); with "fast navigation" the add-on's
             # interpreter is reused and those modules stay imported.
@@ -468,6 +592,14 @@ class Recorder(object):
         for menu, real in self.menus:
             menu.get_infolabel = real
         self.menus = []
+        if self.pinned:
+            # A menu first imported during this build took the pinned alias.
+            pinned, real_label = self.pinned
+            for name in MENU_MODULES:
+                menu = sys.modules.get(name)
+                if menu is not None and getattr(menu, 'get_infolabel', None) is pinned:
+                    menu.get_infolabel = real_label
+            self.pinned = None
         self.ku.make_listitem = self.saved.pop('make_listitem')
         for key, value in self.saved.items():
             owner, name = (self.xp, key[3:]) if key.startswith('xp.') else (self.ku, key[3:])
@@ -494,6 +626,8 @@ def replay(snap, handle, kodi_utils, xbmc, xbmcgui, xbmcplugin):
         elif name == 'addDirectoryItem':
             xbmcplugin.addDirectoryItem(handle, args[0], items[args[1]], *args[2:], **kwargs)
         elif name.startswith('ku.'):
+            if name == 'ku.set_view_mode' and (args[2:3] == [True] or kwargs.get('is_widget') is True):
+                continue      # POV returns at once for home rows; importing it costs ~0.6 s
             if callable(kodi_utils) and not hasattr(kodi_utils, name[3:]):
                 kodi_utils = kodi_utils()
             getattr(kodi_utils, name[3:])(*args, **kwargs)
@@ -522,7 +656,7 @@ def _stale(snap, age, personal):
 
 
 def _same(a, b):
-    return json.dumps([a['items'], a['calls']], sort_keys=True) == json.dumps([b['items'], b['calls']], sort_keys=True)
+    return a['items'] == b['items'] and a['calls'] == b['calls']
 
 
 def _refresh_shown(xbmc, argv, context):
@@ -539,8 +673,28 @@ def _refresh_shown(xbmc, argv, context):
 
 
 def _query(argv):
-    from urllib.parse import parse_qsl
-    return dict(parse_qsl((argv[2] if len(argv) > 2 else '').replace('?', '')))
+    """mode/action/exit_list_params without importing urllib (and re): None
+    when they are percent-encoded, so the normal route decides instead."""
+    out = {}
+    for part in (argv[2] if len(argv) > 2 else '').lstrip('?').split('&'):
+        name, _, value = part.partition('=')
+        if name:
+            out[name] = value
+    if any(c in out.get(k, '') for k in ('mode', 'action') for c in '%+'):
+        return None
+    return out
+
+
+def _adult_fast(xbmc, xbmcvfs):
+    """profile_age_guard.active_policy() is None, decided without importing
+    it (json, re, urllib) where that is certain: no profile policy or child
+    marker anywhere, so only the skin's child flag decides. None: undecided."""
+    master = os.path.realpath(xbmcvfs.translatePath('special://masterprofile/'))
+    active = os.path.realpath(xbmcvfs.translatePath('special://profile/'))
+    if master != active and (os.path.isfile(os.path.join(master, GUARD_POLICY_FILE)) or
+                             os.path.isfile(os.path.join(active, GUARD_CHILD_MARKER))):
+        return None
+    return not xbmc.getCondVisibility('Skin.HasSetting(POVILChild)')
 
 
 def serve_early(argv):
@@ -550,21 +704,34 @@ def serve_early(argv):
     more than the replay itself. An old copy (yesterday's, the first click
     after Kodi starts) is shown here too; False then lets POV load and
     rebuild it behind the scenes (EARLY)."""
+    begun = time.perf_counter()
     try:
         import xbmc, xbmcgui, xbmcplugin, xbmcvfs, xbmcaddon
         argv = list(argv)
         params = _query(argv)
         handle = int(argv[1]) if len(argv) > 1 else -1
-        if (handle < 0 or not eligible(params) or os.path.exists(xbmcvfs.translatePath(KILL_SWITCH))
-                or not _adult_profile()):
+        if (params is None or handle < 0 or not eligible(params)
+                or os.path.exists(xbmcvfs.translatePath(KILL_SWITCH))):
+            return False
+        adult = _adult_fast(xbmc, xbmcvfs)
+        if not (_adult_profile() if adult is None else adult):
             return False
         profile = _profile_dir(xbmcvfs)
         personal = _personal(params)
         labels = _labels(xbmc)
-        path = os.path.join(_store_dir(profile), _key(argv, _versions(xbmcaddon), _context(labels, params)) + '.json')
-        snap, age = load(path, _deps(profile, params))
-        if snap is None:
-            return False      # missing or changed: the normal route builds it
+        path, raw = _path(profile, argv, _versions(xbmcaddon), _context(labels, params))
+        now = time.time()
+        sig = _stat_sig(profile, now)
+        snap = read(path, raw)
+        age = _age(snap, now) if snap is not None else None
+        if age is None:
+            return False      # missing or too old: the normal route builds it
+        checked = None
+        if not proven(snap, sig, now):
+            deps, sig = _settled_sig(profile, lambda: _deps(profile, params))
+            if not _trusted(deps) or snap.get('deps') != deps:
+                return False  # changed: the normal route builds it
+            checked = (deps, sig)
         stale = _stale(snap, age, personal)
     except Exception:
         return False
@@ -582,9 +749,18 @@ def serve_early(argv):
             pass
         xbmc.log('[POV IL snapshot] early replay failed: %s' % type(exc).__name__, xbmc.LOGWARNING)
         return True           # this handle was already answered (partly)
-    xbmc.log('[POV IL snapshot] hit early mode=%s items=%d age_s=%d ms=%d%s' % (
+    xbmc.log('[POV IL snapshot] hit early mode=%s items=%d age_s=%d ms=%d check_ms=%d%s%s' % (
         params.get('mode'), count, age, round((time.perf_counter() - started) * 1000),
+        round((started - begun) * 1000), ' (files)' if checked is None else ' (content)',
         ' (refreshing)' if stale else ''), xbmc.LOGINFO)
+    if checked is not None and checked[1] is not None and not stale:
+        # Same content, newer file times: record them so the next visit is
+        # proven by the files alone. Already on screen; best effort.
+        try:
+            snap['sig'], snap['expires'] = checked[1], _expiry(checked[0])
+            save(path, snap)
+        except Exception:
+            pass
     if stale:
         EARLY[handle] = (snap, labels)
         return False          # POV loads and rebuilds it; nothing more is shown
@@ -618,8 +794,8 @@ def wrap(original, native):
             labels = early[1] if early else _labels(xbmc)
             context = _context(labels, params)
             deps = _deps(profile, params)
-            path = os.path.join(_store_dir(profile), _key(argv, _versions(xbmcaddon), context) + '.json')
-            snap, age = (None, None) if early else load(path, deps)
+            path, raw = _path(profile, argv, _versions(xbmcaddon), context)
+            snap, age = (None, None) if early else load(path, raw, deps)
         except Exception:
             snap, age, path, context, labels = None, None, None, None, None
         shadow = False
@@ -660,13 +836,14 @@ def wrap(original, native):
                 result = None
         try:
             # Taken after the build: POV writes its own caches while building.
-            new = recorder.snapshot(_deps(profile, params)) if path else None
+            new = None
+            if path:
+                deps, sig = _settled_sig(profile, lambda: _deps(profile, params))
+                new = recorder.snapshot(deps)
+                if new is not None:
+                    new.update(key=raw, sig=sig, expires=_expiry(deps))
             if new is not None:
-                try:
-                    with open(path, 'r', encoding='utf-8') as fh:
-                        prev = json.load(fh)
-                except (OSError, ValueError):
-                    prev = None
+                prev = read(path, raw)
                 # Another request may have rebuilt (and refreshed) this list
                 # meanwhile -- e.g. a home row asked for twice at start-up.
                 done = (shown is not None and isinstance(prev, dict) and
