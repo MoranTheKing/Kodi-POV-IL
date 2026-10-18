@@ -1535,8 +1535,9 @@ def rank_ready_candidates(info, candidates, max_candidates=4, cached_only=False)
                 if (status in (sync_align.STATUS_CONFIRMED,
                                sync_align.STATUS_FIXABLE)
                         and re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature)):
-                    exact_key = _cache_key(text, playing, cut_signature)
-                    _store_verdict(exact_key, verdict)
+                    if not cached_only:   # read from that key already
+                        exact_key = _cache_key(text, playing, cut_signature)
+                        _store_verdict(exact_key, verdict)
                     candidate['_subsync_state'] = (
                         'confirmed' if status == sync_align.STATUS_CONFIRMED
                         else 'fixable')
