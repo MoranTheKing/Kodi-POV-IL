@@ -16,15 +16,17 @@ playback, and a tap right after stopping a bad source is a new choice).
 
 When Kodi is busy (the first seconds after it starts, on a slow box several
 seconds), nothing showed between the tap and POV's sources window, so people
-tapped again. If that window is not up after NOTICE_AFTER_S, a short notice
-says the episode is being looked up.
+tapped again. A notice says the episode is being looked up as soon as the
+request arrives (0.4.61 waited 1.5 s first -- still a gap on a Shield, field
+video Oct 2026), and it is closed the moment POV's own window is up.
 """
 import time
 
 PROPERTY = 'povil.play.started'
 PLAY_MODES = ('play_media',)
 WINDOW_S = 60.0
-NOTICE_AFTER_S = 1.5
+NOTICE_S = 8.0          # the notice's longest life; closed earlier by the watcher
+NOTICE_STEP_S = 0.1
 # POV's own progress (full screen or background bar) or its results list.
 POV_WINDOWS = ('Window.IsVisible(progress_media.xml) | Window.IsVisible(sources_results.xml)'
                ' | Window.IsActive(extendedprogressdialog)')
@@ -73,27 +75,52 @@ def duplicate(argv):
         _LAST[0] = now
         import atexit
         atexit.register(_finished, now)
-        try:
-            import threading
-            threading.Timer(NOTICE_AFTER_S, _slow_notice, (now,)).start()
-        except Exception:
-            pass
+        _searching_notice(now)
         return False
     except Exception:
         return False
 
 
-def _slow_notice(started):
-    """Still looking for sources and nothing on screen: say the tap counted."""
+def _searching_notice(started):
+    """Say the tap counted, now; take the notice down once POV shows its own
+    window, plays, or the request is over."""
     try:
         import xbmc
         import xbmcgui
-        win = xbmcgui.Window(10000)
-        if started in _OVER or win.getProperty(PROPERTY) != repr(started) or xbmc.Player().isPlaying():
-            return
-        if xbmc.getCondVisibility(POV_WINDOWS):
-            return
-        xbmcgui.Dialog().notification('POV IL', 'מחפש מקורות...', time=3000, sound=False)
+        if xbmc.Player().isPlaying():
+            return          # POV's next episode during playback: no notice
+        xbmcgui.Dialog().notification('POV IL', 'מחפש מקורות...',
+                                      time=int(NOTICE_S * 1000), sound=False)
+        import threading
+        threading.Thread(target=_watch_notice, args=(started,)).start()
+    except Exception:
+        pass
+
+
+def _watch_notice(started):
+    """Close the notice once POV's own window is up or a video plays (any toast
+    then on screen is ours or the guard's). A request that ended without a
+    window -- POV's "no results" / "no debrid" toast comes next -- only stops
+    the watch; within its first second Kodi still shows our notice, so it can
+    be closed safely then."""
+    try:
+        import xbmc
+        import xbmcgui
+        monitor = xbmc.Monitor()
+        shown = time.time()
+        waited = 0.0
+        while waited < NOTICE_S:
+            over = (started in _OVER or _LAST[0] != started
+                    or xbmcgui.Window(10000).getProperty(PROPERTY) != repr(started))
+            up = not over and (xbmc.Player().isPlaying() or xbmc.getCondVisibility(POV_WINDOWS))
+            if over or up:
+                if ((up or time.time() - shown < 0.8)
+                        and xbmc.getCondVisibility('Window.IsVisible(notification)')):
+                    xbmc.executebuiltin('Dialog.Close(notification,true)')
+                return
+            if monitor.waitForAbort(NOTICE_STEP_S):
+                return
+            waited += NOTICE_STEP_S
     except Exception:
         pass
 
