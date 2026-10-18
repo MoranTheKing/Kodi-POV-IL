@@ -97,22 +97,25 @@ def _searching_notice(started):
         pass
 
 
-def _notice_done(started):
-    import xbmc
-    import xbmcgui
-    if started in _OVER or xbmcgui.Window(10000).getProperty(PROPERTY) != repr(started):
-        return True
-    return xbmc.Player().isPlaying() or xbmc.getCondVisibility(POV_WINDOWS)
-
-
 def _watch_notice(started):
+    """Close the notice once POV's own window is up or a video plays (any toast
+    then on screen is ours or the guard's). A request that ended without a
+    window -- POV's "no results" / "no debrid" toast comes next -- only stops
+    the watch; within its first second Kodi still shows our notice, so it can
+    be closed safely then."""
     try:
         import xbmc
+        import xbmcgui
         monitor = xbmc.Monitor()
+        shown = time.time()
         waited = 0.0
         while waited < NOTICE_S:
-            if _notice_done(started):
-                if xbmc.getCondVisibility('Window.IsVisible(notification)'):
+            over = (started in _OVER or _LAST[0] != started
+                    or xbmcgui.Window(10000).getProperty(PROPERTY) != repr(started))
+            up = not over and (xbmc.Player().isPlaying() or xbmc.getCondVisibility(POV_WINDOWS))
+            if over or up:
+                if ((up or time.time() - shown < 1.0)
+                        and xbmc.getCondVisibility('Window.IsVisible(notification)')):
                     xbmc.executebuiltin('Dialog.Close(notification,true)')
                 return
             if monitor.waitForAbort(NOTICE_STEP_S):
