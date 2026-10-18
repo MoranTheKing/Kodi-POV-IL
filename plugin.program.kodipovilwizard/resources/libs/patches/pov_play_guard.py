@@ -114,7 +114,7 @@ def _watch_notice(started):
                     or xbmcgui.Window(10000).getProperty(PROPERTY) != repr(started))
             up = not over and (xbmc.Player().isPlaying() or xbmc.getCondVisibility(POV_WINDOWS))
             if over or up:
-                if ((up or time.time() - shown < 1.0)
+                if ((up or time.time() - shown < 0.8)
                         and xbmc.getCondVisibility('Window.IsVisible(notification)')):
                     xbmc.executebuiltin('Dialog.Close(notification,true)')
                 return
