@@ -687,6 +687,37 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(self.m.PLAY_PROPERTY, guard.PROPERTY)
         self.assertEqual(self.m.PLAY_WINDOW_S, guard.WINDOW_S)
 
+    def test_show_lists_follow_the_show_metadata(self):
+        self.assertTrue(self.m.eligible({'mode': 'build_season_list', 'tmdb_id': '1396'}))
+        self.assertTrue(self.m.eligible({'mode': 'build_episode_list', 'tmdb_id': '1396', 'season': '2'}))
+        self.assertFalse(self.m.eligible({'mode': 'build_season_list'}))
+        path = str(self.env.profile / 'metacache.db')
+        c = sqlite3.connect(path)
+        c.execute('CREATE TABLE metadata (db_type TEXT, tmdb_id TEXT, imdb_id TEXT, tvdb_id TEXT, expires INTEGER, meta TEXT)')
+        c.execute('CREATE TABLE season_metadata (tmdb_id TEXT, expires INTEGER, meta TEXT)')
+        c.execute("INSERT INTO metadata VALUES ('tvshow', '1396', '', '', 1, 'show')")
+        c.execute("INSERT INTO season_metadata VALUES ('1396_1', 1, 's1')")
+        c.execute("INSERT INTO season_metadata VALUES ('1396_2', 1, 's2')")
+        c.execute("INSERT INTO season_metadata VALUES ('13960_1', 1, 'other show')")
+        c.commit()
+        ep2 = {'mode': 'build_episode_list', 'tmdb_id': '1396', 'season': '2'}
+        every = {'mode': 'build_episode_list', 'tmdb_id': '1396', 'season': 'all'}
+        seasons = {'mode': 'build_season_list', 'tmdb_id': '1396'}
+        before = [self.m._show_meta(path, p) for p in (ep2, every, seasons)]
+        c.execute("UPDATE season_metadata SET meta = 'other show 2' WHERE tmdb_id = '13960_1'")
+        c.commit()
+        self.assertEqual([self.m._show_meta(path, p) for p in (ep2, every, seasons)], before)
+        c.execute("UPDATE season_metadata SET meta = 's1 new episode' WHERE tmdb_id = '1396_1'")
+        c.commit()
+        after = [self.m._show_meta(path, p) for p in (ep2, every, seasons)]
+        self.assertEqual(after[0], before[0])           # season 2 list: unchanged
+        self.assertNotEqual(after[1], before[1])        # all episodes: changed
+        self.assertEqual(after[2], before[2])           # seasons list: show row only
+        c.execute("UPDATE metadata SET meta = 'show, new season' WHERE tmdb_id = '1396'")
+        c.commit(); c.close()
+        self.assertNotEqual(self.m._show_meta(path, seasons), before[2])
+        self.assertIn(self.m.META_DB, self.m._deps(str(self.env.profile), seasons))
+
     def test_guard_file_names_match_profile_age_guard(self):
         spec = importlib.util.spec_from_file_location('pag_test', MOD.parent / 'profile_age_guard.py')
         guard = importlib.util.module_from_spec(spec)
