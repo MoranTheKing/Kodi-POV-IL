@@ -2365,8 +2365,9 @@ def _breathe():
 _DEEP_THREAD = [None]
 _YIELD_CHECK_S = 0.25
 _YIELD_MAX_S = 30.0
+_YIELD_JOB_MAX_S = 120.0   # all waits of one job together
 _STOP_AFTER_S = 2.0
-_yield_state = {'checked': 0.0, 'seen_playing': False, 'gone': None}
+_yield_state = {'checked': 0.0, 'seen_playing': False, 'gone': None, 'waited': 0.0}
 _VIEWER_BUSY = ('Window.IsActive(videoosd) | Window.IsVisible(script.moransubs.chooser.xml)'
                 ' | Window.IsActive(subtitlesearch)')
 
@@ -2386,21 +2387,22 @@ def _yield_to_viewer():
     try:
         import xbmc
         import xbmcgui
-        monitor = xbmc.Monitor()
     except Exception:
         return
+    monitor = None
     waited = 0.0
     while True:
         try:
             playing = xbmc.Player().isPlayingVideo()
             busy = (xbmc.getCondVisibility(_VIEWER_BUSY)
-                    or bool(xbmcgui.Window(10000).getProperty('moransubs.chooser_busy')))
+                    or _chooser_opening(xbmcgui))
         except Exception:
             return
         if playing:
             _yield_state['seen_playing'] = True
             _yield_state['gone'] = None
-            if not busy or waited >= _YIELD_MAX_S:
+            if (not busy or waited >= _YIELD_MAX_S
+                    or _yield_state['waited'] >= _YIELD_JOB_MAX_S):
                 return
         elif _yield_state['seen_playing']:
             gone = _yield_state['gone'] or time.monotonic()
@@ -2409,10 +2411,23 @@ def _yield_to_viewer():
                 raise ViewerLeft('playback ended')
         else:
             return          # not started yet: the remote reader waits for it
+        if monitor is None:
+            monitor = xbmc.Monitor()
         if monitor.waitForAbort(0.1):
             raise ViewerLeft('Kodi is closing')
         waited += 0.1
+        _yield_state['waited'] += 0.1
         _yield_state['checked'] = time.monotonic()
+
+
+def _chooser_opening(xbmcgui):
+    """The chooser's busy stamp, by the chooser's own rule (a stamp older
+    than a minute is a process that died)."""
+    try:
+        stamp = float(xbmcgui.Window(10000).getProperty('moransubs.chooser_busy') or 0)
+    except ValueError:
+        return False
+    return 0 <= time.time() - stamp < 60
 
 
 if sync_align is not None:
@@ -4961,7 +4976,7 @@ def run_deep_job(job):
     started = time.monotonic()
     started_wall = time.time()
     _DEEP_THREAD[0] = threading.get_ident()
-    _yield_state.update(checked=0.0, seen_playing=False, gone=None)
+    _yield_state.update(checked=0.0, seen_playing=False, gone=None, waited=0.0)
     try:
         key = job.get('key') or ''
         path = job.get('path') or ''
