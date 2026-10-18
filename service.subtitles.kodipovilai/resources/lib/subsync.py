@@ -2352,6 +2352,86 @@ def _breathe():
     if now - _breath[0] >= _BREATHE_SLICE:
         time.sleep(0.001)
         _breath[0] = time.monotonic()
+        _yield_to_viewer()
+
+
+# On a Shield the 1 ms breaths were not enough: a new script got ~5% of the
+# interpreter, so "בחירת כתוביות" started 6-10 s late behind the deep job's
+# tournament, and the list the player returned to replayed in 1.5 s instead of
+# 0.1 s while the job ran on after playback stopped (field logs, Oct 2026).
+# The deep job (and only it -- never a request the viewer made) therefore
+# STOPS while the player's menu or the chooser is open, and ends once the
+# video it checks has stopped.
+_DEEP_THREAD = [None]
+_YIELD_CHECK_S = 0.25
+_YIELD_MAX_S = 30.0
+_YIELD_JOB_MAX_S = 120.0   # all waits of one job together
+_STOP_AFTER_S = 2.0
+_yield_state = {'checked': 0.0, 'seen_playing': False, 'gone': None, 'waited': 0.0}
+_VIEWER_BUSY = ('Window.IsActive(videoosd) | Window.IsVisible(script.moransubs.chooser.xml)'
+                ' | Window.IsActive(subtitlesearch)')
+
+
+class ViewerLeft(BaseException):
+    """The video the deep job checks is no longer playing (BaseException, so
+    the many best-effort ``except Exception`` blocks inside cannot hide it)."""
+
+
+def _yield_to_viewer():
+    if _DEEP_THREAD[0] is None or threading.get_ident() != _DEEP_THREAD[0]:
+        return
+    now = time.monotonic()
+    if now - _yield_state['checked'] < _YIELD_CHECK_S:
+        return
+    _yield_state['checked'] = now
+    try:
+        import xbmc
+        import xbmcgui
+    except Exception:
+        return
+    monitor = None
+    waited = 0.0
+    while True:
+        try:
+            playing = xbmc.Player().isPlayingVideo()
+            busy = (xbmc.getCondVisibility(_VIEWER_BUSY)
+                    or _chooser_opening(xbmcgui))
+        except Exception:
+            return
+        if playing:
+            _yield_state['seen_playing'] = True
+            _yield_state['gone'] = None
+            if (not busy or waited >= _YIELD_MAX_S
+                    or _yield_state['waited'] >= _YIELD_JOB_MAX_S):
+                return
+        elif _yield_state['seen_playing']:
+            gone = _yield_state['gone'] or time.monotonic()
+            _yield_state['gone'] = gone
+            if time.monotonic() - gone >= _STOP_AFTER_S:
+                raise ViewerLeft('playback ended')
+        else:
+            return          # not started yet: the remote reader waits for it
+        if monitor is None:
+            monitor = xbmc.Monitor()
+        if monitor.waitForAbort(0.1):
+            raise ViewerLeft('Kodi is closing')
+        waited += 0.1
+        _yield_state['waited'] += 0.1
+        _yield_state['checked'] = time.monotonic()
+
+
+def _chooser_opening(xbmcgui):
+    """The chooser's busy stamp, by the chooser's own rule (a stamp older
+    than a minute is a process that died)."""
+    try:
+        stamp = float(xbmcgui.Window(10000).getProperty('moransubs.chooser_busy') or 0)
+    except ValueError:
+        return False
+    return 0 <= time.time() - stamp < 60
+
+
+if sync_align is not None:
+    sync_align.YIELD = _yield_to_viewer
 
 
 def _onset_coverage(source, target, tolerance_ms=250.0):
@@ -4895,6 +4975,8 @@ def run_deep_job(job):
     toast per pair, ever (see _announce). Never raises."""
     started = time.monotonic()
     started_wall = time.time()
+    _DEEP_THREAD[0] = threading.get_ident()
+    _yield_state.update(checked=0.0, seen_playing=False, gone=None, waited=0.0)
     try:
         key = job.get('key') or ''
         path = job.get('path') or ''
@@ -5042,7 +5124,10 @@ def run_deep_job(job):
         except Exception:
             pass
         _log('deep job failed: %r' % e, level='WARNING')
+    except ViewerLeft as e:
+        _log('deep job stopped: %s' % e)
     finally:
+        _DEEP_THREAD[0] = None
         try:
             queued = float(job.get('ts') or 0.0)
             wait_s = (max(0.0, started_wall - queued)
