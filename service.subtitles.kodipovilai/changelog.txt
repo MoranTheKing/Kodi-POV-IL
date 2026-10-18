@@ -1,5 +1,5 @@
 0.3.39
-- "בחירת כתוביות" opens at once again when the subtitle on screen is not yet verified: before opening, the chooser ran a new timing comparison against the playing file for up to four Hebrew subtitles -- 7.7 s each on a Shield, so the window waited 16 s (field log and video, Oct 2026). The chooser now orders its list only with timing verdicts already stored for this file (the sync at the start of the episode stores them) and never runs a comparison itself. QA (PC, same episode, 69 rows): window in 0.1 s.
+- "בחירת כתוביות" opens at once again when the subtitle on screen is not yet verified: before opening, the chooser ran a new timing comparison against the playing file for up to four Hebrew subtitles -- 7.7 s each on a Shield, so the window waited 16 s (field log and video, Oct 2026). The chooser now never runs a comparison itself: it orders its list only with timing verdicts already stored for this exact subtitle text and file (today mostly those of autosub's own ranking; otherwise the provider order stays). QA (PC, same episode, 69 rows): window in 0.1 s.
 
 0.3.38
 - Start-up housekeeping (skin patchers, cache pruning) waits until the home rows stop loading (at most 15 s): every home row is a Python interpreter of its own and shares the CPU with it.
