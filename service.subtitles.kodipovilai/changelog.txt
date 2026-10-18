@@ -1,3 +1,6 @@
+0.3.40
+- SubSync's deep check (the timing check that runs in the background after an episode starts) now steps aside for the viewer: it waits while the player's menu or the subtitle chooser is open (at most 30 s at a time), and ends 2 s after the video it checks has stopped. On a Shield its 1 ms breaths left a new script about 5% of the interpreter, so "בחירת כתוביות" started 6-10 s late behind it, and the list the player returned to replayed in 1.5 s instead of 0.1 s while it ran on after playback stopped (field logs and video, Oct 2026). Only the deep check's own thread waits; nothing the viewer asked for does. QA: chooser 0.1 s with the menu open mid-check (the check resumed after the window closed); stopping mid-check ended it ("deep job stopped").
+
 0.3.39
 - "בחירת כתוביות" opens at once again when the subtitle on screen is not yet verified: before opening, the chooser ran a new timing comparison against the playing file for up to four Hebrew subtitles -- 7.7 s each on a Shield, so the window waited 16 s (field log and video, Oct 2026). The chooser now never runs a comparison itself: it orders its list only with timing verdicts already stored for this exact subtitle text and file (today mostly those of autosub's own ranking; otherwise the provider order stays). QA (PC, same episode, 69 rows): window in 0.1 s.
 
