@@ -57,8 +57,14 @@ NAVIGATOR_MODES = frozenset((
     'navigator.anime_genres', 'navigator.anime_years', 'navigator.my_content',
     'navigator.because_you_watched', 'navigator.favorites',
     'navigator.shortcut_folders', 'navigator.build_shortcut_folder_list'))
+# A show's seasons and a season's episodes: rebuilt from scratch on every
+# visit -- 3-4.5 s on a Shield when the player returns to them (field log and
+# video, Oct 2026). They follow the show's rows in POV's metadata cache and the
+# watch state (a watched episode or a resume point: shown, then refreshed).
+SHOW_MODES = frozenset(('build_season_list', 'build_episode_list'))
+META_DB = 'metacache.db'
 ROUTES = frozenset(('build_movie_list', 'build_tvshow_list',
-                    'build_next_episode', 'build_in_progress_episode')) | NAVIGATOR_MODES
+                    'build_next_episode', 'build_in_progress_episode')) | NAVIGATOR_MODES | SHOW_MODES
 NAVIGATOR_DB = 'navigator.db'
 ACCTMGR_SETTINGS = os.path.join(os.pardir, 'script.module.acctmgr', 'settings.xml')
 GENERAL_TTL_S = 3 * 3600
@@ -80,7 +86,8 @@ HASHED_FILES = ('settings.xml', 'povil_dropped_trakt.json', 'povil_dropped_mdbli
 # Sizes and times of every file above (and POV's list cache): unchanged files
 # mean unchanged dependencies, without opening a database.
 STAT_FILES = HASHED_FILES + (ACCTMGR_SETTINGS,) + tuple(
-    name + suffix for name in WATCH_DBS + ('maincache.db', NAVIGATOR_DB) for suffix in ('', '-wal'))
+    name + suffix for name in WATCH_DBS + ('maincache.db', NAVIGATOR_DB, META_DB)
+    for suffix in ('', '-wal'))
 # profile_age_guard's files (a test keeps these equal to its constants).
 GUARD_POLICY_FILE = 'povil_profiles.json'
 GUARD_CHILD_MARKER = 'povil.child-profile'
@@ -236,6 +243,8 @@ def _account_list(params):
 def eligible(params):
     if params.get('mode') not in ROUTES:
         return False
+    if params.get('mode') in SHOW_MODES and not (params.get('tmdb_id') or '').isdigit():
+        return False
     action = (params.get('action') or '')
     return not any(word in action for word in ('search', 'discover'))
 
@@ -277,6 +286,32 @@ def _rows_crc(path, table):
     con = sqlite3.connect(path, timeout=DB_TIMEOUT)
     try:
         return _crc(repr(con.execute('SELECT * FROM "%s" ORDER BY 1, 2' % table).fetchall()).encode('utf-8'))
+    except sqlite3.Error:
+        return 'error'
+    finally:
+        con.close()
+
+
+def _show_meta(path, params):
+    """The show's metadata row and, for an episode list, its season row(s), as
+    one checksum (POV refetches them when they expire or a new episode airs)."""
+    sqlite3 = _db_module()
+    if not os.path.isfile(path):
+        return None
+    tmdb_id = params.get('tmdb_id') or ''
+    season = params.get('season') or ''
+    con = sqlite3.connect(path, timeout=DB_TIMEOUT)
+    try:
+        rows = con.execute("SELECT meta FROM metadata WHERE db_type = 'tvshow' AND tmdb_id = ?",
+                           (tmdb_id,)).fetchall()
+        if params.get('mode') == 'build_episode_list':
+            if season == 'all':
+                rows += con.execute("SELECT tmdb_id, meta FROM season_metadata WHERE tmdb_id LIKE ? "
+                                    "ESCAPE '\\' ORDER BY tmdb_id", (tmdb_id + '\\_%',)).fetchall()
+            else:
+                rows += con.execute('SELECT meta FROM season_metadata WHERE tmdb_id = ?',
+                                    ('%s_%s' % (tmdb_id, season),)).fetchall()
+        return _crc(repr(rows).encode('utf-8'))
     except sqlite3.Error:
         return 'error'
     finally:
@@ -407,6 +442,9 @@ def _deps(profile, params, keep=None, fresh=None):
                     out['acctmgr'] = _crc(fh.read())
             except OSError:
                 out['acctmgr'] = None
+    if params.get('mode') in SHOW_MODES:
+        out[META_DB] = keep[META_DB] if reuse(META_DB) else _show_meta(
+            os.path.join(profile, META_DB), params)
     if _account_list(params):
         for name, table in ACCOUNT_CACHES:
             key = name + ':' + table
