@@ -1434,8 +1434,13 @@ def diverse_human_alternatives(candidates, limit=6, info=None):
     return chosen
 
 
-def rank_ready_candidates(info, candidates, max_candidates=4):
+def rank_ready_candidates(info, candidates, max_candidates=4, cached_only=False):
     """Conservatively promote a stronger human Hebrew autosub candidate.
+
+    cached_only (the manual chooser): use only timing verdicts already stored
+    for the playing file and never run a new comparison -- one comparison
+    against a ~1500-cue profile took 7.7 s on a Shield, and the chooser waited
+    16 s for two of them before it opened (field log, Oct 2026).
 
     This is used only by autosub.  It never fetches candidates, never changes
     the manual picker and never moves an AI/non-human row.  On first play it may
@@ -1505,6 +1510,7 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
         human_indexes = []
         checked = []
         cut_signature = (bundle.get('cut_signature') or '').strip().lower()
+        stored = _load_verdicts() if cached_only else {}
         for index, candidate in enumerate(rows):
             text, payload = _ready_candidate_text(info, candidate)
             listed_lang = (candidate.get('language') or '').strip().lower()
@@ -1513,7 +1519,13 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
                 continue
             human_indexes.append(index)
             if text and len(checked) < max(1, int(max_candidates)):
-                verdict, label, count = _verify_file_bundle(bundle, text)
+                if cached_only:
+                    known = stored.get(_cache_key(text, playing, cut_signature))
+                    if not known or known.get('v') != _VERDICT_VERSION:
+                        continue
+                    verdict, label, count = dict(known), 'cached', 0
+                else:
+                    verdict, label, count = _verify_file_bundle(bundle, text)
                 verdict = verdict or {}
                 status = verdict.get('status')
                 # This comparison uses the cached cue profile of the exact
@@ -1523,8 +1535,9 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
                 if (status in (sync_align.STATUS_CONFIRMED,
                                sync_align.STATUS_FIXABLE)
                         and re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature)):
-                    exact_key = _cache_key(text, playing, cut_signature)
-                    _store_verdict(exact_key, verdict)
+                    if not cached_only:   # read from that key already
+                        exact_key = _cache_key(text, playing, cut_signature)
+                        _store_verdict(exact_key, verdict)
                     candidate['_subsync_state'] = (
                         'confirmed' if status == sync_align.STATUS_CONFIRMED
                         else 'fixable')
@@ -1588,7 +1601,7 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
         return candidates
 
 
-def rank_picker_candidates(info, candidates, max_candidates=4):
+def rank_picker_candidates(info, candidates, max_candidates=4, cached_only=False):
     """Put the strongest ready Hebrew choices first in the manual picker.
 
     Provider search order is not timing evidence.  Reuse the exact same
@@ -1604,11 +1617,13 @@ def rank_picker_candidates(info, candidates, max_candidates=4):
                    (row.get('filename') or '').startswith('» נוכחית')]
         if not current:
             return rank_ready_candidates(
-                info, rows, max_candidates=max_candidates)
+                info, rows, max_candidates=max_candidates,
+                cached_only=cached_only)
         pinned = current[0]
         rest = [row for row in rows if row is not pinned]
         return [pinned] + rank_ready_candidates(
-            info, rest, max_candidates=max_candidates)
+            info, rest, max_candidates=max_candidates,
+            cached_only=cached_only)
     except Exception as e:
         _log('picker timing-rank skipped: %r' % e, level='DEBUG')
         return candidates

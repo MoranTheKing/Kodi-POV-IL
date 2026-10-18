@@ -319,7 +319,7 @@ def _show_pyxbmct():
         cands = []
     try:
         from resources.lib import subsync
-        cands = subsync.rank_picker_candidates(info, cands)
+        cands = subsync.rank_picker_candidates(info, cands, cached_only=True)
     except Exception as e:
         _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
     items = [c for c in cands if c.get('link') and c.get('filename')]
@@ -755,10 +755,12 @@ def _chooser_items(info, translate, quick=False):
     # The timing rank only works on human Hebrew rows (its cached-proof pass
     # labels even a single one); importing SubSync for it cost 1.9 s on that
     # box when the list held only embedded / AI rows.
+    # It only reads verdicts already stored for this file (cached_only): a new
+    # comparison took 7.7 s each on a Shield and held the window for 16 s.
     if _human_hebrew_rows(cands) >= 1:
         try:
             from resources.lib import subsync
-            cands = subsync.rank_picker_candidates(info, cands)
+            cands = subsync.rank_picker_candidates(info, cands, cached_only=True)
         except Exception as e:
             _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
     else:
