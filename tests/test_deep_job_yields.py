@@ -47,7 +47,7 @@ class DeepJobYields(unittest.TestCase):
                         mock.patch.object(self.sub.time, 'monotonic', lambda: self.clock[0])):
             patcher.start()
             self.addCleanup(patcher.stop)
-        self.sub._yield_state.update(checked=0.0, seen_playing=False, gone=None)
+        self.sub._yield_state.update(checked=0.0, seen_playing=False, gone=None, waited=0.0)
 
     def deep(self):
         self.sub._DEEP_THREAD[0] = threading.get_ident()
@@ -85,6 +85,21 @@ class DeepJobYields(unittest.TestCase):
         self.playing[0] = False
         self.sub._yield_to_viewer()
         self.assertEqual(self.waits, [])
+
+    def test_a_job_stops_waiting_after_its_total_cap(self):
+        self.deep()
+        self.busy[0] = True
+        for _ in range(10):
+            self.clock[0] += 1.0
+            self.sub._yield_to_viewer()
+        self.assertLessEqual(sum(self.waits), self.sub._YIELD_JOB_MAX_S + 0.2)
+
+    def test_a_stale_chooser_stamp_does_not_hold_the_job(self):
+        gui = types.SimpleNamespace(Window=lambda wid: types.SimpleNamespace(getProperty=lambda k: '1.0'))
+        self.assertFalse(self.sub._chooser_opening(gui))
+        fresh = types.SimpleNamespace(Window=lambda wid: types.SimpleNamespace(
+            getProperty=lambda k: repr(self.sub.time.time())))
+        self.assertTrue(self.sub._chooser_opening(fresh))
 
     def test_alignment_loops_use_it(self):
         self.assertIs(self.sub.sync_align.YIELD, self.sub._yield_to_viewer)
