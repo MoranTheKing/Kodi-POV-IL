@@ -304,11 +304,17 @@ _BREATHE_SLICE = 0.02
 _breath = [0.0]
 
 
+# subsync sets this to its deep-job yield (a no-op on any other thread).
+YIELD = None
+
+
 def _breathe():
     now = time.monotonic()
     if now - _breath[0] >= _BREATHE_SLICE:
         time.sleep(0.001)
         _breath[0] = time.monotonic()
+        if YIELD is not None:
+            YIELD()
 
 
 def _best_offset(ref_on, cand_on, a, max_off=_MAXOFF):
