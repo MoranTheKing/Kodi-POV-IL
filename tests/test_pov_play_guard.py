@@ -82,12 +82,32 @@ class GuardTests(unittest.TestCase):
         fn(*args)
         self.assertEqual(self.builtins, ['Dialog.Close(notification,true)'])
 
-    def test_the_notice_is_taken_down_when_the_request_ended(self):
+    def test_a_quick_end_takes_the_notice_down(self):
         self.tap()
         fn, args = self.timers[0]
-        self.m.request_over()                       # no results / cancelled
+        self.m.request_over()                       # ended within the first second
         fn(*args)
         self.assertEqual(len(self.builtins), 1)
+
+    def test_a_late_end_leaves_pov_own_toast_alone(self):
+        clock = iter([1000.0])                     # shown at 1000, checked at 1005
+        self.tap()
+        fn, args = self.timers[0]
+        self.m.request_over()                       # "no results" toast is POV's now
+        with mock.patch.object(self.m.time, 'time', lambda: next(clock, 1005.0)):
+            fn(*args)
+        self.assertEqual(self.builtins, [])
+
+    def test_a_later_request_keeps_its_own_notice(self):
+        clock = iter([1000.0, 1001.0])
+        with mock.patch.object(self.m.time, 'time', lambda: next(clock, 1001.0)):
+            self.tap()
+            first = self.timers[0]
+            self.assertFalse(self.tap(reused=True))  # fast navigation: same interpreter
+        late = iter([2000.0])
+        with mock.patch.object(self.m.time, 'time', lambda: next(late, 2005.0)):
+            first[0](*first[1])                      # the old watcher stops silently
+        self.assertEqual(self.builtins, [])
 
     def test_a_watcher_never_outlives_its_notice(self):
         self.tap()
