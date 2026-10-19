@@ -28,6 +28,23 @@ import urllib.parse
 
 from . import cache
 from . import gemini
+from . import gender_guard
+from . import srt_wire
+
+# Numbered entries WITHOUT timecodes (srt_wire, NG's index/text request):
+# replies ~45% smaller and up to 6x faster offline -- but in Kodi Google's
+# PROHIBITED_CONTENT filter blocked the denser text: 13 blocked requests vs 0
+# on the same titles; Gilmore Girls chunk 13 blocked 3/3 without timecodes
+# and 0/3 with them (2/3 even with the timecodes kept in the request and left
+# out of the reply only). A blocked chunk falls back to a weaker reference or
+# to English, so this stays OFF. True: request and reply without timecodes.
+_NUMBERED_REQUESTS = False
+
+# After a gender-referenced translation, Hebrew lines the readers cannot read
+# on a role the reference marks are labelled by one blind classifier request
+# (SRT AI Translator NG's Method B); contradictions join the guarded repair.
+_GENDER_CLASSIFIER = True
+_CLASSIFIER_MAX_LINES = 200
 from . import kodi_utils
 from . import local_subs
 from . import prompt
@@ -3672,6 +3689,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         tvshow=info.get('tvshow', ''),
         season=season,
         episode=episode,
+        numbered=_NUMBERED_REQUESTS,
     )
 
     blocks = srt.parse_blocks(src_text)
@@ -4002,6 +4020,34 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # every one of them.
     _TOPUP_ROUNDS = 3
 
+    def _accepted_before(ch, blocks, missing, limit=5):
+        """[(number, source text, accepted Hebrew)] of up to `limit` entries
+        just before the first missing one (NG's resume context pair): a
+        re-asked line keeps the genders the same scene already used."""
+        try:
+            first = srt._block_start(missing[0])
+            src_by = {}
+            order = []
+            for b in ch:
+                parts = b.strip().split('\n')
+                start = srt._block_start(b)
+                if len(parts) >= 3 and start is not None:
+                    src_by[start] = (parts[0].strip(), '\n'.join(parts[2:]))
+                    order.append(start)
+            if first is None or first not in order:
+                return []
+            before = set(order[:order.index(first)])
+            pairs = []
+            for b in blocks:
+                parts = b.strip().split('\n')
+                start = srt._block_start(b)
+                if len(parts) >= 3 and start in before:
+                    num, src = src_by[start]
+                    pairs.append((num, src, '\n'.join(parts[2:])))
+            return pairs[-limit:]
+        except Exception:
+            return []
+
     def _top_up_missing(idx, ch, response, deadline, level=0):
         """Re-request only the entries the model silently dropped, and splice
         them back in. Returns the completed reply text (or the original when
@@ -4031,7 +4077,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     # The reference the chunk passed with: after a fallback
                     # language, asking with the blocked primary again wastes a
                     # request and then drops the gender hints.
-                    fill = _call_gemini(idx, missing, level)
+                    fill = _call_gemini(idx, missing, level,
+                                        he_context=_accepted_before(ch, blocks, missing))
                 except gemini.FilteredResponse:
                     # These specific lines are what the filter objects to. Drop
                     # the gender reference for them and try once more; the
@@ -4341,14 +4388,20 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
                 _gemini_rate_gate(_rpm_interval)
 
-    def _call_gemini(idx, ch, ref_level=0):
+    def _call_gemini(idx, ch, ref_level=0, he_context=None):
         if _translation_cancelled():
             raise _AbortTranslation('cancelled', '')
-        body = '\n\n'.join(ch)
+        # Numbered entries without timecodes (srt_wire): the reply's timecodes
+        # were never used, only paid for. They are restored from `ch` below.
+        body = '\n\n'.join(srt_wire.to_wire(ch) if _NUMBERED_REQUESTS else ch)
+        _nums = [b.lstrip().split('\n', 1)[0].strip() for b in ch]
+        _nums = [n for n in _nums if n.isdigit()]
         prev_ctx_block = prompt.build_prev_context_block(
             _source_context_for_subchunk(
                 chunks, idx, ch, prev_context_lines)
             if not whole_subtitle_request else [])
+        if he_context:
+            prev_ctx_block += prompt.build_hebrew_context_block(he_context)
         # Gender reference for THIS chunk's entries (opt-in), keyed by the block's
         # own SRT number so it stays aligned regardless of chunking. `ref_level`
         # selects WHICH human-subtitle language: 0 = primary, 1.. = fallback
@@ -4384,6 +4437,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                        .replace('{prev_context_block}',
                                 prev_ctx_block + ar_block)
                        .replace('{entry_count}', str(len(ch)))
+                       .replace('{first_num}', _nums[0] if _nums else '?')
+                       .replace('{last_num}', _nums[-1] if _nums else '?')
                        .replace('{chunk}', body))
         overload_attempts = 0
         generic_attempts = 0
@@ -4407,6 +4462,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     thinking_level=thinking_level,
                     timeout=gemini_timeout or gemini.REQUEST_TIMEOUT,
                 )
+                if _NUMBERED_REQUESTS:
+                    response = srt_wire.from_wire(ch, response)
                 # A model can expose its private self-correction inside a cue:
                 # wrong Hebrew, "[Wait, let's fix ... -> ...]", then a second
                 # draft. Deleting the note alone would leave the known-wrong
@@ -4466,8 +4523,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                level='ERROR')
                 raise _AbortTranslation('invalid_key',
                     kodi_utils.localised(33004, 'API key rejected'))
-            except gemini.TruncatedResponse:
-                # propagate up to _translate_one which will bisect
+            except gemini.TruncatedResponse as e:
+                # propagate up to _translate_one which will bisect; the part
+                # that did arrive gets its source timecodes like a full reply.
+                if _NUMBERED_REQUESTS and getattr(e, 'partial_text', ''):
+                    e.partial_text = srt_wire.from_wire(ch, e.partial_text)
                 raise
             except gemini.FilteredResponse as e:
                 # Prompt/safety block -- usually FLAKY. Retry the SAME prompt a
@@ -4755,6 +4815,89 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         _emit(False, 'partial')
         return None
 
+    def _classifier_conflicts(blocks, ref_map, ref_lang, wanted):
+        """{number: [(role, reference gender)]} from the blind classifier:
+        cues whose reference marks a role the Hebrew readers cannot read,
+        labelled by one extra request, kept where the label contradicts the
+        reference. Never raises; any failure or malformed reply adds nothing."""
+        try:
+            hpg = arabic_gender._hpg()
+            if hpg is None:
+                return {}
+
+            def ref_gender(ref, role):
+                if ref_lang == 'he':
+                    seen = set(t[role] for t in hpg.read(ref) if t[role])
+                    return seen.pop() if len(seen) == 1 else None
+                if role == 'speaker':
+                    return arabic_gender.reference_speaker_gender(ref, ref_lang)
+                return arabic_gender.reference_addressee_gender(ref, ref_lang)
+
+            asked = {}     # number -> {role: reference gender}
+            lines = []
+            for block in blocks:
+                parts = block.split('\n')
+                if len(parts) < 3 or not parts[0].strip().isdigit():
+                    continue
+                num = int(parts[0].strip())
+                ref = ref_map.get(num)
+                if not ref:
+                    continue
+                body = '\n'.join(parts[2:])
+                if not any(u'\u05d0' <= c <= u'\u05ea' for c in body):
+                    continue
+                turns = hpg.read(body)
+                roles = {}
+                for role in ('speaker', 'addressee'):
+                    if any(r == role for r, _g in wanted.get(num, ())):
+                        continue
+                    if any(t[role] for t in turns):
+                        continue           # the reader already read it
+                    if role == 'addressee' and (arabic_gender.addresses_female(body)
+                                                or arabic_gender.addresses_male(body)):
+                        continue
+                    if role == 'speaker' and (gender_guard.two_speakers(body)
+                                              or gender_guard.two_speakers(ref)):
+                        continue
+                    g = ref_gender(ref, role)
+                    if g in ('F', 'M'):
+                        roles[role] = g
+                if roles:
+                    asked[num] = roles
+                    lines.append((num, body))
+                if len(lines) >= _CLASSIFIER_MAX_LINES:
+                    break
+            if not lines:
+                return {}
+            request = gender_guard.classifier_prompt(lines)
+            _gemini_rate_gate(_rpm_interval)
+            reply = _repair_generate(
+                api_key=api_key, model=model, prompt=request,
+                temperature=0.0, max_output_tokens=max_output_tokens,
+                top_p=top_p, thinking_budget=thinking_budget,
+                thinking_level=thinking_level,
+                timeout=gemini_timeout or gemini.REQUEST_TIMEOUT)
+            labels = gender_guard.parse_classifier(reply, [n for n, _b in lines])
+            if labels is None:
+                kodi_utils.log('gender classifier: unreadable reply for {0} line(s) '
+                               '-- adding nothing'.format(len(lines)), level='WARNING')
+                return {}
+            out = {}
+            for num, roles in asked.items():
+                for role, g in roles.items():
+                    said = (labels.get(num) or {}).get(role)
+                    if said and said != g:
+                        out.setdefault(num, []).append((role, g))
+            kodi_utils.log('gender classifier: {0} line(s) the readers could not read, '
+                           '{1} contradict the {2} reference'.format(
+                               len(lines), len(out), ref_lang), level='INFO')
+            return out
+        except _AbortTranslation:
+            raise
+        except Exception as e:
+            kodi_utils.log('gender classifier skipped: {0}'.format(e), level='WARNING')
+            return {}
+
     def _regender_blocks(blocks, wanted):
         """Guarded entry point -- see _regender_unguarded for what it does.
 
@@ -4832,6 +4975,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         evidence = []
         eligible = set()
         target_by_num = {}
+        tally_two_speakers = [0]
         for num in dict.fromkeys(wanted):
             if num not in pos_of or num not in source_pos or not _ar_map.get(num):
                 continue
@@ -4841,12 +4985,20 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 ('addressee', arabic_gender.reference_addressee_gender(
                     _ar_map[num], _ref_lang))]
             roles = [(r, g) for r, g in roles if g in ('F', 'M')]
-            if not roles:
-                continue
-            target_by_num[num] = roles
             idx = source_pos[num]
             original = source_blocks[idx]
             current = blocks[pos_of[num]]
+            # A cue where a second person speaks has no single speaker: a
+            # speaker correction read off the whole cue can rewrite the other
+            # person (NG RR-2 W3, Before Sunset 257). The addressee stays.
+            if any(r == 'speaker' for r, _g in roles) and (
+                    gender_guard.two_speakers('\n'.join(original.split('\n')[2:]))
+                    or gender_guard.two_speakers('\n'.join(current.split('\n')[2:]))):
+                roles = [(r, g) for r, g in roles if r != 'speaker']
+                tally_two_speakers[0] += 1
+            if not roles:
+                continue
+            target_by_num[num] = roles
             # Do not silently truncate a long cue's meaning to fit a budget.
             if max(len(original), len(current), len(_ar_map[num])) > 2000:
                 continue
@@ -4932,6 +5084,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # indistinguishable between a model that kept every line and a proof
         # that refused every rewrite.
         tally = {'returned': 0, 'unchanged': 0, 'unproven': 0, 'refused': 0}
+        refused_why = {}
         for nb in srt.parse_blocks(reply or ''):
             head = nb.split('\n', 1)[0].strip()
             if not head.isdigit():
@@ -4943,57 +5096,45 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if num not in want or num not in pos_of or num in done:
                 continue
             new_lines = [l for l in nb.split('\n')[2:] if l.strip()]
-            body = '\n'.join(new_lines).strip()
             tally['returned'] += 1
-            if body == '\n'.join(
-                    l for l in blocks[pos_of[num]].split('\n')[2:] if l.strip()).strip():
-                tally['unchanged'] += 1
-                continue
-            if not body or not arabic_gender.person_roles_fixed(
-                    body, target_by_num[num],
-                    _ar_map.get(num) if _ref_lang == 'he' else None):
-                tally['unproven'] += 1
-                continue          # ignored the instruction -> keep the original
-            # Explicit Hebrew characters, NOT looks_hebrew alone. looks_hebrew
-            # counts only Hebrew and Latin as alphabetic, so a reply in Arabic
-            # script -- or one that is nothing but punctuation -- has zero
-            # "alphabetic" characters and falls into its deliberate "too little
-            # text to judge, do not block" branch. That branch is right for a
-            # whole-document quality gate and wrong here: it would let a full
-            # Hebrew sentence be replaced by Arabic, or by "...".
-            if not any(u'֐' <= c <= u'׿' for c in body):
-                continue
-            if not srt.looks_hebrew(body, min_alpha=1):
-                continue
             src_lines = blocks[pos_of[num]].split('\n')
             old_lines = [l for l in src_lines[2:] if l.strip()]
-            if len(new_lines) != len(old_lines):
-                continue          # a gender rewrite does not change the shape
-            # Mechanical backstops, not a claim of semantic equivalence.
-            # Reject unrelated rewrites and loss/addition of negation/numbers.
-            import re as _repair_re
-            from difflib import SequenceMatcher
-            old_body = '\n'.join(old_lines)
-            if SequenceMatcher(None, old_body, body, autojunk=False).ratio() < 0.60:
-                continue
-            # Attached conjunctions retain negation too: שלא / ושאין / כשלא.
-            # This pass changes gender only; changing these words is ineligible.
-            invariant = r'(?<![א-ת])(?:ו?(?:ש|כש)?(?:לא|אין|אל)|ו?ללא|ו?בלי)(?![א-ת])|[0-9]+'
-            if _repair_re.findall(invariant, old_body) != _repair_re.findall(invariant, body):
+            roles_here = target_by_num[num]
+            ref_here = _ar_map.get(num) if _ref_lang == 'he' else None
+            # gender_guard.vet_repair: a flip on a role nobody asked about is
+            # put back first; then the person-gender proof, Hebrew script,
+            # the same shape, similarity, negation/numbers -- and no added
+            # letter of another script and no new "you" that disagrees with
+            # its own verb (NG Round 19A A.3/A.4).
+            kept, why = gender_guard.vet_repair(
+                old_lines, new_lines, roles_here,
+                lambda body: arabic_gender.person_roles_fixed(body, roles_here, ref_here),
+                lambda body: srt.looks_hebrew(body, min_alpha=1))
+            if kept is None:
+                if why == 'unchanged':
+                    tally['unchanged'] += 1
+                elif why == 'unproven':
+                    tally['unproven'] += 1
+                else:
+                    refused_why[why] = refused_why.get(why, 0) + 1
                 continue
             # The index and timecode are taken from the SOURCE block, never
             # from the reply -- a rewrite may not move a cue, and this is one
             # pair, so there is no positional pairing to verify.
-            out[pos_of[num]] = '\n'.join(src_lines[:2] + new_lines)
+            out[pos_of[num]] = '\n'.join(src_lines[:2] + kept)
             done.add(num)
         tally['refused'] = (tally['returned'] - tally['unchanged']
                             - tally['unproven'] - len(done))
         kodi_utils.log(
             'gender repair: {0}/{1} entr(ies) rewritten with per-entry '
             'addressee evidence (returned {2}, kept as they were {3}, '
-            'not proven {4}, refused by the shape checks {5})'.format(
+            'not proven {4}, refused by the shape checks {5}{6}; speaker '
+            'fix dropped on {7} two-speaker cue(s))'.format(
                 len(done), len(ask), tally['returned'], tally['unchanged'],
-                tally['unproven'], tally['refused']), level='INFO')
+                tally['unproven'], tally['refused'],
+                (': ' + ', '.join('{0} {1}'.format(k, v) for k, v in
+                                  sorted(refused_why.items()))) if refused_why else '',
+                tally_two_speakers[0]), level='INFO')
         return out
 
     # Stitch in original order.
@@ -5035,6 +5176,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     _roles = _wanted.setdefault(_num, [])
                     if ('addressee', _g) not in _roles:
                         _roles.append(('addressee', _g))
+            # Lines the readers above cannot read on a role the reference
+            # does mark: one blind classifier request (NG Method B) labels
+            # the Hebrew; a label that contradicts the reference joins the
+            # same guarded repair.
+            if _GENDER_CLASSIFIER:
+                for _num, _roles in _classifier_conflicts(
+                        out_blocks, _ar_map, _ref_lang, _wanted).items():
+                    _have = _wanted.setdefault(_num, [])
+                    for _role in _roles:
+                        if _role not in _have:
+                            _have.append(_role)
             if _wanted:
                 _speakers = sum(1 for r in _wanted.values()
                                 if any(x[0] == 'speaker' for x in r))
@@ -5084,7 +5236,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             except Exception:
                 return True
             return False
-        def _residual_request(prompt_text):
+        def _residual_request(prompt_text, temperature=0.0):
             _gemini_rate_gate(_rpm_interval)
             # A user can cancel or choose another subtitle while pacing waits.
             if _residual_cancelled():
@@ -5092,7 +5244,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             return _repair_generate(
                 cancelled=_residual_cancelled,
                 api_key=api_key, model=model, prompt=prompt_text,
-                temperature=0.0, max_output_tokens=min(max_output_tokens, 4096),
+                temperature=temperature, max_output_tokens=min(max_output_tokens, 4096),
                 top_p=top_p, thinking_budget=thinking_budget,
                 thinking_level=thinking_level,
                 timeout=min(gemini_timeout or gemini.REQUEST_TIMEOUT, 60))
@@ -5109,6 +5261,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             out_blocks, _script_counts = script_residual.repair(
                 _aligned_source, out_blocks, _residual_request,
                 cancelled=_residual_cancelled)
+            # A reply that returned every line unchanged fixed nothing --
+            # measured: 24 lines of Thai/Georgian letters left in a film
+            # ("0/24 repaired, 24 returned unchanged"), when the other runs
+            # repaired most. Ask once more.
+            if (_script_counts['selected'] and not _script_counts['repaired']
+                    and _script_counts['kept'] == _script_counts['selected']):
+                kodi_utils.log('Foreign-script repair: every line came back unchanged '
+                               '-- asking once more', level='INFO')
+                out_blocks, _script_counts = script_residual.repair(
+                    _aligned_source, out_blocks,
+                    lambda text: _residual_request(text, temperature=0.7),
+                    cancelled=_residual_cancelled)
             if _script_counts['selected']:
                 kodi_utils.log('Foreign-script repair: {0}/{1} lines repaired '
                                '({2} refused, {3} returned unchanged{4})'.format(
