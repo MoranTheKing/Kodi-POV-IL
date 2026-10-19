@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-10-19T04:20:52Z",
+  "generated": "2026-10-19T16:42:05Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -48,13 +48,13 @@
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
       "name": "מועדפים ואייקונים",
-      "version": "1.4.11",
+      "version": "1.4.12",
       "type": "plugin",
-      "filename": "plugin.program.orderfavourites-hebrew-1.4.11.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.11.zip",
-      "size": 13337394,
-      "sha256": "7a53d09b1a9e3506e8e69a07c795dee9762cc736762d603d429e1e1d997178d0",
-      "updated": "2026-10-09T08:21:03Z"
+      "filename": "plugin.program.orderfavourites-hebrew-1.4.12.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.12.zip",
+      "size": 13337644,
+      "sha256": "006b55ae2559f90a9df8c0a596b87ec3ea1f10a48bf4ee7275655f577f5e656f",
+      "updated": "2026-10-19T16:42:05Z"
     },
     "repository.709": {
       "id": "repository.709",
