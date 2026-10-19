@@ -153,6 +153,40 @@ def _structured_block_reason(value):
     return ''
 
 
+# A model that refuses the BLOCK_NONE threshold gets the same four categories
+# at OFF (ported from SRT AI Translator NG, Bundle G PR-4): if Google ever
+# stops accepting BLOCK_NONE for a model, every chunk would otherwise fail.
+# In memory only -- the next Kodi start tries BLOCK_NONE again, and one
+# refusal costs one resend.
+_SAFETY_OFF_MODELS = set()
+_SAFETY_THRESHOLD_RE = re.compile(
+    r'SAFETY[_\s]?SETTINGS?|HARM_?BLOCK_?THRESHOLD|\bTHRESHOLD\b|BLOCK_NONE', re.I)
+_SAFETY_CATEGORIES = ('HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH',
+                      'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT')
+
+
+def _safety_settings(model):
+    threshold = 'OFF' if model in _SAFETY_OFF_MODELS else 'BLOCK_NONE'
+    return [{'category': c, 'threshold': threshold} for c in _SAFETY_CATEGORIES]
+
+
+def _refused_threshold(r):
+    """A 400 that names the safety setting or its threshold -- not a content
+    block and not a key problem."""
+    if r.status_code != 400:
+        return False
+    snippet = (r.text or '')[:600]
+    upper = snippet.upper()
+    if 'API KEY' in upper or 'API_KEY' in upper or 'X-GOOG-API-KEY' in upper:
+        return False
+    try:
+        if _structured_block_reason(r.json()):
+            return False
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return bool(_SAFETY_THRESHOLD_RE.search(snippet))
+
+
 def _raise_rejected_request(r):
     """Classify 400/403 bodies without losing recoverable content blocks."""
     body = r.text or ''
@@ -418,24 +452,25 @@ def generate(api_key, model, prompt, temperature=0.2,
         # OFF. Otherwise Gemini returns "no candidates (filtered)" on a chunk and
         # the whole translation aborts. BLOCK_NONE is the most permissive
         # threshold the Gemini API accepts.
-        'safetySettings': [
-            {'category': 'HARM_CATEGORY_HARASSMENT', 'threshold': 'BLOCK_NONE'},
-            {'category': 'HARM_CATEGORY_HATE_SPEECH', 'threshold': 'BLOCK_NONE'},
-            {'category': 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-             'threshold': 'BLOCK_NONE'},
-            {'category': 'HARM_CATEGORY_DANGEROUS_CONTENT',
-             'threshold': 'BLOCK_NONE'},
-        ],
+        # (OFF instead once Google refused BLOCK_NONE for this model.)
+        'safetySettings': _safety_settings(model),
     }
 
-    try:
-        r = requests.post(url,
-                          data=json.dumps(payload),
-                          headers={'Content-Type': 'application/json',
-                                   'x-goog-api-key': api_key},
-                          timeout=timeout)
-    except requests.RequestException as e:
-        raise GeminiError('Network error: {0}'.format(e))
+    for _attempt in (0, 1):
+        try:
+            r = requests.post(url,
+                              data=json.dumps(payload),
+                              headers={'Content-Type': 'application/json',
+                                       'x-goog-api-key': api_key},
+                              timeout=timeout)
+        except requests.RequestException as e:
+            raise GeminiError('Network error: {0}'.format(e))
+        if (_attempt == 0 and model not in _SAFETY_OFF_MODELS
+                and _refused_threshold(r)):
+            _SAFETY_OFF_MODELS.add(model)
+            payload['safetySettings'] = _safety_settings(model)
+            continue
+        break
 
     if r.status_code == 429:
         raise _classify_429(r)

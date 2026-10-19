@@ -2334,6 +2334,39 @@ _EDITORIAL_ACTION_RE = re.compile(
     r'\bkeep\s+as\s+is\b|'
     r'\bwait\b(?=[^\r\n]{0,300}(?:\bfix\b|\bcorrect\b|\btypo\b|'
     r'\bidiom\b|\bliteral\b|\btranslate\b|->|→)))', re.I)
+# The same leak without the brackets the pattern above needs (QA, Oct 2026,
+# a Gilmore Girls chunk that passed its retry): draft lines opened by an
+# arrow ("-> ...אוקיי"), labelled working lines ("Let's check Arabic: ...",
+# "Hebrew: ..."), and English notes on who is male or female ("(Drella is
+# female)", "(Wait: Drella to Lorelai, ...)"). A subtitle line never opens
+# with an arrow or such a label, and a Hebrew cue has no English note on a
+# character's gender; the source check below still lets dialogue through.
+_REASONING_LINE_RE = re.compile(
+    r"^(?:-+>|=>|→|"
+    r"let['’]?s\s+(?:check|see|look|fix|correct|verify)\b|"
+    r"(?:hebrew|arabic|english|translation|note|check|correction)\s*:)",
+    re.I)
+_REASONING_FRAGMENT_RE = re.compile(
+    r"\bwait\s*[:,]|"
+    r"\b(?:is|are|was)\s+(?:a\s+)?(?:female|male)\b|"
+    r"\b(?:feminine|masculine)\s+(?:addressee|speaker|form|verb|plural)\b|"
+    r"\b(?:speaking|talking)\s+to\b[^()\r\n]{0,80}\b(?:female|male)\b",
+    re.I)
+# Leading punctuation the RTL fix moves around; a '-' that opens an arrow
+# stays. A bare '>' / '>>' is a caption speaker marker, never an arrow here.
+_REASONING_LEAD_RE = re.compile('^(?:[\\s.,!?:;"\'\u05f4\u2013\u2014]|-(?!-*>))+')
+
+
+_SOURCE_ARROW_RE = re.compile(r'-+>|=>|→')
+
+
+def _reasoning_line(line, source_has_arrow=False):
+    line = ''.join(c for c in line if c not in _INVISIBLE_BIDI)
+    line = _MARKUP_RE.sub('', line)
+    m = _REASONING_LINE_RE.match(_REASONING_LEAD_RE.sub('', line))
+    # A sign or caption arrow the source has anywhere ("Exit ->") may open
+    # the Hebrew line once the word order turns around.
+    return bool(m) and not (source_has_arrow and _SOURCE_ARROW_RE.match(m.group(0)))
 _LATIN_ECHO_WORD_RE = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)?")
 _LATIN_ECHO_FINITE_VERBS = frozenset((
     'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
@@ -2416,18 +2449,28 @@ def generated_editorial_leak_indices(src_blocks, out_blocks):
             source = candidates[occurrence] if occurrence < len(candidates) else ''
             source_clean = re.sub(r'\s+', ' ', source).strip().lower()
             source_is_editorial = bool(_EDITORIAL_ACTION_RE.search(source_clean))
+            leaked = False
             for match in _EDITORIAL_FRAGMENT_RE.finditer(body):
                 fragment = ''.join(c for c in match.group(0)
                                    if c not in _INVISIBLE_BIDI)
-                if not _EDITORIAL_ACTION_RE.search(fragment):
+                if not (_EDITORIAL_ACTION_RE.search(fragment)
+                        or _REASONING_FRAGMENT_RE.search(fragment)):
                     continue
                 fragment_clean = re.sub(
                     r'\s+', ' ', fragment[1:-1]).strip().lower()
                 if (source_is_editorial
+                        or _REASONING_FRAGMENT_RE.search(source_clean)
                         or (fragment_clean and fragment_clean in source_clean)):
                     continue
-                bad.append(index)
+                leaked = True
                 break
+            # A source line that opens the same way ("-> Exit", "Note: ...")
+            # makes it dialogue; both sides are cleaned the same way.
+            if not leaked and not any(_reasoning_line(l) for l in source.split('\n')):
+                arrow = bool(_SOURCE_ARROW_RE.search(source))
+                leaked = any(_reasoning_line(l, arrow) for l in body.split('\n'))
+            if leaked:
+                bad.append(index)
         return bad
     except Exception:
         return []

@@ -19,8 +19,15 @@ LANG_NAME = {
 
 
 def build(source_lang, title, year, cast, is_episode=False,
-          tvshow='', season='', episode=''):
-    """Return the system+user prompt as a single string."""
+          tvshow='', season='', episode='', numbered=False):
+    """Return the system+user prompt as a single string.
+
+    numbered: the request carries each entry as its number line and its text
+    lines only, without the timecode (srt_wire.py) -- the reply is asked for
+    in the same shape, and the timecodes are put back from the source. The
+    placeholders {entry_count}, {first_num} and {last_num} are filled per
+    request by the caller.
+    """
 
     src_name = LANG_NAME.get(source_lang, source_lang or 'English')
 
@@ -65,6 +72,60 @@ def build(source_lang, title, year, cast, is_episode=False,
             'When ambiguous, prefer the neutral or plural form.'
         )
 
+    if numbered:
+        if numbered == 'reply':
+            # The request keeps its timecode lines -- measured: without them
+            # Google's PROHIBITED_CONTENT filter blocked the denser text far
+            # more often -- and only the reply leaves them out.
+            entry_rule = (
+                '- Every input entry is its number, its timecode line, then its '
+                'text line(s). Write each output entry WITHOUT the timecode '
+                'line: the same number on its own line, then the Hebrew text '
+                'line(s).\n')
+        else:
+            entry_rule = (
+                '- Every input entry is its NUMBER on its own line, followed by '
+                'its text line(s). There are no timecodes. Write each output '
+                'entry the same way: the same number on its own line, then the '
+                'Hebrew text line(s). Do not add timecodes.\n')
+        shape_rules = (
+            entry_rule +
+            '- The TEXT inside an entry is the only thing you change. If '
+            'an input entry has 1 text line, your output entry should have '
+            '1 text line; if 2 lines, 2 lines.\n'
+            '- Preserve the physical text-line order inside each entry: '
+            'line 1 stays line 1, line 2 stays line 2. Do not swap stacked '
+            'dialogue lines.\n'
+            '- Each output entry separated from the next by a single blank '
+            'line.\n\n')
+        output_rule = ('4. Output ONLY the numbered entries. No commentary, no '
+                       'preface, no closing remarks.\n')
+        request_line = ('Entries to translate ({entry_count} entries, numbered '
+                        '{first_num} to {last_num}). Return exactly {entry_count} '
+                        'entries -- the numbers below, each once, in this order:'
+                        '\n\n')
+    else:
+        shape_rules = (
+            '- Every input timecode line ("HH:MM:SS,mmm --> HH:MM:SS,mmm") '
+            'must appear in the output EXACTLY as written. Do not change '
+            'them by a single character.\n'
+            '- The TEXT inside an entry is the only thing you change. If '
+            'an input entry has 1 text line, your output entry should have '
+            '1 text line; if 2 lines, 2 lines.\n'
+            '- Preserve the physical text-line order inside each entry: '
+            'line 1 stays line 1, line 2 stays line 2. Do not swap stacked '
+            'dialogue lines.\n'
+            '- Each output entry separated from the next by a single blank '
+            'line. Standard SRT shape.\n\n')
+        output_rule = ('4. Output ONLY the SRT content. No commentary, no '
+                       'preface, no closing remarks.\n')
+        # The exact range (NG prompt.ts): with a context block before the
+        # chunk, a light model sometimes answered only the last lines.
+        request_line = ('SRT to translate ({entry_count} entries, numbered '
+                        '{first_num} to {last_num}). Return exactly {entry_count} '
+                        'entries -- the numbers below, each once, in this order:'
+                        '\n\n')
+
     return (
         'You are a professional subtitle translator for Hebrew. Translate '
         'the following {src} subtitles to Hebrew.\n\n'
@@ -75,17 +136,7 @@ def build(source_lang, title, year, cast, is_episode=False,
         'entries as the input, in the SAME ORDER.\n'
         '- Every input entry number must appear EXACTLY ONCE in the '
         'output. No skipping, no duplicating, no merging.\n'
-        '- Every input timecode line ("HH:MM:SS,mmm --> HH:MM:SS,mmm") '
-        'must appear in the output EXACTLY as written. Do not change '
-        'them by a single character.\n'
-        '- The TEXT inside an entry is the only thing you change. If '
-        'an input entry has 1 text line, your output entry should have '
-        '1 text line; if 2 lines, 2 lines.\n'
-        '- Preserve the physical text-line order inside each entry: '
-        'line 1 stays line 1, line 2 stays line 2. Do not swap stacked '
-        'dialogue lines.\n'
-        '- Each output entry separated from the next by a single blank '
-        'line. Standard SRT shape.\n\n'
+        '{shape_rules}'
         'GENDER AGREEMENT (most important translation rule -- Hebrew '
         'is heavily gendered and getting this wrong is the #1 quality '
         'complaint):\n'
@@ -179,16 +230,35 @@ def build(source_lang, title, year, cast, is_episode=False,
         '"NAME:" are handled by the SPEAKER-PREFIX HINT rule above -- '
         'USE them for gender inference, then drop only the prefix '
         'from the output.)\n'
-        '4. Output ONLY the SRT content. No commentary, no preface, no '
-        'closing remarks.\n'
+        '{output_rule}'
         '5. Work out speakers and listeners silently. NEVER write notes, '
         'explanations, speaker names or gender annotations into the '
         'subtitle text (no "(X speaking to Y)", no "[male]").\n\n'
         '{{prev_context_block}}'
-        'SRT to translate ({entry_count} entries):\n\n'
+        '{request_line}'
         '{{chunk}}\n'
     ).format(src=src_name, ctx=context_line, cast=cast_block,
-             entry_count='{entry_count}')
+             shape_rules=shape_rules, output_rule=output_rule,
+             request_line=request_line)
+
+
+def build_hebrew_context_block(pairs):
+    """For a re-request (the entries a reply left out): the source and the
+    accepted Hebrew of the entries just before, so the re-asked lines keep the
+    same speakers' genders. `pairs` is [(number, source_text, hebrew_text)].
+    Returns '' when there is nothing to show."""
+    rows = []
+    for num, src, heb in pairs or ():
+        src = ' / '.join(l.strip() for l in (src or '').split('\n') if l.strip())
+        heb = ' / '.join(l.strip() for l in (heb or '').split('\n') if l.strip())
+        if src and heb:
+            rows.append('   {0}: {1}  =>  {2}'.format(num, src, heb))
+    if not rows:
+        return ''
+    return (
+        'ALREADY TRANSLATED JUST BEFORE THESE ENTRIES (source => accepted '
+        'Hebrew; for continuity of speakers and gender only -- DO NOT '
+        'include these in your output):\n' + '\n'.join(rows) + '\n\n')
 
 
 def build_prev_context_block(prev_context_lines):
