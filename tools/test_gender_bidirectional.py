@@ -6,6 +6,8 @@ BASE=ROOT/'addons/service.subtitles.kodipovilai/resources/lib'
 def module(name):
     spec=importlib.util.spec_from_file_location(name,BASE/(name+'.py'));m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
 ag=module('arabic_gender');srt=module('srt')
+# The repair's extra backstops (gender_guard.py), where this tree has them.
+gg=module('gender_guard') if (BASE/'gender_guard.py').exists() else None
 TREE=ast.parse((BASE/'translate.py').read_text(encoding='utf-8'))
 def block(n,text):return '%s\n00:00:%02d,000 --> 00:00:%02d,900\n%s'%(n,n,n,text)
 def repair(source,refs,reply):
@@ -16,6 +18,7 @@ def repair(source,refs,reply):
             kodi_utils=types.SimpleNamespace(log=lambda *a,**kw:None),api_key='fixture',model='fixture',max_output_tokens=8192,
             top_p=1.0,thinking_budget=None,thinking_level=None,gemini_timeout=None,_rpm_interval=0,
             _gemini_rate_gate=lambda x:None,src_text='\n\n'.join(source),_ar_map=refs,_ref_lang='he')
+    if gg is not None:ns['gender_guard']=gg
     for node in ast.walk(TREE):
         if isinstance(node,ast.FunctionDef) and node.name in ('_regender_blocks','_regender_unguarded'):
             exec(compile(ast.Module(body=[node],type_ignores=[]),'<actual-repair>','exec'),ns)
