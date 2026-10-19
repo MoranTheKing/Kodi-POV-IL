@@ -234,12 +234,18 @@ print("  ok - safe timing repair cannot bypass semantic rejection")
 
 print("== mutations and production wiring ==")
 real_pattern = srt._EDITORIAL_ACTION_RE
+# The reasoning-note pattern also catches the bracketed "(Wait, ...)" shape.
+real_reasoning = getattr(srt, "_REASONING_FRAGMENT_RE", None)
 try:
     srt._EDITORIAL_ACTION_RE = re.compile(r"(?!)")
+    if real_reasoning is not None:
+        srt._REASONING_FRAGMENT_RE = re.compile(r"(?!)")
     assert srt.generated_editorial_leak_indices(
         [SOURCE[0]], [block(1, 1, 2, bad_shapes[1])]) == []
 finally:
     srt._EDITORIAL_ACTION_RE = real_pattern
+    if real_reasoning is not None:
+        srt._REASONING_FRAGMENT_RE = real_reasoning
 print("  ok - removing the detector restores the regression (mutation killed)")
 
 real_negation_pattern = srt._NEGATIVE_FUTURE_RE

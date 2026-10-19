@@ -219,7 +219,8 @@ class WiringTests(unittest.TestCase):
             self.assertIn(call, text)
         # The repair requests retry a transient overload (measured: one HTTP
         # 503 left 20 detected gender errors on screen).
-        self.assertEqual(text.count('_repair_generate('), 3)
+        # (Definition, residual repair, gender repair, gender classifier.)
+        self.assertEqual(text.count('_repair_generate('), 4)
         self.assertIn('except (gemini.OverloadError, gemini.RateLimited) as e:', text)
         # ...and a reply that answers none of the proven contradictions is asked
         # once more; the log says what happened to every entry.
