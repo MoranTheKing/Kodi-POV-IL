@@ -706,6 +706,16 @@ _ADDRESSEE_MARKERS = {
 }
 
 
+# Invisible direction marks are not text: a human Hebrew file that starts a
+# line with U+202B still starts it with "את" (measured by SRT AI Translator
+# NG, Round 19A A.1 -- _HE_FEM_CLAUSE anchors on the line start).
+_DIRECTION_MARKS = re.compile(u'[‎‏‪-‮⁦-⁩؜﻿]')
+
+
+def _visible(text):
+    return _DIRECTION_MARKS.sub(u'', text or u'')
+
+
 def reference_addressee_gender(ref_text, lang):
     """'F', 'M', or None when the reference does not mark it unambiguously.
 
@@ -720,6 +730,12 @@ def reference_addressee_gender(ref_text, lang):
     if not ref_text:
         return None
     try:
+        ref_text = _visible(ref_text)
+        if lang in ('es', 'pt'):
+            # A short reviewed list of second-person predicate adjectives
+            # (estás cansada / você está pronto); anything else stays None.
+            gg = _gg()
+            return gg.romance_addressee(ref_text, lang) if gg is not None else None
         if lang == 'he':
             f = _he_addresses_female(ref_text)
             m = bool(_HE_MASC.search(ref_text))
@@ -1015,6 +1031,7 @@ def reference_speaker_gender(ref_text, lang):
     if not ref_text:
         return None
     try:
+        ref_text = _visible(ref_text)
         if lang == 'ar':
             f = bool(_AR_SPEAKER_F.search(ref_text) or _AR_ME_F.search(ref_text))
             m = bool(_AR_SPEAKER_M.search(ref_text) or _AR_ME_M.search(ref_text))
@@ -1032,6 +1049,30 @@ def reference_speaker_gender(ref_text, lang):
     except Exception:
         pass
     return None
+
+
+_GG = []
+
+
+def _gg():
+    """gender_guard, as a package module or (standalone load) its file."""
+    if _GG:
+        return _GG[0]
+    mod = None
+    try:
+        from resources.lib import gender_guard as mod
+    except Exception:
+        try:
+            import importlib.util
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                'gender_guard.py')
+            spec = importlib.util.spec_from_file_location('gender_guard', path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        except Exception:
+            mod = None
+    _GG.append(mod)
+    return mod
 
 
 _HPG = []
@@ -1146,7 +1187,7 @@ def person_gender_conflicts(blocks, ref_map, lang):
 
 def addresses_female(text):
     """Conservative feminine-address candidate; not speaker/referent identity."""
-    return _he_addresses_female(text or '')
+    return _he_addresses_female(_visible(text))
 
 
 def addresses_male(text):
@@ -1158,7 +1199,7 @@ def addresses_male(text):
     spend a request to stand still.
     """
     try:
-        return bool(_HE_MASC.search(text or ''))
+        return bool(_HE_MASC.search(_visible(text)))
     except Exception:
         return False
 

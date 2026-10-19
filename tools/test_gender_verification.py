@@ -158,10 +158,22 @@ for _lang, _text, _want in (
 # a feminine noun's ending without parsing ("eres una estrella"), Dutch marks
 # only referent gender, and Urdu uses Indic morphology rather than the Arabic
 # diacritics -- so each returns None and the verification simply does not fire.
+# Spanish and Portuguese are read only from a short reviewed list of
+# second-person predicate adjectives (gender_guard.romance_addressee, ported
+# from SRT AI Translator NG) where this tree has it: "estás cansada" reads F,
+# a noun after the verb ("eres una estrella") still reads nothing.
+_romance = os.path.exists(os.path.join(ADDON, 'resources', 'lib', 'gender_guard.py'))
 for _lang, _text in (('es', u'estás cansada'), ('it', u'sei stanca'),
                      ('pt', u'estás cansada'), ('fr', u'tu es fatiguée'),
                      ('ro', u'ești obosită'), ('el', u'είσαι κουρασμένη'),
                      ('nl', u'zij is moe'), ('ur', u'تم اچھی ہو')):
+    if _romance and _lang in ('es', 'pt'):
+        check('%s: %s (reviewed predicate)' % (_lang, _text),
+              ag.reference_addressee_gender(_text, _lang), 'F')
+        ok('%s: a noun after the verb reads nothing' % _lang,
+           ag.reference_addressee_gender(
+               u'eres una estrella' if _lang == 'es' else u'é uma estrela', _lang) is None)
+        continue
     ok('%s is deliberately not verified' % _lang,
        ag.reference_addressee_gender(_text, _lang) is None)
 
@@ -276,6 +288,13 @@ _sspec = importlib.util.spec_from_file_location(
 _srt = importlib.util.module_from_spec(_sspec)
 _sspec.loader.exec_module(_srt)
 _ns['srt'] = _srt
+# The repair's extra backstops (gender_guard.py), where this tree has them.
+_ggpath = os.path.join(ADDON, 'resources', 'lib', 'gender_guard.py')
+if os.path.exists(_ggpath):
+    _gspec = importlib.util.spec_from_file_location('gg_for_gender', _ggpath)
+    _gg = importlib.util.module_from_spec(_gspec)
+    _gspec.loader.exec_module(_gg)
+    _ns['gender_guard'] = _gg
 _ns.update(src_text='1\n00:00:01,000 --> 00:00:02,000\nYou really scare me.',
            _ar_map={1: 'أنتِ تخيفينني حقاً.'}, _ref_lang='ar')
 
