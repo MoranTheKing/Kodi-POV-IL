@@ -269,7 +269,14 @@ def seed_previous_defaults(xml):
     return _save_state(xml, set())
 
 
-def _parse_favourites(xml, label):
+def _parse_favourites(xml, label, strict=True):
+    """(root, {name: first item}). Files this module generates are strict.
+    The installed file is the user's: Kodi lets two favourites share a name
+    (two episodes called "Pilot" from different shows), and refusing that
+    left every later refresh undone -- a newly connected TorBox never got its
+    tile (field log, Oct 2026). With strict=False such an entry is kept in
+    place and only the first of each name is matched by name; a copy that
+    equals an old build default still follows the build like the first."""
     try:
         root = ET.fromstring(xml)
     except (ET.ParseError, TypeError) as exc:
@@ -281,7 +288,9 @@ def _parse_favourites(xml, label):
         name = item.get('name')
         if (item.tag != 'favourite' or not name or not (item.text or '').strip()
                 or len(item) or name in by_name):
-            raise ValueError('{0} favourites.xml is ambiguous'.format(label))
+            if strict:
+                raise ValueError('{0} favourites.xml is ambiguous'.format(label))
+            continue
         by_name[name] = item
     return root, by_name
 
@@ -390,7 +399,7 @@ def _tile_identities(config, xmls, recorded=None):
     for xml in xmls:
         if xml is None:
             continue
-        _, rows = _parse_favourites(xml, 'identity')
+        _, rows = _parse_favourites(xml, 'identity', strict=False)
         for name, item in rows.items():
             candidates = actions.get(_action_identity(item.text), set())
             if name not in names and len(candidates) == 1:
@@ -408,7 +417,7 @@ def _merge_favourites(existing, previous, desired, deleted, repair_tail=False, i
     desired_root, desired_by_name = _parse_favourites(desired, 'new default')
     if existing is None:
         return desired, set()
-    user_root, user_by_name = _parse_favourites(existing, 'installed')
+    user_root, user_by_name = _parse_favourites(existing, 'installed', strict=False)
     if previous is None:
         old_by_name = {}
     else:

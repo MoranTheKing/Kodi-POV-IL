@@ -265,6 +265,29 @@ class FavouritesGeneratorTests(unittest.TestCase):
         path.write_text(json.dumps(state), 'utf8')
         self.assertEqual(_items(self._refresh())[-1].get('thumb'), 'my-icon.png')
 
+    def test_user_favourites_sharing_a_name_do_not_block_refresh(self):
+        # field log, Oct 2026: two favourites with one name ("ambiguous") made
+        # every refresh give up, so a newly connected TorBox never got its tile
+        self.visibility.active.discard('torbox')
+        root = ET.fromstring(self._refresh())
+        for ep in ('a', 'b'):
+            ET.SubElement(root, 'favourite', name='Pilot').text = 'PlayMedia("plugin://x/?ep=%s")' % ep
+        ET.SubElement(root, 'favourite', name='NoAction').text = ''
+        self._installed().write_text(ET.tostring(root, encoding='unicode'), 'utf-8')
+        self.visibility.active.add('torbox')
+        rows = _items(self._refresh())
+        self.assertEqual(sum('TorBox' in (i.get('name') or '') for i in rows), 1)
+        pilots = [i.text for i in rows if i.get('name') == 'Pilot']
+        self.assertEqual(pilots, ['PlayMedia("plugin://x/?ep=a")', 'PlayMedia("plugin://x/?ep=b")'])
+        self.assertEqual(sum(i.get('name') == 'NoAction' for i in rows), 1)
+        before = self._installed().read_bytes()
+        self.assertIsNotNone(self._refresh())
+        self.assertEqual(self._installed().read_bytes(), before)
+        self.visibility.active.discard('torbox')
+        rows = _items(self._refresh())
+        self.assertEqual(sum('TorBox' in (i.get('name') or '') for i in rows), 0)
+        self.assertEqual(sum(i.get('name') == 'Pilot' for i in rows), 2)
+
     def test_bad_existing_xml_is_never_overwritten(self):
         self._refresh()
         self._installed().write_text('<favourites><broken', 'utf-8')
