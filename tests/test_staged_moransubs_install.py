@@ -135,6 +135,41 @@ class StagedInstallTests(unittest.TestCase):
             self.assertEqual(self.install(), 2)
         self.assertEqual((self.old / 'service.py').read_text(), 'new code')
 
+    def test_windows_extract_that_never_finishes_falls_back_to_reader(self):
+        # field (Oct 2026): Windows fresh installs failed "extraction not
+        # verified" when Kodi's Extract missed its 20 s deadline
+        clock = iter(range(0, 1000, 5))
+        fake = types.SimpleNamespace(
+            getCondVisibility=lambda condition: True,
+            executebuiltin=mock.Mock(), log=mock.Mock(), LOGWARNING=2)
+        self.bundle_with()
+        with mock.patch.dict(sys.modules, xbmc=fake),                 mock.patch.object(installer.time, 'monotonic', lambda: next(clock)),                 mock.patch.object(installer.time, 'sleep', lambda s: None):
+            self.assertEqual(self.install(), 2)
+        fake.executebuiltin.assert_called_once()
+        fake.log.assert_called_once()
+        self.assertEqual((self.old / 'service.py').read_text(), 'new code')
+        # the next attempt clears the abandoned private root and works again
+        self.bundle_with()
+        with mock.patch.dict(sys.modules, xbmc=fake),                 mock.patch.object(installer.time, 'monotonic', lambda: next(clock)),                 mock.patch.object(installer.time, 'sleep', lambda s: None):
+            self.assertEqual(self.install(), 2)
+
+    def test_locked_abandoned_root_uses_reader(self):
+        fake = types.SimpleNamespace(
+            getCondVisibility=lambda condition: True,
+            executebuiltin=mock.Mock(side_effect=AssertionError('Extract while locked')))
+        (self.addons.parent / '.kodipovil-ms-extract').mkdir()
+        self.bundle_with()
+        with mock.patch.dict(sys.modules, xbmc=fake):
+            real = installer.shutil.rmtree
+            def rmtree(path, *a, **k):
+                if path.endswith('.kodipovil-ms-extract'):
+                    raise PermissionError('busy')
+                return real(path, *a, **k)
+            with mock.patch.object(installer.shutil, 'rmtree', rmtree):
+                self.assertEqual(self.install(), 2)
+        fake.executebuiltin.assert_not_called()
+        self.assertEqual((self.old / 'service.py').read_text(), 'new code')
+
     def test_traversal_or_case_duplicate_never_reaches_live_addon(self):
         for bad_member in (ADDON + '/../escape.py', ADDON + '/SERVICE.py',
                            ADDON + '/NUL.py', ADDON + '/data:stream'):
