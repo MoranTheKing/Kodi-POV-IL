@@ -741,6 +741,10 @@ PATCH_CONFIG = [
         "target_file": "resources/lib/modules/dialogs.py",
         "marker": "# WIZARD_FAV_REFRESH_DIALOG_v3",
         "anchor": "if refresh: container_refresh()",
+        # POV 6.10.06 was republished (same version) with dialogs.py
+        # importing `kodi_utils as ku`; a fresh install stopped on this
+        # missing anchor ("Fresh source patches are incomplete", Oct 2026).
+        "alternatives": [{"anchor": "if refresh: ku.container_refresh()"}],
         "action": "prepend_before",
         "hook": (
             "\trefresh = 'search' not in (__import__('xbmc').getInfoLabel('Container.FolderPath') or '').lower()\n"
