@@ -28,6 +28,9 @@ release version) or "unavailable <ver>: <reason>" (exit 3: the official zip
 could not be fetched or is not that POV -- usually transient).
 "python3 tools/auto_bump_pov_pin.py --check" only prints "newer <ver>" or
 "current <ver>" (no download).
+"python3 tools/auto_bump_pov_pin.py --republish-check" compares the official
+zip of the pinned version with the pin and audits a republished one (see
+republish_check).
 """
 
 import contextlib
@@ -171,7 +174,53 @@ def run(outdir, fetcher=None, getter=_get, verifier=None):
     return 0, 'bumped %s %s %s' % (current, latest, out)
 
 
+def republish_check(fetcher=None, getter=_get, verifier=None):
+    """(code, line) for a POV republished under the pinned version.
+
+    Field (20 Oct 2026): kodifitzwell replaced plugin.video.pov 6.10.06 with
+    different code under the same version. A version compare saw nothing,
+    one Wizard hook lost its anchor, and fresh installs stopped at the end.
+    When upstream's newest POV is the pinned version, compare the official
+    zip with the pin and, if it differs, audit every enabled Wizard patch on
+    it. The pin itself stays: legacy migration stages the mirrored copy, and
+    Kodi never moves a device between two zips of one version.
+
+    Lines: "newer <ver>" (the pin job handles it), "same <ver>",
+    "republished <ver> <sha12> fits: <audit>",
+    "republished <ver> <sha12> blocked: <reason>" (exit 2),
+    "unavailable <ver>: <reason>" (exit 3, usually transient)."""
+    current, latest = pending(fetcher)
+    if latest:
+        return 0, 'newer %s' % latest
+    pin = json.loads(PIN.read_text('utf-8'))
+    try:
+        data, upstream_url = official_zip(current, getter)
+    except Exception as exc:
+        return 3, 'unavailable %s: official zip unusable: %s' % (current, exc)
+    digest = hashlib.sha256(data).hexdigest()
+    if digest == pin['sha256'] and len(data) == pin['size']:
+        return 0, 'same %s' % current
+    old_pin_text = PIN.read_text('utf-8')
+    report = io.StringIO()
+    try:
+        _write_text_keep_eol(PIN, json.dumps(pin_for(current, data, upstream_url), indent=2) + '\n')
+        if verifier is None:
+            verifier = _load('verify_pov_patches', ROOT / '.github' / 'scripts' / 'verify_pov_patches.py').verify
+        with contextlib.redirect_stdout(report):
+            verifier(ROOT, data)
+    except Exception as exc:
+        return 2, 'republished %s %s blocked: %s' % (current, digest[:12], exc)
+    finally:
+        _write_text_keep_eol(PIN, old_pin_text)
+    audit = ' '.join(report.getvalue().split()) or 'verified'
+    return 0, 'republished %s %s fits: %s' % (current, digest[:12], audit)
+
+
 if __name__ == '__main__':
+    if sys.argv[1:] == ['--republish-check']:
+        code, line = republish_check()
+        print(line)
+        sys.exit(code)
     if sys.argv[1:] == ['--check']:
         current, latest = pending()
         print('newer %s' % latest if latest else 'current %s' % current)
