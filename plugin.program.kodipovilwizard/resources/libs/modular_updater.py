@@ -143,6 +143,12 @@ class ModularUpdater:
     def run_update_check(self):
         """Fetch manifest, diff versions, and execute necessary updates."""
         logging.log("[ModularUpdater] Starting modular update check...", level=xbmc.LOGINFO)
+        # The POV version gate may replace a newer, unverified POV only when
+        # this very run (a fresh installation) is what put POV on disk.
+        try:
+            self._pov_was_installed = self._on_disk('plugin.video.pov')
+        except Exception:
+            self._pov_was_installed = True
 
         # A previously prepared clean POV tree can be completed offline. The
         # legacy subtitle service has had a full intervening Kodi process to
@@ -311,6 +317,7 @@ class ModularUpdater:
         logging.log('[ModularUpdater] update queue={0}, config_pending={1}, fresh={2}'
                     .format(len(update_queue), config_pending, fresh), level=xbmc.LOGINFO)
         if not update_queue and not config_pending and not fresh:
+            if hasattr(self, '_sync_verified_pov'): self._sync_verified_pov(manifest)
             # startup.py shows a new update note only while this is True.
             self.build_current = bool(self._record_build_identity(manifest))
             logging.log("[ModularUpdater] All modules and config are up to date.", level=xbmc.LOGINFO)
@@ -325,9 +332,34 @@ class ModularUpdater:
         # never did).
         logging.log('[ModularUpdater] entering execute_updates', level=xbmc.LOGINFO)
         success = self.execute_updates(update_queue)
+        # After execute_updates: a fresh install's native phase has put POV
+        # on disk by now, and finalize() verifies the hooks after this.
+        if hasattr(self, '_sync_verified_pov'): self._sync_verified_pov(manifest, update_queue)
         if success:
             self.build_current = bool(self._record_build_identity(manifest))
         return success
+
+    def _sync_verified_pov(self, manifest, queue=()):
+        """Hold POV's auto-update and move it to the verified pin."""
+        try:
+            from resources.libs import pov_version_gate, db
+            db_path = os.path.join(CONFIG.DATABASE, db.latest_db('Addons') or '')
+            # A Wizard update in this run means the hooks in memory are the
+            # old ones; a new pin may need the new ones. Next start installs.
+            wizard_updating = any((mod or {}).get('id') == CONFIG.ADDON_ID for mod in queue)
+            first_pov = (getattr(self, 'fresh', False) and
+                         not getattr(self, '_pov_was_installed', True))
+            result = pov_version_gate.sync(
+                self, manifest, first_pov, CONFIG,
+                lambda msg: logging.log(msg, level=xbmc.LOGINFO), db_path,
+                install_allowed=not wizard_updating)
+            logging.log('[ModularUpdater] POV version gate: {0}'.format(result),
+                        level=xbmc.LOGINFO)
+            return result
+        except Exception as exc:
+            logging.log('[ModularUpdater] POV version gate skipped: {0}'.format(exc),
+                        level=xbmc.LOGWARNING)
+            return 'failed'
 
     def _record_build_identity(self, manifest):
         """An OTA completion updates the build label too; never certify a failure."""

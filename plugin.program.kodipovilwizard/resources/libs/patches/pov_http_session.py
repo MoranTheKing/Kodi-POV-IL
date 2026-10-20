@@ -15,7 +15,7 @@ SESSION_SHA256 = '4f9ece685c857d6f0f596c290dd78cf04b237ca852539fb65be3e9df845bfc
 # at 6.10.05 alone, 6.10.06 silently lost the deferral and the bounded retry.
 # 6.10.16 moved the same bytes to modules/session.py (imported as
 # modules.session); the hook passes that path and module name.
-_VERIFIED_VERSIONS = ('6.10.05', '6.10.06', '6.10.16', '6.10.17')
+_VERIFIED_VERSIONS = ('6.10.05', '6.10.06', '6.10.16', '6.10.17', '6.10.18')
 _install_lock = threading.Lock()
 
 
