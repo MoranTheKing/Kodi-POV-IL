@@ -113,7 +113,7 @@ jobs:
                    --json title --jq 'length' | grep -qv '^0$'; then
                 echo "Issue already open."
               else
-                gh issue create --repo "$REPO_SLUG" --title "$TITLE" --body "$OUT
+                gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" --title "$TITLE" --body "$OUT
 
           Devices still on legacy MoranSubs 0.2.x cannot migrate once Kodi installs this POV. Fix the moved anchors in patches_config.py; the next run moves the pin by itself."
               fi
@@ -147,7 +147,7 @@ jobs:
           git add .github/pov-host-migration.json UPSTREAM_VERSIONS.txt manifest.json
           git commit -m "chore(pov): move the clean-host migration pin to POV $NEW [skip ci]"
           git push origin HEAD:main
-          gh issue create --repo "$REPO_SLUG" \
+          gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" \
             --title "POV $NEW: migration pin moved automatically ($OLD -> $NEW)" \
             --body "$OUT
 
@@ -190,4 +190,4 @@ jobs:
             "New upstream versions (verified -> published):" \
             "$CHANGES" \
             "Devices install these from the developers' repositories. Re-run the wizard patch engine and the MoranSubs host patchers against the new version, fix any moved anchor, then update UPSTREAM_VERSIONS.txt.")
-          gh issue create --repo "$REPO_SLUG" --title "$TITLE" --body "$BODY"
+          gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" --title "$TITLE" --body "$BODY"
