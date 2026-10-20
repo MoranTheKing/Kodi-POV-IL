@@ -166,7 +166,13 @@ def recover(addons_dir, package_path, addon_id):
     if extract_root is not None and extract_root.exists():
         if extract_root.is_symlink():
             raise ValueError('symlinked extraction root')
-        shutil.rmtree(str(extract_root))
+        try:
+            shutil.rmtree(str(extract_root))
+        except OSError:
+            # A late Kodi extraction (or an antivirus scan) still holds files
+            # there. The private root sits outside the add-on scanner; leave
+            # it for a later attempt instead of failing this install.
+            pass
     if backup.exists():
         if not target.exists():
             os.replace(str(backup), str(target))
@@ -204,8 +210,15 @@ def _extract_kodi(zip_path, stage, addon_id, expected_files):
     if root.exists():
         if root.is_symlink():
             raise ValueError('symlinked extraction root')
-        shutil.rmtree(str(root))
-    root.mkdir()
+        try:
+            shutil.rmtree(str(root))
+        except OSError:
+            # A late extraction from an earlier attempt may still hold files.
+            return False
+    try:
+        root.mkdir()
+    except OSError:
+        return False
     command = 'Extract({},{})'.format(zip_path, root)
     xbmc.executebuiltin(command, True)
     extracted = root / addon_id
@@ -213,13 +226,31 @@ def _extract_kodi(zip_path, stage, addon_id, expected_files):
     while time.monotonic() < deadline:
         if extracted.is_dir() and sum(
                 len(names) for _base, _dirs, names in os.walk(extracted)) == expected_files:
-            os.replace(str(extracted), str(stage))
-            shutil.rmtree(str(root))
+            try:
+                os.replace(str(extracted), str(stage))
+            except OSError:
+                # A file Kodi still holds; the rename is atomic, so nothing
+                # reached the stage and the reader can take over.
+                break
+            try:
+                shutil.rmtree(str(root))
+            except OSError:
+                pass
             return True
         time.sleep(0.1)
     # A delayed Kodi extraction might still be writing. Leave the private
-    # root for recovery on the next boot rather than deleting under it.
-    raise NativeExtractionTimeout('Kodi ZIP extraction did not complete')
+    # root for recovery on the next boot rather than deleting under it; it
+    # never writes into the stage. Field reports (Oct 2026): two Windows fresh
+    # installs failed with "extraction not verified" on every attempt of the
+    # first run (Kodi busy installing the build, or an antivirus scanning each
+    # new file) and succeeded on the next start. Use the in-memory extractor
+    # instead of failing the install.
+    try:
+        xbmc.log('[staged_addon_install] Kodi Extract did not finish in 20 s; '
+                 'using the built-in extractor', xbmc.LOGWARNING)
+    except Exception:
+        pass
+    return False
 
 
 def _activate(target, stage, backup):
