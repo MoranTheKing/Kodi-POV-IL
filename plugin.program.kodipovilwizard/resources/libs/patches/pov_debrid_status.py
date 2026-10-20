@@ -15,6 +15,7 @@ def run(local_vars):
         # 1. Target potential module locations for the upstream notification routine
         modules_to_check = [
             'entry',
+            'modules.entry',  # POV 6.10.16 moved entry.py into modules/
             'resources.lib.modules.debrid',
             'resources.lib.modules.real_debrid',
             'resources.lib.modules.premiumize',
@@ -36,13 +37,14 @@ def run(local_vars):
                 continue
 
         # 2. As a fallback, check if it was integrated as a class method on POVMonitor
-        try:
-            from entry import POVMonitor
-            if hasattr(POVMonitor, 'premAccntNotification'):
-                setattr(POVMonitor, 'premAccntNotification', lambda *args, **kwargs: None)
-                patched = True
-        except Exception:
-            pass
+        for mod_name in ('entry', 'modules.entry'):
+            try:
+                POVMonitor = getattr(__import__(mod_name, fromlist=['POVMonitor']), 'POVMonitor')
+                if hasattr(POVMonitor, 'premAccntNotification'):
+                    setattr(POVMonitor, 'premAccntNotification', lambda *args, **kwargs: None)
+                    patched = True
+            except Exception:
+                pass
 
         if patched:
             xbmc.log("[POV Wizard] Successfully neutralized upstream Debrid expiry notifications in memory.", xbmc.LOGINFO)

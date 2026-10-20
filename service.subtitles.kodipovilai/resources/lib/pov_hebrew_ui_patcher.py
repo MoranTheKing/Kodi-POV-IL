@@ -34,6 +34,9 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 STRINGS_REL = 'resources/language/resource.language.en_gb/strings.po'
+# POV 6.10.16 moved its strings into a Python table that local_string() reads
+# (strings.po is now an empty stub), so the same ids are set there instead.
+STRINGS_PY_REL = 'resources/lib/modules/strings_po.py'
 
 # POV string id -> Hebrew. Format tokens ([B], %s) are kept verbatim.
 HE = {
@@ -77,8 +80,22 @@ def _strings_path():
             'special://home/addons/' + POV_ADDON_ID + '/')
     except Exception:
         return ''
-    p = os.path.join(base, *STRINGS_REL.split('/'))
-    return p if os.path.isfile(p) else ''
+    for rel in (STRINGS_PY_REL, STRINGS_REL):
+        p = os.path.join(base, *rel.split('/'))
+        if os.path.isfile(p):
+            return p
+    return ''
+
+
+def _apply_py(content):
+    """Set the targeted `<id>: '<text>',` entries of strings_po.py."""
+    applied = 0
+    for sid, he in HE.items():
+        pat = re.compile(r"(?m)^(" + sid + r"): '(?:[^'\\\n]|\\.)*'")
+        literal = "'" + he.replace('\\', '\\\\').replace("'", "\\'") + "'"
+        content, n = pat.subn(lambda m: m.group(1) + ': ' + literal, content, count=1)
+        applied += n
+    return content, applied
 
 
 def ensure_patched():
@@ -96,7 +113,15 @@ def ensure_patched():
 
     new_content = content
     applied = 0
-    for sid, he in HE.items():
+    if path.endswith('.py'):
+        new_content, applied = _apply_py(content)
+        try:
+            compile(new_content, path, 'exec')
+        except SyntaxError as e:
+            _log('strings_po.py would not compile ({0}); leaving it alone'.format(e),
+                 level='WARNING')
+            return 'unmatched'
+    for sid, he in (() if path.endswith('.py') else HE.items()):
         # msgctxt "#<id>" \n msgid "<english>" \n msgstr "<current>"
         # -> set BOTH msgid and msgstr to Hebrew. Tolerates LF or CRLF.
         pat = re.compile(
