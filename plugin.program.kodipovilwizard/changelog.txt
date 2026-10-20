@@ -1,3 +1,6 @@
+0.4.65
+- A fresh install no longer stops at the end with "Fresh source patches are incomplete" (the build then showed "None" as the installed build). POV 6.10.06 was republished under the same version with dialogs.py importing kodi_utils as "ku", and the favourites-refresh hook did not find its line there (field log, Oct 2026). The hook now fits both shapes. Audit: all 117 POV hooks apply, and are idempotent, on both the original and the republished 6.10.06; a fresh install that had stopped there completed in Kodi.
+
 0.4.64
 - Windows fresh install: two field reports (Oct 2026) failed on MoranSubs with "extraction not verified" on every attempt of the first run and succeeded on the next start; the failing run's log was not available. The likely cause: the installer waited at most 20 s for Kodi's own ZIP extraction (Kodi busy installing the build, or an antivirus scanning each new file), and each retry then failed on the folder the late extraction still held. After 20 s the installer now extracts the package itself (the same verified reader Android uses), and a folder still held by a late extraction is left for later instead of failing the install. QA (Windows Kodi x64): forced timeout -> 240/240 files in 0.4 s, and again with the held folder.
 
