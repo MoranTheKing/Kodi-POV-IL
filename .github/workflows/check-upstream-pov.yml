@@ -191,3 +191,57 @@ jobs:
             "$CHANGES" \
             "Devices install these from the developers' repositories. Re-run the wizard patch engine and the MoranSubs host patchers against the new version, fix any moved anchor, then update UPSTREAM_VERSIONS.txt.")
           gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" --title "$TITLE" --body "$BODY"
+
+  # A version compare cannot see a POV replaced under the same version (field
+  # 20 Oct 2026: 6.10.06 republished with dialogs.py importing kodi_utils as
+  # ku; one Wizard hook lost its anchor and fresh installs stopped at the end).
+  # Compare the official zip of the pinned version with the pin, audit every
+  # enabled Wizard patch on a changed one, and open one issue per new zip.
+  pov-republish:
+    if: github.repository == 'MoranTheKing/Kodi-POV-IL'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Audit a POV republished under the pinned version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_SLUG: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Sparse: the tracked tree is ~18 GB (dist/ zips); the audit needs
+          # the patch engine, its config and the three scripts only.
+          git clone --depth 1 --filter=blob:none --sparse \
+            "https://github.com/${REPO_SLUG}.git" repo || { echo "clone failed; retry later"; exit 0; }
+          cd repo
+          git sparse-checkout set --no-cone /tools/auto_bump_pov_pin.py \
+            /tools/check_upstream_addons.py /.github/pov-host-migration.json \
+            /.github/scripts/verify_pov_patches.py /plugin.program.kodipovilwizard/ \
+            || { echo "checkout failed; retry later"; exit 0; }
+          STATUS=0
+          OUT=$(python3 tools/auto_bump_pov_pin.py --republish-check) || STATUS=$?
+          echo "$OUT"
+          case "$OUT" in
+            republished*) ;;
+            *) exit 0 ;;   # same / newer (the pin job) / unavailable (retry later)
+          esac
+          VER=$(printf '%s' "$OUT" | cut -d' ' -f2)
+          SHA=$(printf '%s' "$OUT" | cut -d' ' -f3)
+          TITLE="POV $VER republished upstream (zip $SHA)"
+          # Closed issues count too: one issue per republished zip, ever.
+          if gh issue list --repo "$REPO_SLUG" --state all --search "in:title \"$TITLE\"" \
+               --json title --jq 'length' | grep -qv '^0$'; then
+            echo "Issue \"$TITLE\" already exists; skipping."
+            exit 0
+          fi
+          if [ "$STATUS" = "0" ]; then
+            VERDICT="Every enabled Wizard patch applies to the new zip (audit below). Fresh installs are fine; still check the MoranSubs POV host patchers and test in Kodi."
+          else
+            VERDICT="A Wizard patch does NOT fit the new zip: fresh installs will stop with \"Fresh source patches are incomplete\". Fix the anchor (an \"alternatives\" entry in patches_config.py) and release the Wizard."
+          fi
+          BODY=$(printf '%s\n\n%s\n\n%s' \
+            "The official plugin.video.pov $VER zip changed without a version bump (sha256 $SHA..., the migration pin still names the original)." \
+            "$VERDICT" \
+            "$OUT")
+          gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" --title "$TITLE" --body "$BODY"
