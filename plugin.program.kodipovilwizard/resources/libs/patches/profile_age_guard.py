@@ -128,10 +128,15 @@ def locks_ready(master, active, children):
         return False
 
 
+# POV 6.10.16 moved resources/lib/entry.py to resources/lib/modules/entry.py;
+# the patch engine follows the file (target_alternatives), so the check does.
+_POV_ENTRY = ('resources/lib/entry.py', 'resources/lib/modules/entry.py')
+
+
 def host_integrity(addons):
     required = {
-        'plugin.video.pov': [('resources/lib/entry.py', 'WIZARD_POV_PROFILE_DIRECTORY_v1'),
-                             ('resources/lib/entry.py', 'WIZARD_POV_PROFILE_ROUTE_v1'),
+        'plugin.video.pov': [(_POV_ENTRY, 'WIZARD_POV_PROFILE_DIRECTORY_v1'),
+                             (_POV_ENTRY, 'WIZARD_POV_PROFILE_ROUTE_v1'),
                              ('resources/lib/modules/player.py', 'WIZARD_POV_PROFILE_PLAY_v1'),
                              ('resources/lib/menus/movies.py', 'WIZARD_POV_PROFILE_MOVIE_META_v1'),
                              ('resources/lib/menus/tvshows.py', 'WIZARD_POV_PROFILE_TV_META_v1'),
@@ -148,6 +153,9 @@ def host_integrity(addons):
                 return False
             continue
         for relative, marker in rows:
+            if not isinstance(relative, str):
+                relative = next((r for r in relative
+                                 if os.path.isfile(os.path.join(directory, r))), relative[0])
             try:
                 with open(os.path.join(directory, relative), encoding='utf-8') as fh:
                     if marker not in fh.read():

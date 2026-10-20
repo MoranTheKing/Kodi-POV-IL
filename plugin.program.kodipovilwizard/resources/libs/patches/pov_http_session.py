@@ -13,7 +13,9 @@ import types
 SESSION_SHA256 = '4f9ece685c857d6f0f596c290dd78cf04b237ca852539fb65be3e9df845bfc2c'
 # Versions whose session.py was checked byte-identical to that digest. Left
 # at 6.10.05 alone, 6.10.06 silently lost the deferral and the bounded retry.
-_VERIFIED_VERSIONS = ('6.10.05', '6.10.06')
+# 6.10.16 moved the same bytes to modules/session.py (imported as
+# modules.session); the hook passes that path and module name.
+_VERIFIED_VERSIONS = ('6.10.05', '6.10.06', '6.10.16', '6.10.17')
 _install_lock = threading.Lock()
 
 
@@ -90,8 +92,8 @@ class _Client:
 
 
 class _SessionModule(types.ModuleType):
-    def __init__(self, path, source):
-        super().__init__('session')
+    def __init__(self, path, source, name='session'):
+        super().__init__(name)
         self.__file__ = path
         self._source = source
         self.lock = threading.RLock()
@@ -148,10 +150,10 @@ def pov_version():
         return ''
 
 
-def install(path, version):
+def install(path, version, name='session'):
     """Only the verified upstream contract is deferred; other hosts pass through."""
     with _install_lock:
-        if version not in _VERIFIED_VERSIONS or 'session' in sys.modules:
+        if version not in _VERIFIED_VERSIONS or name in sys.modules:
             return False
         try:
             with open(path, 'rb') as handle:
@@ -161,5 +163,5 @@ def install(path, version):
                 return False
         except OSError:
             return False
-        sys.modules['session'] = _SessionModule(path, source)
+        sys.modules[name] = _SessionModule(path, source, name)
         return True

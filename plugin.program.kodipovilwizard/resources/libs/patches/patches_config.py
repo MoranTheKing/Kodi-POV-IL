@@ -5,26 +5,31 @@ PATCH_CONFIG = [
     {'id': 'pov_directory_clock', 'name': 'Directory entry latency clock',
      'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/entry.py', 'marker': '# WIZARD_POV_DIRECTORY_CLOCK_v1',
+     'target_alternatives': ['resources/lib/modules/entry.py'],
      'anchor': 'from threading import Thread', 'action': 'prepend_before',
      'hook': "import time as _povil_clock\n_povil_entry_started = _povil_clock.perf_counter()\n"},
     {'id': 'pov_directory_latency', 'name': 'Slow catalogue route measurements',
      'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/entry.py', 'marker': '# WIZARD_POV_DIRECTORY_LATENCY_v1',
+     'target_alternatives': ['resources/lib/modules/entry.py'],
      'anchor': 'class Router:', 'action': 'prepend_before',
      'hook': "import pov_directory_latency\npov_directory_latency.install(globals())\n"},
     {'id': 'pov_list_snapshot_early', 'name': 'Saved lists served before POV is imported',
      'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/router.py', 'marker': '# WIZARD_POV_SNAPSHOT_EARLY_v2',
+     'alternatives': [{'anchor': 'from modules.entry import Router'}],
      'anchor': "__import__('entry').Router()()", 'action': 'prepend_before',
      'hook': "import sys, xbmcvfs\n_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\nif _povil_p not in sys.path: sys.path.append(_povil_p)\ntry:\n\timport pov_list_snapshot\n\t_povil_served = pov_list_snapshot.serve_early(sys.argv)\nexcept Exception:\n\t_povil_served = False\nif _povil_served: raise SystemExit\n"},
     {'id': 'pov_play_guard', 'name': 'Queued taps do not start several episodes',
      'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/router.py', 'marker': '# WIZARD_POV_PLAY_GUARD_v2',
+     'alternatives': [{'anchor': 'from modules.entry import Router'}],
      'anchor': "__import__('entry').Router()()", 'action': 'prepend_before',
      'hook': "import sys, xbmcvfs\n_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\nif _povil_p not in sys.path: sys.path.append(_povil_p)\ntry:\n\timport pov_play_guard\n\t_povil_drop = pov_play_guard.duplicate(sys.argv)\nexcept Exception:\n\t_povil_drop = False\nif _povil_drop: raise SystemExit\n"},
     {'id': 'pov_play_guard_end', 'name': 'A finished play request ends its notice timer',
      'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/router.py', 'marker': '# WIZARD_POV_PLAY_GUARD_END_v1',
+     'alternatives': [{'anchor': '\tRouter()()'}],
      'anchor': "__import__('entry').Router()()", 'action': 'append_after',
      'hook': "try:\n\timport pov_play_guard\n\tpov_play_guard.request_over()\nexcept Exception:\n\tpass\n"},
     {'id': 'pov_linear_tv_history', 'name': 'Linear native TV history grouping',
@@ -61,10 +66,12 @@ PATCH_CONFIG = [
      'hook': "\t\t\tprofile_age_guard.stamp_item(item, meta)\n"},
     {'id': 'pov_profile_directory_guard', 'name': 'Child profile directory guard', 'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/entry.py', 'marker': '# WIZARD_POV_PROFILE_DIRECTORY_v1',
+     'target_alternatives': ['resources/lib/modules/entry.py'],
      'anchor': 'from modules import kodi_utils, settings', 'action': 'prepend_before',
      'hook': "import sys, xbmcvfs\n_povil_guards = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\nif _povil_guards not in sys.path: sys.path.append(_povil_guards)\nimport profile_age_guard\nprofile_age_guard.install_directory_guard()\n"},
     {'id': 'pov_profile_route_guard', 'name': 'Child profile account route guard', 'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/entry.py', 'marker': '# WIZARD_POV_PROFILE_ROUTE_v1',
+     'target_alternatives': ['resources/lib/modules/entry.py'],
      'anchor': "\tparams = kodi_utils.parsed_query(sys_obj.argv[2])", 'action': 'append_after',
      'hook': "\tif not profile_age_guard.route_allowed(params, 'pov'): return\n"},
     {'id': 'pov_profile_play_guard', 'name': 'Child profile playback guard', 'addon_id': 'plugin.video.pov', 'enabled': True,
@@ -686,6 +693,7 @@ PATCH_CONFIG = [
         "enabled": True,
         "target_file": "resources/lib/service.py",
         "marker": "# WIZARD_POV_DEBRID_STATUS_v2",
+        "alternatives": [{"anchor": "\tfrom modules.entry import SettingsMonitor"}],
         "anchor": "\t__import__('entry').SettingsMonitor()()",
         "action": "prepend_before",
         "hook": (
@@ -704,6 +712,7 @@ PATCH_CONFIG = [
         "enabled": True,
         "target_file": "resources/lib/service.py",
         "marker": "# WIZARD_POV_CUSTOM_DEBRID_TOASTS_v2",
+        "alternatives": [{"anchor": "\tfrom modules.entry import SettingsMonitor"}],
         "anchor": "\t__import__('entry').SettingsMonitor()()",
         "action": "prepend_before",
         "hook": (
@@ -1042,7 +1051,16 @@ PATCH_CONFIG = [
         "target_file": "resources/lib/indexers/tmdb_api.py",
         "marker": "# WIZARD_POV_SHARED_HTTP_TMDB_v2",
         "anchor": "from session import session, HTTPAdapter, Retry",
-        "alternatives": [{"anchor": "import requests", "superseded": True}],
+        "alternatives": [{"anchor": "import requests", "superseded": True},
+                         {"anchor": "from modules.session import session, HTTPAdapter, Retry",
+                          "hook": (
+                              "import sys, xbmcvfs, xbmcaddon\n"
+                              "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+                              "sys.path.append(p) if p not in sys.path else None\n"
+                              "import pov_http_session\n"
+                              "pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/modules/session.py'), "
+                              "getattr(pov_http_session, 'pov_version', str)(), 'modules.session')\n"
+                          )}],
         "action": "prepend_before",
         "hook": (
             "import sys, xbmcvfs, xbmcaddon\n"
@@ -1061,7 +1079,16 @@ PATCH_CONFIG = [
         "target_file": "resources/lib/indexers/trakt_api.py",
         "marker": "# WIZARD_POV_SHARED_HTTP_TRAKT_v2",
         "anchor": "from session import session, HTTPAdapter, Retry",
-        "alternatives": [{"anchor": "import requests", "superseded": True}],
+        "alternatives": [{"anchor": "import requests", "superseded": True},
+                         {"anchor": "from modules.session import session, HTTPAdapter, Retry",
+                          "hook": (
+                              "import sys, xbmcvfs, xbmcaddon\n"
+                              "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+                              "sys.path.append(p) if p not in sys.path else None\n"
+                              "import pov_http_session\n"
+                              "pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/modules/session.py'), "
+                              "getattr(pov_http_session, 'pov_version', str)(), 'modules.session')\n"
+                          )}],
         "action": "prepend_before",
         "hook": (
             "import sys, xbmcvfs, xbmcaddon\n"
@@ -1081,7 +1108,8 @@ PATCH_CONFIG = [
         "target_file": "resources/lib/indexers/tmdb_api.py",
         "marker": "# WIZARD_POV_HTTP_LAZY_TMDB_v3",
         "anchor": "import requests",
-        "alternatives": [{"anchor": "from session import session, HTTPAdapter, Retry", "superseded": True}],
+        "alternatives": [{"anchor": "from session import session, HTTPAdapter, Retry", "superseded": True},
+                         {"anchor": "from modules.session import session, HTTPAdapter, Retry", "superseded": True}],
         "action": "prepend_before",
         "hook": (
             "import sys, xbmcvfs\n"
@@ -1100,7 +1128,8 @@ PATCH_CONFIG = [
         "target_file": "resources/lib/indexers/trakt_api.py",
         "marker": "# WIZARD_POV_HTTP_LAZY_TRAKT_v3",
         "anchor": "import requests",
-        "alternatives": [{"anchor": "from session import session, HTTPAdapter, Retry", "superseded": True}],
+        "alternatives": [{"anchor": "from session import session, HTTPAdapter, Retry", "superseded": True},
+                         {"anchor": "from modules.session import session, HTTPAdapter, Retry", "superseded": True}],
         "action": "prepend_before",
         "hook": (
             "import sys, xbmcvfs\n"
@@ -1583,6 +1612,7 @@ PATCH_CONFIG = [
         "target_file": "resources/lib/caches/watched_cache.py",
         "marker": "# WIZARD_POV_WATCHED_LAZY_PROXY_v2",
         "anchor": "from indexers.trakt_api import trakt_watched_unwatched, trakt_progress, trakt_get_hidden_items, trakt_official_status",
+        "alternatives": [{"anchor": "from indexers.trakt_api import trakt_get_hidden_items, trakt_official_status, trakt_progress, trakt_watched_unwatched"}],
         "action": "append_after",
         "hook": (
             "import pov_watched_lazy_imports;\n"
@@ -1653,6 +1683,7 @@ PATCH_CONFIG.extend([
               "from pov_cache_read import loads\nreturn loads(data_str)\n")},
     {'id': 'pov_safe_invoker_check', 'name': 'Safe interpreter reconciliation', 'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/entry.py', 'marker': '# WIZARD_POV_SAFE_INVOKER_CHECK_v1',
+     'target_alternatives': ['resources/lib/modules/entry.py'],
      'anchor': "\tlogger('POV', 'ReuseLanguageInvokerCheck Service Starting')", 'action': 'prepend_before',
      'hook': ("\timport sys, xbmcvfs\n"
               "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
@@ -1686,6 +1717,7 @@ PATCH_CONFIG.extend([
      'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/entry.py',
      'marker': '# WIZARD_POV_CONTINUE_PREFETCH_v1',
+     'target_alternatives': ['resources/lib/modules/entry.py'],
      'anchor': '\t\tfor i in threads: i.start()', 'action': 'prepend_before',
      'hook': _continue_import + 'threads = (*threads, Thread(target=pov_continue_watching.service_prefetch, args=(self,)))\n'},
     {'id': 'pov_continuation_extra_sources', 'name': 'Apply exclusions to bookmarks and optional watchlists',
