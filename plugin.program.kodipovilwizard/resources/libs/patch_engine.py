@@ -372,13 +372,26 @@ class PatchEngine(object):
             except Exception:
                 is_enabled = entry.get('enabled', True)
 
+            addon_id = entry.get('addon_id') or DEFAULT_ADDON_ID
+            target_file = entry['target_file']
+            # A host can move a file between releases (POV 6.10.16 moved
+            # resources/lib/entry.py to resources/lib/modules/entry.py). The
+            # first candidate present on disk is the target; with none present
+            # the primary path is reported missing as before.
+            for candidate in [target_file] + list(entry.get('target_alternatives') or []):
+                try:
+                    if os.path.isfile(self._resolve_paths(addon_id, candidate)[1]):
+                        target_file = candidate
+                        break
+                except Exception:
+                    continue
             return {
                 'id': patch_id,
                 'name': entry.get('name', patch_id),
                 'description': entry.get('description', ''),
                 # Backward compat: pre-addon_id entries all targeted the main build addon.
-                'addon_id': entry.get('addon_id') or DEFAULT_ADDON_ID,
-                'target_file': entry['target_file'],
+                'addon_id': addon_id,
+                'target_file': target_file,
                 'marker': entry['marker'],
                 'anchor': entry['anchor'],
                 'action': action,
