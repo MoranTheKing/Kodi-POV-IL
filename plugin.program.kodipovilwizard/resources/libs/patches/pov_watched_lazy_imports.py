@@ -19,12 +19,38 @@ class DummyModule:
     def __call__(self, *args, **kwargs):
         return None
 
-def mock_modules():
+PROXY_MARKER = 'WIZARD_POV_WATCHED_LAZY_PROXY'
+
+
+def _proxy_present(caller_globals):
+    """True only when the calling file also carries the un-mock proxy hook.
+
+    Field (Oct 2026): POV 6.10.16 re-sorted watched_cache.py's imports, the
+    proxy hook lost its anchor while this mock hook kept its own, and the
+    dummies stayed in sys.modules for the whole interpreter: local_droplist()
+    returned None and every next-episode / in-progress list failed. Never
+    mock without the matching cleanup in the same file.
+    """
+    try:
+        path = caller_globals.get('__file__')
+        if not path:
+            return False
+        with open(path, 'r', encoding='utf-8', errors='ignore') as handle:
+            return PROXY_MARKER in handle.read()
+    except Exception:
+        return False
+
+
+def mock_modules(caller_globals=None):
     """
     Injects dummies into sys.modules BEFORE the upstream parser reaches the imports.
     This safely prevents disk reading and heavy CPU parsing on 32-bit platforms.
     """
     try:
+        if caller_globals is None:
+            caller_globals = sys._getframe(1).f_globals
+        if not _proxy_present(caller_globals):
+            return
         for mod in DUMMY_MODULES:
             if mod not in sys.modules:
                 sys.modules[mod] = DummyModule()
