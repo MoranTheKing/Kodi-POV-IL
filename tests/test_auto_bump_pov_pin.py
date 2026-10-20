@@ -128,5 +128,54 @@ class AutoBumpTests(unittest.TestCase):
             self.assertEqual(gen._pov_host_migration()['version'], '6.10.07')
 
 
+class RepublishTests(unittest.TestCase):
+    """Field (20 Oct 2026): POV 6.10.06 was replaced upstream under the same
+    version, one Wizard hook lost its anchor and fresh installs stopped."""
+
+    setUp = AutoBumpTests.setUp
+
+    def check(self, data, verifier=lambda root, archive: print('audit ok'), latest='6.10.06'):
+        return bump.republish_check(fetcher=lambda url: index(latest),
+                                    getter=lambda url: data, verifier=verifier)
+
+    def test_same_zip_is_quiet(self):
+        data = pov_zip('6.10.06')
+        self.pin.write_text(json.dumps(bump.pin_for('6.10.06', data, 'u')), 'utf-8')
+        self.assertEqual(self.check(data, verifier=mock.Mock(side_effect=AssertionError)),
+                         (0, 'same 6.10.06'))
+
+    def test_republished_zip_is_audited_and_the_pin_stays(self):
+        before = self.pin.read_bytes()
+        data = pov_zip('6.10.06', extra={'plugin.video.pov/new.py': 'y = 2'})
+        seen = []
+        code, line = self.check(data, verifier=lambda root, archive: (
+            seen.append(json.loads(self.pin.read_text('utf-8'))['sha256']), print('audit ok')))
+        sha = bump.hashlib.sha256(data).hexdigest()
+        self.assertEqual((code, line), (0, 'republished 6.10.06 %s fits: audit ok' % sha[:12]))
+        self.assertEqual(seen, [sha])                  # the audit ran on the new zip
+        self.assertEqual(self.pin.read_bytes(), before)  # and the pin is back
+
+    def test_republished_zip_that_breaks_a_patch_is_reported(self):
+        before = self.pin.read_bytes()
+        def broken(root, archive):
+            raise ValueError("Host patch audit failed: {'anchor_missing': 1}")
+        code, line = self.check(pov_zip('6.10.06'), verifier=broken)
+        self.assertEqual(code, 2)
+        self.assertIn('blocked: Host patch audit failed', line)
+        self.assertTrue(line.startswith('republished 6.10.06 '))
+        self.assertEqual(self.pin.read_bytes(), before)
+
+    def test_newer_version_is_left_to_the_pin_job(self):
+        self.assertEqual(self.check(b'', verifier=mock.Mock(side_effect=AssertionError),
+                                    latest='6.10.07'), (0, 'newer 6.10.07'))
+
+    def test_unreachable_zip_is_transient(self):
+        def down(url):
+            raise OSError('timeout')
+        code, line = bump.republish_check(fetcher=lambda url: index('6.10.06'), getter=down)
+        self.assertEqual(code, 3)
+        self.assertTrue(line.startswith('unavailable 6.10.06'))
+
+
 if __name__ == '__main__':
     unittest.main()
