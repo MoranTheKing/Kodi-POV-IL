@@ -31,6 +31,11 @@ could not be fetched or is not that POV -- usually transient).
 "python3 tools/auto_bump_pov_pin.py --republish-check" compares the official
 zip of the pinned version with the pin and audits a republished one (see
 republish_check).
+
+"--addon umbrella" before the other arguments does the same for Umbrella's
+pin (.github/umbrella-pin.json, read by the Wizard's version gate): Umbrella
+carries the kids-profile hooks and, like POV, follows its developer's
+repository.
 """
 
 import contextlib
@@ -45,11 +50,34 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+ADDON = 'plugin.video.pov'
 PIN = ROOT / '.github' / 'pov-host-migration.json'
 UPSTREAM = ROOT / 'UPSTREAM_VERSIONS.txt'
 REPO = 'MoranTheKing/Kodi-POV-IL'
 HOSTS = ('kodifitzwell', 'kodiyashimaru')
 MAX_BYTES = 25 * 1024 * 1024
+# pinned add-on -> (pin file, official zip URL for a filename; None = HOSTS)
+TARGETS = {
+    'plugin.video.pov': ('pov-host-migration.json', None),
+    'plugin.video.umbrella': (
+        'umbrella-pin.json',
+        'https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io'
+        '/master/omega/zips/plugin.video.umbrella/%s'),
+}
+
+
+def select(addon_id):
+    """Point the module at another pinned add-on (command line --addon)."""
+    global ADDON, PIN
+    ADDON = addon_id
+    PIN = ROOT / '.github' / TARGETS[addon_id][0]
+
+
+def official_urls(filename):
+    template = TARGETS[ADDON][1]
+    if template:
+        return [template % filename]
+    return ['https://%s.github.io/repo/%s/%s' % (host, ADDON, filename) for host in HOSTS]
 
 
 def _load(name, path):
@@ -71,30 +99,35 @@ def _get(url, limit=MAX_BYTES):
 def newest_pov(fetcher=None):
     checker = _load('check_upstream_addons', ROOT / 'tools' / 'check_upstream_addons.py')
     kwargs = {'fetcher': fetcher} if fetcher else {}
-    return checker.upstream_versions(**kwargs).get('plugin.video.pov'), checker.version_key
+    return checker.upstream_versions(**kwargs).get(ADDON), checker.version_key
 
 
 def official_zip(version, getter=_get):
-    """(bytes, upstream url) of the official zip, checked to be that POV."""
-    filename = 'plugin.video.pov-%s.zip' % version
+    """(bytes, upstream url) of the official zip, checked to be that add-on."""
+    filename = '%s-%s.zip' % (ADDON, version)
     errors = []
-    for host in HOSTS:
-        url = 'https://%s.github.io/repo/plugin.video.pov/%s' % (host, filename)
+    for url in official_urls(filename):
         try:
             data = getter(url)
             with zipfile.ZipFile(io.BytesIO(data)) as package:
                 if package.testzip() is not None:
                     raise ValueError('CRC error')
                 names = package.namelist()
-                if not names or any(not n.startswith('plugin.video.pov/') or '..' in n
+                if not names or any(not n.startswith(ADDON + '/') or '..' in n
                                     for n in names):
                     raise ValueError('unexpected member paths')
                 if sum(i.file_size for i in package.infolist()) > 8 * MAX_BYTES:
                     raise ValueError('unpacks too large')
-                head = package.read('plugin.video.pov/addon.xml').decode('utf-8', 'replace')
+                # The Wizard's staged installer refuses anything beyond these
+                # (staged_addon_install.install); never pin what it cannot install.
+                members = [i for i in package.infolist() if not i.is_dir()]
+                if (len(members) > 2000 or sum(i.file_size for i in members) > 30 * 1024 * 1024 or
+                        any(i.file_size > 16 * 1024 * 1024 for i in members)):
+                    raise ValueError('beyond the Wizard installer limits')
+                head = package.read(ADDON + '/addon.xml').decode('utf-8', 'replace')
             tag = re.search(r'<addon\b[^>]*>', head, re.S)
             attrs = dict(re.findall(r'\b(id|version)\s*=\s*"([^"]*)"', tag.group(0) if tag else ''))
-            if attrs.get('id') != 'plugin.video.pov' or attrs.get('version') != version:
+            if attrs.get('id') != ADDON or attrs.get('version') != version:
                 raise ValueError('addon.xml says %r' % attrs)
             return data, url
         except Exception as exc:
@@ -103,9 +136,9 @@ def official_zip(version, getter=_get):
 
 
 def pin_for(version, data, upstream_url):
-    filename = 'plugin.video.pov-%s.zip' % version
+    filename = '%s-%s.zip' % (ADDON, version)
     return {
-        'id': 'plugin.video.pov',
+        'id': ADDON,
         'version': version,
         'filename': filename,
         'zip': 'https://github.com/%s/releases/download/addons-latest/official-%s' % (REPO, filename),
@@ -123,11 +156,17 @@ def _write_text_keep_eol(path, text):
 
 def set_upstream_pov(text, version):
     lines = text.replace('\r\n', '\n').split('\n')
-    hits = [i for i, line in enumerate(lines) if line.startswith('plugin.video.pov:')]
+    hits = [i for i, line in enumerate(lines) if line.startswith(ADDON + ':')]
     if len(hits) != 1:
-        raise ValueError('UPSTREAM_VERSIONS.txt must name plugin.video.pov exactly once')
-    lines[hits[0]] = 'plugin.video.pov: %s' % version
+        raise ValueError('UPSTREAM_VERSIONS.txt must name %s exactly once' % ADDON)
+    lines[hits[0]] = '%s: %s' % (ADDON, version)
     return '\n'.join(lines)
+
+
+def _verifier():
+    verify = _load('verify_pov_patches', ROOT / '.github' / 'scripts' / 'verify_pov_patches.py').verify
+    pin_path = PIN.relative_to(ROOT).as_posix()
+    return lambda root, archive: verify(root, archive, pin_path)
 
 
 def pending(fetcher=None):
@@ -156,7 +195,7 @@ def run(outdir, fetcher=None, getter=_get, verifier=None):
     try:
         _write_text_keep_eol(PIN, json.dumps(candidate, indent=2) + '\n')
         if verifier is None:
-            verifier = _load('verify_pov_patches', ROOT / '.github' / 'scripts' / 'verify_pov_patches.py').verify
+            verifier = _verifier()
         # The verifier reports its counts on stdout; keep stdout to our one line.
         with contextlib.redirect_stdout(sys.stderr):
             verifier(ROOT, data)
@@ -205,7 +244,7 @@ def republish_check(fetcher=None, getter=_get, verifier=None):
     try:
         _write_text_keep_eol(PIN, json.dumps(pin_for(current, data, upstream_url), indent=2) + '\n')
         if verifier is None:
-            verifier = _load('verify_pov_patches', ROOT / '.github' / 'scripts' / 'verify_pov_patches.py').verify
+            verifier = _verifier()
         with contextlib.redirect_stdout(report):
             verifier(ROOT, data)
     except Exception as exc:
@@ -217,6 +256,9 @@ def republish_check(fetcher=None, getter=_get, verifier=None):
 
 
 if __name__ == '__main__':
+    if sys.argv[1:2] == ['--addon']:
+        select('plugin.video.' + sys.argv[2])
+        del sys.argv[1:3]
     if sys.argv[1:] == ['--republish-check']:
         code, line = republish_check()
         print(line)

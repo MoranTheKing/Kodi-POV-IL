@@ -17,33 +17,45 @@ def repair_changed(addons, previous, current, window, monitor):
                       ('failed', 'missing', 'anchor_missing', 'malformed', 'legacy_host_deferred'))
     umbrella_changed = current[1][1] is not None and old.get(current[1][0]) != current[1][1:]
     if umbrella_changed:
-        import uuid
-        ack = 'kodipovil.host_repair.' + uuid.uuid4().hex
-        script = os.path.join(addons, 'service.subtitles.kodipovilai', 'repair_hosts.py')
-        if not os.path.isfile(script):
-            healthy = False
-        else:
-            try:
-                xbmc.executebuiltin('RunScript({}, {})'.format(script, ack))
-                for _ in range(20):
-                    result = window.getProperty(ack)
-                    if result:
-                        healthy = healthy and json.loads(result).get('ok') is True
-                        break
-                    if monitor.waitForAbort(1):
-                        return False
-                else:
-                    healthy = False
-            except Exception:
-                healthy = False
-            finally:
-                window.clearProperty(ack)
+        repaired = repair_umbrella(addons, window, monitor)
+        if repaired is None:
+            return False
+        healthy = healthy and repaired
     if any(row[0] in ('skin.fentastic', 'script.fentastic.helper') and
            old.get(row[0]) != row[1:] for row in current):
         from resources.libs import fentastic_widgets
         fentastic_widgets.repair()
     xbmc.log('[POV IL] Host-update patch repair: {} acknowledged={}'.format(stats, healthy), xbmc.LOGINFO)
     return healthy
+
+def repair_umbrella(addons, window, monitor):
+    """Run MoranSubs' Umbrella patchers (its repair_hosts.py) and wait for
+    their answer. True when every one reports a good state, False when not or
+    no answer came within 20 s, None when Kodi is closing.
+
+    Also used by the Wizard's version gate right after it installs a verified
+    Umbrella: this watch takes its baseline after the start-up update check,
+    so it never sees that change, and MoranSubs patched the old tree at start."""
+    import xbmc
+    import uuid
+    ack = 'kodipovil.host_repair.' + uuid.uuid4().hex
+    script = os.path.join(addons, 'service.subtitles.kodipovilai', 'repair_hosts.py')
+    if not os.path.isfile(script):
+        return False
+    try:
+        xbmc.executebuiltin('RunScript({}, {})'.format(script, ack))
+        for _ in range(20):
+            result = window.getProperty(ack)
+            if result:
+                return json.loads(result).get('ok') is True
+            if monitor.waitForAbort(1):
+                return None
+        return False
+    except Exception:
+        return False
+    finally:
+        window.clearProperty(ack)
+
 
 def prebuild_lists():
     """Build one POV list ahead of its first visit while Kodi is idle (see
