@@ -24,6 +24,7 @@ on:
       - "skin.*/**"
       - "userdata/**"
       - ".github/pov-host-migration.json"
+      - ".github/umbrella-pin.json"
       - ".github/workflows/build-and-release.yml"
       - "tests/test_search_provider_skins.py"
   workflow_dispatch: {}
@@ -108,6 +109,9 @@ jobs:
       - name: Verify hooks against the pinned official POV before publishing
         run: python .github/scripts/verify_pov_patches.py
 
+      - name: Verify hooks against the pinned official Umbrella before publishing
+        run: python .github/scripts/verify_pov_patches.py "" .github/umbrella-pin.json
+
       - name: Detect changed addons
         id: detect
         run: |
@@ -146,11 +150,13 @@ jobs:
              [ ! -f manifest.json ]; then
             HOST_CHANGED=true
           elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null \
-               | grep -qFx '.github/pov-host-migration.json'; then
+               | grep -qFx -e '.github/pov-host-migration.json' -e '.github/umbrella-pin.json'; then
             HOST_CHANGED=true
           elif ! python -c 'import json,sys; m=json.load(open("manifest.json", encoding="utf-8")).get("pov_host_migration") or {}; p=json.load(open(".github/pov-host-migration.json", encoding="utf-8")); sys.exit(0 if (m.get("version"), m.get("sha256")) == (p["version"], p["sha256"]) else 1)'; then
             # The published manifest still carries an older pin (e.g. the run
             # that should have moved it failed): catch up on this run.
+            HOST_CHANGED=true
+          elif ! python -c 'import json,sys; m=json.load(open("manifest.json", encoding="utf-8")).get("umbrella_pin") or {}; p=json.load(open(".github/umbrella-pin.json", encoding="utf-8")); sys.exit(0 if (m.get("version"), m.get("sha256")) == (p["version"], p["sha256"]) else 1)'; then
             HOST_CHANGED=true
           fi
           echo "host=$HOST_CHANGED" >> "$GITHUB_OUTPUT"
@@ -243,6 +249,12 @@ jobs:
           if len(payload) != entry['size'] or hashlib.sha256(payload).hexdigest() != entry['sha256']:
               raise SystemExit('official POV migration package hash/size changed')
           print('Official POV migration package verified:', entry['version'])
+          entry = json.load(open('manifest.json', encoding='utf-8'))['umbrella_pin']
+          with urllib.request.urlopen(entry['zip'], timeout=60) as response:
+              payload = response.read(entry['size'] + 1)
+          if len(payload) != entry['size'] or hashlib.sha256(payload).hexdigest() != entry['sha256']:
+              raise SystemExit('official Umbrella package hash/size changed')
+          print('Official Umbrella package verified:', entry['version'])
           PY
 
       - name: Verify every manifest target exists on release

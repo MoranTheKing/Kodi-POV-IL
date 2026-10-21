@@ -27,6 +27,10 @@ jobs:
   # yet migrated (field log 16 Oct 2026). Move the pin -- only after the Wizard
   # patch engine is proven on the new official POV -- and publish it at once.
   #
+  # Umbrella (kids-profile hooks) has the same kind of pin since Wizard
+  # 0.4.69: the Wizard holds Kodi's auto-update for it and installs only the
+  # pinned version, so its pin moves here too, on the same proof.
+  #
   # Detection takes no lock: joining the release concurrency group on every
   # run would cancel a release that is waiting in it.
   pov-pin-detect:
@@ -36,9 +40,9 @@ jobs:
       contents: read
       actions: read
     outputs:
-      newer: ${{ steps.check.outputs.newer }}
+      targets: ${{ steps.check.outputs.targets }}
     steps:
-      - name: Is upstream POV newer than the migration pin?
+      - name: Is upstream POV or Umbrella newer than its pin?
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -52,24 +56,28 @@ jobs:
                    --json status --jq '[.[] | select(.status != "completed")] | length')
           if [ "$BUSY" != "0" ]; then
             echo "A release run is queued or running; not entering its group now."
-            echo "newer=false" >> "$GITHUB_OUTPUT"
+            echo "targets=[]" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git clone --depth 1 --filter=blob:none --sparse \
             "https://github.com/${REPO_SLUG}.git" repo
           cd repo
           git sparse-checkout set --no-cone /tools/auto_bump_pov_pin.py \
-            /tools/check_upstream_addons.py /.github/pov-host-migration.json
-          OUT=$(python3 tools/auto_bump_pov_pin.py --check)
-          echo "$OUT"
-          case "$OUT" in
-            newer*) echo "newer=true" >> "$GITHUB_OUTPUT" ;;
-            *) echo "newer=false" >> "$GITHUB_OUTPUT" ;;
-          esac
+            /tools/check_upstream_addons.py /.github/pov-host-migration.json \
+            /.github/umbrella-pin.json
+          TARGETS=""
+          for ADDON in pov umbrella; do
+            OUT=$(python3 tools/auto_bump_pov_pin.py --addon "$ADDON" --check) || OUT="error"
+            echo "$ADDON: $OUT"
+            case "$OUT" in
+              newer*) TARGETS="$TARGETS${TARGETS:+,}\"$ADDON\"" ;;
+            esac
+          done
+          echo "targets=[$TARGETS]" >> "$GITHUB_OUTPUT"
 
   pov-pin:
     needs: pov-pin-detect
-    if: needs.pov-pin-detect.outputs.newer == 'true'
+    if: needs.pov-pin-detect.outputs.targets != '[]' && needs.pov-pin-detect.outputs.targets != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -80,10 +88,11 @@ jobs:
       group: build-and-release
       cancel-in-progress: false
     steps:
-      - name: Move the clean-host POV pin when a newer POV fits our patches
+      - name: Move each pin whose newer upstream version fits our patches
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO_SLUG: ${{ github.repository }}
+          TARGETS: ${{ join(fromJSON(needs.pov-pin-detect.outputs.targets), ' ') }}
         run: |
           set -euo pipefail
           # A release that is still queued or running owns manifest.json and
@@ -94,69 +103,101 @@ jobs:
             echo "A release run is in progress; trying again on the next schedule."
             exit 0
           fi
-          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO_SLUG}.git" repo
-          cd repo
-          STATUS=0
-          OUT=$(python3 tools/auto_bump_pov_pin.py "$RUNNER_TEMP/pov-pin") || STATUS=$?
-          echo "$OUT"
-          case "$OUT" in
-            current*)
-              exit 0 ;;
-            unavailable*)
-              # Usually a repository that has not finished publishing; retry later.
-              exit 0 ;;
-            blocked*)
-              VER=${OUT#blocked }
-              VER=${VER%%:*}
-              TITLE="POV $VER: migration pin NOT moved (patches need attention)"
-              if gh issue list --repo "$REPO_SLUG" --state open --search "in:title \"$TITLE\"" \
-                   --json title --jq 'length' | grep -qv '^0$'; then
-                echo "Issue already open."
-              else
-                gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" --title "$TITLE" --body "$OUT
+          # One job for every pin: each job joining the release group on its
+          # own would cancel a release queued in between. Each add-on runs in
+          # its own subshell ("exit" ends only that add-on), on a fresh clone,
+          # so the second one builds on the first one's push.
+          FAILED=0
+          for ADDON in $TARGETS; do
+          set +e
+          (
+          set -euo pipefail
+            if [ "$ADDON" = "umbrella" ]; then
+              LABEL=Umbrella; PIN=.github/umbrella-pin.json
+            else
+              LABEL=POV; PIN=.github/pov-host-migration.json
+            fi
+            git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO_SLUG}.git" "repo-$ADDON"
+            cd "repo-$ADDON"
+            STATUS=0
+            OUT=$(python3 tools/auto_bump_pov_pin.py --addon "$ADDON" "$RUNNER_TEMP/pov-pin") || STATUS=$?
+            echo "$OUT"
+            case "$OUT" in
+              current*)
+                exit 0 ;;
+              unavailable*)
+                # Usually a repository that has not finished publishing; retry later.
+                exit 0 ;;
+              blocked*)
+                VER=${OUT#blocked }
+                VER=${VER%%:*}
+                if [ "$ADDON" = "umbrella" ]; then
+                  TITLE="Umbrella $VER: verified pin NOT moved (patches need attention)"
+                  WHY="Devices stay on the pinned Umbrella (the Wizard holds its auto-update) until the pin moves."
+                else
+                  TITLE="POV $VER: migration pin NOT moved (patches need attention)"
+                  WHY="Devices stay on the pinned POV (the Wizard holds its auto-update); a POV updated by hand blocks a legacy MoranSubs 0.2.x device's migration."
+                fi
+                if gh issue list --repo "$REPO_SLUG" --state open --search "in:title \"$TITLE\"" \
+                     --json title --jq 'length' | grep -qv '^0$'; then
+                  echo "Issue already open."
+                else
+                  gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" --title "$TITLE" --body "$OUT
 
-          Devices still on legacy MoranSubs 0.2.x cannot migrate once Kodi installs this POV. Fix the moved anchors in patches_config.py; the next run moves the pin by itself."
-              fi
-              exit 0 ;;
-            bumped*) ;;
-            *)
-              echo "unexpected output (exit $STATUS)" >&2
-              exit 1 ;;
-          esac
-          read -r _ OLD NEW ZIP <<< "$OUT"
-          NAME=$(basename "$ZIP")
-          # gen_manifest.py treats dist/<id>-<version>.zip as freshly built;
-          # the clone tracks old package zips there. Start empty, as the
-          # release workflow does: every module and the config carry over
-          # and only the pin moves.
-          rm -rf dist
-          mkdir dist
-          python3 .github/scripts/gen_manifest.py
-          mkdir -p "$RUNNER_TEMP/pov-verify"
-          if ! gh release view addons-latest --repo "$REPO_SLUG" --json assets -q '.assets[].name' \
-               | grep -Fxq "$NAME"; then
-            gh release upload addons-latest --repo "$REPO_SLUG" "$ZIP"
-          fi
-          gh release download addons-latest --repo "$REPO_SLUG" -p "$NAME" -D "$RUNNER_TEMP/pov-verify"
-          if ! cmp "$ZIP" "$RUNNER_TEMP/pov-verify/$NAME"; then
-            echo "addons-latest already holds a different $NAME (re-published upstream?)" >&2
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/pov-host-migration.json UPSTREAM_VERSIONS.txt manifest.json
-          git commit -m "chore(pov): move the clean-host migration pin to POV $NEW [skip ci]"
-          git push origin HEAD:main
-          gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" \
-            --title "POV $NEW: migration pin moved automatically ($OLD -> $NEW)" \
-            --body "$OUT
+            $WHY Fix the moved anchors in patches_config.py; the next run moves the pin by itself."
+                fi
+                exit 0 ;;
+              bumped*) ;;
+              *)
+                echo "unexpected output (exit $STATUS)" >&2
+                exit 1 ;;
+            esac
+            read -r _ OLD NEW ZIP <<< "$OUT"
+            NAME=$(basename "$ZIP")
+            # gen_manifest.py treats dist/<id>-<version>.zip as freshly built;
+            # the clone tracks old package zips there. Start empty, as the
+            # release workflow does: every module and the config carry over
+            # and only the pin moves.
+            rm -rf dist
+            mkdir dist
+            python3 .github/scripts/gen_manifest.py
+            mkdir -p "$RUNNER_TEMP/pov-verify"
+            if ! gh release view addons-latest --repo "$REPO_SLUG" --json assets -q '.assets[].name' \
+                 | grep -Fxq "$NAME"; then
+              gh release upload addons-latest --repo "$REPO_SLUG" "$ZIP"
+            fi
+            gh release download addons-latest --repo "$REPO_SLUG" -p "$NAME" -D "$RUNNER_TEMP/pov-verify"
+            if ! cmp "$ZIP" "$RUNNER_TEMP/pov-verify/$NAME"; then
+              echo "addons-latest already holds a different $NAME (re-published upstream?)" >&2
+              exit 1
+            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add "$PIN" UPSTREAM_VERSIONS.txt manifest.json
+            git commit -m "chore($ADDON): move the verified $LABEL pin to $NEW [skip ci]"
+            git push origin HEAD:main
+            if [ "$ADDON" = "umbrella" ]; then
+              TODO="- the MoranSubs Umbrella patchers (service.subtitles.kodipovilai/resources/lib/umbrella_*_patcher.py);
+            - real Kodi QA on the new Umbrella (kids profiles, Hebrew UI, sources)."
+            else
+              TODO="- the MoranSubs POV host patchers (service.subtitles.kodipovilai/resources/lib/pov_*_patcher.py and others that edit POV);
+            - runtime version gates such as pov_http_session._VERIFIED_VERSIONS (an unlisted POV silently runs without the deferred HTTP clients);
+            - real Kodi QA on the new POV."
+            fi
+            gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" \
+              --title "$LABEL $NEW: verified pin moved automatically ($OLD -> $NEW)" \
+              --body "$OUT
 
-          Verified automatically: the official zip is POV $NEW, and every enabled Wizard patch applies to it (nothing missing, idempotent). Legacy devices on POV $NEW can migrate again.
+            Verified automatically: the official zip is $LABEL $NEW, and every enabled Wizard patch applies to it (nothing missing, idempotent). The Wizard installs $LABEL $NEW on devices at their next update check.
 
-          NOT verified -- still to do by hand:
-          - the MoranSubs POV host patchers (service.subtitles.kodipovilai/resources/lib/pov_*_patcher.py and others that edit POV);
-          - runtime version gates such as pov_http_session._VERIFIED_VERSIONS (an unlisted POV silently runs without the deferred HTTP clients);
-          - real Kodi QA on the new POV."
+            NOT verified -- still to do by hand:
+            $TODO"
+          )
+          RC=$?
+          set -e
+          [ "$RC" = "0" ] || FAILED=1
+          done
+          exit $FAILED
 
   check:
     needs: pov-pin
@@ -203,11 +244,16 @@ jobs:
     permissions:
       contents: read
       issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        addon: [pov, umbrella]
     steps:
-      - name: Audit a POV republished under the pinned version
+      - name: Audit a ${{ matrix.addon }} zip republished under the pinned version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO_SLUG: ${{ github.repository }}
+          ADDON: ${{ matrix.addon }}
         run: |
           set -euo pipefail
           # Sparse: the tracked tree is ~18 GB (dist/ zips); the audit needs
@@ -217,10 +263,11 @@ jobs:
           cd repo
           git sparse-checkout set --no-cone /tools/auto_bump_pov_pin.py \
             /tools/check_upstream_addons.py /.github/pov-host-migration.json \
+            /.github/umbrella-pin.json \
             /.github/scripts/verify_pov_patches.py /plugin.program.kodipovilwizard/ \
             || { echo "checkout failed; retry later"; exit 0; }
           STATUS=0
-          OUT=$(python3 tools/auto_bump_pov_pin.py --republish-check) || STATUS=$?
+          OUT=$(python3 tools/auto_bump_pov_pin.py --addon "$ADDON" --republish-check) || STATUS=$?
           echo "$OUT"
           case "$OUT" in
             republished*) ;;
@@ -228,20 +275,29 @@ jobs:
           esac
           VER=$(printf '%s' "$OUT" | cut -d' ' -f2)
           SHA=$(printf '%s' "$OUT" | cut -d' ' -f3)
-          TITLE="POV $VER republished upstream (zip $SHA)"
+          if [ "$ADDON" = "umbrella" ]; then LABEL=Umbrella; else LABEL=POV; fi
+          TITLE="$LABEL $VER republished upstream (zip $SHA)"
           # Closed issues count too: one issue per republished zip, ever.
           if gh issue list --repo "$REPO_SLUG" --state all --search "in:title \"$TITLE\"" \
                --json title --jq 'length' | grep -qv '^0$'; then
             echo "Issue \"$TITLE\" already exists; skipping."
             exit 0
           fi
-          if [ "$STATUS" = "0" ]; then
+          if [ "$ADDON" = "umbrella" ]; then
+            # Devices install the mirrored copy the pin names, never this zip;
+            # only a new pin (or a hand install) would bring it.
+            if [ "$STATUS" = "0" ]; then
+              VERDICT="Every enabled Wizard patch applies to the new zip (audit below). Devices keep the mirrored, verified copy; still check the MoranSubs Umbrella patchers before the next pin."
+            else
+              VERDICT="A Wizard patch does NOT fit the new zip. Devices keep the mirrored, verified copy; fix the anchor (an \"alternatives\" entry in patches_config.py) before the next pin."
+            fi
+          elif [ "$STATUS" = "0" ]; then
             VERDICT="Every enabled Wizard patch applies to the new zip (audit below). Fresh installs are fine; still check the MoranSubs POV host patchers and test in Kodi."
           else
             VERDICT="A Wizard patch does NOT fit the new zip: fresh installs will stop with \"Fresh source patches are incomplete\". Fix the anchor (an \"alternatives\" entry in patches_config.py) and release the Wizard."
           fi
           BODY=$(printf '%s\n\n%s\n\n%s' \
-            "The official plugin.video.pov $VER zip changed without a version bump (sha256 $SHA..., the migration pin still names the original)." \
+            "The official plugin.video.$ADDON $VER zip changed without a version bump (sha256 $SHA..., the pin still names the original)." \
             "$VERDICT" \
             "$OUT")
           gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" --title "$TITLE" --body "$BODY"

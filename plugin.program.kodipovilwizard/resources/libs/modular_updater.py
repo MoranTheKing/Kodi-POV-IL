@@ -147,8 +147,9 @@ class ModularUpdater:
         # this very run (a fresh installation) is what put POV on disk.
         try:
             self._pov_was_installed = self._on_disk('plugin.video.pov')
+            self._umbrella_was_installed = self._on_disk('plugin.video.umbrella')
         except Exception:
-            self._pov_was_installed = True
+            self._pov_was_installed = self._umbrella_was_installed = True
 
         # A previously prepared clean POV tree can be completed offline. The
         # legacy subtitle service has had a full intervening Kodi process to
@@ -340,26 +341,30 @@ class ModularUpdater:
         return success
 
     def _sync_verified_pov(self, manifest, queue=()):
-        """Hold POV's auto-update and move it to the verified pin."""
-        try:
-            from resources.libs import pov_version_gate, db
-            db_path = os.path.join(CONFIG.DATABASE, db.latest_db('Addons') or '')
-            # A Wizard update in this run means the hooks in memory are the
-            # old ones; a new pin may need the new ones. Next start installs.
-            wizard_updating = any((mod or {}).get('id') == CONFIG.ADDON_ID for mod in queue)
-            first_pov = (getattr(self, 'fresh', False) and
-                         not getattr(self, '_pov_was_installed', True))
-            result = pov_version_gate.sync(
-                self, manifest, first_pov, CONFIG,
-                lambda msg: logging.log(msg, level=xbmc.LOGINFO), db_path,
-                install_allowed=not wizard_updating)
-            logging.log('[ModularUpdater] POV version gate: {0}'.format(result),
-                        level=xbmc.LOGINFO)
-            return result
-        except Exception as exc:
-            logging.log('[ModularUpdater] POV version gate skipped: {0}'.format(exc),
-                        level=xbmc.LOGWARNING)
-            return 'failed'
+        """Hold POV's and Umbrella's auto-update; move each to its verified pin."""
+        results = {}
+        for addon_id, was_installed in (('plugin.video.pov', '_pov_was_installed'),
+                                        ('plugin.video.umbrella', '_umbrella_was_installed')):
+            try:
+                from resources.libs import pov_version_gate, db
+                db_path = os.path.join(CONFIG.DATABASE, db.latest_db('Addons') or '')
+                # A Wizard update in this run means the hooks in memory are the
+                # old ones; a new pin may need the new ones. Next start installs.
+                wizard_updating = any((mod or {}).get('id') == CONFIG.ADDON_ID for mod in queue)
+                first_copy = (getattr(self, 'fresh', False) and
+                              not getattr(self, was_installed, True))
+                result = pov_version_gate.sync(
+                    self, manifest, first_copy, CONFIG,
+                    lambda msg: logging.log(msg, level=xbmc.LOGINFO), db_path,
+                    install_allowed=not wizard_updating, addon_id=addon_id)
+                logging.log('[ModularUpdater] {0} version gate: {1}'.format(addon_id, result),
+                            level=xbmc.LOGINFO)
+            except Exception as exc:
+                logging.log('[ModularUpdater] {0} version gate skipped: {1}'.format(addon_id, exc),
+                            level=xbmc.LOGWARNING)
+                result = 'failed'
+            results[addon_id] = result
+        return results
 
     def _record_build_identity(self, manifest):
         """An OTA completion updates the build label too; never certify a failure."""
