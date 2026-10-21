@@ -1,4 +1,4 @@
-"""Defer POV 6.10.05/6.10.06's shared HTTP clients until a client is actually used.
+"""Defer POV's shared HTTP clients until a client is actually used.
 
 Cached directories need adapters configured at import time, but no network
 client. Replay those mounts into the unmodified upstream session, including
@@ -10,12 +10,18 @@ import sys
 import threading
 import types
 
-SESSION_SHA256 = '4f9ece685c857d6f0f596c290dd78cf04b237ca852539fb65be3e9df845bfc2c'
-# Versions whose session.py was checked byte-identical to that digest. Left
-# at 6.10.05 alone, 6.10.06 silently lost the deferral and the bounded retry.
+# The digest pins the module side of the contract: everything the proxy
+# assumes (session, http, HTTPAdapter, Retry, retry, http.connection_pool_kw,
+# TimeoutSession) is defined in this one file, executed from these same
+# bytes; any byte change falls back to stock POV. The caller side -- POV's
+# other files using session/http only as `X.attr`, HTTPAdapter(...) only in
+# session.mount(...), Retry(...) only inside HTTPAdapter(...) -- is checked
+# on every official POV before its pin moves (.github/scripts/
+# verify_pov_patches.audit_session_callers). The hand-kept POV version list
+# this replaced cost a Wizard update per POV release (6.10.17-6.10.19).
 # 6.10.16 moved the same bytes to modules/session.py (imported as
 # modules.session); the hook passes that path and module name.
-_VERIFIED_VERSIONS = ('6.10.05', '6.10.06', '6.10.16', '6.10.17', '6.10.18', '6.10.19')
+SESSION_SHA256 = '4f9ece685c857d6f0f596c290dd78cf04b237ca852539fb65be3e9df845bfc2c'
 _install_lock = threading.Lock()
 
 
@@ -142,18 +148,21 @@ class _SessionModule(types.ModuleType):
 
 
 def pov_version():
-    """POV's version, or '' while Kodi has it unregistered (mid-update)."""
-    try:
-        import xbmcaddon
-        return xbmcaddon.Addon('plugin.video.pov').getAddonInfo('version')
-    except Exception:
-        return ''
+    """Kept for the hooks already in POV's files, which pass it to install().
+
+    install() ignores the version, so this no longer asks Kodi (it ran twice
+    per POV invocation, once per hooked indexer).
+    """
+    return ''
 
 
-def install(path, version, name='session'):
-    """Only the verified upstream contract is deferred; other hosts pass through."""
+def install(path, version='', name='session'):
+    """Only the verified upstream contract is deferred; other hosts pass through.
+
+    `version` is ignored: hooks already in POV's files still pass it.
+    """
     with _install_lock:
-        if version not in _VERIFIED_VERSIONS or name in sys.modules:
+        if name in sys.modules:
             return False
         try:
             with open(path, 'rb') as handle:
