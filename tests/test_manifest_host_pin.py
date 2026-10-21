@@ -35,7 +35,12 @@ class ManifestHostPinTests(unittest.TestCase):
     def test_official_pin_is_emitted_and_bad_hash_is_rejected(self):
         official = generator._pov_host_migration()
         self.assertEqual(official['id'], 'plugin.video.pov')
-        self.assertEqual(official['version'], '6.10.06')
+        # The pin moves by itself (tools/auto_bump_pov_pin.py); a literal here
+        # failed the release the first time it did (6.10.06 -> 6.10.18).  The
+        # generator must emit exactly what the pin file says.
+        pin_file = json.loads((ROOT / '.github/pov-host-migration.json').read_text('utf-8'))
+        self.assertEqual(official['version'], pin_file['version'])
+        self.assertEqual(official['sha256'], pin_file['sha256'])
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / 'manifest.json'
             # This unit test checks pin propagation, independent of whether
