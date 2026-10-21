@@ -77,6 +77,29 @@ class EngineFollowsMovedFile(unittest.TestCase):
 
 
 class SharedSessionUnderModulesPackage(unittest.TestCase):
+    def test_6_10_19_keeps_the_deferral(self):
+        # 6.10.19 (pin moved by the release automation, 21 Oct 2026) ships the
+        # same modules/session.py, now inside a regular package (__init__.py).
+        lazy = load('lazy_6_10_19', PATCHES / 'pov_http_session.py')
+        saved = {k: sys.modules.pop(k, None) for k in ('modules', 'modules.session', '_povil_native_session')}
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                pkg = Path(tmp) / 'modules'
+                pkg.mkdir()
+                (pkg / '__init__.py').write_text('', encoding='utf-8')
+                sys.path.insert(0, tmp)
+                try:
+                    self.assertTrue(lazy.install(str(FIXTURE), '6.10.19', 'modules.session'))
+                    from modules.session import session  # noqa: F401
+                    self.assertIs(sys.modules['modules.session']._native, None)
+                finally:
+                    sys.path.remove(tmp)
+        finally:
+            for key, value in saved.items():
+                sys.modules.pop(key, None)
+                if value is not None:
+                    sys.modules[key] = value
+
     def test_6_10_16_defers_modules_session(self):
         lazy = load('lazy_6_10_16', PATCHES / 'pov_http_session.py')
         saved = {k: sys.modules.pop(k, None) for k in ('modules', 'modules.session', '_povil_native_session')}
