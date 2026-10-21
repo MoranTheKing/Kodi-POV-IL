@@ -144,7 +144,7 @@ jobs:
                 else
                   gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" --title "$TITLE" --body "$OUT
 
-            $WHY Fix the moved anchors in patches_config.py; the next run moves the pin by itself."
+            $WHY Fix the moved anchors in patches_config.py -- or, when the reason names the shared-HTTP proxy, adapt pov_http_session.py or the caller audit in .github/scripts/verify_pov_patches.py; the next run moves the pin by itself."
                 fi
                 exit 0 ;;
               bumped*) ;;
@@ -181,14 +181,13 @@ jobs:
             - real Kodi QA on the new Umbrella (kids profiles, Hebrew UI, sources)."
             else
               TODO="- the MoranSubs POV host patchers (service.subtitles.kodipovilai/resources/lib/pov_*_patcher.py and others that edit POV);
-            - runtime version gates such as pov_http_session._VERIFIED_VERSIONS (an unlisted POV silently runs without the deferred HTTP clients);
             - real Kodi QA on the new POV."
             fi
             gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" \
               --title "$LABEL $NEW: verified pin moved automatically ($OLD -> $NEW)" \
               --body "$OUT
 
-            Verified automatically: the official zip is $LABEL $NEW, and every enabled Wizard patch applies to it (nothing missing, idempotent). The Wizard installs $LABEL $NEW on devices at their next update check.
+            Verified automatically: the official zip is $LABEL $NEW, and every enabled Wizard patch applies to it (nothing missing, idempotent); for POV also that its files use the session module only in the shapes the Wizard's shared-HTTP proxy imitates. The Wizard installs $LABEL $NEW on devices at their next update check.
 
             NOT verified -- still to do by hand:
             $TODO"
