@@ -40,6 +40,19 @@ except Exception:
 
 OFFICIAL = 'repository.xbmc.org'
 
+# Add-ons the build ships together with their developer's own repository
+# (the Umbrella pack carries repository.umbrella and repository.cocoscrapers
+# precisely so the developers are the update channel). Such an add-on is
+# registered to that repository even when another repository also lists it.
+# Field (Oct 2026): CocoScrapers is also listed by the long-dead
+# repository.KodiRealDebridIsrael, the "one repository" rule saw two, and
+# every device stayed on the pack's 1.0.39 while the developer published
+# 1.0.43 (the Magneto changes Umbrella's developer moved into it).
+DEVELOPER_REPOSITORY = {
+    'script.module.cocoscrapers': 'repository.cocoscrapers',
+    'plugin.video.umbrella': 'repository.umbrella',
+}
+
 # What the manifest ships, for a boot where the manifest could not be read.
 BUILD_OWNED = frozenset((
     'plugin.program.autocompletion',
@@ -75,6 +88,10 @@ def plan(conn, owned=()):
             continue
         repos = offers.get(addon_id) or set()
         if not repos or OFFICIAL in repos:
+            continue
+        own = DEVELOPER_REPOSITORY.get(addon_id)
+        if own and own in repos and own in enabled_repos:
+            out.append((addon_id, own))
             continue
         live = repos & enabled_repos
         if len(repos) == 1 and len(live) == 1:
