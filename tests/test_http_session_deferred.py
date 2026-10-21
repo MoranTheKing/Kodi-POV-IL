@@ -96,9 +96,15 @@ assert sys.modules['session']._native is None
         self.assertTrue(lazy.install(str(FIXTURE),'6.10.06'))
         sys.modules.pop('session',None)
 
-    def test_unknown_versions_content_and_existing_modules_are_preserved(self):
-        self.assertFalse(lazy.install(str(FIXTURE),'6.10.99'))
-        self.assertNotIn('session',sys.modules)
+    def test_identical_content_defers_under_any_version(self):
+        # The digest pins every name the proxy relies on; an unlisted version
+        # (or '' while Kodi has POV unregistered mid-update) no longer loses it.
+        for version in ('6.10.99',''):
+            self.assertTrue(lazy.install(str(FIXTURE),version))
+            sys.modules.pop('session',None)
+        self.assertTrue(lazy.install(str(FIXTURE)))
+
+    def test_unknown_content_and_existing_modules_are_preserved(self):
         with tempfile.TemporaryDirectory() as raw:
             path=Path(raw)/'session.py';path.write_text('unrecognized source')
             self.assertFalse(lazy.install(str(path),'6.10.05'))
