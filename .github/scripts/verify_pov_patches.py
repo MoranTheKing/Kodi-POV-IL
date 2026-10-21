@@ -13,13 +13,17 @@ import zipfile
 from pathlib import Path
 
 
-def verify(root, archive=None):
-    pin = json.loads((root / '.github/pov-host-migration.json').read_text('utf-8'))
+def verify(root, archive=None, pin_path='.github/pov-host-migration.json'):
+    """Every enabled Wizard patch for the pinned add-on applies, idempotently.
+
+    pin_path names the pin file: the POV host pin by default, or
+    .github/umbrella-pin.json for Umbrella."""
+    pin = json.loads((root / pin_path).read_text('utf-8'))
     if archive is None:
         with urllib.request.urlopen(pin['zip'], timeout=30) as response:
             archive = response.read(pin['size'] + 1)
     if len(archive) != pin['size'] or hashlib.sha256(archive).hexdigest() != pin['sha256']:
-        raise ValueError('Official POV package size/hash does not match the pin')
+        raise ValueError('Official %s package size/hash does not match the pin' % pin['id'])
     wizard = root / 'plugin.program.kodipovilwizard'
     config = runpy.run_path(str(wizard / 'resources/libs/patches/patches_config.py'))['PATCH_CONFIG']
     config = [entry for entry in config if entry.get('addon_id') == pin['id']]
@@ -37,7 +41,7 @@ def verify(root, archive=None):
         target = Path(temp)
         with zipfile.ZipFile(io.BytesIO(archive)) as package:
             if package.testzip():
-                raise ValueError('Official POV package failed CRC')
+                raise ValueError('Official %s package failed CRC' % pin['id'])
             for name in package.namelist():
                 if not name.startswith(pin['id'] + '/') or not (target / name).resolve().is_relative_to(target):
                     raise ValueError('Unexpected package path')
@@ -65,8 +69,11 @@ def verify(root, archive=None):
             raise ValueError('Host patches are not idempotent')
         for source in host.rglob('*.py'):
             ast.parse(source.read_text('utf-8-sig'), filename=str(source.relative_to(host)))
-        print('Official POV', pin['version'], 'verified:', first, 'repeat:', second)
+        print('Official', pin['id'], pin['version'], 'verified:', first, 'repeat:', second)
 
 
 if __name__ == '__main__':
-    verify(Path(__file__).resolve().parents[2], Path(sys.argv[1]).read_bytes() if len(sys.argv) > 1 else None)
+    # verify_pov_patches.py [ZIP] [PIN]: the POV host pin unless PIN is given
+    args = sys.argv[1:]
+    verify(Path(__file__).resolve().parents[2], Path(args[0]).read_bytes() if args and args[0] else None,
+           *(args[1:2]))
