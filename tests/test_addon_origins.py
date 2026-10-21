@@ -127,6 +127,42 @@ class AddonOriginTests(unittest.TestCase):
         self.assertEqual(got['repository.otaku'], '')
         self.assertEqual(origins.repair(self.db), [])
 
+    def test_shipped_addons_follow_their_developers_repository(self):
+        # Field (Oct 2026): CocoScrapers is also listed by the dead
+        # repository.KodiRealDebridIsrael; "two repositories" kept its origin
+        # empty and every device stayed on the pack's 1.0.39.
+        for dead_enabled in (0, 1):
+            with self.subTest(dead_enabled=dead_enabled):
+                db = os.path.join(self.dir, 'coco%d.db' % dead_enabled)
+                _make_db(db, installed=[
+                    ('script.module.cocoscrapers', 1, ''),
+                    ('plugin.video.umbrella', 1, ''),
+                    ('repository.cocoscrapers', 1, ''),
+                    ('repository.umbrella', 1, ''),
+                    ('repository.KodiRealDebridIsrael', dead_enabled, ''),
+                ], offers={
+                    'repository.cocoscrapers': [('script.module.cocoscrapers', '1.0.43')],
+                    'repository.umbrella': [('plugin.video.umbrella', '6.7.93')],
+                    'repository.KodiRealDebridIsrael': [('script.module.cocoscrapers', '1.0.32'),
+                                                        ('plugin.video.umbrella', '6.0.0')],
+                })
+                self.assertEqual(sorted(origins.repair(db)), [
+                    ('plugin.video.umbrella', 'repository.umbrella'),
+                    ('script.module.cocoscrapers', 'repository.cocoscrapers')])
+
+    def test_developer_repository_must_be_enabled_and_offer_it(self):
+        db = os.path.join(self.dir, 'coco_off.db')
+        _make_db(db, installed=[
+            ('script.module.cocoscrapers', 1, ''),
+            ('repository.cocoscrapers', 0, ''),
+            ('repository.KodiRealDebridIsrael', 1, ''),
+        ], offers={
+            'repository.cocoscrapers': [('script.module.cocoscrapers', '1.0.43')],
+            'repository.KodiRealDebridIsrael': [('script.module.cocoscrapers', '1.0.32')],
+        })
+        # the developer's repository is off: still ambiguous, left alone
+        self.assertEqual(origins.repair(db), [])
+
     def test_manifest_addons_are_never_registered(self):
         done = origins.repair(self.db, owned=('plugin.video.pov',))
         self.assertNotIn('plugin.video.pov', dict(done))
