@@ -39,6 +39,7 @@ MANIFEST_OUT = os.environ.get("MANIFEST_OUT", os.path.join(REPO_ROOT, "manifest.
 DIST_DIR = os.path.join(REPO_ROOT, "dist")
 MANIFEST_VERSION = 1
 POV_HOST_MIGRATION = os.path.join(REPO_ROOT, '.github', 'pov-host-migration.json')
+UMBRELLA_PIN = os.path.join(REPO_ROOT, '.github', 'umbrella-pin.json')
 
 
 def _now_iso() -> str:
@@ -130,6 +131,27 @@ def _pov_host_migration() -> dict:
     return entry
 
 
+def _umbrella_pin() -> dict:
+    """The Umbrella version the Wizard's hooks were verified on (Wizard gate)."""
+    with open(UMBRELLA_PIN, 'r', encoding='utf-8') as source:
+        entry = json.load(source)
+    addon_id = 'plugin.video.umbrella'
+    expected = ('id', 'version', 'filename', 'zip', 'size', 'sha256', 'upstream_zip')
+    filename = '{}-{}.zip'.format(addon_id, entry.get('version'))
+    upstream = ('https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io'
+                '/master/omega/zips/{}/'.format(addon_id) + filename)
+    mirror = ('https://github.com/' + REPO + '/releases/download/addons-latest/official-'
+              + filename)
+    if (set(entry) != set(expected) or entry['id'] != addon_id or
+            not re.fullmatch(r'[0-9]+(?:\.[0-9]+)+', str(entry['version'])) or
+            entry['filename'] != filename or entry['zip'] != mirror or
+            entry['upstream_zip'] != upstream or
+            not isinstance(entry['size'], int) or not 0 < entry['size'] <= 25 * 1024 * 1024 or
+            not re.fullmatch(r'[0-9a-f]{64}', str(entry['sha256']))):
+        raise ValueError('invalid pinned official Umbrella package')
+    return entry
+
+
 def main() -> int:
     addons = discover_addons()
     previous = _load_previous()
@@ -202,6 +224,7 @@ def main() -> int:
             f"https://raw.githubusercontent.com/{REPO}/main/manifest.json"
         ),
         "pov_host_migration": _pov_host_migration(),
+        "umbrella_pin": _umbrella_pin(),
         "config": _config_entry(now),
         "addons": entries,
     }
