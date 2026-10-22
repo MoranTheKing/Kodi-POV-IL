@@ -240,5 +240,208 @@ class MoranSubsRepairScript(unittest.TestCase):
         self.assertGreaterEqual(len(waits), 8)              # >= 30 s of quiet after the last play
 
 
+class AF3EstuaryRestore(unittest.TestCase):
+    """Kodi can drop a profile to Estuary while it installs an AF3 update
+    (QA, 22 Oct 2026). The watch puts it back -- once, through the Wizard's
+    guarded Switch Skin, and never over a deliberate Estuary choice."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.addons = self.root / 'addons'
+        self.profile = self.root / 'profile'
+        self.skins = []
+        self.skin = AF3
+        self.xbmc = types.SimpleNamespace(LOGINFO=1, LOGWARNING=2, log=Mock(), executebuiltin=Mock(),
+                                          getSkinDir=lambda: self.skins.pop(0) if self.skins else self.skin)
+        vfs = types.SimpleNamespace(translatePath=lambda p: str(self.profile / p.split('special://profile/')[1])
+                                    if p.startswith('special://profile/') else str(self.addons) + '/')
+        mods = patch.dict(sys.modules, {'xbmc': self.xbmc, 'xbmcvfs': vfs})
+        mods.start()
+        self.addCleanup(mods.stop)
+        self.watch = load('af3_restore_watch', LIBS / 'host_patch_watch.py')
+        write(self.addons / AF3 / 'addon.xml', '<addon/>')
+        write(self.addons / AF3 / '1080i' / 'Font.xml', 'NotoSans-Regular.ttf')
+        def switch(target):
+            if self.switch_ok:
+                self.skin = target
+            return self.switch_ok
+        self.switch_ok = True
+        self.switch = Mock(side_effect=switch)
+        self.build_skin = types.SimpleNamespace(switch=self.switch)
+
+    def restore(self, previous, row=(AF3, 1, 1)):
+        with patch.dict(sys.modules, {'resources.libs': types.SimpleNamespace(build_skin=self.build_skin)}):
+            return self.watch.restore_af3(previous, row)
+
+    def test_back_to_af3_once_per_update_through_switch(self):
+        self.skin = 'skin.estuary'
+        self.assertTrue(self.restore(AF3))
+        self.switch.assert_called_once_with(AF3)
+        self.skin = 'skin.estuary'
+        self.assertIsNone(self.restore(AF3))                 # same update: never again
+        self.switch_ok = False
+        self.assertFalse(self.restore(AF3, (AF3, 2, 1)))    # a later update gets one try
+        self.assertEqual(self.switch.call_count, 2)
+
+    def test_nothing_to_do(self):
+        self.skin = 'skin.estuary'
+        self.assertIsNone(self.restore('skin.estuary'))      # the user's own choice
+        self.skin = AF3
+        self.assertIsNone(self.restore(AF3))                 # no fallback happened
+        self.switch.assert_not_called()
+
+    def test_one_evaluation_per_update_even_when_still_on_af3(self):
+        # first look: still on AF3 (no fallback); a retry of the same repair
+        # after the user picked Estuary must not "restore" over that choice
+        self.assertIsNone(self.restore(AF3, (AF3, 7, 1)))
+        self.skin = 'skin.estuary'
+        self.assertIsNone(self.restore(AF3, (AF3, 7, 1)))
+        self.switch.assert_not_called()
+
+    def test_waits_for_moransubs_start_up_and_30_quiet_seconds(self):
+        self.skin = 'skin.estuary'
+        self.watch.remember_skin(AF3)
+        props, waits, media = {}, [], [True, True, False, True]
+        window = types.SimpleNamespace(getProperty=lambda k: props.get(k, ''))
+
+        def wait(seconds):
+            waits.append(seconds)
+            if len(waits) == 5:                              # MoranSubs finishes its pass
+                props['kodipovil_startup_repairs_done'] = '0.3.44'
+            self.assertFalse(self.switch.called)             # nothing before both waits end
+            return False
+        self.xbmc.getCondVisibility = lambda c: media.pop(0) if media else False
+        with patch.dict(sys.modules, {'resources.libs': types.SimpleNamespace(build_skin=self.build_skin)}):
+            self.assertTrue(self.watch.restore_af3(AF3, (AF3, 9, 1),
+                                                   types.SimpleNamespace(waitForAbort=wait), window))
+        self.assertEqual(waits[:5], [5] * 5)                 # 25 s of start-up wait
+        self.assertGreaterEqual(sum(waits[5:]), 30)          # then 30 quiet seconds
+        self.switch.assert_called_once_with(AF3)
+
+    def test_quiet_for(self):
+        quiet = self.watch._quiet_for
+        never = types.SimpleNamespace(waitForAbort=lambda s: False)
+        self.assertTrue(quiet(never, lambda: True, 0, 10))
+        self.assertFalse(quiet(never, lambda: False, 0, 10))
+        flips = [False, True, True, True, True, True, True, True]
+        self.assertTrue(quiet(never, lambda: flips.pop(0), 30, 100))
+        self.assertIsNone(quiet(types.SimpleNamespace(waitForAbort=lambda s: True), lambda: False, 0, 10))
+
+    def test_mid_install_is_capped_and_future_mtimes_are_no_update(self):
+        self.xbmc.getCondVisibility = lambda c: False
+        with patch.object(self.watch.time, 'monotonic', side_effect=[100.0, 100.0, 800.0]):
+            self.assertTrue(self.watch.af3_mid_install(str(self.addons)))
+            self.assertFalse(self.watch.af3_mid_install(str(self.addons)))   # 700 s: not an install
+        import time as _t
+        os.utime(self.addons / AF3 / 'addon.xml', (_t.time() + 86400, _t.time() + 86400))
+        self.assertFalse(self.watch.af3_updated_since(0))
+
+    def test_a_choice_made_during_the_wait_wins(self):
+        self.skin = 'skin.estuary'
+        self.watch.remember_skin(AF3)
+        window = types.SimpleNamespace(getProperty=lambda k: '1')
+        self.xbmc.getCondVisibility = lambda c: False
+
+        def wait(seconds):
+            self.watch.remember_skin('skin.estuary')         # picked in the Wizard meanwhile
+            return False
+        with patch.dict(sys.modules, {'resources.libs': types.SimpleNamespace(build_skin=self.build_skin)}):
+            self.assertIsNone(self.watch.restore_af3(AF3, (AF3, 10, 1),
+                                                     types.SimpleNamespace(waitForAbort=wait), window))
+        self.switch.assert_not_called()
+
+    def test_memory_round_trip(self):
+        self.assertEqual(self.watch.read_skin_memory(), ('', 0.0))
+        self.watch.remember_skin(AF3, 100.0)
+        self.assertEqual(self.watch.read_skin_memory(), (AF3, 100.0))
+        self.watch.remember_skin('')
+        self.assertEqual(self.watch.read_skin_memory()[0], AF3)
+
+    def run_watch(self, rows, polls):
+        """rows: signature per poll (the first one is the start-up baseline)."""
+        props = {}
+        window = types.SimpleNamespace(getProperty=lambda k: props.get(k, ''),
+                                       setProperty=lambda k, v: props.__setitem__(k, v),
+                                       clearProperty=lambda k: props.pop(k, None))
+        monitor = types.SimpleNamespace(waitForAbort=Mock(side_effect=[False] * polls + [True]),
+                                        abortRequested=lambda: False)
+        self.xbmc.Monitor = lambda: monitor
+        self.xbmc.Player = lambda: types.SimpleNamespace(isPlayingVideo=lambda: False)
+        with patch.dict(sys.modules, {'xbmcgui': types.SimpleNamespace(Window=lambda n: window)}), \
+                patch.object(self.watch, 'signature', side_effect=rows + [rows[-1]] * 50), \
+                patch.object(self.watch, 'prebuild_lists'), patch.object(self.watch, 'warm_bytecode'), \
+                patch.object(self.watch, 'repair_changed', return_value=True) as repair:
+            self.watch.run()
+        return repair
+
+    def rows(self, af3):
+        return (('plugin.video.pov', 1, 1), ('plugin.video.umbrella', None, None), (AF3, af3, 1))
+
+    def test_a_user_who_never_switches_is_remembered(self):
+        self.run_watch([self.rows(1)] * 5, 4)
+        self.assertEqual(self.watch.read_skin_memory()[0], AF3)
+
+    def test_the_fallback_during_an_update_is_not_a_choice(self):
+        # settled on AF3, then Kodi falls back to Estuary while AF3's files change
+        self.skins = [AF3, AF3, AF3, 'skin.estuary', 'skin.estuary', 'skin.estuary']
+        self.skin = 'skin.estuary'
+        rows = [self.rows(1)] * 5 + [self.rows(2)] * 3
+        repair = self.run_watch(rows, 6)
+        self.assertEqual(repair.call_args.kwargs['previous_skin'], AF3)
+        self.assertEqual(self.watch.read_skin_memory()[0], AF3)
+
+    def test_estuary_while_af3_is_unloaded_for_its_install_is_never_remembered(self):
+        # a slow box: Kodi shows Estuary for minutes before AF3's addon.xml changes
+        self.skins = [AF3, AF3, AF3] + ['skin.estuary'] * 20
+        self.skin = 'skin.estuary'
+        has_addon = [True] * 3 + [False] * 20
+        self.xbmc.getCondVisibility = lambda c: has_addon.pop(0) if has_addon else False
+        rows = [self.rows(1)] * 12 + [self.rows(2)] * 3
+        repair = self.run_watch(rows, 14)
+        self.assertEqual(self.watch.read_skin_memory()[0], AF3)
+        self.assertEqual(repair.call_args.kwargs['previous_skin'], AF3)
+
+    def test_a_wizard_switch_counts_at_once(self):
+        # Switch Skin writes the memory file; the watch's in-loop copy is older
+        self.skins = [AF3, AF3, AF3]
+        self.skin = 'skin.estuary'
+        rows = [self.rows(1)] * 5 + [self.rows(2)] * 3
+        original = self.watch.read_skin_memory
+        calls = []
+
+        def read():
+            calls.append(1)
+            if len(calls) > 1:
+                self.watch.remember_skin('skin.estuary')     # the user's Switch Skin, mid-session
+            return original()
+        with patch.object(self.watch, 'read_skin_memory', side_effect=read):
+            repair = self.run_watch(rows, 6)
+        self.assertEqual(repair.call_args.kwargs['previous_skin'], 'skin.estuary')
+
+    def test_a_deliberate_estuary_is_respected(self):
+        self.skins = [AF3, AF3, AF3] + ['skin.estuary'] * 4
+        self.skin = 'skin.estuary'
+        rows = [self.rows(1)] * 8 + [self.rows(2)] * 3
+        repair = self.run_watch(rows, 9)
+        self.assertEqual(self.watch.read_skin_memory()[0], 'skin.estuary')
+        self.assertEqual(repair.call_args.kwargs['previous_skin'], 'skin.estuary')
+
+    def test_an_update_before_start_up_with_the_fallback(self):
+        self.watch.remember_skin(AF3, 100.0)                 # AF3's files are newer than this
+        self.skin = 'skin.estuary'
+        repair = self.run_watch([self.rows(1)] * 4, 2)
+        repair.assert_called_once()
+        self.assertEqual(repair.call_args.kwargs['previous_skin'], AF3)
+
+    def test_estuary_chosen_last_session_without_an_update_is_kept(self):
+        self.watch.remember_skin(AF3)                        # newer than AF3's files
+        os.utime(self.addons / AF3 / 'addon.xml', (50, 50))
+        self.skin = 'skin.estuary'
+        repair = self.run_watch([self.rows(1)] * 4, 2)
+        repair.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
