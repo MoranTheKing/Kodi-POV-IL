@@ -406,6 +406,14 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
         data = r.json()
     except ValueError:
         raise GeminiError('Unparseable response from API')
+    # Audio requests spend the same daily quota as translation (NG counts
+    # every request against one budget); uncounted, the "requests today"
+    # figure ran up to 5 low for a title synced by audio.
+    try:
+        from . import gemini_quota
+        gemini_quota.note_request(model)
+    except Exception:
+        pass
     return _generated_text(data)
 
 
