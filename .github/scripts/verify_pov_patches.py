@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import runpy
+import subprocess
 import sys
 import tempfile
 import types
@@ -144,6 +145,34 @@ def audit_session_callers(host, digest):
     return problems
 
 
+def audit_moransubs_umbrella(root, host, runner=None):
+    """Problems MoranSubs' Umbrella patchers have with this official Umbrella.
+
+    The Wizard's hooks are not all a new Umbrella needs: on 22 Oct 2026 the
+    pin moved to 6.7.95, MoranSubs' Hebrew menu installer could not read its
+    moved English strings, and every device got English menus. The audit runs
+    the patchers repair_hosts.py runs on devices, twice, on a copy of the
+    tree, in a separate interpreter (stubbed Kodi, no network)."""
+    if runner is None:
+        def runner(args):
+            return subprocess.run(args, capture_output=True, text=True, timeout=300)
+    script = root / '.github/scripts/moransubs_umbrella_audit.py'
+    result = runner([sys.executable, '-I', str(script),
+                     str(root / 'service.subtitles.kodipovilai'), str(host)])
+    if result.returncode:
+        raise ValueError('MoranSubs Umbrella audit could not run: ' + result.stderr.strip()[-400:])
+    data = json.loads(result.stdout.strip().splitlines()[-1])
+    good = set(data['good'])
+    problems = []
+    for module, function, first, second in data['steps']:
+        name = '{}.{}'.format(module, function)
+        if first not in good:
+            problems.append('{}: {}'.format(name, first))
+        elif second not in good or second in ('patched', 'repatched'):
+            problems.append('{} does not settle: {} then {}'.format(name, first, second))
+    return problems
+
+
 def verify(root, archive=None, pin_path='.github/pov-host-migration.json'):
     """Every enabled Wizard patch for the pinned add-on applies, idempotently.
 
@@ -178,6 +207,11 @@ def verify(root, archive=None, pin_path='.github/pov-host-migration.json'):
                     raise ValueError('Unexpected package path')
             package.extractall(target)
         host = target / pin['id']
+        if pin['id'] == 'plugin.video.umbrella':
+            # On the pristine tree (the audit works on its own copy).
+            problems = audit_moransubs_umbrella(root, host)
+            if problems:
+                raise ValueError('MoranSubs Umbrella patchers do not fit: ' + '; '.join(problems))
         if pin['id'] == 'plugin.video.pov':
             # Before the hooks: this judges POV's own files.
             problems = audit_session_callers(host, _session_digest(root))
