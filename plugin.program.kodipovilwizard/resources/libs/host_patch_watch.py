@@ -8,11 +8,58 @@ import hashlib
 import json
 import time
 
+AF3_ID = 'skin.arctic.fuse.3'
+
+def af3_font_current(addons):
+    """False when Arctic Fuse 3 is installed without the build's Hebrew font.
+
+    Kodi replaces the whole skin folder on an update, Font.xml included, and
+    the developer's fonts have no Hebrew: Kodi's own Hebrew (dates, "last
+    login", menus) then shows as boxes, on the next login screen too (field
+    report, 22 Oct 2026). MoranSubs' af3_home_patcher writes the NotoSans
+    fontset."""
+    if not os.path.isfile(os.path.join(addons, AF3_ID, 'addon.xml')):
+        return True
+    try:
+        with open(os.path.join(addons, AF3_ID, '1080i', 'Font.xml'), 'rb') as handle:
+            return b'NotoSans-Regular.ttf' in handle.read()
+    except OSError:
+        return False
+
+
+def repair_af3(addons, window, monitor):
+    """Re-apply the build's edits to Arctic Fuse 3 after Kodi updated it.
+
+    The update wipes two sets of them. The Wizard's own -- child-profile home
+    gating, the profile bootstrap and the branded login screen -- are written
+    again here (install_login_hooks reloads the skin itself when a child
+    policy is active). MoranSubs' -- Hebrew font and strings, POV search,
+    Discover and the subtitle dialog -- come from its repair_af3.py, which
+    waits for MoranSubs' own start-up pass and for playback to end, then
+    rebuilds and reloads the skin. Best effort: the next Kodi start applies
+    both anyway, so a failure here is logged, never retried in a loop.
+    Returns None when Kodi is closing."""
+    import xbmc
+    try:
+        from resources.libs import build_profiles
+        build_profiles.install_login_hooks()
+    except Exception as exc:
+        xbmc.log('[POV IL] Arctic Fuse 3 profile hooks deferred: {!r}'.format(exc), xbmc.LOGWARNING)
+    result = run_moransubs_repair(addons, window, monitor, 'repair_af3.py',
+                                  'kodipovil.af3_repair.', wait=60, missing=True)
+    xbmc.log('[POV IL] Arctic Fuse 3 update repair acknowledged={}'.format(result), xbmc.LOGINFO)
+    return None if result is None else True
+
+
 def repair_changed(addons, previous, current, window, monitor):
     import xbmc
     from resources.libs.patch_engine import PatchEngine
     old = dict((row[0], row[1:]) for row in previous)
-    stats = PatchEngine().run() if current[0][1] is not None else {}
+    changed = [row[0] for row in current if old.get(row[0]) != row[1:]]
+    # The patch engine has nothing for Arctic Fuse; an AF3 update alone does
+    # not repeat the start-up pass on slow boxes.
+    hooks = current[0][1] is not None and any(name != AF3_ID for name in changed)
+    stats = PatchEngine().run() if hooks else {}
     healthy = not any(stats.get(key, 0) for key in
                       ('failed', 'missing', 'anchor_missing', 'malformed', 'legacy_host_deferred'))
     umbrella_changed = current[1][1] is not None and old.get(current[1][0]) != current[1][1:]
@@ -25,6 +72,10 @@ def repair_changed(addons, previous, current, window, monitor):
            old.get(row[0]) != row[1:] for row in current):
         from resources.libs import fentastic_widgets
         fentastic_widgets.repair()
+    if any(row[0] == AF3_ID and row[1] is not None and old.get(row[0]) != row[1:]
+           for row in current):
+        if repair_af3(addons, window, monitor) is None:
+            return False
     xbmc.log('[POV IL] Host-update patch repair: {} acknowledged={}'.format(stats, healthy), xbmc.LOGINFO)
     return healthy
 
@@ -36,15 +87,23 @@ def repair_umbrella(addons, window, monitor):
     Also used by the Wizard's version gate right after it installs a verified
     Umbrella: this watch takes its baseline after the start-up update check,
     so it never sees that change, and MoranSubs patched the old tree at start."""
+    return run_moransubs_repair(addons, window, monitor, 'repair_hosts.py',
+                                'kodipovil.host_repair.')
+
+
+def run_moransubs_repair(addons, window, monitor, script_name, ack_prefix,
+                         wait=20, missing=False):
+    """RunScript one of MoranSubs' repair scripts and wait for its answer.
+    `missing` is the result when that MoranSubs has no such script."""
     import xbmc
     import uuid
-    ack = 'kodipovil.host_repair.' + uuid.uuid4().hex
-    script = os.path.join(addons, 'service.subtitles.kodipovilai', 'repair_hosts.py')
+    ack = ack_prefix + uuid.uuid4().hex
+    script = os.path.join(addons, 'service.subtitles.kodipovilai', script_name)
     if not os.path.isfile(script):
-        return False
+        return missing
     try:
         xbmc.executebuiltin('RunScript({}, {})'.format(script, ack))
-        for _ in range(20):
+        for _ in range(wait):
             result = window.getProperty(ack)
             if result:
                 return json.loads(result).get('ok') is True
@@ -119,7 +178,7 @@ def warm_bytecode(addons, monitor):
 def signature(addons):
     result = []
     for addon in ('plugin.video.pov', 'plugin.video.umbrella',
-                  'skin.fentastic', 'script.fentastic.helper'):
+                  'skin.fentastic', 'script.fentastic.helper', AF3_ID):
         path = os.path.join(addons, addon, 'addon.xml')
         try:
             info = os.stat(path)
@@ -143,6 +202,11 @@ def run():
     monitor = xbmc.Monitor()
     addons = xbmcvfs.translatePath('special://home/addons/')
     previous = signature(addons)
+    if not af3_font_current(addons):
+        # Kodi's start-up repository check updated AF3 alongside the build's
+        # own start-up (QA: MoranSubs patched 3.4.4 a second before 3.4.6
+        # replaced it). Treat AF3 as changed so the first settled poll repairs.
+        previous = tuple((row[0], -1, -1) if row[0] == AF3_ID else row for row in previous)
     pending = None
     retry_at = 0
     attempts = 0
