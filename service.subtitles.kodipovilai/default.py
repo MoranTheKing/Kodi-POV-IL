@@ -936,7 +936,14 @@ def _try_fast_download(handle, link, info, selection=None):
             cached = _cache.translated_path(
                 imdb_id, season, episode, source_lang,
                 source_id=source_id)
-            if os.path.isfile(cached):
+            # A Google Translate fallback that AI can now replace goes to
+            # resolve(), which translates it with a live preview -- when
+            # resolve() looks in this same plain slot, i.e. with the gender
+            # reference off. With it on, resolve() reads the 'ar' slot only,
+            # so this file stays the instant hit it was.
+            _upgrade = (translate._google_cache_upgradeable(cached)
+                        and not kodi_utils.get_bool('gender_ref_arabic', False))
+            if os.path.isfile(cached) and not _upgrade:
                 # A cached translation keeps its SOURCE subtitle's timing. Run
                 # the delivery through the same release-aware gate as resolve;
                 # any correction is a copy, never a rewrite of the AI cache.
