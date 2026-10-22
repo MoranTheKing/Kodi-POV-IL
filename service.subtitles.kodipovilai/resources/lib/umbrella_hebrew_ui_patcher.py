@@ -61,6 +61,9 @@ except Exception:
 
 UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
 ENGLISH_REL = 'resources/language/English/strings.po'
+# Umbrella 6.7.95 (22 Oct 2026) moved its languages to Kodi's folder names;
+# its English now lives here, same ids and msgids (all 273 below matched).
+ENGLISH_MODERN_REL = 'resources/language/resource.language.en_gb/strings.po'
 HEBREW_REL = 'resources/language/resource.language.he_il/strings.po'
 
 # First line of every file we write, so a later run can tell our translation
@@ -469,9 +472,12 @@ def ensure_patched():
     base = _addon_base()
     if not base:
         return 'not_installed'
-    src = os.path.join(base, *ENGLISH_REL.split('/'))
     dst = os.path.join(base, *HEBREW_REL.split('/'))
-    english = _english_msgids(src)
+    english = {}
+    for rel in (ENGLISH_REL, ENGLISH_MODERN_REL):
+        english = _english_msgids(os.path.join(base, *rel.split('/')))
+        if english:
+            break
     if not english:
         _log('could not read Umbrella\'s English strings -- skipping',
              'WARNING')
