@@ -204,6 +204,10 @@ class ModularUpdater:
         # manifest outage must not strand a complete local handoff.
         if not getattr(self, 'fresh', False):
             self._complete_pending_service_handoff()
+        # A handoff cut off between disabling the subtitle service and
+        # enabling it again leaves it disabled for good. After the handoff:
+        # one cut off before its swap completes above and enables itself.
+        if hasattr(self, '_heal_service_left_disabled'): self._heal_service_left_disabled()
 
         # 1. Fetch Remote Manifest
         self._manifest_checked = True
@@ -527,6 +531,54 @@ class ModularUpdater:
                         level=xbmc.LOGERROR)
             return False
 
+    @staticmethod
+    def _service_disabled_marker():
+        return os.path.join(CONFIG.USERDATA, 'kodipovil.moransubs_disabled_for_handoff')
+
+    def _mark_service_disabled(self, disabled):
+        """Written right before the handoff disables MoranSubs, removed once it
+        is enabled again: a disable this updater made, never a user's."""
+        path = self._service_disabled_marker()
+        try:
+            if disabled:
+                with open(path, 'w') as handle:
+                    handle.write('service.subtitles.kodipovilai')
+            elif os.path.exists(path):
+                os.remove(path)
+        except OSError as exc:
+            logging.log('[ModularUpdater] handoff marker: {0}'.format(exc), level=xbmc.LOGWARNING)
+
+    def _heal_service_left_disabled(self):
+        """QA (22 Oct 2026): Kodi closed two seconds into a handoff -- after
+        MoranSubs was disabled and swapped, before it was enabled -- and it
+        stayed disabled: no subtitles, no host patchers, nothing re-enabled
+        it. A user closing Kodi right after an update hits the same window."""
+        if not os.path.exists(self._service_disabled_marker()):
+            return
+        addon_id = 'service.subtitles.kodipovilai'
+        state = self._addon_enabled_state(addon_id)
+        if state is None:
+            return                     # Kodi could not say; keep the marker
+        if state is False:
+            enabled = self._enable_addon(addon_id)
+            logging.log('[ModularUpdater] MoranSubs was left disabled by an interrupted '
+                        'update; enabled again: {0}'.format(enabled), level=xbmc.LOGWARNING)
+            if not enabled:
+                return
+        self._mark_service_disabled(False)
+
+    @staticmethod
+    def _addon_enabled_state(addon_id):
+        """True / False as Kodi reports it, None when it cannot say."""
+        try:
+            response = json.loads(xbmc.executeJSONRPC(json.dumps({
+                'jsonrpc': '2.0', 'id': 1, 'method': 'Addons.GetAddonDetails',
+                'params': {'addonid': addon_id, 'properties': ['enabled']}})))
+            enabled = response['result']['addon'].get('enabled')
+            return enabled if isinstance(enabled, bool) else None
+        except Exception:
+            return None
+
     def _complete_pending_service_handoff(self):
         """Swap only after the old service acknowledged a different boot."""
         from resources.libs import staged_addon_install
@@ -559,6 +611,7 @@ class ModularUpdater:
             # again is a no-op and does NOT start the replacement service.
             # Stop/disable it explicitly before swapping, then enable the new
             # package in this boot. Never do this to a live unacknowledged one.
+            self._mark_service_disabled(True)
             response = json.loads(xbmc.executeJSONRPC(json.dumps({
                 'jsonrpc': '2.0', 'id': 1, 'method': 'Addons.SetAddonEnabled',
                 'params': {'addonid': addon_id, 'enabled': False}})))
@@ -577,6 +630,7 @@ class ModularUpdater:
                     'עדכון הכתוביות הותקן, אך השירות לא התחיל. יש לפתוח את Kodi מחדש.',
                     time=8000)
                 raise RuntimeError('updated subtitle service could not enable')
+            self._mark_service_disabled(False)
             logging.log('[ModularUpdater] MoranSubs handoff complete: {0} files'
                         .format(count), level=xbmc.LOGINFO)
             xbmcgui.Dialog().notification(
@@ -585,8 +639,12 @@ class ModularUpdater:
             return True
         except Exception as exc:
             staged_addon_install.clear_handoff(CONFIG.USERDATA)
-            logging.log('[ModularUpdater] MoranSubs handoff failed; old service '
-                        'will resume on restart: {0}'.format(exc),
+            # Never leave the service disabled: whichever tree is on disk now,
+            # enabled is better than no subtitles and no host patchers.
+            state = self._addon_enabled_state(addon_id)
+            if state is True or (state is False and self._enable_addon(addon_id)):
+                self._mark_service_disabled(False)
+            logging.log('[ModularUpdater] MoranSubs handoff failed: {0}'.format(exc),
                         level=xbmc.LOGERROR)
             return False
 
