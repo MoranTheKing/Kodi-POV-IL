@@ -381,6 +381,16 @@ def _chain_lang_of(cand):
     return lang
 
 
+def _provider_of(cand):
+    """The provider in an engine candidate's label ("[XX] Wizdom · 87%  --
+    name"), for the log. A Hebrew reference is trusted as a human
+    translation; a field log has to show which provider that trust went to
+    (NG gender-reference: reference provenance)."""
+    import re
+    label = re.sub(r'^(?:\[[^\]]*\]\s*)+', '', cand.get('filename') or '')
+    return label.split(' · ', 1)[0].strip()[:40] or '?'
+
+
 # ---------------- fetch reference candidates from the engine ----------------
 
 def _reference_candidates(info):
@@ -527,8 +537,9 @@ class ReferencePlan(object):
                         if mapping:
                             self._used.add(lang)
                             _log(
-                                'reference [{0}] {1} -> {2} entries hinted'
-                                .format(lang, diag, len(mapping)))
+                                'reference [{0}] {1} -> {2} entries hinted '
+                                '(from {3})'.format(lang, diag, len(mapping),
+                                                    _provider_of(cand)))
                             return lang, mapping
                         _log(
                             'candidate [{0}] rejected: {1} -- trying next'

@@ -350,16 +350,23 @@ def download(download_data,MySubFolder):
 
     response = None
     success = False
-    
+    # One shuffle per download, then DISTINCT keys: a fresh random draw per
+    # attempt could hand back the key that just said its quota is used up
+    # (NG reference-subtitle-download 5: shuffle once, at most 8 different
+    # keys). Keys this process already saw exhausted go last.
+    _keys = [] if USE_OS_USER_API_KEY else _download_key_order()
+
     # Get subtitle download link
     for api_key_attempt_number in range(1, REQUEST_MAX_RETRIES_NUMBER + 1):
-    
+
         # Determine which API key to use for Download
         if USE_OS_USER_API_KEY:
             OS_API_KEY_NAME = "User_Setting_API_Key"
             OS_API_KEY_VALUE = OS_USER_API_KEY_VALUE  # Use OS_USER_API_KEY_VALUE from settings
         else:
-            OS_API_KEY_NAME,OS_API_KEY_VALUE = get_random_key()
+            if not _keys:
+                break
+            OS_API_KEY_NAME, OS_API_KEY_VALUE = _keys[(api_key_attempt_number - 1) % len(_keys)]
             
         log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles | api_key_attempt_number={api_key_attempt_number} | OS_API_KEY_NAME={OS_API_KEY_NAME}")
 
@@ -379,12 +386,21 @@ def download(download_data,MySubFolder):
                 response = requests.post(OPS_API_DOWNLOAD_URL, json=payload, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
                 log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles response.status_code: {repr(response.status_code)}")
                 
+                if response.status_code == 406 and not _is_quota_406(response):
+                    # A 406 about THIS file, not the key: another key gets the
+                    # same answer, so move on to the next subtitle instead.
+                    raise RuntimeError("OpenSubtitles refused this file (406, not a quota reply)")
                 if response.status_code == 503 or response.status_code == 406:
+                    if response.status_code == 406:
+                        _EXHAUSTED_KEYS.add(OS_API_KEY_NAME)
                     break # 503 - Wrong API Key | 406 - max usage quota reached for the API key.
                 response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
-                
+
                 response_json = response.json()
-                log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles result: {repr(response_json)}")
+                # Never the whole reply: its 'link' is a tokenized download URL.
+                log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles result: remaining={response_json.get('remaining')!r}")
+                if response_json.get('remaining') == 0:
+                    _EXHAUSTED_KEYS.add(OS_API_KEY_NAME)
                 subtitle_download_url = response_json['link']
                 success = True # Set flag to break both loops
                 break
@@ -424,12 +440,17 @@ def download(download_data,MySubFolder):
 
         except requests.HTTPError as http_err:
             if attempt_number < REQUEST_MAX_RETRIES_NUMBER:
-                log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles error: {repr(http_err)} on attempt_number {attempt_number}. Retrying in {REQUEST_RETRY_DELAY_IN_MS} seconds...")
+                # Status only: the error's text carries the tokenized download link.
+                log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles error: HTTP {getattr(http_err.response, 'status_code', '?')} on attempt_number {attempt_number}. Retrying in {REQUEST_RETRY_DELAY_IN_MS} seconds...")
                 xbmc.sleep(REQUEST_RETRY_DELAY_IN_MS)
                 continue  # Retry the request
             else:
-                log.warning('DEBUG | [OpenSubtitles] | OpenSubtitles DownloadSubtitles error: ' + repr(http_err))
+                log.warning('DEBUG | [OpenSubtitles] | OpenSubtitles DownloadSubtitles error: HTTP %s' % getattr(http_err.response, 'status_code', '?'))
                 raise RuntimeError("OpenSubtitles DownloadSubtitles HTTPError reached maximum tries.")
+        except requests.RequestException as req_err:
+            # A connection error or timeout: its text carries the tokenized
+            # link too, and the engine logs it. Same single try as before.
+            raise RuntimeError("OpenSubtitles DownloadSubtitles %s" % type(req_err).__name__) from None
 
 def c_get_os_api_keys_v2():
     try:
@@ -451,6 +472,33 @@ def get_api_keys(shuffle_keys=False):
 def get_random_key():
     api_keys = get_api_keys(shuffle_keys=True)
     return api_keys[0]
+
+
+# Keys this process saw answer "quota used up" (a quota 406, or remaining 0).
+# The pool's ~33 keys are shared by every build user (and NG's desktop app
+# copies the same list); about 100 downloads per key per day (NG probe).
+_EXHAUSTED_KEYS = set()
+
+
+def _download_key_order():
+    """Shuffled once; keys seen exhausted in this process go last."""
+    keys = get_api_keys(shuffle_keys=True)
+    return ([k for k in keys if k[0] not in _EXHAUSTED_KEYS]
+            + [k for k in keys if k[0] in _EXHAUSTED_KEYS])
+
+
+def _is_quota_406(response):
+    """True when a 406 is the per-key daily download limit, not a refusal of
+    the file. OpenSubtitles words it as the allowed downloads / quota; an
+    unreadable body counts as quota (the old behaviour: try the next key)."""
+    try:
+        body = (response.text or '').lower()
+    except Exception:
+        return True
+    if not body.strip():
+        return True
+    return any(word in body for word in ('quota', 'allowed', 'download limit',
+                                          'remaining', 'reset'))
 
 
 
