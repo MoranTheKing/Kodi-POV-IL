@@ -103,8 +103,17 @@ def mirror(addon_id, legacy_rel=LEGACY_REL, modern_rel=MODERN_REL):
             addon_id), 'WARNING')
         return 'outside'
     if not os.path.isfile(src):
-        # Upstream moved to the modern layout themselves, or a broken
-        # install -- either way there is nothing safe to copy.
+        if os.path.isfile(dst):
+            try:
+                with open(dst, 'rb') as f:
+                    ours = f.read(len(MARKER.encode('utf-8'))) == MARKER.encode('utf-8')
+            except OSError:
+                ours = True
+            if not ours:
+                # Upstream moved to the modern layout itself (Umbrella 6.7.95,
+                # 22 Oct 2026): exactly what this mirror stood in for.
+                return 'upstream'
+        # A broken install -- there is nothing safe to copy.
         _log('{0}: legacy English strings.po not found -- skipping'.format(
             addon_id), 'WARNING')
         return 'no_source'
