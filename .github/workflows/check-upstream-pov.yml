@@ -144,7 +144,7 @@ jobs:
                 else
                   gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" --title "$TITLE" --body "$OUT
 
-            $WHY Fix the moved anchors in patches_config.py -- or, when the reason names the shared-HTTP proxy, adapt pov_http_session.py or the caller audit in .github/scripts/verify_pov_patches.py; the next run moves the pin by itself."
+            $WHY Fix the moved anchors in patches_config.py -- or, when the reason names the shared-HTTP proxy, adapt pov_http_session.py or the caller audit in .github/scripts/verify_pov_patches.py; when it names MoranSubs Umbrella patchers, fix them in service.subtitles.kodipovilai and release MoranSubs; the next run moves the pin by itself."
                 fi
                 exit 0 ;;
               bumped*) ;;
@@ -177,8 +177,7 @@ jobs:
             git commit -m "chore($ADDON): move the verified $LABEL pin to $NEW [skip ci]"
             git push origin HEAD:main
             if [ "$ADDON" = "umbrella" ]; then
-              TODO="- the MoranSubs Umbrella patchers (service.subtitles.kodipovilai/resources/lib/umbrella_*_patcher.py);
-            - real Kodi QA on the new Umbrella (kids profiles, Hebrew UI, sources)."
+              TODO="- real Kodi QA on the new Umbrella (kids profiles, Hebrew UI, sources); MoranSubs' Umbrella patchers were run on it automatically (every one fits, idempotent)."
             else
               TODO="- the MoranSubs POV host patchers (service.subtitles.kodipovilai/resources/lib/pov_*_patcher.py and others that edit POV);
             - real Kodi QA on the new POV."
@@ -187,7 +186,7 @@ jobs:
               --title "$LABEL $NEW: verified pin moved automatically ($OLD -> $NEW)" \
               --body "$OUT
 
-            Verified automatically: the official zip is $LABEL $NEW, and every enabled Wizard patch applies to it (nothing missing, idempotent); for POV also that its files use the session module only in the shapes the Wizard's shared-HTTP proxy imitates. The Wizard installs $LABEL $NEW on devices at their next update check.
+            Verified automatically: the official zip is $LABEL $NEW, and every enabled Wizard patch applies to it (nothing missing, idempotent); for POV also that its files use the session module only in the shapes the Wizard's shared-HTTP proxy imitates; for Umbrella also that every MoranSubs Umbrella patcher applies and settles. The Wizard installs $LABEL $NEW on devices at their next update check.
 
             NOT verified -- still to do by hand:
             $TODO"
@@ -262,8 +261,9 @@ jobs:
           cd repo
           git sparse-checkout set --no-cone /tools/auto_bump_pov_pin.py \
             /tools/check_upstream_addons.py /.github/pov-host-migration.json \
-            /.github/umbrella-pin.json \
+            /.github/umbrella-pin.json /.github/scripts/moransubs_umbrella_audit.py \
             /.github/scripts/verify_pov_patches.py /plugin.program.kodipovilwizard/ \
+            /service.subtitles.kodipovilai/ \
             || { echo "checkout failed; retry later"; exit 0; }
           STATUS=0
           OUT=$(python3 tools/auto_bump_pov_pin.py --addon "$ADDON" --republish-check) || STATUS=$?
@@ -286,9 +286,9 @@ jobs:
             # Devices install the mirrored copy the pin names, never this zip;
             # only a new pin (or a hand install) would bring it.
             if [ "$STATUS" = "0" ]; then
-              VERDICT="Every enabled Wizard patch applies to the new zip (audit below). Devices keep the mirrored, verified copy; still check the MoranSubs Umbrella patchers before the next pin."
+              VERDICT="Every enabled Wizard patch and every MoranSubs Umbrella patcher applies to the new zip (audit below). Devices keep the mirrored, verified copy."
             else
-              VERDICT="A Wizard patch does NOT fit the new zip. Devices keep the mirrored, verified copy; fix the anchor (an \"alternatives\" entry in patches_config.py) before the next pin."
+              VERDICT="The new zip does NOT pass the audit (reason below: a Wizard hook -> an \"alternatives\" entry in patches_config.py; MoranSubs Umbrella patchers -> fix and release MoranSubs). Devices keep the mirrored, verified copy."
             fi
           elif [ "$STATUS" = "0" ]; then
             VERDICT="Every enabled Wizard patch applies to the new zip (audit below). Fresh installs are fine; still check the MoranSubs POV host patchers and test in Kodi."
