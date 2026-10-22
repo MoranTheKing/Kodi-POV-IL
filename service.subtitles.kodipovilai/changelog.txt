@@ -1,3 +1,6 @@
+0.3.44
+- New repair_af3.py, run by the Wizard's host watch (0.4.72) right after Kodi updates Arctic Fuse 3: re-applies the build's AF3 Hebrew font and strings, POV search, Discover and subtitle-dialog edits and rebuilds/reloads the skin. It waits for this service's own start-up pass (which runs the same patchers) and for playback to end before reloading, runs once at a time, finishes a rebuild deferred while POV was reloading (the home marker survives the update, so a plain retry would never reload the restored font), and treats a moved anchor as final instead of retrying.
+
 0.3.43
 - Umbrella's menus are Hebrew again on Umbrella 6.7.95, which moved its English strings from resources/language/English to resource.language.en_gb (same ids and texts; all 273 of ours matched). The Hebrew installer read only the old folder and skipped, so everyone on 6.7.95 saw English menus. The legacy-English mirror now reports 'upstream' when an add-on ships the modern folder itself, instead of a failure that made the Wizard's host watch retry the Umbrella repair every few minutes.
 - QA (Windows Kodi): on Umbrella 6.7.95 the Hebrew installer wrote all 273 strings, every other Umbrella patcher was already applied, and after a restart the Umbrella menu and lists opened in Hebrew with no errors.
