@@ -259,4 +259,10 @@ def switch(target):
             return False
     if not activate(target):
         return False
+    try:
+        # A deliberate choice: the host watch must not "restore" AF3 over it.
+        from resources.libs import host_patch_watch
+        host_patch_watch.remember_skin(target)
+    except Exception:
+        pass
     return refresh_home()
