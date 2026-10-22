@@ -142,6 +142,31 @@ def note_request(model):
         pass
 
 
+SETTING_EXHAUSTED = '_gemini_quota_exhausted'
+
+
+def note_exhausted(model):
+    """Google said the daily quota is used up: remember (day, model), so a
+    Google-translated fallback is not re-translated before the quota resets."""
+    try:
+        if kodi_utils is not None:
+            kodi_utils.set_setting(SETTING_EXHAUSTED,
+                                   '{0} {1}'.format(_today_utc(), _norm(model)))
+    except Exception:
+        pass
+
+
+def exhausted_today(model):
+    """True when the daily quota for `model` ran out today (Pacific day)."""
+    try:
+        if kodi_utils is None:
+            return False
+        stored = (kodi_utils.get_setting(SETTING_EXHAUSTED, '') or '').split()
+        return stored == [_today_utc(), _norm(model)]
+    except Exception:
+        return False
+
+
 def get_today_usage(model=None):
     """Return {count, limit, percent, remaining, date, model}. Always
     returns a dict; on storage failure, count is 0. `model` defaults to

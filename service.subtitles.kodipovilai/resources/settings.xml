@@ -472,6 +472,17 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
+        <!-- Hidden: "<Pacific day> <model>" when Google said that model's
+             daily quota is used up (gemini_quota.note_exhausted). A Google
+             fallback cached that day is not re-translated until the next
+             day. MUST be declared or set_setting silently no-ops. -->
+        <setting id="_gemini_quota_exhausted" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <!-- Hidden: which tile-refresh generation this install has already
              applied (build_icons_patcher.TILE_REFRESH_GEN). Gates the one-time
              texture-cache drop when the branding tiles change. MUST be declared

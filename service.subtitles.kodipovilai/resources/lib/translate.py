@@ -475,6 +475,9 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
         # deciding one is a tag needs the SOURCE entry, which a cached file no
         # longer has.
         body = srt.fold_foreign_in_hebrew_word(body)
+        # ...and its Latin form, as the final pass does ("בהTחשב"); files
+        # cached or pooled before that fold get it on the way in.
+        body = srt.fold_stray_latin_letter(body)
         body = srt.strip_niqqud(body)
     # Unconditional: this only rewrites a character as the canonical spelling of
     # that same character, so it is safe on any subtitle, whatever made it.
@@ -1714,6 +1717,139 @@ def _is_google_translated(path):
         return srt.is_google_translated(path)
     except Exception:
         return True
+
+
+def _preview_clean(blocks, src_text):
+    """The cleaners the live preview runs over merged chunk blocks (see the
+    chunk_ready note in translate()): every Hebrew line here is our model's
+    reply or Google's, and untranslated source carries no Hebrew, so each
+    cleaner is safe on the mix."""
+    return srt.clamp_cue_durations(
+        srt.fix_rtl_punctuation(
+            srt.normalize_glyphs(
+                srt.strip_niqqud(
+                    srt.fold_stray_latin_letter(
+                        srt.fold_foreign_in_hebrew_word(
+                            srt.strip_source_echo(
+                                srt.strip_leaked_arabic(
+                                    srt.strip_hebrew_speaker_prefix(
+                                        srt.strip_leaked_speaker_prefix(
+                                            srt.stitch_blocks(blocks)),
+                                        src_text)))))))))
+
+
+def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
+                          translated, info, reason='', google_chunks=None):
+    """Keep the chunks Gemini finished and let Google translate only the rest.
+
+    NG continue-and-retry: finished work is not thrown away when a run stops.
+    Before this, a daily-quota or rate-limit abort on chunk 9 of 12 sent the
+    WHOLE film to Google, discarding eight chunks of AI Hebrew with their
+    gender work. The file is still marked Google (never pooled), and a later
+    watch with quota translates it with AI again (see
+    _google_cache_upgradeable). `google_chunks` is the cached Google file this
+    run was replacing, cut like `chunks`: its Hebrew fills the gaps with no
+    second request. Falls back to the whole-file Google path when nothing
+    finished, Google's reply does not line up entry for entry, or anything
+    here fails."""
+    missing = [i for i in range(1, len(chunks) + 1) if i not in done_by_index]
+    if not done_by_index or not missing:
+        return _google_translate_and_save(src_text, source_lang, translated,
+                                          info, reason=reason)
+    try:
+        missing_blocks = [b for i in missing for b in chunks[i - 1]]
+        if google_chunks:
+            filled = [b for i in missing for b in google_chunks[i - 1]]
+        else:
+            heb = None
+            try:
+                from . import google_translate
+                heb = google_translate.translate_srt(
+                    srt.strip_leaked_speaker_prefix('\n\n'.join(missing_blocks)),
+                    source_lang)
+            except Exception as e:
+                kodi_utils.log('google fill failed: {0}'.format(e), level='WARNING')
+            filled = srt.parse_blocks(heb or '')
+        if len(filled) != len(missing_blocks):
+            kodi_utils.log('google fill returned {0} of {1} entries -- translating '
+                           'the whole file with Google'.format(
+                               len(filled), len(missing_blocks)), level='WARNING')
+            return _google_translate_and_save(src_text, source_lang, translated,
+                                              info, reason=reason)
+        # The AI cleaners run on the AI part only: they are written for our
+        # model's slips, and the read repair and srt.may_carry_arabic_leak
+        # exempt Google output on purpose (an Arabic quote in a Google line is
+        # the film's own text). Index-keyed, so the subset keeps its numbers.
+        ai_blocks = [srt.drop_model_notes(b) for i in sorted(done_by_index)
+                     for b in done_by_index[i]]
+        cleaned = srt.parse_blocks(_preview_clean(ai_blocks, src_text))
+        if len(cleaned) != len(ai_blocks):
+            cleaned = ai_blocks
+        merged, ai_at, cursor = [], 0, 0
+        for i in range(1, len(chunks) + 1):
+            if i in done_by_index:
+                merged.extend(cleaned[ai_at:ai_at + len(done_by_index[i])])
+                ai_at += len(done_by_index[i])
+            else:
+                merged.extend(filled[cursor:cursor + len(chunks[i - 1])])
+                cursor += len(chunks[i - 1])
+        text = srt.clamp_cue_durations(
+            srt.normalize_glyphs(srt.stitch_blocks(merged)))
+        if not _is_mostly_hebrew(text):
+            return _google_translate_and_save(src_text, source_lang, translated,
+                                              info, reason=reason)
+        cache.save_text(translated, text)
+        try:
+            open(translated + '.google', 'w').close()  # keep it out of the pool
+        except Exception:
+            pass
+        _reapply_rtl_fix_in_place(translated)
+    except Exception as e:
+        kodi_utils.log('google fill failed ({0}) -- translating the whole file '
+                       'with Google'.format(e), level='WARNING')
+        return _google_translate_and_save(src_text, source_lang, translated,
+                                          info, reason=reason)
+    kodi_utils.log('{0}: kept {1} of {2} chunk(s) from Gemini; the other {3} '
+                   'entr(ies) are Google Translate{4}'.format(
+                       reason or 'abort', len(done_by_index), len(chunks),
+                       len(missing_blocks),
+                       ' (from the cached file)' if google_chunks else ''),
+                   level='WARNING')
+    why = {'quota': 'מכסת ה-AI היומית נגמרה', 'ratelimit': 'AI: עומס זמני חורג'}.get(reason, 'AI')
+    kodi_utils.notify('{0} — {1} מתוך {2} חלקים תורגמו ב-AI, השאר ב-Google Translate'.format(
+        why, len(done_by_index), len(chunks)), time_ms=4000)
+    return translated
+
+
+def _google_cache_upgradeable(path):
+    """True when a cached file is a Google fallback that AI can now replace:
+    AI mode, a key, and today's quota not known to be used up. Without this a
+    quota or rate-limit night left a title on Google Translate for good --
+    the file is Hebrew, so it was served as "from cache" on every watch."""
+    try:
+        if not path or not os.path.isfile(path) or not _is_google_translated(path):
+            return False
+        if (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
+            return False
+        if not (kodi_utils.get_setting('api_key', '') or '').strip():
+            return False
+        from . import gemini_quota
+        model = kodi_utils.get_setting('model', '') or ''
+        if (not kodi_utils.get_bool('ai_paid_mode', False)
+                and gemini_quota.exhausted_today(model)):
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def _clear_google_marker(path):
+    """An AI translation now owns `path`; a '.google' sidecar left from an
+    earlier fallback would keep it out of the pool and re-translate it."""
+    try:
+        os.remove(path + '.google')
+    except OSError:
+        pass
 
 
 def _google_translate_and_save(src_text, source_lang, translated, info,
@@ -3167,6 +3303,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     except Exception:
         _ar_on = False
     _tier = 'ar' if _ar_on else ''
+    # A cached Google Translate fallback this run sets out to replace with AI
+    # (see _google_cache_upgradeable); handed back if the AI run fails. Only
+    # with a live preview: a caller without one waits for resolve() to return
+    # and got that file at once before, so it still does.
+    _replacing_google = None
     # Embedded-sourced translations (synced to the video's own timing) are
     # stored under 'ai_emb' so the pool can surface them distinctly. Embedded
     # wins over the ar/plain distinction for the POOL kind (the 'ai_ar' tag was
@@ -3297,7 +3438,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 os.remove(translated)
             except OSError:
                 pass
-        if os.path.isfile(translated):
+        if (progressive_cb is not None and local_source
+                and os.path.isfile(local_source)
+                and _google_cache_upgradeable(translated)):
+            kodi_utils.log('Cached file is a Google fallback and AI is available '
+                           'again -- translating with AI: ' + translated,
+                           level='INFO')
+            _replacing_google = translated
+        elif os.path.isfile(translated):
             kodi_utils.log('Cache hit (early): ' + translated,
                            level='INFO')
             kodi_utils.notify(
@@ -3331,6 +3479,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         except (IOError, OSError):
             src_text = None
     if not src_text:
+        if _replacing_google and os.path.isfile(_replacing_google):
+            return _deliver(_replacing_google)
         kodi_utils.notify(
             'מקור הכתוביות לא נמצא — בחר שוב',
             time_ms=5000,
@@ -3383,7 +3533,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 os.remove(translated_by_content)
             except OSError:
                 pass
-        if os.path.isfile(translated_by_content):
+        if (progressive_cb is not None
+                and _google_cache_upgradeable(translated_by_content)):
+            kodi_utils.log('Cached file is a Google fallback and AI is available '
+                           'again -- translating with AI: ' + translated_by_content,
+                           level='INFO')
+            _replacing_google = translated_by_content
+        elif os.path.isfile(translated_by_content):
             kodi_utils.log(
                 'Cache hit (content): ' + translated_by_content,
                 level='INFO')
@@ -3457,6 +3613,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         if pooled:
             try:
                 cache.save_text(translated, pooled)
+                _clear_google_marker(translated)
                 _reapply_rtl_fix_in_place(translated)
                 kodi_utils.notify(
                     'AI: כתוביות מהמאגר הקהילתי (לא נדרש תרגום)', time_ms=4000)
@@ -3470,6 +3627,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # single in-flight translation. Same value the cache key uses
     # above. Safe to evaluate here -- both ids are now stable.
     _progressive_source_id = early_source_id or content_id
+    # Replacing a cached Google Translate file: the viewer already had that
+    # Hebrew, so it stands in for the English placeholder while the AI works
+    # (a failed run hands the same file back, see _keep_replaced_google).
+    _google_prev = ''
+    if _replacing_google:
+        try:
+            _google_prev = cache.load_text(_replacing_google) or ''
+        except Exception:
+            _google_prev = ''
 
     # Fast-first-chunk hand-off: release the English fallback to the
     # caller (e.g. DarkSubs) so Kodi can start showing SOMETHING in
@@ -3481,7 +3647,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     if progressive_cb is not None:
         try:
             progressive_cb('first_ready', {
-                'fallback_text': srt.strip_leaked_speaker_prefix(src_text),
+                'fallback_text': (_google_prev
+                                  or srt.strip_leaked_speaker_prefix(src_text)),
                 'source_id': _progressive_source_id,
                 'release': _src_release,
             })
@@ -3489,6 +3656,20 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             kodi_utils.log(
                 'progressive_cb first_ready raised: ' + str(e),
                 level='WARNING')
+    if _google_prev and progressive_cb is not None:
+        # The picker shows its own English placeholder and ignores
+        # first_ready; a chunk_ready puts the Hebrew the viewer already had
+        # on screen now, before the reference download and the first AI chunk.
+        try:
+            progressive_cb('chunk_ready', {
+                'completed': 0,
+                'merged_text': _google_prev,
+                'source_id': _progressive_source_id,
+                'release': _src_release,
+            })
+        except Exception as e:
+            kodi_utils.log('progressive_cb chunk_ready (cached Google) raised: '
+                           + str(e), level='WARNING')
 
     kodi_utils.log(
         'No cache hit. Starting translation. imdb={0} content_id={1} '
@@ -3853,6 +4034,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     else:
         chunks = list(srt.chunk_blocks(blocks, per_chunk=chunk_lines))
     total = len(chunks)
+    # The cached Google file cut like the chunks, for the live preview's
+    # pending chunks -- only when it lines up entry for entry.
+    _google_chunks = None
+    if _google_prev:
+        _gblocks = srt.parse_blocks(_google_prev)
+        if len(_gblocks) == sum(len(_c) for _c in chunks):
+            _google_chunks, _at = [], 0
+            for _c in chunks:
+                _google_chunks.append(_gblocks[_at:_at + len(_c)])
+                _at += len(_c)
 
     # Backoff schedule for retryable Gemini failures (503 overload,
     # 500 / 502 / 504 transients). Google's published guidance is to
@@ -4694,6 +4885,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             if _key in out_blocks_by_index:
                                 _merged_blocks.extend(
                                     out_blocks_by_index[_key])
+                            elif _google_chunks:
+                                # Hebrew the viewer already had, not English
+                                _merged_blocks.extend(_google_chunks[_i])
                             else:
                                 _merged_blocks.extend(_ch)
                         # Bound the cues here too: this text is written to a
@@ -4719,18 +4913,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         # show up in it either. Both are safe over the half that
                         # is still untranslated source -- one needs Hebrew on
                         # the line, the other needs Hebrew points.
-                        _merged_text = srt.clamp_cue_durations(
-                            srt.fix_rtl_punctuation(
-                                srt.normalize_glyphs(
-                                    srt.strip_niqqud(
-                                        srt.fold_foreign_in_hebrew_word(
-                                            srt.strip_source_echo(
-                                                srt.strip_leaked_arabic(
-                                                    srt.strip_hebrew_speaker_prefix(
-                                                        srt.strip_leaked_speaker_prefix(
-                                                            srt.stitch_blocks(
-                                                                _merged_blocks)),
-                                                        src_text))))))))
+                        _merged_text = _preview_clean(_merged_blocks, src_text)
                         progressive_cb('chunk_ready', {
                             'completed': completed,
                             'total': total,
@@ -4750,6 +4933,29 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                           time_ms=5000)
         return None
 
+    def _keep_replaced_google(why):
+        """The run set out to replace a cached Google Translate file and did
+        not finish. Nothing is saved before the end, so that file is still
+        there, and it beats no subtitle at all (it was served before this
+        run). None when there is no such file."""
+        path = _replacing_google
+        if not (path and os.path.isfile(path) and _is_google_translated(path)):
+            return None
+        kodi_utils.log('AI translation did not finish ({0}) -- keeping the '
+                       'cached Google Translate file'.format(why), level='WARNING')
+        delivered = _deliver(path)
+        if progressive_cb is not None:
+            try:
+                progressive_cb('done', {
+                    'success': True,
+                    'source_id': _progressive_source_id,
+                    'release': _src_release,
+                    'path': delivered,
+                })
+            except Exception:
+                pass
+        return delivered
+
     if abort_reason:
         if abort_reason == 'cancelled':
             # The viewer changed film or subtitle. Do not spend another API
@@ -4760,9 +4966,25 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # (machine quality; never pooled). Other aborts (invalid key, overload,
         # error) surface as before so the user can fix them.
         if abort_reason in ('quota', 'ratelimit'):
-            gpath = _google_translate_and_save(src_text, source_lang,
-                                               translated, info,
-                                               reason=abort_reason)
+            if abort_reason == 'quota':
+                try:
+                    from . import gemini_quota
+                    gemini_quota.note_exhausted(model)
+                except Exception:
+                    pass
+            # Nothing from the AI and a cached Google file in hand: that file,
+            # not a second Google request.
+            gpath = (None if out_blocks_by_index or not _google_chunks
+                     else _keep_replaced_google(abort_reason))
+            if gpath:
+                kodi_utils.notify(abort_msg, time_ms=5000)
+                _emit(False, 'abort:' + str(abort_reason)
+                      + ' (cached Google file kept)')
+                return gpath
+            gpath = _google_fill_and_save(chunks, dict(out_blocks_by_index),
+                                          src_text, source_lang, translated,
+                                          info, reason=abort_reason,
+                                          google_chunks=_google_chunks)
             if gpath:
                 delivered_path = _deliver(gpath)
                 if progressive_cb is not None:
@@ -4783,6 +5005,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 _emit(True, 'google')
                 return delivered_path
         kodi_utils.notify(abort_msg, time_ms=5000)
+        _kept = _keep_replaced_google(abort_reason)
+        if _kept:
+            _emit(False, 'abort:' + str(abort_reason or 'crash')
+                  + ' (cached Google file kept)')
+            return _kept
         if progressive_cb is not None:
             try:
                 progressive_cb('done', {
@@ -4802,6 +5029,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             'AI: תרגום הסתיים חלקית ({0}/{1}). נסה שוב.'.format(
                 completed, total),
             time_ms=5000)
+        _kept = _keep_replaced_google('partial')
+        if _kept:
+            _emit(False, 'partial (cached Google file kept)')
+            return _kept
         if progressive_cb is not None:
             try:
                 progressive_cb('done', {
@@ -4976,7 +5207,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         eligible = set()
         target_by_num = {}
         tally_two_speakers = [0]
-        for num in dict.fromkeys(wanted):
+        tally_over_cap = [0]
+
+        def _addressee_first(num):
+            roles = wanted.get(num) if isinstance(wanted, dict) else None
+            return 0 if not roles or any(r == 'addressee' for r, _g in roles) else 1
+        # The request is capped at 24 000 characters. Reader-proven addressee
+        # fixes go in first, speaker-only ones after (NG gender-reference 7.2:
+        # speaker flags crowded addressee fixes out of one bucket), and an
+        # entry that does not fit is skipped, not the end of the list.
+        for num in sorted(dict.fromkeys(wanted), key=_addressee_first):
             if num not in pos_of or num not in source_pos or not _ar_map.get(num):
                 continue
             # `wanted` maps an entry to the (role, gender) pairs its reference
@@ -4991,9 +5231,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # A cue where a second person speaks has no single speaker: a
             # speaker correction read off the whole cue can rewrite the other
             # person (NG RR-2 W3, Before Sunset 257). The addressee stays.
+            # The reference cue counts too: it can hold both turns of an
+            # exchange the source splits differently.
             if any(r == 'speaker' for r, _g in roles) and (
                     gender_guard.two_speakers('\n'.join(original.split('\n')[2:]))
-                    or gender_guard.two_speakers('\n'.join(current.split('\n')[2:]))):
+                    or gender_guard.two_speakers('\n'.join(current.split('\n')[2:]))
+                    or gender_guard.two_speakers(_ar_map[num])):
                 roles = [(r, g) for r, g in roles if r != 'speaker']
                 tally_two_speakers[0] += 1
             if not roles:
@@ -5015,7 +5258,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 if r == 'addressee':
                     item['suggested_addressee_gender'] = g
             if len(json.dumps(evidence + [item], ensure_ascii=False)) > 24000:
-                break  # Bounded extra request; untouched entries keep their text.
+                tally_over_cap[0] += 1  # Bounded request; this entry keeps its text.
+                continue
             evidence.append(item)
             eligible.add(num)
         ask = [blocks[pos_of[n]] for n in wanted if n in eligible]
@@ -5058,8 +5302,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 thinking_level=thinking_level,
                 timeout=gemini_timeout or gemini.REQUEST_TIMEOUT)
 
+        def _entries(text):
+            plain = [nb for nb in srt.parse_blocks(text or '')
+                     if nb.split('\n', 1)[0].strip().isdigit()]
+            # Flash-lite sometimes answers in the shape of the JSON evidence
+            # (NG gender-reference 7.2: 3 of ~22 replies; a QA title here
+            # lost all 15 entries twice). Read that too; vet_repair still
+            # judges every line.
+            return plain or gender_guard.reply_entries(text)
+
         def _answers(text):
-            heads = (nb.split('\n', 1)[0].strip() for nb in srt.parse_blocks(text or ''))
+            heads = (nb.split('\n', 1)[0].strip() for nb in _entries(text))
             return sum(1 for h in heads if h.isdigit() and int(h) in eligible)
 
         try:
@@ -5070,8 +5323,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if not _answers(reply):
                 kodi_utils.log(
                     'gender repair: the reply answered none of the {0} entries '
-                    '({1} chars) -- asking once more'.format(
-                        len(ask), len(reply or '')), level='WARNING')
+                    '({1} chars, starts {2!r}) -- asking once more'.format(
+                        len(ask), len(reply or ''),
+                        ' '.join((reply or '').split())[:160]), level='WARNING')
                 reply = _ask()
         except Exception as e:
             kodi_utils.log('gender repair request failed ({0}) -- keeping the '
@@ -5085,7 +5339,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # that refused every rewrite.
         tally = {'returned': 0, 'unchanged': 0, 'unproven': 0, 'refused': 0}
         refused_why = {}
-        for nb in srt.parse_blocks(reply or ''):
+        entries = _entries(reply)
+        if entries and not any(nb.split('\n', 1)[0].strip().isdigit()
+                               for nb in srt.parse_blocks(reply or '')):
+            kodi_utils.log('gender repair: reply read as JSON ({0} entries)'.format(
+                len(entries)), level='INFO')
+        for nb in entries:
             head = nb.split('\n', 1)[0].strip()
             if not head.isdigit():
                 continue
@@ -5129,12 +5388,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             'gender repair: {0}/{1} entr(ies) rewritten with per-entry '
             'addressee evidence (returned {2}, kept as they were {3}, '
             'not proven {4}, refused by the shape checks {5}{6}; speaker '
-            'fix dropped on {7} two-speaker cue(s))'.format(
+            'fix dropped on {7} two-speaker cue(s); {8} over the size cap)'.format(
                 len(done), len(ask), tally['returned'], tally['unchanged'],
                 tally['unproven'], tally['refused'],
                 (': ' + ', '.join('{0} {1}'.format(k, v) for k, v in
                                   sorted(refused_why.items()))) if refused_why else '',
-                tally_two_speakers[0]), level='INFO')
+                tally_two_speakers[0], tally_over_cap[0]), level='INFO')
         return out
 
     # Stitch in original order.
@@ -5423,6 +5682,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             + str(e), level='WARNING')
                 _emit(True, 'google')
                 return delivered_path
+        _kept = _keep_replaced_google('not_hebrew')
+        if _kept:
+            _emit(False, 'not_hebrew (cached Google file kept)')
+            return _kept
         kodi_utils.notify(
             'AI: התרגום לא הוחזר בעברית (ריק/לא תורגם). נסה שוב.', time_ms=5000)
         if progressive_cb is not None:
@@ -5434,6 +5697,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         _emit(False, 'not_hebrew')
         return None
     cache.save_text(translated, final)
+    _clear_google_marker(translated)
     # Also save under the content-hash slot when it differs from
     # the early-source-id slot. That way the same translation
     # answers a future lookup whether the user comes back via the
@@ -5442,15 +5706,25 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # different local path).
     if early_source_id and content_id and content_id != early_source_id:
         try:
-            cache.save_text(
-                cache.translated_path(
-                    imdb_id, season, episode, source_lang,
-                    source_id=content_id, tier=_tier),
-                final)
+            _content_slot = cache.translated_path(
+                imdb_id, season, episode, source_lang,
+                source_id=content_id, tier=_tier)
+            cache.save_text(_content_slot, final)
+            _clear_google_marker(_content_slot)
         except Exception as e:
             kodi_utils.log(
                 'content-hash duplicate save failed: {0}'.format(e),
                 level='DEBUG')
+    # The Google file this run replaces can sit in another slot (the gender
+    # reference tier came out differently this time). AI owns the title now:
+    # a lookup of that slot must not serve the Google text or spend another
+    # translation on it.
+    if _replacing_google and os.path.isfile(_replacing_google + '.google'):
+        for _suffix in ('', '.google', '.release'):
+            try:
+                os.remove(_replacing_google + _suffix)
+            except OSError:
+                pass
 
     # Queue the telemetry event BEFORE the pool contribute below, so it rides
     # THIS translation's own /contribute piggyback (pool._post drains the pending

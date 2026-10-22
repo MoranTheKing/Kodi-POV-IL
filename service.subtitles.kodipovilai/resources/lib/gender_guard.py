@@ -355,6 +355,82 @@ def _first_json_object(text):
     raise ValueError('unbalanced JSON object')
 
 
+_SRT_ENTRY_RE = re.compile(
+    u'^\\s*(\\d+)\\s*\\n\\s*\\d{1,2}:\\d{2}:\\d{2}[,.]\\d{1,3}\\s*-->\\s*'
+    u'\\d{1,2}:\\d{2}:\\d{2}[,.]\\d{1,3}[^\\n]*\\n(.+)$', re.S)
+_JSON_TEXT_KEYS = (u'corrected_hebrew', u'hebrew', u'text', u'current_hebrew',
+                   u'new_hebrew', u'corrected', u'output', u'he')
+
+
+def _json_values(text):
+    """Every JSON value the reply holds: one fenced or bare array/object, or
+    several fenced blocks. [] when there is none."""
+    import json
+    found = []
+    t = (text or u'').strip()
+    for body in (re.findall(u'```(?:json)?[ \\t]*\\r?\\n(.*?)```', t, flags=re.I | re.S) or [t]):
+        body = body.strip()
+        start = min([i for i in (body.find(u'['), body.find(u'{')) if i >= 0] or [-1])
+        if start < 0:
+            continue
+        try:
+            found.append(json.JSONDecoder().raw_decode(body[start:])[0])
+        except ValueError:
+            continue
+    return found
+
+
+def reply_entries(text):
+    """SRT entries ("index\\ntimecode\\ntext") in a gender-repair reply.
+
+    The request asks for SRT entries but carries its evidence as JSON, and
+    flash-lite sometimes answers in that JSON shape instead: NG measured 3 of
+    ~22 repair replies lost to it ("JSON repair parsing was mandatory for
+    Flash-Lite", gender-reference 7.2), and a QA run here lost all 15 entries
+    of one title twice over ("answered none"). A plain SRT reply is read as
+    before. Only when it holds no numbered entry is it read as JSON: a string
+    that is itself a whole SRT entry, or an object with an integer index and
+    one text field. Everything still goes through vet_repair, so a misread
+    answer can only be refused, never applied blindly."""
+    blocks = [b for b in _parse_srt_blocks(text) if b.split(u'\n', 1)[0].strip().isdigit()]
+    if blocks:
+        return blocks
+    out = []
+
+    def walk(value):
+        if isinstance(value, str):
+            m = _SRT_ENTRY_RE.match(value.replace(u'\r\n', u'\n'))
+            if m:
+                out.append(value.replace(u'\r\n', u'\n').strip())
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+        elif isinstance(value, dict):
+            index = value.get(u'index', value.get(u'id', value.get(u'num')))
+            texts = [value.get(k) for k in _JSON_TEXT_KEYS if isinstance(value.get(k), str)]
+            if isinstance(index, (int, str)) and str(index).strip().isdigit() and texts:
+                body = texts[0].replace(u'\r\n', u'\n').strip()
+                m = _SRT_ENTRY_RE.match(body)
+                if m:
+                    if int(m.group(1)) == int(str(index).strip()):
+                        out.append(body)
+                    return
+                if body:
+                    out.append(u'%d\n00:00:00,000 --> 00:00:00,000\n%s' % (int(str(index).strip()), body))
+                return
+            for item in value.values():
+                walk(item)
+    for value in _json_values(text):
+        walk(value)
+    return out
+
+
+def _parse_srt_blocks(text):
+    """The same split srt.parse_blocks does, without importing it here."""
+    t = (text or u'').replace(u'\r\n', u'\n').strip()
+    return [b.strip(u'\n') for b in re.split(u'\n\\s*\n', t) if b.strip()]
+
+
 def parse_classifier(reply, asked):
     """{number: {'speaker': 'M'|'F'|None, 'addressee': ...}} for every number
     in `asked`, or None when the reply is malformed or leaves one out -- then

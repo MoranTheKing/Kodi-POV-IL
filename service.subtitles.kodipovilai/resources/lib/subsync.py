@@ -762,7 +762,9 @@ def _audio_probe_reference(info, playing, second_pass=False):
             if ent is not None and ent.get('pv') != _PROBE_CACHE_VERSION:
                 ent = None   # older engine (un-rebased origin) -- redo
             if ent is not None:
-                prior = ent.get('cues') or []
+                # Sorted on the way in too: entries cached before the sort
+                # below would otherwise keep failing the in-order preflight.
+                prior = sorted(ent.get('cues') or [], key=lambda c: c['start'])
                 if not second_pass:
                     _log('audio: cache %s for %r'
                          % ('hit (%d cues)' % len(prior) if prior
@@ -781,6 +783,7 @@ def _audio_probe_reference(info, playing, second_pass=False):
                        else (0.22, 0.50, 0.78)),
             log=lambda m: _log('audio: ' + m))
         cues = []
+        whole_seconds = [0, 0]
         api_failed = False
         if segs:
             model = (kodi_utils.get_setting('model', '') or
@@ -810,10 +813,22 @@ def _audio_probe_reference(info, playing, second_pass=False):
                         e = float(it.get('e')) * 1000.0 + seg['start_ms']
                         if e > s:
                             cues.append({'start': int(s), 'end': int(e)})
+                            whole_seconds[0] += float(it.get('s')).is_integer()
+                            whole_seconds[1] += 1
                     except Exception:
                         continue
-            _log('audio: %d speech cues from %d segment(s)'
-                 % (len(cues), len(segs)))
+            # The model lists speech in its own order; the aligner's preflight
+            # refuses a reference with one start out of order, and the cache
+            # would repeat that refusal for this file every time (NG
+            # subtitle-alignment 9.5: model-written references come with order
+            # defects). Sort, and drop exact duplicate starts.
+            _seen_starts = set()
+            cues = [c for c in sorted(cues, key=lambda c: c['start'])
+                    if not (c['start'] in _seen_starts or _seen_starts.add(c['start']))]
+            # NG measured whole-second times from general Flash models; a reply
+            # that is mostly whole seconds can rarely pass the tight check.
+            _log('audio: %d speech cues from %d segment(s), %d of %d starts on a '
+                 'whole second' % (len(cues), len(segs), whole_seconds[0], whole_seconds[1]))
         if api_failed and not cues:
             return None   # transient -- no negative cache, retry next time
         if second_pass:
