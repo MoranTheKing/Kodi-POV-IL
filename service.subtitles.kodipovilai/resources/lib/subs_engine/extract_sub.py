@@ -71,13 +71,31 @@ def convert_to_utf(file):
     except Exception:
         pass
     
+# A text subtitle archive -- even a whole season -- is a few MB unpacked, and
+# a bitmap one (VobSub/PGS) tens of MB. Far beyond that it is not subtitles
+# (or is built to fill the disk), and the shared folder sits on the device's
+# own storage (NG reference-subtitle-download: size limits on archives).
+MAX_UNPACKED_BYTES = 200 * 1024 * 1024
+MAX_ENTRIES = 500
+
+
 def extract(archive_file,MySubFolder):
     try:
         with zipfile.ZipFile(archive_file, 'r') as zip_ref:
             names = zip_ref.namelist()
-            zip_ref.extractall(MySubFolder)
+            infos = zip_ref.infolist()
+            # zipfile never writes more than an entry's declared size.
+            unpacked = sum(i.file_size for i in infos)
+            too_big = len(infos) > MAX_ENTRIES or unpacked > MAX_UNPACKED_BYTES
+            if not too_big:
+                zip_ref.extractall(MySubFolder)
 
         os.remove(archive_file)
+        if too_big:
+            log.warning('Error Extract: archive too large to be subtitles '
+                        '(%d entries, %d bytes unpacked) -- skipped'
+                        % (len(infos), unpacked))
+            return '0'
         # Return a subtitle file THIS archive actually contained -- keyed off the
         # zip's own namelist, NOT "the first subtitle-shaped file in the shared
         # folder". The folder is reused by every source/title, so scanning the
