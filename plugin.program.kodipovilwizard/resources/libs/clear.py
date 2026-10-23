@@ -35,6 +35,15 @@ from resources.libs.common import logging
 from resources.libs.common import tools
 
 
+def _kept_cache_dirs(profile_addon_data):
+    """Cache folders Clear Cache leaves alone (and does not count): MoranSubs
+    keeps its finished AI translations in its "cache" folder; each one cost
+    Gemini quota, and clearing it meant translating again. Its other caches
+    (downloaded subtitles, search results) are cheap and still go."""
+    return set(os.path.normcase(os.path.join(base, 'service.subtitles.kodipovilai', 'cache'))
+               for base in (CONFIG.ADDON_DATA, profile_addon_data))
+
+
 def get_cache_size():
     from resources.libs.common import tools
 
@@ -87,6 +96,7 @@ def get_cache_size():
         cachelist.append(PROFILEADDONDATA)
 
     totalsize = 0
+    keep = _kept_cache_dirs(PROFILEADDONDATA)
 
     for item in cachelist:
         if not os.path.exists(item):
@@ -95,6 +105,7 @@ def get_cache_size():
             totalsize = tools.get_size(item, totalsize)
         else:
             for root, dirs, files in os.walk(item):
+                dirs[:] = [d for d in dirs if os.path.normcase(os.path.join(root, d)) not in keep]
                 for d in dirs:
                     if 'cache' in d.lower() and d.lower() not in ['meta_cache']:
                         totalsize = tools.get_size(os.path.join(root, d), totalsize)
@@ -189,9 +200,9 @@ def auto_clean_startup(now=None):
     """Run the start-up clean the user switched on in the maintenance menu.
 
     The toggles were in the menu all along, but nothing ever ran them. Only
-    "Clear Packages on Startup" is run. "Clear Cache on Startup" would delete
-    every add-on's *cache* folder at each start -- MoranSubs keeps the AI
-    translations it already paid quota for in such folders -- and old_thumbs()
+    "Clear Packages on Startup" is run. "Clear Cache on Startup" would wipe
+    every add-on's caches (and Kodi's temp) at each start, so every start
+    would rebuild them -- and old_thumbs()
     finds nothing (it compares Kodi's date text with a number) but VACUUMs the
     live Textures DB; both toggles are hidden. Returns True when a clean ran."""
     if CONFIG.AUTOCLEANUP != 'true':
@@ -332,6 +343,7 @@ def clear_cache(over=None):
 
     delfiles = 0
     excludes = ['meta_cache', 'archive_cache']
+    keep = _kept_cache_dirs(PROFILEADDONDATA)
     for item in cachelist:
         if not os.path.exists(item):
             continue
@@ -362,7 +374,8 @@ def clear_cache(over=None):
                                         level=xbmc.LOGINFO)
         else:
             for root, dirs, files in os.walk(item):
-                dirs[:] = [d for d in dirs if d not in excludes]
+                dirs[:] = [d for d in dirs if d not in excludes
+                           and os.path.normcase(os.path.join(root, d)) not in keep]
                 for d in dirs:
                     if not str(d.lower()).find('cache') == -1:
                         try:

@@ -1,3 +1,6 @@
+0.4.80
+- Maintenance > Clear Cache (and Total Clean Up) keeps MoranSubs' finished AI translations. It deletes every add-on folder whose name contains "cache", and MoranSubs keeps its translations in its "cache" folder, so each Clear Cache meant translating them again on Gemini quota (QA Kodi: 145 translations). MoranSubs' other caches (downloaded subtitles, search results) are still cleared, and the size shown next to Clear Cache no longer counts the kept translations (QA Kodi: it showed 8.57 MB right after a clear).
+
 0.4.79
 - Maintenance > Cleaning Tools > "Auto Clean Up On Startup" with "Clear Packages on Startup" now runs: at Kodi start, as often as "Auto Clean Frequency" says, it deletes the add-on zips in addons/packages that are over an hour old -- all of them, so Kodi's "Versions" list then has no local zip to roll back to. The toggles were in the menu, but nothing ever ran them. "Clear Cache on Startup" and "Clear Old Thumbs on Startup" are hidden: the first would delete every add-on's cache folders at each start, MoranSubs' saved AI translations among them; the second never finds a thumbnail (its date check compares Kodi's date text with a number) and only compacts Kodi's thumbnail database.
 
