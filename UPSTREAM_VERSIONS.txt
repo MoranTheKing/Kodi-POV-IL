@@ -11,4 +11,4 @@ plugin.video.idanplus: 4.0.2
 skin.arctic.fuse.3: 3.4.8
 plugin.video.umbrella: 6.7.97
 plugin.video.otaku: 5.3.4
-script.module.acctmgr: 1.2.0a
+script.module.acctmgr: 1.2.1
