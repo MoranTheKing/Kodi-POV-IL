@@ -1,3 +1,9 @@
+0.4.76
+- Boxes still on the old subtitle add-on (MoranSubs 0.2.x) can move to the current one. The move first keeps a backup copy of POV's settings, and on some Android boxes (field: Android TV 12) that copy stopped with "Permission denied": Python's copy also copies the file's metadata (permissions, times), which Android's storage can refuse. A box in that state would stay on MoranSubs 0.2.x, and with POV's current version that means English instead of Hebrew subtitles and an error in POV's "Connect services" (field log, 23 Oct 2026, MoranSubs 0.2.566). The backup now copies the contents only.
+- Each attempt that failed after staging left a copy of POV (about 3 MB) beside the add-ons folder. The next attempt removes those leftovers, and a failed attempt now removes its own.
+- Hardening: a temp file left by an interrupted backup is removed before the next one.
+- Tested with every metadata-copying helper forced to fail and with a leftover read-only temp file; the Android condition itself was not reproduced on the Windows QA Kodi.
+
 0.4.75
 - The host watch confirms an Arctic Fuse 3 change 3 s after it first sees it instead of on its next 10 s poll, and waits while Kodi still has AF3 unloaded for its install (up to 10 minutes). With MoranSubs 0.3.49, which now puts the Hebrew font back first, AF3 shows Hebrew again much sooner after an update by Kodi (field report, 23 Oct 2026: boxes and English labels for about a minute).
 - QA (Windows Kodi, AF3 3.4.6 -> 3.4.8 by Kodi's own updater during a session): boxes for 44 s before, 10-21 s now in three runs; the full AF3 repair still ran afterwards and was acknowledged.
