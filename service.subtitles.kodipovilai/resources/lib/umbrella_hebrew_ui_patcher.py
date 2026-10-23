@@ -18,7 +18,7 @@
 # a string with no entry here simply is not in the file, Kodi falls back to
 # en_gb, and it renders in English exactly as it does today. Nothing breaks,
 # nothing goes blank. That lets us translate the surface a user actually
-# touches -- 273 ids covering the menus, the Discover and My-Lists rows, the
+# touches -- 302 ids covering the menus, the Discover and My-Lists rows, the
 # dialogs and the context actions -- and leave the settings labels in English,
 # where the terms are technical and a translation would more often confuse
 # than help.
@@ -62,7 +62,7 @@ except Exception:
 UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
 ENGLISH_REL = 'resources/language/English/strings.po'
 # Umbrella 6.7.95 (22 Oct 2026) moved its languages to Kodi's folder names;
-# its English now lives here, same ids and msgids (all 273 below matched).
+# its English now lives here, same ids and msgids (all 273 ids of that day matched).
 ENGLISH_MODERN_REL = 'resources/language/resource.language.en_gb/strings.po'
 HEBREW_REL = 'resources/language/resource.language.he_il/strings.po'
 
@@ -405,6 +405,38 @@ HE = {
     '40703': 'חמים השבוע',
     '40706': 'אוסף (MDBList)',
     '40711': 'רשימות רשמיות (MDBList)',
+    # --- menu rows Umbrella added later (seen in English in QA on 6.7.96) -
+    # 'Custom' stays Latin: navigator.py swaps it for the user's own Custom
+    # Service Name on these rows (label.replace('Custom', name)).
+    '40709': 'מנהל האוסף - סרטים',
+    '40710': 'מנהל האוסף - סדרות',
+    '40715': 'סדרות שנצפו (MDBList)',
+    '40716': 'סרטים שנצפו (MDBList)',
+    '40778': 'פרקים אחרונים (MDBList)',
+    '40779': 'פרקים קרובים (MDBList)',
+    '40780': 'פתיחות עונה (MDBList)',
+    '40781': 'רשימות משתמש (Scrob)',
+    '40736': 'רשימת צפייה (Custom)',
+    '40737': 'אוסף (Custom)',
+    '40738': 'סדרות שנצפו (Custom)',
+    '40739': 'סדרות בהמשך צפייה (Custom)',
+    '40740': 'פרקים בהמשך צפייה (Custom)',
+    '40741': 'לא הושלמו (Custom)',
+    '40742': 'פרקים אחרונים (Custom)',
+    '40743': 'פרקים קרובים (Custom)',
+    '40744': 'פתיחות עונה (Custom)',
+    '40745': 'סרטים שנצפו (Custom)',
+    '40753': 'פרקים קרובים בהמשכים (Custom)',
+    '40782': 'רשימות משתמש (Custom)',
+    '40783': 'ננטשו (Custom)',
+    '40786': '[COLOR %s][B]מנהל הנטישות - סרטים[/B][/COLOR]',
+    '40787': '[COLOR %s][B]מנהל הנטישות - סדרות[/B][/COLOR]',
+    '40788': '[COLOR %s][B]מנהל המתוכננים לצפייה - סרטים[/B][/COLOR]',
+    '40789': '[COLOR %s][B]מנהל המתוכננים לצפייה - סדרות[/B][/COLOR]',
+    '40790': '[COLOR %s][B]מנהל המושהים - סדרות[/B][/COLOR]',
+    '40829': 'חיפוש משולב',   # fits an AF3 tile; a longer label shows only its last word
+    '40830': 'ייצוא הגדרות',
+    '40831': 'ייבוא הגדרות',
 }
 
 
