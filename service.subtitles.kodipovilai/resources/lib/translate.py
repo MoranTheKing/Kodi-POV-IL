@@ -1726,7 +1726,7 @@ def _preview_clean(blocks, src_text):
     cleaner is safe on the mix."""
     return srt.clamp_cue_durations(
         srt.fix_rtl_punctuation(
-            srt.normalize_glyphs(
+            srt.mend_line_breaks(srt.normalize_glyphs(
                 srt.strip_niqqud(
                     srt.fold_stray_latin_letter(
                         srt.fold_foreign_in_hebrew_word(
@@ -1735,7 +1735,7 @@ def _preview_clean(blocks, src_text):
                                     srt.strip_hebrew_speaker_prefix(
                                         srt.strip_leaked_speaker_prefix(
                                             srt.stitch_blocks(blocks)),
-                                        src_text)))))))))
+                                        src_text))))))))))
 
 
 def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
@@ -1873,6 +1873,7 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
     if not heb or not heb.strip():
         kodi_utils.notify('Google Translate נכשל — נסה שוב', time_ms=4000)
         return None
+    heb = srt.mend_line_breaks(heb)
     try:
         cache.save_text(translated, heb)
         try:
@@ -5641,6 +5642,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # below: it strips RLE/PDF, which is exactly what fix_rtl_punctuation adds.
     # See normalize_glyphs' docstring -- that ordering is load-bearing.
     final = srt.normalize_glyphs(final)
+    # BBC Subtitle Guidelines 3.4: no first line ending on "על" / "את" /
+    # "שאני" that belongs with the line below. Logical order: before the RTL fix.
+    _pre_breaks = final
+    final = srt.mend_line_breaks(final)
+    if final is not _pre_breaks:
+        try:
+            kodi_utils.log('line breaks moved to natural points in {0} cue(s)'.format(
+                sum(1 for a, b in zip(_pre_breaks.split('\n'), final.split('\n'))
+                    if a != b) // 2), level='INFO')
+        except Exception:
+            pass
     # Defensive backstop for RTL punctuation: Gemini sometimes puts
     # punctuation at the logical start of a Hebrew line ("?שלום")
     # when it belongs at the logical end ("שלום?"). The prompt
