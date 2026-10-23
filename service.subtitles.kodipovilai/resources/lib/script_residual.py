@@ -125,16 +125,32 @@ def _same_person(before, after):
     return True
 
 
+def _quoted_foreign(source):
+    """Third-script letters a source cue only QUOTES -- a sign or a name inside
+    a line written in another alphabet -- which the translation may keep. In
+    a cue WRITTEN in that script (a Japanese, Korean, Thai, Russian or Arabic
+    source) the same letters in the Hebrew are an untranslated leak, and
+    exempting them hid exactly that: "אני 大丈夫" from "私は大丈夫" was never
+    flagged (found by checking another add-on's NG adoptions, Oct 2026)."""
+    letters = [c for c in _visible(source or '') if unicodedata.category(c)[0] == 'L']
+    foreign = _foreign(source or '')
+    if not foreign:
+        return foreign
+    if sum(1 for c in letters if c in foreign) * 2 > len(letters):
+        return set()
+    return foreign
+
+
 def candidates(source_blocks, current_blocks):
     """[(index, offset, line)] for output lines with letters of a third script
-    that the paired source cue does not itself contain."""
+    that the paired source cue does not itself merely quote."""
     found = []
     for index, current in enumerate(current_blocks):
         cur = _lines(current)
         if not cur:
             continue
         source = source_blocks[index] if index < len(source_blocks) else ''
-        allowed = _foreign(source or '')
+        allowed = _quoted_foreign(source)
         for offset in range(2, len(cur)):
             line = cur[offset].rstrip('\r\n')
             if _foreign(_visible(line)) - allowed:

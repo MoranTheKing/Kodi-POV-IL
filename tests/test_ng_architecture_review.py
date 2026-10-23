@@ -6,7 +6,9 @@
   entry that does not fit instead of ending the list there.
 - A quota or rate-limit abort keeps the chunks Gemini finished; a Google
   fallback in the cache is translated with AI again once AI is available, and
-  stays on screen if that AI run fails.
+  stays on screen if that AI run fails. Since 0.3.51 an overload, a request /
+  network error or an unexpected chunk exception does the same (an invalid key
+  still surfaces).
 - OpenSubtitles downloads walk distinct keys and tell a quota 406 apart; a
   subtitle archive far too large to be subtitles is not unpacked.
 """
@@ -44,6 +46,19 @@ srt = _load('srt')
 gemini = _load('gemini')
 ag = _load('arabic_gender')
 gq = _load('gemini_quota')
+
+
+def _constants(tree, names, ns):
+    """translate.py's own module-level literal constants into `ns`."""
+    for node in tree.body:
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id in names):
+            ns[node.targets[0].id] = ast.literal_eval(node.value)
+    missing = [n for n in names if n not in ns]
+    if missing:
+        raise AssertionError('no constant ' + ', '.join(missing))
+    return ns
 
 
 def _define(tree, names, ns):
@@ -216,6 +231,7 @@ class GoogleFillTests(unittest.TestCase):
                            notify=lambda m, **k: self.notes.append(m)),
                        _reapply_rtl_fix_in_place=lambda p: None,
                        _google_translate_and_save=lambda *a, **k: self.whole.append(a) or 'whole')
+        _constants(TREE, ['_GOOGLE_FALLBACK_WHY'], self.ns)
         _define(TREE, ['_preview_clean', '_google_fill_and_save', '_is_mostly_hebrew'], self.ns)
 
     def tearDown(self):
@@ -254,6 +270,30 @@ class GoogleFillTests(unittest.TestCase):
         self.assertTrue(os.path.isfile(self.path + '.google'))   # never pooled
         self.assertEqual(self.notes, ['מכסת ה-AI היומית נגמרה — 2 מתוך 3 חלקים תורגמו ב-AI, השאר ב-Google Translate'])
         self.assertEqual(self.whole, [])
+
+    def test_overload_and_errors_keep_finished_chunks_too(self):
+        # 0.3.51: an overload that outlasts the backoff, a request/network error
+        # that keeps failing, or an unexpected chunk exception used to drop
+        # every finished chunk and deliver nothing.
+        aborts = _constants(TREE, ['_GOOGLE_FILL_ABORTS'], {})['_GOOGLE_FILL_ABORTS']
+        for reason in ('quota', 'ratelimit', 'overload', 'error', 'crash'):
+            self.assertIn(reason, aborts)
+        for reason in ('cancelled', 'invalid_key'):
+            self.assertNotIn(reason, aborts)
+        self.reply = lambda text: text.replace('Line', 'גוגל שורה')
+        done = {1: [block(1, 'שורה ראשונה'), block(2, 'שורה שנייה')]}
+        src = '\n\n'.join(b for ch in self.chunks() for b in ch)
+        self.assertEqual(self.ns['_google_fill_and_save'](
+            self.chunks(), done, src, 'en', self.path, {}, reason='overload'), self.path)
+        self.assertIn('שורה ראשונה', self.saved())
+        self.assertTrue(os.path.isfile(self.path + '.google'))
+        self.assertEqual(self.notes, ['Gemini עמוס — 1 מתוך 3 חלקים תורגמו ב-AI, השאר ב-Google Translate'])
+        abort = TRANSLATE.index('if abort_reason in _GOOGLE_FILL_ABORTS:')
+        self.assertIn("gemini_quota.note_exhausted(model)", TRANSLATE[abort:abort + 700])
+        self.assertIn("if abort_reason == 'quota':", TRANSLATE[abort:abort + 500])
+        # an error the user can fix (retired model, API not enabled) still says why
+        self.assertIn("if abort_reason in ('error', 'crash'):\n", TRANSLATE[abort:abort + 200])
+        self.assertIn('kodi_utils.notify(abort_msg, time_ms=5000)', TRANSLATE[abort:abort + 400])
 
     def test_replacing_a_cached_google_file_reuses_its_hebrew(self):
         cached = [[block(n, 'גוגל ישן %d' % n) for n in (1, 2)],
@@ -382,7 +422,7 @@ class GoogleCacheUpgradeTests(unittest.TestCase):
         self.assertLess(placeholder, TRANSLATE.index("'No cache hit. Starting translation."))
         self.assertIn('google_chunks=_google_chunks)', TRANSLATE)
         # an abort with no AI chunk keeps the cached file, no second request
-        abort = TRANSLATE.index("if abort_reason in ('quota', 'ratelimit'):")
+        abort = TRANSLATE.index("if abort_reason in _GOOGLE_FILL_ABORTS:")
         self.assertIn('gpath = (None if out_blocks_by_index or not _google_chunks\n'
                       '                     else _keep_replaced_google(abort_reason))',
                       TRANSLATE[abort:abort + 900])
@@ -411,7 +451,7 @@ class GoogleCacheUpgradeTests(unittest.TestCase):
         self.assertNotIn('UnusableReply', TRANSLATE)   # measured and dropped
         self.assertTrue('cache.save_text(translated, final)\n    _clear_google_marker(translated)' in TRANSLATE)
         self.assertIn('_clear_google_marker(_content_slot)', TRANSLATE)
-        abort = TRANSLATE.index("if abort_reason in ('quota', 'ratelimit'):")
+        abort = TRANSLATE.index("if abort_reason in _GOOGLE_FILL_ABORTS:")
         self.assertIn('gemini_quota.note_exhausted(model)', TRANSLATE[abort:abort + 600])
         self.assertIn('_google_fill_and_save(chunks, dict(out_blocks_by_index)', TRANSLATE[abort:abort + 1400])
         self.assertIn('_merged_text = _preview_clean(_merged_blocks, src_text)', TRANSLATE)

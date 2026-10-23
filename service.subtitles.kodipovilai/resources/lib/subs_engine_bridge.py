@@ -695,7 +695,8 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
         # from the API but the flag used to be dropped, letting an MT Hebrew
         # sub masquerade as human). Old cached results simply lack the key ->
         # False, same behavior as before.
-        is_mt = ((parsed['download_data'] or {}).get('mt') == 'true')
+        is_mt = ((parsed['download_data'] or {}).get('mt') == 'true'
+                 or _looks_machine_translated(parsed['filename'], label0))
         # Classify. Hebrew (human / machine) first, everything else after.
         if (lang == 'HebrewMachineTranslated'
                 or 'HebrewMachineTranslated' in label0
@@ -1188,6 +1189,32 @@ _LANG_NORMALIZE = {
     'dut': 'nl', 'nld': 'nl', 'por': 'pt', 'ita': 'it',
     'tur': 'tr', 'pol': 'pl', 'chi': 'zh', 'zho': 'zh',
 }
+
+
+# A release / file name that says the subtitle is a machine or AI translation.
+# Only OpenSubtitles flags that and Telegram labels its own files, so a Google
+# or GPT Hebrew file on Wizdom, Ktuvit or SubSource counted as HUMAN Hebrew --
+# the first gender reference, the one the repair proof trusts. MT leans
+# masculine, so it "fixed" correct feminine lines (found by checking another
+# add-on's NG adoptions, Oct 2026). Each pattern needs a translation word next
+# to the engine name, so a film called "AI" or a "Google" in a title passes.
+_SEP = r'[\s._\-()\[\]]*'
+_MT_NAME_RE = re.compile(
+    r'machine' + _SEP + r'translat|'
+    r'auto(?:matic(?:ally)?)?' + _SEP + r'translat|'
+    r'\bMT' + _SEP + r'(?:heb|hebrew|translat)|'
+    r'(?:\bAI|\bA\.I\.|google|deepl|(?:chat)?gpt|gemini|claude|openai)' + _SEP + r'(?:translat|subs?\b|תרגום)|'
+    r'translat\w*' + _SEP + r'(?:by|with|using)?' + _SEP + r'(?:\bAI\b|google|deepl|(?:chat)?gpt|gemini|claude|machine)|'
+    r'\bdeepl\b|'
+    r'תרגום' + _SEP + r'(?:מכונה|אוטומטי|גוגל|AI\b|בינה' + _SEP + r'מלאכותית)|'
+    r'תורגם' + _SEP + r'(?:אוטומטית|(?:ע"?י|על' + _SEP + r'ידי|ב|עם)?' + _SEP
+    + r'(?:מכונה|גוגל|AI\b|בינה' + _SEP + r'מלאכותית|GPT|ג.?י.?פי.?טי))',
+    re.I)
+
+
+def _looks_machine_translated(*names):
+    """True when a release/file name or label says machine/AI translation."""
+    return any(_MT_NAME_RE.search(n or '') for n in names)
 
 
 _PROVIDER_LABEL = {
