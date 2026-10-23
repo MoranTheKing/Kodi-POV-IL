@@ -7,7 +7,9 @@ developer's font: Hebrew shows as boxes for the rest of the session and on
 the login screen of the next start (field report, 22 Oct 2026, AF3 3.4.4 ->
 3.4.6). The Wizard's host watch runs this as soon as the update settles.
 
-Run in its own interpreter, so it may wait without holding anything up:
+The font and the strings go back first, with no wait but for Kodi to load the
+new AF3 (repair()). Then, in its own interpreter, so it may wait without
+holding anything up:
   * for this service's start-up pass, which runs the same patchers -- two
     interpreters writing the skinvariables node files at once can tear them;
   * for playback to end -- the rebuild ends in ReloadSkin;
@@ -28,7 +30,8 @@ from resources.lib import kodi_utils
 # Statuses that will not change by running again: done, nothing to patch, or
 # an anchor AF3 moved (a later MoranSubs fixes that, a retry cannot).
 GOOD = {'patched', 'patched_rebuilt', 'already_patched', 'upgrade_requested',
-        'no_af3', 'no_file', 'unmatched', 'deferred_done'}
+        'no_af3', 'no_file', 'unmatched', 'deferred_done',
+        'restored', 'restored_reloaded'}
 LOCK = 'kodipovil.af3_repair.running'
 REPAIRS_DONE_PROPERTY = 'kodipovil_startup_repairs_done'
 
@@ -54,8 +57,47 @@ def _wait(monitor, window, condition, seconds, step=2, settle=0):
             return None
 
 
+def _restore_font_first(monitor, window, results):
+    """The build's Hebrew font back before anything below waits.
+
+    Kodi unloads AF3 while it installs the update, so wait for Kodi to load
+    it again: files written before that can still be replaced. Then reload
+    the skin as soon as a reload interrupts nothing, or leave the reload to
+    the rebuild below. None when Kodi closes."""
+    from resources.lib import af3_home_patcher
+    loaded = _wait(monitor, window, lambda: xbmc.getCondVisibility(
+        'System.HasAddon(skin.arctic.fuse.3)'), 120)
+    if loaded is not True:
+        return loaded
+    if not af3_home_patcher.restore_hebrew_font():
+        return True
+    results['af3_font'] = 'restored'
+    if not af3_home_patcher._is_af3_active():
+        return True
+    idle = _wait(monitor, window, af3_home_patcher.skin_reload_idle, 60, step=1, settle=5)
+    if idle is None:
+        return None
+    if idle and af3_home_patcher._is_af3_active():
+        af3_home_patcher.reload_skin()
+        results['af3_font'] = 'restored_reloaded'
+        kodi_utils.log('Arctic Fuse 3 update: Hebrew font restored, skin reloaded')
+    return True
+
+
 def repair(monitor, window):
     results = {}
+    # The font first: until it is back every Hebrew letter is a box and AF3's
+    # labels are English, and the waits below took 44 s on a PC and about a
+    # minute on an Android box (field report, 23 Oct 2026). The start-up pass
+    # writes the same bytes at the same offsets and no skinvariables node file
+    # is touched; the reload waits for 5 s of a screen it cannot interrupt
+    # (skin_reload_idle: no media, dialog, POV progress, play on its way, AF3
+    # install or POV cycle), not for 30 quiet seconds.
+    try:
+        if _restore_font_first(monitor, window, results) is None:
+            return None
+    except Exception:
+        results['af3_font'] = 'failed'
     # Start-up pass first (bounded: a MoranSubs without the build pass never
     # publishes it, and the repair is still wanted).
     if _wait(monitor, window, lambda: bool(window.getProperty(REPAIRS_DONE_PROPERTY)), 180) is None:

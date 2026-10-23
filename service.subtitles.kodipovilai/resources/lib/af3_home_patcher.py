@@ -1300,10 +1300,91 @@ def _rebuild_af3_shortcuts():
     xbmc.executebuiltin('RunScript(script.skinvariables,action=buildtemplate,force=True,background=true)')
     xbmc.sleep(1200)
     xbmc.executebuiltin('ReloadSkin()')
+    _mark_reloaded()
     xbmc.sleep(1800)
     xbmc.executebuiltin('SetFocus(310)')
     xbmc.executebuiltin('AlarmClock(POVAF3FocusSpotlight,SetFocus(310),00:02,silent)')
     return True
+
+
+# POV's own progress (full screen or background bar) or its results list, and
+# the play guard's mark (a time.time() stamp, live for a minute): what an
+# autoplay gap between episodes shows (pov_play_guard.POV_WINDOWS/PROPERTY).
+_POV_WINDOWS = ('Window.IsVisible(progress_media.xml) | Window.IsVisible(sources_results.xml)'
+                ' | Window.IsActive(extendedprogressdialog)')
+_PLAY_PROPERTY = 'povil.play.started'
+
+
+def restore_hebrew_font():
+    """Put back only the build's Hebrew font and strings.
+
+    Kodi's update of AF3 replaces the whole skin folder: from then on every
+    Hebrew letter is a box and AF3's labels are English until the full repair,
+    which waits for the start-up pass and 30 quiet seconds -- about a minute
+    on an Android box (field report, 23 Oct 2026). These files are what the
+    viewer sees, they are small, and every writer writes the same bytes, so
+    this runs at once and ensure_patched() still does the rest. True when a
+    file changed; the caller reloads the skin (skin_reload_idle)."""
+    if xbmcvfs is None or not _exists('special://home/addons/' + AF3_SKIN_ID + '/addon.xml'):
+        return False
+    try:
+        changed = _patch_font_xml()
+        return _patch_hebrew_language() or changed
+    except Exception:
+        return False
+
+
+def skin_reload_idle():
+    """Nothing playing, no play on its way and no dialog open: a skin reload
+    now closes nothing. An autoplay gap between episodes shows POV's progress
+    or carries the play guard's mark, so it never counts as idle. Nor do the
+    two moments every other reload here waits out: Kodi with AF3 unloaded for
+    an install (a reload then drops the profile to Estuary, 22 Oct 2026) and
+    POV off for its reload cycle (every POV widget then stays empty for the
+    session -- see pov_reload)."""
+    if xbmc is None:
+        return False
+    try:
+        if (xbmc.getCondVisibility('Player.HasMedia')
+                or xbmc.getCondVisibility('System.HasVisibleModalDialog')
+                or xbmc.getCondVisibility('System.HasActiveModalDialog')
+                or xbmc.getCondVisibility(_POV_WINDOWS)
+                or not xbmc.getCondVisibility('System.HasAddon(' + AF3_SKIN_ID + ')')):
+            return False
+        import xbmcgui
+        started = float(xbmcgui.Window(10000).getProperty(_PLAY_PROPERTY) or 0)
+        if 0 <= time.time() - started < 60.0:
+            return False
+    except Exception:
+        return False
+    try:
+        from resources.lib import pov_reload
+        return not pov_reload.is_cycling()
+    except Exception:
+        return True             # no pov_reload here means no POV cycle to wait out
+
+
+# time.monotonic() (one clock for every interpreter in Kodi) of the last skin
+# reload requested from here: the start-up font restore skips its own reload
+# when the rebuild's came after the font went back.
+RELOADED_PROPERTY = 'povil.af3_reloaded'
+
+
+def _mark_reloaded():
+    try:
+        import xbmcgui
+        xbmcgui.Window(10000).setProperty(RELOADED_PROPERTY, repr(time.monotonic()))
+    except Exception:
+        pass
+
+
+def reload_skin():
+    """ReloadSkin as the rebuild does (focus back on the spotlight); callers
+    wait for skin_reload_idle() first."""
+    xbmc.executebuiltin('ReloadSkin()')
+    _mark_reloaded()
+    xbmc.sleep(1800)
+    xbmc.executebuiltin('SetFocus(310)')
 
 
 def ensure_patched():
