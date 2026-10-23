@@ -175,11 +175,13 @@ class MoranSubsRepairScript(unittest.TestCase):
     """service.subtitles.kodipovilai/repair_af3.py, run with fake Kodi modules."""
 
     def run_script(self, home_status='patched', props=None, playing=(), settled=True, active=True,
-                   rebuild=True):
+                   rebuild=True, font_changed=False, idle=None, loaded=()):
         props = {} if props is None else props
         props.setdefault('kodipovil_startup_repairs_done', '0.3.44')
         calls = []
         playing = list(playing)
+        loaded = list(loaded)
+        idle = (lambda: True) if idle is None else idle
         window = types.SimpleNamespace(getProperty=lambda k: props.get(k, ''),
                                        setProperty=lambda k, v: props.__setitem__(k, v),
                                        clearProperty=lambda k: props.pop(k, None))
@@ -191,11 +193,16 @@ class MoranSubsRepairScript(unittest.TestCase):
             return False
         xbmc = types.SimpleNamespace(
             Monitor=lambda: types.SimpleNamespace(waitForAbort=wait),
-            Player=lambda: types.SimpleNamespace(isPlaying=lambda: playing.pop(0) if playing else False))
+            Player=lambda: types.SimpleNamespace(isPlaying=lambda: playing.pop(0) if playing else False),
+            getCondVisibility=lambda c: (loaded.pop(0) if loaded else True) if 'HasAddon' in c else False,
+            executebuiltin=lambda b: calls.append(('builtin', b)))
         home = types.SimpleNamespace(
             ensure_patched=lambda: calls.append('home') or home_status,
             _is_af3_active=lambda: active,
-            _rebuild_af3_shortcuts=lambda: calls.append('rebuild') or rebuild)
+            _rebuild_af3_shortcuts=lambda: calls.append('rebuild') or rebuild,
+            restore_hebrew_font=lambda: calls.append('font') or font_changed,
+            skin_reload_idle=idle,
+            reload_skin=lambda: calls.append('reload'))
         lib = types.SimpleNamespace(
             kodi_utils=types.SimpleNamespace(log=lambda msg: calls.append(('log', msg))),
             af3_dialog_subtitles_patcher=types.SimpleNamespace(ensure_patched=lambda: 'already_patched'),
@@ -258,6 +265,40 @@ class MoranSubsRepairScript(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIn('home', calls)
 
+    def test_the_font_goes_back_before_the_start_up_wait(self):
+        # field report (23 Oct 2026): boxes for about a minute after an AF3
+        # update -- the start-up and 30-quiet-second waits came first
+        ok, calls, _ = self.run_script(props={'kodipovil_startup_repairs_done': ''}, font_changed=True)
+        self.assertTrue(ok)
+        first_long_wait = calls.index(('wait', 2))
+        self.assertLess(calls.index('font'), calls.index('reload'))
+        self.assertLess(calls.index('reload'), first_long_wait)
+        self.assertEqual(calls[calls.index('font'):calls.index('reload')].count(('wait', 1)), 5)
+        self.assertIn('home', calls)                            # the full repair still follows
+
+    def test_the_font_reload_waits_for_an_idle_screen(self):
+        states = [False, False, True, True, True]               # e.g. POV's resolve dialog first
+        ok, calls, _ = self.run_script(font_changed=True, idle=lambda: states.pop(0) if states else True)
+        self.assertTrue(ok)
+        self.assertGreaterEqual(calls[:calls.index('reload')].count(('wait', 1)), 7)   # 2 busy + 5 idle
+
+    def test_never_idle_leaves_the_reload_to_the_rebuild(self):
+        ok, calls, _ = self.run_script(font_changed=True, idle=lambda: False)
+        self.assertTrue(ok)
+        self.assertNotIn('reload', calls)
+        self.assertIn('home', calls)
+
+    def test_nothing_to_restore_means_no_reload(self):
+        ok, calls, _ = self.run_script(font_changed=False)
+        self.assertTrue(ok)
+        self.assertIn('font', calls)
+        self.assertNotIn('reload', calls)
+
+    def test_waits_for_kodi_to_load_the_new_af3_first(self):
+        ok, calls, _ = self.run_script(font_changed=True, loaded=[False, False, True])
+        self.assertTrue(ok)
+        self.assertEqual(calls[:calls.index('font')].count(('wait', 2)), 2)
+
     def test_playback_must_stay_off_for_30_seconds(self):
         # playing, stopped once (an autoplay gap), playing again, then stopped for good
         ok, calls, _ = self.run_script(playing=[True, False, True])
@@ -265,6 +306,148 @@ class MoranSubsRepairScript(unittest.TestCase):
         before = calls[:calls.index('home')]
         waits = [c for c in before if isinstance(c, tuple) and c == ('wait', 5)]
         self.assertGreaterEqual(len(waits), 8)              # >= 30 s of quiet after the last play
+
+
+class EarlyFontRestore(unittest.TestCase):
+    """service.py: an AF3 that came up without the build's Hebrew font (Kodi
+    replaced it before or during the last session) gets it back before the
+    start-up pass's home-rows wait -- about a minute on an Android box."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.addons = Path(tmp.name) / 'addons'
+        spec = importlib.util.spec_from_file_location('ms_service_early_font', MS / 'service.py')
+        self.service = importlib.util.module_from_spec(spec)
+        with patch.dict(sys.modules, {'xbmc': None}):        # import xbmc fails: main() returns
+            spec.loader.exec_module(self.service)
+        self.calls = []
+        self.skin, self.loaded, self.idle = AF3, True, (lambda: True)
+        self.clock = [0.0]
+
+        def wait(seconds):
+            self.clock[0] += seconds
+            return False
+        self.service.xbmc = types.SimpleNamespace(
+            getSkinDir=lambda: self.skin,
+            getCondVisibility=lambda c: self.loaded,
+            Monitor=lambda: types.SimpleNamespace(waitForAbort=wait))
+        self.service._translate_path = lambda p: str(self.addons / p.split('special://home/addons/')[1])
+        self.home = types.SimpleNamespace(
+            restore_hebrew_font=lambda: self.calls.append('font') or True,
+            skin_reload_idle=lambda: self.idle(),
+            _is_af3_active=lambda: self.skin == AF3,
+            reload_skin=lambda: self.calls.append('reload'),
+            RELOADED_PROPERTY='povil.af3_reloaded')
+        self.props = {}
+        lib = types.SimpleNamespace(af3_home_patcher=self.home,
+                                    kodi_utils=types.SimpleNamespace(log=lambda *a, **k: self.calls.append('log')))
+        gui = types.SimpleNamespace(Window=lambda n: types.SimpleNamespace(getProperty=lambda k: self.props.get(k, '')))
+        self.mods = {'resources': types.SimpleNamespace(lib=lib), 'resources.lib': lib, 'xbmcgui': gui,
+                     'resources.lib.af3_home_patcher': self.home, 'resources.lib.kodi_utils': lib.kodi_utils}
+
+    def font(self, ours):
+        write(self.addons / AF3 / '1080i' / 'Font.xml',
+              '<fonts>%s</fonts>' % ('NotoSans-Regular.ttf' if ours else 'Inter-Regular.ttf'))
+
+    def run_early(self):
+        with patch.dict(sys.modules, self.mods), \
+                patch.object(self.service.threading, 'Thread',
+                             lambda target, daemon: types.SimpleNamespace(start=target)), \
+                patch.object(self.service.time, 'monotonic', lambda: self.clock[0]):
+            self.service._maybe_restore_af3_font_early()
+        return self.calls
+
+    def test_font_missing_restored_and_reloaded_once_idle(self):
+        self.font(ours=False)
+        states = [False, False] + [True] * 20
+        self.idle = lambda: states.pop(0) if states else True
+        self.assertEqual(self.run_early(), ['font', 'reload', 'log'])
+        self.assertLess(self.clock[0], 10)                      # seconds, not a minute
+        self.assertGreaterEqual(self.clock[0], 5)               # 5 s of idle first
+
+    def test_the_usual_boot_reads_one_file_and_stops(self):
+        self.font(ours=True)
+        self.assertEqual(self.run_early(), [])
+
+    def test_other_skins_and_an_install_in_flight_are_left_alone(self):
+        self.font(ours=False)
+        self.skin = 'skin.povil.nox'
+        self.assertEqual(self.run_early(), [])
+        self.skin, self.loaded = AF3, False                      # Kodi has AF3 unloaded
+        self.assertEqual(self.run_early(), [])
+
+    def test_no_second_reload_after_the_rebuild_reloaded(self):
+        # QA: the start-up pass's AF3 rebuild reloaded while a dialog was
+        # open; the restore's own reload once it closed was pure cost
+        self.font(ours=False)
+        self.clock[0] = 100.0
+        states = [False] * 4
+
+        def busy_then_rebuilt():
+            if not states:
+                self.props['povil.af3_reloaded'] = repr(self.clock[0])   # the rebuild's reload
+                return True
+            return states.pop(0)
+        self.idle = busy_then_rebuilt
+        self.assertEqual(self.run_early(), ['font', 'log'])
+        self.props['povil.af3_reloaded'] = '50.0'                        # an older reload counts not
+        self.calls.clear()
+        self.idle = lambda: True
+        self.assertEqual(self.run_early(), ['font', 'reload', 'log'])
+
+    def test_no_idle_moment_leaves_the_reload_to_the_start_up_pass(self):
+        self.font(ours=False)
+        self.idle = lambda: False
+        self.assertEqual(self.run_early(), ['font', 'log'])
+        self.assertGreaterEqual(self.clock[0], 120)
+
+
+class ReloadIdle(unittest.TestCase):
+    """af3_home_patcher.skin_reload_idle: when the font repair may reload the
+    skin -- never over playback, a dialog, POV's progress, a play on its way,
+    Kodi's AF3 install or POV's reload cycle."""
+
+    def setUp(self):
+        self.true = set()
+        self.props = {}
+        self.cycling = False
+        xbmc = types.SimpleNamespace(getCondVisibility=lambda c: c in self.true)
+        gui = types.SimpleNamespace(Window=lambda n: types.SimpleNamespace(getProperty=lambda k: self.props.get(k, '')))
+        vfs = types.SimpleNamespace(translatePath=lambda p: p)
+        pov_reload = types.SimpleNamespace(is_cycling=lambda: self.cycling)
+        lib = types.SimpleNamespace(pov_reload=pov_reload)
+        self.mods = {'xbmc': xbmc, 'xbmcgui': gui, 'xbmcvfs': vfs, 'xbmcaddon': types.SimpleNamespace(),
+                     'resources': types.SimpleNamespace(lib=lib), 'resources.lib': lib,
+                     'resources.lib.pov_reload': pov_reload}
+        with patch.dict(sys.modules, self.mods):
+            self.home = load('af3_home_idle', MS / 'resources/lib/af3_home_patcher.py')
+        self.loaded = 'System.HasAddon(%s)' % AF3
+
+    def idle(self):
+        with patch.dict(sys.modules, self.mods):
+            return self.home.skin_reload_idle()
+
+    def test_each_guard(self):
+        self.true = {self.loaded}
+        self.assertTrue(self.idle())
+        for busy in ('Player.HasMedia', 'System.HasVisibleModalDialog', 'System.HasActiveModalDialog',
+                     self.home._POV_WINDOWS):
+            with self.subTest(busy=busy):
+                self.true = {self.loaded, busy}
+                self.assertFalse(self.idle())
+        self.true = set()                                       # Kodi has AF3 unloaded
+        self.assertFalse(self.idle())
+
+    def test_a_play_on_its_way_and_a_pov_cycle(self):
+        import time as _t
+        self.true = {self.loaded}
+        self.props['povil.play.started'] = str(_t.time() - 10)
+        self.assertFalse(self.idle())
+        self.props['povil.play.started'] = str(_t.time() - 120)  # an old mark is no play
+        self.assertTrue(self.idle())
+        self.cycling = True
+        self.assertFalse(self.idle())
 
 
 class AF3EstuaryRestore(unittest.TestCase):
@@ -395,6 +578,7 @@ class AF3EstuaryRestore(unittest.TestCase):
                                        clearProperty=lambda k: props.pop(k, None))
         monitor = types.SimpleNamespace(waitForAbort=Mock(side_effect=[False] * polls + [True]),
                                         abortRequested=lambda: False)
+        self.watch_waits = monitor.waitForAbort.call_args_list
         self.xbmc.Monitor = lambda: monitor
         self.xbmc.Player = lambda: types.SimpleNamespace(isPlayingVideo=lambda: False)
         with patch.dict(sys.modules, {'xbmcgui': types.SimpleNamespace(Window=lambda n: window)}), \
@@ -421,15 +605,54 @@ class AF3EstuaryRestore(unittest.TestCase):
         self.assertEqual(self.watch.read_skin_memory()[0], AF3)
 
     def test_estuary_while_af3_is_unloaded_for_its_install_is_never_remembered(self):
-        # a slow box: Kodi shows Estuary for minutes before AF3's addon.xml changes
+        # a slow box: Kodi shows Estuary for minutes before AF3's addon.xml
+        # changes, and loads AF3 again once the new folder is in place
         self.skins = [AF3, AF3, AF3] + ['skin.estuary'] * 20
         self.skin = 'skin.estuary'
-        has_addon = [True] * 3 + [False] * 20
+        has_addon = [True] * 3 + [False] * 9 + [True] * 20
         self.xbmc.getCondVisibility = lambda c: has_addon.pop(0) if has_addon else False
         rows = [self.rows(1)] * 12 + [self.rows(2)] * 3
         repair = self.run_watch(rows, 14)
         self.assertEqual(self.watch.read_skin_memory()[0], AF3)
         self.assertEqual(repair.call_args.kwargs['previous_skin'], AF3)
+
+    def test_a_change_is_confirmed_3_s_later_not_a_poll_later(self):
+        # field report (23 Oct 2026): Hebrew boxes for about a minute after
+        # an AF3 update; the first part of that was this watch's 10 s poll
+        self.xbmc.getCondVisibility = lambda c: True          # AF3 loaded again
+        rows = [self.rows(1)] * 3 + [self.rows(2)] * 3
+        repair = self.run_watch(rows, 4)
+        repair.assert_called_once()
+        waits = [c.args[0] for c in self.watch_waits]
+        self.assertEqual(waits[:4], [10, 10, 10, 3])          # change seen, confirmed 3 s later
+
+    def test_no_repair_while_kodi_has_af3_unloaded(self):
+        loaded = [False] * 6 + [True] * 20                    # unloaded from the change on
+        self.xbmc.getCondVisibility = lambda c: loaded.pop(0) if loaded else True
+        rows = [self.rows(1)] + [self.rows(2)] * 10
+        repair = self.run_watch(rows, 9)
+        repair.assert_called_once()
+        waits = [c.args[0] for c in self.watch_waits]
+        # every check while AF3 is unloaded comes 3 s later; the repair only after it loaded
+        self.assertEqual(waits[1:7], [3] * 6)
+
+    def test_a_pov_change_is_not_held_by_an_unloaded_af3(self):
+        self.xbmc.getCondVisibility = lambda c: False          # AF3 disabled/unloaded throughout
+        pov2 = (('plugin.video.pov', 2, 1), ('plugin.video.umbrella', None, None), (AF3, 1, 1))
+        repair = self.run_watch([self.rows(1)] * 2 + [pov2] * 3, 4)
+        repair.assert_called_once()
+        self.assertNotIn(3, [c.args[0] for c in self.watch_waits])   # POV keeps its 10 s polls
+
+    def test_an_af3_that_never_loads_is_repaired_after_the_cap(self):
+        self.xbmc.getCondVisibility = lambda c: False
+        clock = [0.0]
+
+        def tick():
+            clock[0] += 120.0                                   # two minutes per look
+            return clock[0]
+        with patch.object(self.watch.time, 'monotonic', side_effect=tick):
+            repair = self.run_watch([self.rows(1)] + [self.rows(2)] * 12, 10)
+        repair.assert_called_once()
 
     def test_a_wizard_switch_counts_at_once(self):
         # Switch Skin writes the memory file; the watch's in-loop copy is older

@@ -2492,6 +2492,79 @@ def _maybe_patch_af3_home():
             pass
 
 
+def _maybe_restore_af3_font_early():
+    """Arctic Fuse 3 came up without the build's Hebrew font: Kodi replaced
+    the skin before or during the last session and nothing repaired it yet.
+    Every Hebrew letter is a box and AF3's labels are English until the
+    start-up pass reaches AF3 -- after the home rows, about a minute on an
+    Android box (field report, 23 Oct 2026). Put the font back now and reload
+    the skin after 5 s in which a reload interrupts nothing (skin_reload_idle);
+    the start-up pass still does the rest. The usual boot costs one read of a
+    1.4 KB file."""
+    try:
+        if xbmc.getSkinDir() != 'skin.arctic.fuse.3':
+            return
+        # Kodi unloads AF3 while it installs an update: its files are in flux.
+        if not xbmc.getCondVisibility('System.HasAddon(skin.arctic.fuse.3)'):
+            return
+        try:
+            with open(_translate_path(
+                    'special://home/addons/skin.arctic.fuse.3/1080i/Font.xml'), 'rb') as fh:
+                if b'NotoSans-Regular.ttf' in fh.read():
+                    return
+        except OSError:
+            pass
+        from resources.lib import af3_home_patcher, kodi_utils
+        # Monotonic: a box without a real-time clock jumps forward on its
+        # first time sync; and it is one clock for every interpreter in Kodi.
+        started = time.monotonic()
+        if not af3_home_patcher.restore_hebrew_font():
+            return
+    except Exception:
+        return
+
+    def _reload():
+        try:
+            monitor = xbmc.Monitor()
+            held = 0.0
+            import xbmcgui
+            home = xbmcgui.Window(10000)
+            while time.monotonic() - started < 120:
+                try:
+                    reloaded = float(home.getProperty(af3_home_patcher.RELOADED_PROPERTY) or 0)
+                except ValueError:
+                    reloaded = 0.0
+                if reloaded and reloaded >= started:
+                    # The start-up pass's AF3 rebuild got there first and
+                    # reloaded with the font in place (QA: a second reload,
+                    # 91 s in once a dialog closed, was pure cost).
+                    kodi_utils.log('af3: Hebrew font restored at start-up; the AF3 rebuild '
+                                   'reloaded', level='INFO')
+                    return
+                if af3_home_patcher.skin_reload_idle():
+                    held += 0.5
+                    if held >= 5:
+                        if af3_home_patcher._is_af3_active():
+                            af3_home_patcher.reload_skin()
+                            kodi_utils.log('af3: Hebrew font restored at start-up, skin reloaded '
+                                           'after {0:.1f}s'.format(time.monotonic() - started),
+                                           level='INFO')
+                        return
+                else:
+                    held = 0.0
+                if monitor.waitForAbort(0.5):
+                    return
+            kodi_utils.log('af3: Hebrew font restored at start-up; no idle moment for the '
+                           'reload, the start-up pass reloads', level='INFO')
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_reload, daemon=True).start()
+    except Exception:
+        pass
+
+
 def _maybe_show_af3_first_launch_dialog():
     """One-shot: if Arctic Fuse 3 is the active skin and we've never
     shown the first-launch dialog before, prompt the user to connect
@@ -4127,6 +4200,8 @@ def main():
             _start_he_warm_drainer(xbmc.Monitor())
         except Exception:
             pass
+        # Before the home-rows wait: AF3 without its Hebrew font is boxes.
+        _maybe_restore_af3_font_early()
 
     # SubSync deep-verify worker: resolve() delivers the subtitle IMMEDIATELY
     # and queues the slow verification (oracle download / file probe / audio)

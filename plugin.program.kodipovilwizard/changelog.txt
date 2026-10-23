@@ -1,3 +1,7 @@
+0.4.75
+- The host watch confirms an Arctic Fuse 3 change 3 s after it first sees it instead of on its next 10 s poll, and waits while Kodi still has AF3 unloaded for its install (up to 10 minutes). With MoranSubs 0.3.49, which now puts the Hebrew font back first, AF3 shows Hebrew again much sooner after an update by Kodi (field report, 23 Oct 2026: boxes and English labels for about a minute).
+- QA (Windows Kodi, AF3 3.4.6 -> 3.4.8 by Kodi's own updater during a session): boxes for 44 s before, 10-21 s now in three runs; the full AF3 repair still ran afterwards and was acknowledged.
+
 0.4.74
 - Arctic Fuse 3's child-profile Home and profile bootstrap come back in the same session when Kodi updates AF3 during start-up. Seen in QA on the 3.4.6 -> 3.4.8 update: the Wizard put its hooks into the old AF3 at start-up, Kodi replaced the skin seconds later, MoranSubs restored the Hebrew font before the host watch began, and the watch -- which looked only at the font -- left the new AF3 without the hooks until the next restart. It now also checks AF3's Home for them.
 - QA (Windows Kodi): AF3 3.4.7 and 3.4.8 checked against every Wizard and MoranSubs AF3 patch (identical result to 3.4.6). The start-up race reproduced twice; in the second run Kodi's update also removed the font, and the watch restored hooks and font in the session once the start-up notice closed. The hooks-only case is covered by tests. AF3 3.4.8's Hebrew shows in the right order on screen.
