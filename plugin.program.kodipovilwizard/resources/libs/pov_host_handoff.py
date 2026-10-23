@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -81,6 +82,36 @@ def _plan_path(userdata):
     return Path(userdata) / PLAN_NAME
 
 
+def _copy_contents(source, target, suffix):
+    """Copy the bytes only, through a synced temp file swapped into place.
+
+    Not shutil.copy2: it also copies the file's metadata (mode, times,
+    extended attributes), and Android's emulated storage can refuse that with
+    EACCES while allowing the bytes (config_apply notes the same for 0.4.18).
+    Here it surfaced as "[Errno 13] Permission denied" on the temp file, the
+    clean-POV migration stopped at this step and the box stayed on legacy
+    MoranSubs (field log, 23 Oct 2026: Android TV 12, ARM 32-bit, MoranSubs
+    0.2.566). Hardening: a temp left by an interrupted run is removed first."""
+    temp = target.with_name(target.name + suffix)
+    try:
+        temp.unlink()
+    except FileNotFoundError:
+        pass
+    except OSError:
+        try:
+            # Windows will not delete a read-only file; owner-only, since the
+            # temp holds POV's account settings.
+            os.chmod(temp, stat.S_IREAD | stat.S_IWRITE)
+            temp.unlink()
+        except OSError:
+            pass
+    with open(source, 'rb') as reader, open(temp, 'wb') as writer:
+        shutil.copyfileobj(reader, writer)
+        writer.flush()
+        os.fsync(writer.fileno())
+    os.replace(temp, target)
+
+
 def _preserve_settings(userdata):
     """Keep a local copy for rollback; never put account data in a package."""
     source = Path(userdata) / 'addon_data/plugin.video.pov/settings.xml'
@@ -88,9 +119,7 @@ def _preserve_settings(userdata):
     if not source.is_file() or backup.is_file():
         return
     backup.parent.mkdir(parents=True, exist_ok=True)
-    temp = backup.with_name(backup.name + '.tmp')
-    shutil.copy2(source, temp)
-    os.replace(temp, backup)
+    _copy_contents(source, backup, '.tmp')
 
 
 def _restore_settings(userdata):
@@ -98,9 +127,7 @@ def _restore_settings(userdata):
     target = Path(userdata) / 'addon_data/plugin.video.pov/settings.xml'
     if backup.is_file():
         target.parent.mkdir(parents=True, exist_ok=True)
-        temp = target.with_name(target.name + '.migration-restore')
-        shutil.copy2(backup, temp)
-        os.replace(temp, target)
+        _copy_contents(backup, target, '.migration-restore')
 
 
 def read_plan(userdata, host):
@@ -131,6 +158,27 @@ def read_plan(userdata, host):
         return None
 
 
+def _remove_stage(root, host):
+    """Delete one staging folder, only where stage_clean_host creates them."""
+    root = Path(root)
+    if (root.parent == host.parent.parent and
+            root.name.startswith(migration.STAGE_PREFIX) and
+            root.is_dir() and not root.is_symlink()):
+        shutil.rmtree(str(root), ignore_errors=True)
+
+
+def _sweep_stages(host, keep):
+    """Remove stages no plan points to.
+
+    Each attempt that failed after staging left a full POV tree (about 3 MB)
+    beside the addons folder, so a box that retried on every start kept
+    collecting them. complete() has already run in this process by now, and
+    recovery never reads a stage, so only the planned one is still needed."""
+    for root in host.parent.parent.glob(migration.STAGE_PREFIX + '*'):
+        if root != keep:
+            _remove_stage(root, host)
+
+
 def prepare(archive, host, userdata, version, sha256, service_addon):
     """Stage and patch official POV; request a restart before any live swap."""
     import xbmcaddon
@@ -139,6 +187,8 @@ def prepare(archive, host, userdata, version, sha256, service_addon):
     if not Path(service_addon).is_file():
         raise migration.MigrationError('old service has no POV-off migration guard')
     existing = read_plan(userdata, host)
+    keep = existing['stage'].parent if existing else None
+    _sweep_stages(host, keep)
     if existing and existing['version'] == version and existing['sha256'] == sha256:
         if (existing['stage'].is_dir() and
                 _digest_tree(existing['stage']) == existing['tree_digest']):
@@ -146,29 +196,35 @@ def prepare(archive, host, userdata, version, sha256, service_addon):
     stage = migration.stage_clean_host(
         archive, host, sha256, version,
         lambda tree: _identity(tree, version))
-    _patched_stage(stage)
-    digest = _digest_tree(stage)
-    _preserve_settings(userdata)
-    details = _rpc('Addons.GetAddonDetails',
-                   {'addonid': migration.ADDON_ID, 'properties': ['enabled']})
-    was_enabled = bool(details['addon']['enabled'])
-    setting = xbmcaddon.Addon('service.subtitles.kodipovilai')
-    setting.setSetting('_pov_patching_off', 'true')
-    if setting.getSetting('_pov_patching_off') != 'true':
-        raise migration.MigrationError('old POV patcher could not be disabled')
-    now = int(time.time())
-    plan = {'schema': 1, 'addon_id': migration.ADDON_ID, 'version': version,
-            'sha256': sha256, 'tree_digest': digest,
-            'stage_name': stage.parent.name, 'creator_pid': os.getpid(),
-            'was_enabled': was_enabled,
-            'created': now, 'expires': now + 86400}
-    path = _plan_path(userdata)
-    temp = path.with_name(path.name + '.tmp')
-    with open(temp, 'w', encoding='utf-8') as output:
-        json.dump(plan, output, sort_keys=True)
-        output.flush()
-        os.fsync(output.fileno())
-    os.replace(temp, path)
+    try:
+        _patched_stage(stage)
+        digest = _digest_tree(stage)
+        _preserve_settings(userdata)
+        details = _rpc('Addons.GetAddonDetails',
+                       {'addonid': migration.ADDON_ID, 'properties': ['enabled']})
+        was_enabled = bool(details['addon']['enabled'])
+        setting = xbmcaddon.Addon('service.subtitles.kodipovilai')
+        setting.setSetting('_pov_patching_off', 'true')
+        if setting.getSetting('_pov_patching_off') != 'true':
+            raise migration.MigrationError('old POV patcher could not be disabled')
+        now = int(time.time())
+        plan = {'schema': 1, 'addon_id': migration.ADDON_ID, 'version': version,
+                'sha256': sha256, 'tree_digest': digest,
+                'stage_name': stage.parent.name, 'creator_pid': os.getpid(),
+                'was_enabled': was_enabled,
+                'created': now, 'expires': now + 86400}
+        path = _plan_path(userdata)
+        temp = path.with_name(path.name + '.tmp')
+        with open(temp, 'w', encoding='utf-8') as output:
+            json.dump(plan, output, sort_keys=True)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temp, path)
+    except Exception:
+        _remove_stage(stage.parent, host)
+        raise
+    if keep is not None and keep != stage.parent:
+        _remove_stage(keep, host)          # the new plan replaced its plan
     plan['stage'] = stage
     return plan
 
