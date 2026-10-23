@@ -33,6 +33,24 @@ def af3_font_current(addons):
         return False
 
 
+def af3_hooks_current(addons):
+    """False when Arctic Fuse 3's Home lacks the build's profile hooks.
+
+    build_profiles.install_login_hooks puts the profile bootstrap (and the
+    child-profile Home) into every build skin at start-up. When Kodi's
+    start-up repository check replaces AF3 a few seconds later, and
+    MoranSubs restores the font before this watch begins, the font check
+    passes and the new Home ran without the hooks until the next restart
+    (QA, 23 Oct 2026: AF3 3.4.6 -> 3.4.8)."""
+    if not os.path.isfile(os.path.join(addons, AF3_ID, 'addon.xml')):
+        return True
+    try:
+        with open(os.path.join(addons, AF3_ID, '1080i', 'Home.xml'), 'rb') as handle:
+            return b'profile_bootstrap.py' in handle.read()
+    except OSError:
+        return False
+
+
 def current_skin():
     try:
         import xbmc
@@ -352,12 +370,12 @@ def run():
     previous = signature(addons)
     remembered, seen = read_skin_memory()
     fell_back = (remembered == AF3_ID and current_skin() == DEFAULT_SKIN and af3_updated_since(seen))
-    if not af3_font_current(addons) or fell_back:
+    if not af3_font_current(addons) or not af3_hooks_current(addons) or fell_back:
         # Kodi's start-up repository check updated AF3 alongside the build's
         # own start-up (QA: MoranSubs patched 3.4.4 a second before 3.4.6
-        # replaced it) -- its files lack the font, or Kodi's fallback left a
-        # profile last seen on AF3 on Estuary. Treat AF3 as changed so the
-        # first settled poll repairs.
+        # replaced it) -- its files lack the font or the profile hooks, or
+        # Kodi's fallback left a profile last seen on AF3 on Estuary. Treat AF3
+        # as changed so the first settled poll repairs.
         previous = tuple((row[0], -1, -1) if row[0] == AF3_ID else row for row in previous)
     # A skin counts as the profile's only after SKIN_STABLE_POLLS polls with
     # nothing changing; any watched change starts the count again, so Kodi's

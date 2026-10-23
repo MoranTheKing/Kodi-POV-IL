@@ -71,5 +71,34 @@ class MoranSubsUmbrellaLanguages(unittest.TestCase):
 
 
 
+class HebrewTable(unittest.TestCase):
+    def setUp(self):
+        self.he = load('uh_table', MS_LIB / 'umbrella_hebrew_ui_patcher.py',
+                       {'xbmcvfs': types.SimpleNamespace(translatePath=str)}).HE
+
+    def test_rows_umbrella_added_later_are_hebrew(self):
+        # Seen in English on 6.7.96: the main menu's combined search (since
+        # 6.7.93) and the settings export/import rows.
+        for key in ('40829', '40830', '40831', '40786', '40736'):
+            self.assertRegex(self.he[key], '[א-ת]', key)
+
+    def test_custom_service_rows_keep_the_word_umbrella_replaces(self):
+        for key in ('40736', '40737', '40738', '40739', '40740', '40741', '40742',
+                    '40743', '40744', '40745', '40753', '40782', '40783'):
+            self.assertIn('(Custom)', self.he[key], key)
+
+    def test_manager_rows_keep_their_colour_placeholder(self):
+        # getLS(40786) % colour -- a lost %s is a TypeError in the menu
+        for key in ('40786', '40787', '40788', '40789', '40790'):
+            self.assertEqual(self.he[key].count('%s'), 1, key)
+
+    def test_markup_stays_balanced(self):
+        import re
+        for key, text in self.he.items():
+            for tag in ('B', 'I', 'COLOR'):
+                opened = len(re.findall(r'\[%s[\] ]' % tag, text))
+                self.assertEqual(opened, text.count('[/%s]' % tag), key)
+
+
 if __name__ == '__main__':
     unittest.main()
