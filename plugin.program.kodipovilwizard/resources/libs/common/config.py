@@ -228,90 +228,102 @@ class Config:
                              os.path.join(self.USERDATA, 'library')]
 
     def init_settings(self):
-        self.FIRSTRUN = self.get_setting('first_install')
+        # One settings load for the whole batch. Each xbmcaddon.Addon() reads
+        # the settings file again, and with Kodi's debug log on every load
+        # writes a line for each stale key the file still holds from old
+        # Wizard versions (114 on a field box, 24 Oct 2026): 57 loads here
+        # wrote ~6,500 lines per Wizard call, so an uploaded log held nothing
+        # else.
+        def _get(key):
+            try:
+                return self.ADDON.getSetting(key)
+            except Exception:
+                return False
+
+        self.FIRSTRUN = _get('first_install')
 
         # Build variables
-        self.BUILDNAME = self.get_setting('buildname')
-        self.BUILDCHECK = self.get_setting('nextbuildcheck')
-        self.DEFAULTSKIN = self.get_setting('defaultskin')
-        self.DEFAULTNAME = self.get_setting('defaultskinname')
-        self.DEFAULTIGNORE = self.get_setting('defaultskinignore')
-        self.BUILDVERSION = self.get_setting('buildversion')
-        self.BUILDTHEME = self.get_setting('buildtheme')
-        self.BUILDLATEST = self.get_setting('latestversion')
-        self.INSTALLED = self.get_setting('installed')
-        self.EXTRACT = self.get_setting('extract')
-        self.EXTERROR = self.get_setting('errors')
+        self.BUILDNAME = _get('buildname')
+        self.BUILDCHECK = _get('nextbuildcheck')
+        self.DEFAULTSKIN = _get('defaultskin')
+        self.DEFAULTNAME = _get('defaultskinname')
+        self.DEFAULTIGNORE = _get('defaultskinignore')
+        self.BUILDVERSION = _get('buildversion')
+        self.BUILDTHEME = _get('buildtheme')
+        self.BUILDLATEST = _get('latestversion')
+        self.INSTALLED = _get('installed')
+        self.EXTRACT = _get('extract')
+        self.EXTERROR = _get('errors')
         
         # View variables
-        self.SHOW20 = self.get_setting('show20')
-        self.SHOW21 = self.get_setting('show21')
-        self.SHOWADULT = self.get_setting('adult')
-        self.SEPARATE = self.get_setting('separate')
-        self.DEVELOPER = self.get_setting('developer')
+        self.SHOW20 = _get('show20')
+        self.SHOW21 = _get('show21')
+        self.SHOWADULT = _get('adult')
+        self.SEPARATE = _get('separate')
+        self.DEVELOPER = _get('developer')
         
         # Auto-Clean variables
-        self.AUTOCLEANUP = self.get_setting('autoclean')
-        self.AUTOCACHE = self.get_setting('clearcache')
-        self.AUTOPACKAGES = self.get_setting('clearpackages')
-        self.AUTOTHUMBS = self.get_setting('clearthumbs')
-        self.AUTOFREQ = self.get_setting('autocleanfreq')
+        self.AUTOCLEANUP = _get('autoclean')
+        self.AUTOCACHE = _get('clearcache')
+        self.AUTOPACKAGES = _get('clearpackages')
+        self.AUTOTHUMBS = _get('clearthumbs')
+        self.AUTOFREQ = _get('autocleanfreq')
         self.AUTOFREQ = int(float(self.AUTOFREQ)) if str(self.AUTOFREQ).isdigit() else 0
-        self.AUTONEXTRUN = self.get_setting('nextautocleanup')
+        self.AUTONEXTRUN = _get('nextautocleanup')
         
         # Startup force addon updates
-        self.FORCEUPDATEFAST_ONSTARTUP = self.get_setting('forceupdateFAST_on_startup')
-        self.FORCEUPDATEFAST_ONSTARTUP_NOTIFY = self.get_setting('forceupdateFAST_on_startup_notify')
+        self.FORCEUPDATEFAST_ONSTARTUP = _get('forceupdateFAST_on_startup')
+        self.FORCEUPDATEFAST_ONSTARTUP_NOTIFY = _get('forceupdateFAST_on_startup_notify')
         
         # Video Cache variables
-        self.INCLUDEVIDEO = self.get_setting('includevideo')
-        self.INCLUDEALL = self.get_setting('includeall')
+        self.INCLUDEVIDEO = _get('includevideo')
+        self.INCLUDEALL = _get('includeall')
         
         # Notification variables
-        self.NOTIFY = self.get_setting('notify')
-        self.NOTEID = self.get_setting('noteid')
-        self.NOTEDISMISS = self.get_setting('notedismiss')
+        self.NOTIFY = _get('notify')
+        self.NOTEID = _get('noteid')
+        self.NOTEDISMISS = _get('notedismiss')
 
         # Modern Data Preservation Toggles
-        self.KEEPACCTMGR = self.get_setting('keepacctmgr')
-        self.KEEPPOVDATA = self.get_setting('keeppovdata')
-        self.KEEPUMBRELLADATA = self.get_setting('keepumbrelladata')
-        self.KEEPFENTASTICDATA = self.get_setting('keepfentasticdata')
+        self.KEEPACCTMGR = _get('keepacctmgr')
+        self.KEEPPOVDATA = _get('keeppovdata')
+        self.KEEPUMBRELLADATA = _get('keepumbrelladata')
+        self.KEEPFENTASTICDATA = _get('keepfentasticdata')
 
         # Core User Data Toggles
-        self.KEEPFAVS = self.get_setting('keepfavourites')
-        self.KEEPSOURCES = self.get_setting('keepsources')
-        self.KEEPPROFILES = self.get_setting('keepprofiles')
-        self.KEEPPLAYERCORE = self.get_setting('keepplayercore')
-        self.KEEPADVANCED = self.get_setting('keepadvanced')
-        self.KEEPGUISETTINGS = self.get_setting('keepguisettings')
-        self.KEEPREPOS = self.get_setting('keeprepos')
-        self.KEEPSUPER = self.get_setting('keepsuper')
-        self.KEEPWHITELIST = self.get_setting('keepwhitelist')
-        self.KEEPADDONS33DB = self.get_setting('keepaddons33db')
+        self.KEEPFAVS = _get('keepfavourites')
+        self.KEEPSOURCES = _get('keepsources')
+        self.KEEPPROFILES = _get('keepprofiles')
+        self.KEEPPLAYERCORE = _get('keepplayercore')
+        self.KEEPADVANCED = _get('keepadvanced')
+        self.KEEPGUISETTINGS = _get('keepguisettings')
+        self.KEEPREPOS = _get('keeprepos')
+        self.KEEPSUPER = _get('keepsuper')
+        self.KEEPWHITELIST = _get('keepwhitelist')
+        self.KEEPADDONS33DB = _get('keepaddons33db')
 
         # Backup variables
-        backup_path = self.get_setting('path')
+        backup_path = _get('path')
         self.BACKUPLOCATION = xbmcvfs.translatePath(backup_path if backup_path else self.HOME)
         self.MYBUILDS = os.path.join(self.BACKUPLOCATION, 'My_Builds')
         self.ACCTMGR_BACKUP = os.path.join(self.MYBUILDS, 'acctmgr_data')
 
         # Logging variables
-        self.DEBUGLEVEL = self.get_setting('debuglevel')
-        self.ENABLEWIZLOG = self.get_setting('wizardlog')
-        self.CLEANWIZLOG = self.get_setting('autocleanwiz')
-        self.CLEANWIZLOGBY = self.get_setting('wizlogcleanby')
-        self.CLEANDAYS = self.get_setting('wizlogcleandays')
-        self.CLEANSIZE = self.get_setting('wizlogcleansize')
-        self.CLEANLINES = self.get_setting('wizlogcleanlines')
+        self.DEBUGLEVEL = _get('debuglevel')
+        self.ENABLEWIZLOG = _get('wizardlog')
+        self.CLEANWIZLOG = _get('autocleanwiz')
+        self.CLEANWIZLOGBY = _get('wizlogcleanby')
+        self.CLEANDAYS = _get('wizlogcleandays')
+        self.CLEANSIZE = _get('wizlogcleansize')
+        self.CLEANLINES = _get('wizlogcleanlines')
         self.MAXWIZSIZE = [100, 200, 300, 400, 500, 1000]
         self.MAXWIZLINES = [100, 200, 300, 400, 500]
         self.MAXWIZDATES = [1, 2, 3, 7]
-        self.KEEPOLDLOG = self.get_setting('oldlog') == 'true'
-        self.KEEPWIZLOG = self.get_setting('wizlog') == 'true'
-        self.KEEPCRASHLOG = self.get_setting('crashlog') == 'true'
-        self.LOGEMAIL = self.get_setting('email')
-        self.NEXTCLEANDATE = self.get_setting('nextwizcleandate')
+        self.KEEPOLDLOG = _get('oldlog') == 'true'
+        self.KEEPWIZLOG = _get('wizlog') == 'true'
+        self.KEEPCRASHLOG = _get('crashlog') == 'true'
+        self.LOGEMAIL = _get('email')
+        self.NEXTCLEANDATE = _get('nextwizcleandate')
 
     def get_setting(self, key, id=xbmcaddon.Addon().getAddonInfo('id')):
         try:
