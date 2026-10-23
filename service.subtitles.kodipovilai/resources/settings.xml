@@ -300,6 +300,17 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
+        <!-- Hidden marker: the standalone add-on seeded Kodi's subtitle
+             languages with Hebrew once (service._maybe_seed_hebrew_subtitle_prefs).
+             Undeclared, the write was dropped and the seeding re-ran on every
+             start, overriding a language the user picked afterwards. -->
+        <setting id="_he_subs_prefs_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <!-- Hidden marker: which CACHE_RTL_FIX_VERSION has run. -->
         <setting id="_rtl_fix_done" type="string" label="30000">
           <level>4</level>

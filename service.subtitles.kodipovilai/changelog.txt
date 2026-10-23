@@ -1,3 +1,8 @@
+0.3.47
+- The standalone add-on (installed on its own from the repository on the site, or the latest zip) now comes from the same code as the build edition. It had stayed at 0.2.568 since 16 Oct; the subtitle and translation fixes it was missing reach it too -- for example the gender repair, keeping the AI-translated parts when the daily quota runs out, and the subtitle source and timing fixes. Without the build it runs the subtitle service only, as the old standalone did.
+- Standalone: Kodi's subtitle languages are set to Hebrew once, as intended. The one-time marker was never saved, so it ran on every start and overrode a language chosen afterwards; the built-in sources engine was switched back on at every start the same way.
+- The build edition's service runs its player, list and add-on repairs only when the build is detected (always on build devices; nothing changes there). The one-time Ktuvit switch-on also runs on the build only; a standalone user's own Ktuvit choice is kept.
+
 0.3.46
 - Umbrella: 29 more menu rows in Hebrew, among them the main menu's combined search ("חיפוש משולב", English until now since Umbrella 6.7.93), settings export/import, and the newer watch-list rows and their managers. Service names stay as they are, "Custom" included (Umbrella replaces it with the name the user gave that service). The combined-search label is short enough for an Arctic Fuse 3 tile, where a longer label shows only its last word.
 - QA (Windows Kodi, Umbrella 6.7.96): Hebrew for 302 strings installed; the menus show them after a restart, in Nox and in Arctic Fuse 3; the order of Hebrew next to "(TMDb)" checked in Nox.
