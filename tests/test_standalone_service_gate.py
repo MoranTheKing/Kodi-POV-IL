@@ -32,6 +32,7 @@ BUILD_ONLY = {
     '_start_service_mirror_keeper',
     # The build switched Ktuvit off during its outage; the standalone never did.
     '_maybe_reenable_ktuvit',
+    '_maybe_restore_af3_font_early',
 }
 STANDALONE_ONLY = {'_maybe_purge_temp_once', '_maybe_seed_hebrew_subtitle_prefs',
                    # the build runs _maybe_refresh_shared_sdh in its startup repairs
