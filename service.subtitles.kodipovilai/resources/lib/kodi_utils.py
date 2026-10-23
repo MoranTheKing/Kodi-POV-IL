@@ -460,6 +460,7 @@ def current_video_info():
         'imdb_id': '', 'tmdb_id': '', 'title': '', 'year': '',
         'season': '', 'episode': '', 'language': '', 'filepath': '',
         'tvshow': '', 'is_episode': False, 'tagline': '', 'label': '',
+        'dbid': '',
     }
     if not KODI_AVAILABLE:
         return info
@@ -478,6 +479,9 @@ def current_video_info():
     # UniqueId mechanism even when imdb is empty. Wyzie accepts
     # either, so this is our main fallback for streams.
     info['tmdb_id']  = gi('VideoPlayer.UniqueId(tmdb)')
+    # Set only for a Kodi library item -- whose episode TMDB id is the
+    # EPISODE's, not the show's (POV and Umbrella give the show's).
+    info['dbid']     = gi('VideoPlayer.DBID')
     info['title']    = gi('VideoPlayer.Title') or gi('VideoPlayer.OriginalTitle')
     info['year']     = gi('VideoPlayer.Year')
     info['season']   = gi('VideoPlayer.Season')
