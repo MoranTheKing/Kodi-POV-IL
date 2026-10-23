@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-10-23T14:42:58Z",
+  "generated": "2026-10-23T17:11:34Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -16,12 +16,12 @@
   },
   "umbrella_pin": {
     "id": "plugin.video.umbrella",
-    "version": "6.7.96",
-    "filename": "plugin.video.umbrella-6.7.96.zip",
-    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.umbrella-6.7.96.zip",
-    "size": 10908488,
-    "sha256": "291096fdc820926b3d8c88ca5103c4d265da1ff49093dafbcdc2d21a8ce8dcb7",
-    "upstream_zip": "https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/omega/zips/plugin.video.umbrella/plugin.video.umbrella-6.7.96.zip"
+    "version": "6.7.97",
+    "filename": "plugin.video.umbrella-6.7.97.zip",
+    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.umbrella-6.7.97.zip",
+    "size": 10910556,
+    "sha256": "e1a428c1ccce1af29315283868ea019a030f99bcca9b5804cfd01c57d0cba45e",
+    "upstream_zip": "https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/omega/zips/plugin.video.umbrella/plugin.video.umbrella-6.7.97.zip"
   },
   "config": {
     "config_version": "2.0.9",
