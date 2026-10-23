@@ -51,10 +51,15 @@ class HostWatchAF3(unittest.TestCase):
         self.addCleanup(mods.stop)
         self.watch = load('af3_watch', LIBS / 'host_patch_watch.py')
 
-    def install_af3(self, ours=True):
+    def install_af3(self, ours=True, hooks=None):
         write(self.addons / AF3 / 'addon.xml', '<addon id="%s" version="3.4.6"/>' % AF3)
         write(self.addons / AF3 / '1080i' / 'Font.xml',
               '<fonts>%s</fonts>' % ('NotoSans-Regular.ttf' if ours else 'Inter-Regular.ttf'))
+        hooked = ours if hooks is None else hooks
+        write(self.addons / AF3 / '1080i' / 'Home.xml',
+              '<window>%s<controls/></window>' % (
+                  '<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/'
+                  'profile_bootstrap.py)</onload>' if hooked else ''))
 
     def test_font_check(self):
         self.assertTrue(self.watch.af3_font_current(str(self.addons)))     # no AF3: nothing to do
@@ -62,6 +67,15 @@ class HostWatchAF3(unittest.TestCase):
         self.assertFalse(self.watch.af3_font_current(str(self.addons)))
         self.install_af3(ours=True)
         self.assertTrue(self.watch.af3_font_current(str(self.addons)))
+
+    def test_hooks_check(self):
+        self.assertTrue(self.watch.af3_hooks_current(str(self.addons)))    # no AF3: nothing to do
+        self.install_af3(ours=True, hooks=False)
+        self.assertFalse(self.watch.af3_hooks_current(str(self.addons)))
+        self.install_af3(ours=True, hooks=True)
+        self.assertTrue(self.watch.af3_hooks_current(str(self.addons)))
+        (self.addons / AF3 / '1080i' / 'Home.xml').unlink()
+        self.assertFalse(self.watch.af3_hooks_current(str(self.addons)))
 
     def af3_repair(self, moransubs_result):
         calls = []
@@ -104,7 +118,16 @@ class HostWatchAF3(unittest.TestCase):
             self.assertFalse(self.watch.repair_changed(str(self.addons), old, old[:2] + ((AF3, 2, 1),), None, None))
 
     def test_an_update_before_the_watch_started_is_repaired_on_the_first_settled_poll(self):
-        self.install_af3(ours=False)
+        for ours, hooks in ((False, False), (True, False)):
+            with self.subTest(font=ours, hooks=hooks):
+                self.install_af3(ours=ours, hooks=hooks)
+                self.start_up_repair()
+
+    def test_nothing_to_repair_at_start_up(self):
+        self.install_af3(ours=True, hooks=True)
+        self.assertIsNone(self.start_up_repair(expect=False))
+
+    def start_up_repair(self, expect=True):
         rows = (('plugin.video.pov', 1, 1), ('plugin.video.umbrella', None, None), (AF3, 5, 5))
         props = {}
         window = types.SimpleNamespace(getProperty=lambda k: props.get(k, ''),
@@ -121,10 +144,14 @@ class HostWatchAF3(unittest.TestCase):
                 patch.object(self.watch, 'signature', return_value=rows), \
                 patch.object(self.watch, 'repair_changed', return_value=True) as repair:
             self.watch.run()
+        if not expect:
+            repair.assert_not_called()
+            return None
         repair.assert_called_once()
         previous, current = repair.call_args[0][1:3]
         self.assertEqual(dict((r[0], r[1:]) for r in previous)[AF3], (-1, -1))
         self.assertEqual(current, rows)
+        return True
 
     def test_moransubs_repair_runner(self):
         props = {}
@@ -263,6 +290,7 @@ class AF3EstuaryRestore(unittest.TestCase):
         self.watch = load('af3_restore_watch', LIBS / 'host_patch_watch.py')
         write(self.addons / AF3 / 'addon.xml', '<addon/>')
         write(self.addons / AF3 / '1080i' / 'Font.xml', 'NotoSans-Regular.ttf')
+        write(self.addons / AF3 / '1080i' / 'Home.xml', 'profile_bootstrap.py')   # hooks in place
         def switch(target):
             if self.switch_ok:
                 self.skin = target
