@@ -1,6 +1,8 @@
+0.3.48
+- Standalone, on an upgrade from the old standalone (0.2.568 or earlier): the built-in sources engine switch-on and the fast first chunk default, which the old standalone had already applied once, are no longer applied a second time. 0.3.47 applied them again and undid a choice made since: a built-in engine turned off came back on (MoranSubs became Kodi's default subtitle service, and DarkSubs, if installed, was switched off), and a fast first chunk turned off came back on. If that happened to you, turn it off again in MoranSubs' settings; it stays off, and DarkSubs is switched back on at the next start. Kodi's default subtitle service does not change back by itself: pick it again in Kodi's subtitle settings if it was another one. (The 0.3.47 note that the old standalone re-ran its one-time settings on every start was wrong and is removed.)
+
 0.3.47
 - The standalone add-on (installed on its own from the repository on the site, or the latest zip) now comes from the same code as the build edition. It had stayed at 0.2.568 since 16 Oct; the subtitle and translation fixes it was missing reach it too -- for example the gender repair, keeping the AI-translated parts when the daily quota runs out, and the subtitle source and timing fixes. Without the build it runs the subtitle service only, as the old standalone did.
-- Standalone: Kodi's subtitle languages are set to Hebrew once, as intended. The one-time marker was never saved, so it ran on every start and overrode a language chosen afterwards; the built-in sources engine was switched back on at every start the same way.
 - The build edition's service runs its player, list and add-on repairs only when the build is detected (always on build devices; nothing changes there). The one-time Ktuvit switch-on also runs on the build only; a standalone user's own Ktuvit choice is kept.
 
 0.3.46
