@@ -316,6 +316,42 @@ def show_result(message, url=None):
     xbmcgui.Dialog().ok(CONFIG.ADDONTITLE, message)
 
 
+_SETTINGS_NOISE = ('<CSettingsManager>: requested setting (', ') was not found')
+
+
+def _drop_settings_noise(data):
+    """Kodi's debug "requested setting (x) was not found" lines, taken out.
+
+    With debug logging on, Kodi writes one for every stale key in an add-on's
+    settings file each time the file is loaded. A field log (24 Oct 2026)
+    was ~5,500 such lines in its last second -- the 600 KB we keep held
+    nothing else, and the problem it was meant to show was cut off.
+
+    Returns (text, header): header names how many lines and which keys were
+    taken out, '' when none were."""
+    try:
+        if not isinstance(data, str) or _SETTINGS_NOISE[0] not in data:
+            return data, ''
+        kept, dropped, keys = [], 0, []
+        for line in data.split('\n'):
+            if _SETTINGS_NOISE[0] in line and _SETTINGS_NOISE[1] in line:
+                dropped += 1
+                key = line.split(_SETTINGS_NOISE[0], 1)[1].split(_SETTINGS_NOISE[1], 1)[0]
+                if key not in keys:
+                    keys.append(key)
+            else:
+                kept.append(line)
+        names = ', '.join(keys)
+        if len(names) > 3000:
+            names = names[:3000] + ', ...'
+        header = ('[Kodi POV IL Wizard] {0} debug lines "requested setting (...) was '
+                  'not found" removed from this log ({1} keys: {2})\n'.format(
+                      dropped, len(keys), names))
+        return '\n'.join(kept), header
+    except Exception:
+        return data, ''
+
+
 def post_log(data, name):
     """Upload the given log contents and return (success, url_or_error_msg).
 
@@ -333,11 +369,17 @@ def post_log(data, name):
         log(msg, level=xbmc.LOGERROR)
         return False, msg
 
+    data, header = _drop_settings_noise(data)
+
     # Keep the most-recent ~600 KB: Hastebin caps document size, and the tail
-    # of the log is where the actual error is. Logs only grow at the end.
+    # of the log is where the actual error is. Logs only grow at the end. The
+    # header goes on AFTER the cut, so a long log still says what was removed.
     try:
-        if isinstance(data, str) and len(data) > 600000:
-            data = data[-600000:]
+        if isinstance(data, str):
+            room = 600000 - len(header)
+            if len(data) > room:
+                data = data[-room:]
+            data = header + data
     except Exception:
         pass
 
