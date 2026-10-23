@@ -8,7 +8,7 @@
 # moved anchor, update the line here.
 plugin.video.pov: 6.10.21
 plugin.video.idanplus: 4.0.2
-skin.arctic.fuse.3: 3.4.6
+skin.arctic.fuse.3: 3.4.8
 plugin.video.umbrella: 6.7.96
 plugin.video.otaku: 5.3.4
 script.module.acctmgr: 1.2.0a
