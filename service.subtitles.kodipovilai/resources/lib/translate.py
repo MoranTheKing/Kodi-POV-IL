@@ -43,8 +43,23 @@ _NUMBERED_REQUESTS = False
 # After a gender-referenced translation, Hebrew lines the readers cannot read
 # on a role the reference marks are labelled by one blind classifier request
 # (SRT AI Translator NG's Method B); contradictions join the guarded repair.
-_GENDER_CLASSIFIER = True
+# OFF since 0.3.51, as NG keeps it: measured in the QA Kodi (5 titles with a
+# Hebrew reference, 23 Oct 2026, blind A/B of every line the repair changed)
+# it changed 5 lines -- 2 better, 2 worse, 1 no difference -- for one extra
+# request per title. The readers' own repairs: 34 changed, 17 better, 9 worse.
+_GENDER_CLASSIFIER = False
 _CLASSIFIER_MAX_LINES = 200
+
+# Aborts that keep the finished AI chunks and send only the rest to Google
+# (_google_fill_and_save). 'cancelled' and 'invalid_key' are not here.
+_GOOGLE_FILL_ABORTS = ('quota', 'ratelimit', 'overload', 'error', 'crash')
+_GOOGLE_FALLBACK_WHY = {
+    'quota': 'מכסת ה-AI היומית נגמרה',
+    'ratelimit': 'AI: עומס זמני חורג',
+    'overload': 'Gemini עמוס',
+    'error': 'שגיאת AI',
+    'crash': 'שגיאת AI',
+}
 from . import kodi_utils
 from . import local_subs
 from . import prompt
@@ -1815,7 +1830,7 @@ def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
                        len(missing_blocks),
                        ' (from the cached file)' if google_chunks else ''),
                    level='WARNING')
-    why = {'quota': 'מכסת ה-AI היומית נגמרה', 'ratelimit': 'AI: עומס זמני חורג'}.get(reason, 'AI')
+    why = _GOOGLE_FALLBACK_WHY.get(reason, 'AI')
     kodi_utils.notify('{0} — {1} מתוך {2} חלקים תורגמו ב-AI, השאר ב-Google Translate'.format(
         why, len(done_by_index), len(chunks)), time_ms=4000)
     return translated
@@ -1884,10 +1899,8 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
     except Exception as e:
         kodi_utils.log('google save failed: {0}'.format(e), level='WARNING')
         return None
-    if reason == 'quota':
-        _fb_msg = 'מכסת ה-AI היומית נגמרה — תורגם עם Google Translate'
-    elif reason == 'ratelimit':
-        _fb_msg = 'AI: עומס זמני חורג — תורגם עם Google Translate'
+    if reason in _GOOGLE_FALLBACK_WHY:
+        _fb_msg = _GOOGLE_FALLBACK_WHY[reason] + ' — תורגם עם Google Translate'
     else:
         _fb_msg = 'תורגם עם Google Translate'
     kodi_utils.notify(_fb_msg, time_ms=4000)
@@ -1932,6 +1945,12 @@ def _is_mostly_hebrew(text, min_ratio=0.30):
     if letters < 20:
         return False  # almost no text -> treat as failed
     return (he / letters) >= min_ratio
+
+
+def _answered(source_blocks, response):
+    """How many requested entries a reply answers: blocks whose start time is
+    one the chunk asked for (srt.align_blocks), not paragraphs of any kind."""
+    return len(srt.align_blocks(source_blocks, srt.parse_blocks(response)))
 
 
 def _is_untranslated_chunk_response(source_blocks, response_blocks):
@@ -3742,8 +3761,23 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # going silent between 'Starting translation' and the dispatch summary, never
     # reaching the executor. These pin WHICH pre-dispatch step hangs.
     kodi_utils.log('translate step: resolving cast metadata', level='INFO')
-    # Cast metadata (cached per-imdb).
-    meta_path = cache.metadata_path(imdb_id) if imdb_id else None
+    # Cast metadata, cached per title -- and per EPISODE: an episode's guest
+    # stars are its own, and a per-show cache lent the first translated
+    # episode's guests to every later one (their roles missing from the
+    # prompt). With no IMDb id the player's TMDB id is used (POV and Umbrella
+    # set the show's), where there used to be no cast at all.
+    _cast_tmdb = '' if imdb_id else (info.get('tmdb_id') or '').strip()
+    if not _cast_tmdb.isdigit():
+        _cast_tmdb = ''
+    if (_cast_tmdb and info.get('is_episode')
+            and str(info.get('dbid') or '').strip() not in ('', '-1', '0')):
+        _cast_tmdb = ''     # a library episode's own id, not its show's
+    _cast_media = 'tv' if info.get('is_episode') else 'movie'
+    meta_key = imdb_id or ('tmdb{0}_{1}'.format(_cast_media, _cast_tmdb)
+                           if _cast_tmdb else '')
+    if meta_key and info.get('is_episode') and season and episode:
+        meta_key = '{0}_S{1}E{2}'.format(meta_key, season, episode)
+    meta_path = cache.metadata_path(meta_key) if meta_key else None
     cast = None
     title = info.get('title') or ''
     year = info.get('year') or ''
@@ -3768,11 +3802,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     if cast is None:
         try:
             cast = tmdb_helper.fetch_cast(
-                imdb_id=imdb_id,
-                media_type=('tv' if info.get('is_episode') else 'movie'),
+                imdb_id=imdb_id or None, tmdb_id=_cast_tmdb or None,
+                media_type=_cast_media,
                 season=season, episode=episode,
             )
-            t2, y2 = tmdb_helper.title_and_year(imdb_id=imdb_id)
+            t2, y2 = tmdb_helper.title_and_year(
+                imdb_id=imdb_id or None, tmdb_id=_cast_tmdb or None,
+                media_type=_cast_media)
             title = title or t2
             year = year or y2
             if meta_path:
@@ -4392,6 +4428,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     .format(idx, mid, len(ch) - mid), level='WARNING')
                 return (_translate_one(idx, ch[:mid], deadline, try_alts) + '\n\n'
                         + _translate_one(idx, ch[mid:], deadline, try_alts))
+            except gemini.StoppedEarly:
+                # RECITATION (song lyrics), SPII...: another reference language
+                # cannot change what the model will not write, and each one is a
+                # download and two requests. Isolate the line directly.
+                _count('blocks')
+                mid = len(ch) // 2
+                kodi_utils.log(
+                    'Chunk {0} stopped early -- bisecting into {1} + {2}'
+                    .format(idx, mid, len(ch) - mid), level='WARNING')
+                return (_translate_one(idx, ch[:mid], deadline, False) + '\n\n'
+                        + _translate_one(idx, ch[mid:], deadline, False))
             except gemini.FilteredResponse:
                 _count('blocks')
                 # 1) Try the WHOLE chunk with the next human-subtitle language(s)
@@ -4413,7 +4460,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             break      # too long -> stop trying alts, isolate
                         # Accept only if the yield is adequate (Gemini can silently
                         # drop entries); otherwise stop and isolate by bisection.
-                        if len(srt.parse_blocks(_resp)) < max(1, int(len(ch) * 0.85)):
+                        if _answered(ch, _resp) < max(1, int(len(ch) * 0.85)):
                             break
                         kodi_utils.log(
                             'Chunk {0} passed with fallback reference [{1}]'
@@ -4440,8 +4487,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # Yield check: did we get back roughly as many entries
             # as we asked for? Gemini sometimes drops entries
             # mid-chunk, leaving silent gaps in the final SRT.
-            # Threshold 85% -- below that, bisect and re-do.
-            got = len(srt.parse_blocks(response))
+            # Threshold 85% -- below that, bisect and re-do. Count only
+            # entries that answer a requested start time: a reply that lost
+            # every timecode still has 50 paragraphs, passed a plain count,
+            # and then the top-up found every entry missing and kept the
+            # whole chunk in the source language.
+            got = _answered(ch, response)
             expected = len(ch)
             if got < max(1, int(expected * 0.85)):
                 mid = expected // 2
@@ -4480,12 +4531,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 level='ERROR')
             _count('src', len(ch))
             return e.partial_text or ''
-        except gemini.FilteredResponse:
+        except gemini.FilteredResponse as _blocked:
             # This ONE entry blocked with the primary reference. Preserve gender
             # if at all possible: try each ALTERNATE human-subtitle language
-            # first (e.g. Spanish after Arabic)...
+            # first (e.g. Spanish after Arabic)... -- not for an early stop
+            # (RECITATION...), which no reference language changes.
             _count('blocks')
-            for _lvl in range(1, _MAX_ALT_LEVELS + 1):
+            for _lvl in range(1, (0 if isinstance(_blocked, gemini.StoppedEarly)
+                                  else _MAX_ALT_LEVELS) + 1):
                 # Cap the uninterruptible window: once past the block-budget, stop
                 # trying more languages for THIS line and degrade -- so one
                 # pathological chunk can't hog the shared RPM gate for other jobs.
@@ -4962,11 +5015,20 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # The viewer changed film or subtitle. Do not spend another API
             # request, show an error, publish telemetry or save partial output.
             return None
-        # Daily quota exhausted OR a per-minute rate limit that outlasted all the
-        # retries -> fall back to Google Translate so the user still gets Hebrew
-        # (machine quality; never pooled). Other aborts (invalid key, overload,
-        # error) surface as before so the user can fix them.
-        if abort_reason in ('quota', 'ratelimit'):
+        # Daily quota exhausted, a per-minute rate limit that outlasted all the
+        # retries, Gemini still overloaded after the whole backoff, a request /
+        # network error that kept failing, or an unexpected exception in a
+        # chunk (telemetry keeps its detail) -> keep the chunks Gemini finished
+        # and let Google translate the rest, so the user still gets Hebrew
+        # (machine quality; never pooled; a later watch re-translates it with
+        # AI). Overload and error used to drop every finished chunk and leave
+        # nothing on screen -- nothing the user can fix. An invalid key still
+        # surfaces as before: that one the user has to fix.
+        if abort_reason in _GOOGLE_FILL_ABORTS:
+            if abort_reason in ('error', 'crash'):
+                # A retired model name or an API that is not enabled is the
+                # user's to fix: Google's Hebrew must not hide why AI failed.
+                kodi_utils.notify(abort_msg, time_ms=5000)
             if abort_reason == 'quota':
                 try:
                     from . import gemini_quota
@@ -5003,7 +5065,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         })
                     except Exception:
                         pass
-                _emit(True, 'google')
+                _emit(True, 'google' if abort_reason in ('quota', 'ratelimit')
+                      else 'google after abort:{0}{1}'.format(
+                          abort_reason,
+                          (': ' + abort_detail) if abort_detail else ''))
                 return delivered_path
         kodi_utils.notify(abort_msg, time_ms=5000)
         _kept = _keep_replaced_google(abort_reason)
@@ -5496,7 +5561,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             except Exception:
                 return True
             return False
-        def _residual_request(prompt_text, temperature=0.0):
+        def _residual_request(prompt_text, temperature=0.0, output_cap=4096):
             _gemini_rate_gate(_rpm_interval)
             # A user can cancel or choose another subtitle while pacing waits.
             if _residual_cancelled():
@@ -5504,7 +5569,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             return _repair_generate(
                 cancelled=_residual_cancelled,
                 api_key=api_key, model=model, prompt=prompt_text,
-                temperature=temperature, max_output_tokens=min(max_output_tokens, 4096),
+                temperature=temperature, max_output_tokens=min(max_output_tokens, output_cap),
                 top_p=top_p, thinking_budget=thinking_budget,
                 thinking_level=thinking_level,
                 timeout=min(gemini_timeout or gemini.REQUEST_TIMEOUT, 60))
@@ -5532,6 +5597,20 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 out_blocks, _script_counts = script_residual.repair(
                     _aligned_source, out_blocks,
                     lambda text: _residual_request(text, temperature=0.7),
+                    cancelled=_residual_cancelled)
+            # The reply ran into the 4096-token cap -- thinking counts against
+            # it on Gemini 3 -- and nothing was repaired. Measured in QA (Mean
+            # Girls, 23 Oct 2026): "0/24 lines repaired (TruncatedResponse)",
+            # after which the Arabic cleanup deleted or spelled out Arabic in
+            # 21 lines instead. Ask once more with room to finish.
+            elif (_script_counts['selected'] and not _script_counts['repaired']
+                    and 'Truncated' in (_script_counts['error'] or '')):
+                kodi_utils.log('Foreign-script repair: the reply was cut off at the '
+                               'output cap -- asking once more with a larger one',
+                               level='INFO')
+                out_blocks, _script_counts = script_residual.repair(
+                    _aligned_source, out_blocks,
+                    lambda text: _residual_request(text, output_cap=12288),
                     cancelled=_residual_cancelled)
             if _script_counts['selected']:
                 kodi_utils.log('Foreign-script repair: {0}/{1} lines repaired '

@@ -124,8 +124,21 @@ class FilteredResponse(GeminiError):
         self.partial_text = partial_text
 
 
+class StoppedEarly(FilteredResponse):
+    """The reply has text but the model stopped for a reason other than the end
+    of its answer or the token cap (RECITATION, SPII, LANGUAGE, OTHER...).
+    Subtitle translation treats it as a block; the audio path keeps the text."""
+
+
 _FILTERED_FINISH_REASONS = frozenset((
     'SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST',
+))
+# The model stopped early for a reason that is not the end of its answer, the
+# token cap or a safety block. Named, not "anything unknown": a new harmless
+# reason Google may add must not send every chunk down the block ladder.
+_EARLY_STOP_REASONS = frozenset((
+    'RECITATION', 'SPII', 'LANGUAGE', 'OTHER', 'MALFORMED_FUNCTION_CALL',
+    'IMAGE_SAFETY', 'UNEXPECTED_TOOL_CALL',
 ))
 _CONTENT_REJECTION_RE = re.compile(
     r'PROHIBITED_CONTENT|'
@@ -246,10 +259,25 @@ def _generated_text(data):
             partial_text=text,
         )
     if not text:
-        if finish_reason in ('OTHER', ''):
+        if finish_reason in ('MAX_TOKENS', 'LENGTH'):
+            # Thinking used the whole output budget: a smaller request helps.
+            raise TruncatedResponse(
+                'empty reply at the output-token cap (finish={0})'.format(
+                    finish_reason))
+        if finish_reason in _EARLY_STOP_REASONS or not finish_reason:
             raise FilteredResponse(
                 'empty/blocked content (finish={0})'.format(finish_reason))
         raise GeminiError('Empty text in response')
+    if finish_reason in _EARLY_STOP_REASONS:
+        # RECITATION (song lyrics, quoted text), SPII, LANGUAGE, OTHER...: the
+        # model stopped early, so the text is a cut-off reply. These used to be
+        # accepted as complete (a last cue cut mid-sentence shipped) or, when
+        # empty, end the whole job as a generic error. The caller's ladder
+        # isolates the line the model would not write.
+        raise StoppedEarly(
+            'reply stopped early (finish={0})'.format(finish_reason),
+            partial_text=text,
+        )
     if finish_reason in ('MAX_TOKENS', 'LENGTH'):
         raise TruncatedResponse(
             'Gemini hit output-token cap (finishReason={0})'.format(
@@ -414,7 +442,12 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
         gemini_quota.note_request(model)
     except Exception:
         pass
-    return _generated_text(data)
+    try:
+        return _generated_text(data)
+    except StoppedEarly as e:
+        # A speech list cut off by RECITATION (sung lyrics) still has its
+        # earlier cues; SubSync used them before 0.3.51 and still does.
+        return e.partial_text
 
 
 def generate(api_key, model, prompt, temperature=0.2,
