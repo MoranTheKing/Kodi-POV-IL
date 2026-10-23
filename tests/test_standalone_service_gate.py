@@ -35,7 +35,8 @@ BUILD_ONLY = {
 }
 STANDALONE_ONLY = {'_maybe_purge_temp_once', '_maybe_seed_hebrew_subtitle_prefs',
                    # the build runs _maybe_refresh_shared_sdh in its startup repairs
-                   '_start_shared_sdh_refresh'}
+                   '_start_shared_sdh_refresh',
+                   '_adopt_old_standalone_markers'}
 # DarkSubs integration, both editions (the old slim service ran it too), only
 # while DarkSubs is active.
 DARKSUBS = {
@@ -149,6 +150,55 @@ class ServiceGate(unittest.TestCase):
             service._start_shared_sdh_refresh(types.SimpleNamespace(waitForAbort=lambda s: True))
         aborted[0]()
         self.assertEqual(ran, [True])          # Kodi stopping during the settle: no fetch
+
+    def test_old_standalone_markers_are_adopted_before_their_one_shots(self):
+        # 0.3.47 ran the engine rollout and the fast-first-chunk default a
+        # second time on an upgrade from the 0.2.x standalone, which had done
+        # them under older marker names, and undid a choice made since.
+        service = load_service()
+        order = []
+        for name in main_calls() - {'_is_kodi_pov_il_build', '_check_first_run_marker'}:
+            if hasattr(service, name) and callable(getattr(service, name)):
+                setattr(service, name, (lambda n: lambda *a, **k: order.append(n))(name))
+        service._is_kodi_pov_il_build = lambda: False
+        service._check_first_run_marker = lambda: False
+        monitor = types.SimpleNamespace(abortRequested=lambda: False, waitForAbort=lambda s=0: True)
+        service.xbmc = types.SimpleNamespace(Monitor=lambda: monitor, LOGINFO=1, LOGWARNING=2)
+        lib = types.ModuleType('resources.lib')
+        lib.kodi_utils = types.SimpleNamespace(get_bool=lambda k, d=False: True, log=lambda *a, **k: None)
+        with patch.dict(sys.modules, {'resources': types.ModuleType('resources'), 'resources.lib': lib,
+                                      'resources.lib.kodi_utils': lib.kodi_utils}):
+            service.main()
+        adopt = order.index('_adopt_old_standalone_markers')
+        self.assertLess(adopt, order.index('_maybe_default_builtin_engine'))
+        self.assertLess(adopt, order.index('_maybe_default_fast_first_chunk'))
+
+        def run(stored):
+            service = load_service()
+            stored = dict(stored)
+            ku = types.SimpleNamespace(get_setting=lambda k, d='': stored.get(k, d),
+                                       set_setting=lambda k, v: stored.__setitem__(k, v),
+                                       log=lambda *a, **k: None)
+            lib = types.ModuleType('resources.lib')
+            lib.kodi_utils = ku
+            with patch.dict(sys.modules, {'resources': types.ModuleType('resources'), 'resources.lib': lib,
+                                          'resources.lib.kodi_utils': ku}):
+                # in main()'s order: the adoption, then the real one-shots
+                service._adopt_old_standalone_markers()
+                service._maybe_default_builtin_engine()
+                service._maybe_default_fast_first_chunk()
+            return stored
+
+        upgraded = run({'_builtin_engine_rollout_v1': '1', '_fast_first_chunk_default_done': '1',
+                        'use_builtin_engine': 'false', 'fast_first_chunk': 'false'})
+        self.assertEqual((upgraded['use_builtin_engine'], upgraded['fast_first_chunk']), ('false', 'false'))
+        self.assertEqual(upgraded['_builtin_engine_rollout_v2'], '1')
+        self.assertEqual(upgraded['_fast_first_chunk_default_v2'], '1')
+        fresh = run({})                        # a new install still gets both one-shots
+        self.assertEqual((fresh['use_builtin_engine'], fresh['fast_first_chunk']), ('true', 'true'))
+        only_engine = run({'_builtin_engine_rollout_v1': '1', 'use_builtin_engine': 'false',
+                           'fast_first_chunk': 'false'})
+        self.assertEqual((only_engine['use_builtin_engine'], only_engine['fast_first_chunk']), ('false', 'true'))
 
     def test_the_markers_are_declared(self):
         settings = (SERVICE.parent / 'resources' / 'settings.xml').read_text(encoding='utf-8')
