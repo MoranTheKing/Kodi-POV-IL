@@ -388,8 +388,10 @@ def run():
     # home widgets have settled (~70 s), then about every 6 hours for Kodi's
     # own add-on updates, and soon after a host repair rewrote files.
     idle_polls, warm_after = 0, 6
+    interval = 10
     try:
-        while not monitor.waitForAbort(10):
+        while not monitor.waitForAbort(interval):
+            interval = 10
             current = signature(addons)
             if current == previous:
                 pending = None
@@ -412,11 +414,18 @@ def run():
             skin_seen, skin_polls = '', 0
             if xbmc.Player().isPlayingVideo():
                 continue
-            # Observe a stable install for two polls before touching it.
-            if pending != current:
+            # Observe a stable install for two polls before touching it. For
+            # AF3 the second comes 3 s after the first -- until its repair
+            # runs, its Hebrew is boxes (field report, 23 Oct 2026) -- and
+            # not while Kodi still has AF3 unloaded for the install (its files
+            # are in flux; af3_mid_install gives up after 10 minutes).
+            af3_changed = (dict((r[0], r[1:]) for r in current).get(AF3_ID)
+                           != dict((r[0], r[1:]) for r in previous).get(AF3_ID))
+            if pending != current or (af3_changed and af3_mid_install(addons)):
                 pending = current
                 attempts = 0
                 retry_at = 0
+                interval = 3 if af3_changed else 10
                 continue
             if time.monotonic() < retry_at:
                 continue
