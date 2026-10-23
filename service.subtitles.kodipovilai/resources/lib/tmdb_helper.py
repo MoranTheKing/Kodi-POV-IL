@@ -130,6 +130,14 @@ def fetch_cast(imdb_id=None, tmdb_id=None, media_type=None,
             elif find.get('tv_results'):
                 tmdb_id = find['tv_results'][0].get('id')
                 media_type = 'tv'
+            elif find.get('tv_episode_results'):
+                # The EPISODE's own IMDb id (a Kodi library episode): its
+                # show, season and episode. This used to return no cast.
+                hit = find['tv_episode_results'][0]
+                tmdb_id = hit.get('show_id')
+                media_type = 'tv'
+                season = season or hit.get('season_number')
+                episode = episode or hit.get('episode_number')
 
     if not tmdb_id or not media_type:
         return []
@@ -229,6 +237,9 @@ def title_and_year(imdb_id=None, tmdb_id=None, media_type=None):
         if find.get('tv_results'):
             d = find['tv_results'][0]
             return (d.get('name', ''), (d.get('first_air_date') or '')[:4])
+        if find.get('tv_episode_results') and find['tv_episode_results'][0].get('show_id'):
+            return title_and_year(tmdb_id=find['tv_episode_results'][0]['show_id'],
+                                  media_type='tv')
         return ('', '')
 
     if media_type == 'tv':
