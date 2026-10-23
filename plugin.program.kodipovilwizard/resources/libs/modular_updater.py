@@ -529,7 +529,17 @@ class ModularUpdater:
         except Exception as exc:
             logging.log('[ModularUpdater] MoranSubs staging failed: {0}'.format(exc),
                         level=xbmc.LOGERROR)
+            self._note_storage_failure(exc)
             return False
+
+    @staticmethod
+    def _note_storage_failure(exc):
+        """Out of space: tell the user now (storage_guard), not only the log."""
+        try:
+            from resources.libs import storage_guard
+            storage_guard.note_failure(exc)
+        except Exception:
+            pass
 
     @staticmethod
     def _service_disabled_marker():
@@ -1301,6 +1311,7 @@ class ModularUpdater:
                 except Exception as e:
                     logging.log('[ModularUpdater] download failed for {0}: {1}'
                                 .format(addon_id, e), level=xbmc.LOGERROR)
+                    self._note_storage_failure(e)
                     failed_addons.append(addon_id)
                     continue
 
@@ -1329,6 +1340,7 @@ class ModularUpdater:
                 except Exception as e:
                     logging.log('[ModularUpdater] extraction failed for {0}: {1}'
                                 .format(addon_id, e), level=xbmc.LOGERROR)
+                    self._note_storage_failure(e)
                     failed_addons.append(addon_id)
                 tools.remove_file(zip_path)
 
