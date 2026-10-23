@@ -853,6 +853,14 @@ except Exception as _early_widget_error:
 
 _mu = None
 if CONFIG.get_setting('buildname'):
+    # Room for the updates below: a full LG TV (field log, 24 Oct 2026) failed
+    # every update and had POV answer every search with no results.
+    try:
+        from resources.libs import storage_guard
+        storage_guard.run_at_startup()
+    except Exception as _storage_error:
+        logging.log('[Storage] start-up check failed: ' + type(_storage_error).__name__,
+                    level=xbmc.LOGWARNING)
     logging.log('[Startup] entering modular update gate', level=xbmc.LOGINFO)
     try:
         from resources.libs.patches import pov_source_remember
