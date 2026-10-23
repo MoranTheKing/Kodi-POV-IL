@@ -105,7 +105,7 @@ def apply(addon_id, wanted, guard_property=None):
     `wanted` is an ordered sequence of (key, value) pairs -- order matters
     when the target add-on reacts to its own settings (Umbrella blanks the
     external provider names whenever it sees the enable toggle off, so the
-    toggle has to go last).
+    toggle goes first; see umbrella_setup_patcher.ensure_external_provider).
 
     `guard_property` is the home-window property the target add-on uses to
     mute its own settings monitor while it writes settings itself; when
