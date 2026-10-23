@@ -2061,6 +2061,99 @@ def fix_pronoun_stutter(text):
         return text
 
 
+# BBC Subtitle Guidelines 3.4 (bbc.co.uk/accessibility/forproducts/guides/
+# subtitles): break lines at natural points -- never split an article or
+# preposition from its phrase, a conjunction from its clause, a pronoun from
+# its verb or the parts of a verb. Hebrew writes the article and most
+# prepositions and conjunctions as prefixes; these are the standalone words
+# left to guard. Measured on five AI-translated titles (Oct 2026): 1-3% of
+# the two-line single-speaker cues ended their first line on one
+# ("היא האביר על / הסוס הלבן שלי", "אפשר לקבל את / תשומת לבכם?").
+# Not here: object pronouns (אותו, אותה) and plain זה, which close a verb
+# phrase, and comparatives (יותר), which pair with either side.
+_BREAK_BEFORE = frozenset(u'''
+את של על עם אל אצל מול בין עד בלי לגבי כמו אחרי לפני בגלל בתוך ליד נגד מאז
+כי אם או אבל גם רק כל הכי ממש כבר עוד לא
+מה מי איך למה איפה מתי כמה איזה איזו
+אני אתה הוא היא אנחנו אתם אתן הם הן
+שאני שאתה שאת שהוא שהיא שאנחנו שאתם שהם שזה
+ואני ואתה ואת והוא והיא ואנחנו והם
+'''.split())
+# A second line that opens a clause of its own: the break is natural already.
+_CLAUSE_OPENERS = frozenset(u'אבל כי אז ואז או אם ואני ואתה ואת והוא והיא ואנחנו והם'.split())
+# Netflix's Hebrew timed-text guide: 42 characters a line (BBC 3.1: 37 on
+# teletext, 68% of the picture width online).
+_LINE_MAX_CHARS = 42
+_LINE_ENDS_CLAUSE = u'.,;:!?…"\'״)]-–—♪'
+_SPEAKER_DASHES = u'-–—'
+
+
+def _mend_two_lines(one, two):
+    """(line 1, line 2) with the words that belong to line 2 moved down, or
+    None. Logical order (before fix_rtl_punctuation); a dialogue line, a
+    first line that ends a clause, markup where the words would cross and
+    a line opening with its end punctuation are left as they are."""
+    a, b = one.strip(), two.strip()
+    if not a or not b or a[0] in _SPEAKER_DASHES or b[0] in _SPEAKER_DASHES:
+        return None
+    # A line still opening with its end punctuation ("?שלום" -- the model's
+    # slip that fix_rtl_punctuation repairs after this, also behind a tag:
+    # "<i>?שלום") is left alone: a word put in front of it, or moved out from
+    # behind it, would strand the mark mid-line.
+    if (a[-1] in _LINE_ENDS_CLAUSE
+            or _CUE_TAG_RE.sub('', a).lstrip()[:1] in _TRAILING_PUNCT_CHARS
+            or b[0] in _TRAILING_PUNCT_CHARS or b[0] in '<{'):
+        return None
+    if not _HEB_RE.search(a) or not _HEB_RE.search(b):
+        return None
+    words = a.split(' ')
+    moved = []
+    while len(moved) < 3 and len(words) > 1 and words[-1] in _BREAK_BEFORE:
+        if words[-1] == u'כל' and words[-2] == u'קודם':
+            break                       # "קודם כל" (first of all) stays one phrase
+        moved.insert(0, words.pop())
+    # All or nothing: half a fix ("שהם / כבר הגיעו") is no better.
+    if not moved or words[-1] in _BREAK_BEFORE or not _HEB_RE.search(words[-1]):
+        return None
+    lead, rest = (u'♪ ', b[1:].lstrip()) if b.startswith(u'♪') else ('', b)
+    # "♪ <i>..." / "♪ ?...": the words would land between the note and the
+    # tag or the misplaced mark.
+    if rest[:1] in _TRAILING_PUNCT_CHARS + '<{':
+        return None
+    if rest.split(' ')[0].rstrip(u',.;:!?…') in _CLAUSE_OPENERS:
+        return None
+    new_two = lead + ' '.join(moved) + ' ' + rest
+    if len(_CUE_TAG_RE.sub('', new_two)) > _LINE_MAX_CHARS:
+        return None
+    return ' '.join(words), new_two
+
+
+def mend_line_breaks(text):
+    """Two-line cues whose first line ends on a word that belongs with the
+    second ("על / הסוס") get it moved down (BBC 3.4). Our translations only,
+    in logical order -- before fix_rtl_punctuation. Never raises."""
+    if not text or '-->' not in text:
+        return text
+    try:
+        out, changed = [], 0
+        for block in parse_blocks(text):
+            lines = block.split('\n')
+            ti = _block_timecode_index(lines)
+            body = lines[ti + 1:] if ti >= 0 else []
+            mended = (_mend_two_lines(body[0].rstrip('\r'), body[1].rstrip('\r'))
+                      if len(body) == 2 else None)
+            if mended is None:
+                out.append(block)
+                continue
+            lines[ti + 1:] = [mended[0] + ('\r' if body[0].endswith('\r') else ''),
+                              mended[1] + ('\r' if body[1].endswith('\r') else '')]
+            out.append('\n'.join(lines))
+            changed += 1
+        return stitch_blocks(out) if changed else text
+    except Exception:
+        return text
+
+
 # A hearing-impaired sound cue written in capitals without brackets ("HEAVY
 # BREATHING", "DOORBELL BUZZES" -- BBC style) gets past the bracket-based HI
 # cleaner, and the model hands it back in English. Shouted dialogue in
