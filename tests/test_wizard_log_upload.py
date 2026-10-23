@@ -135,6 +135,47 @@ class LogUploadTests(unittest.TestCase):
                              (True, 'https://paste.kodi.tv/fixture'))
         self.assertEqual(transport.post.call_count, 1)
 
+    def test_settings_noise_is_left_out_before_the_tail_is_kept(self):
+        # Field log, 24 Oct 2026: ~5,500 of these lines in the last second, so
+        # the 600 KB tail held nothing else and the real problem was cut off.
+        noise = ('2026-10-24 00:01:18.377 T:24359   debug <CSettingsManager>: '
+                 'requested setting (imdb-thecrew) was not found.\n')
+        real = '2026-10-24 00:01:10.000 T:1   info <general>: the real problem\n'
+        transport = types.ModuleType('requests')
+        transport.post = Mock(return_value=types.SimpleNamespace(status_code=200,
+            json=lambda: {'key': 'fixture'}))
+        with patch.dict(sys.modules, {'requests': transport}):
+            self.assertTrue(self.scope['post_log'](real + noise * 9000, 'kodi.log')[0])
+        sent = transport.post.call_args.kwargs['data'].decode('utf-8')
+        self.assertIn('the real problem', sent)
+        self.assertNotIn('requested setting (imdb-thecrew)', sent)
+        self.assertTrue(sent.startswith('[Kodi POV IL Wizard] 9000 debug lines'))
+        self.assertIn('(1 keys: imdb-thecrew)', sent.split('\n', 1)[0])
+
+    def test_a_long_log_still_carries_the_header_after_the_cut(self):
+        noise = ('2026-10-24 00:01:18.377 T:24359   debug <CSettingsManager>: '
+                 'requested setting (gaiapm) was not found.\n')
+        real = ''.join('2026-10-24 00:00:%02d.000 T:1   info <general>: real line %d\n'
+                       % (i % 60, i) for i in range(30000))
+        transport = types.ModuleType('requests')
+        transport.post = Mock(return_value=types.SimpleNamespace(status_code=200,
+            json=lambda: {'key': 'fixture'}))
+        with patch.dict(sys.modules, {'requests': transport}):
+            self.assertTrue(self.scope['post_log'](noise * 5000 + real, 'kodi.log')[0])
+        sent = transport.post.call_args.kwargs['data'].decode('utf-8')
+        self.assertLessEqual(len(sent), 600000)
+        self.assertTrue(sent.startswith('[Kodi POV IL Wizard] 5000 debug lines'))
+        self.assertIn('real line 29999', sent)
+        self.assertNotIn('requested setting (gaiapm)', sent.split('\n', 1)[1])
+
+    def test_a_log_without_settings_noise_is_sent_unchanged(self):
+        transport = types.ModuleType('requests')
+        transport.post = Mock(return_value=types.SimpleNamespace(status_code=200,
+            json=lambda: {'key': 'fixture'}))
+        with patch.dict(sys.modules, {'requests': transport}):
+            self.scope['post_log']('synthetic log', 'kodi.log')
+        self.assertEqual(transport.post.call_args.kwargs['data'], b'synthetic log')
+
     def test_fallback_and_all_services_unavailable_are_handled(self):
         transport = types.ModuleType('requests')
         transport.post = Mock(side_effect=[TimeoutError('offline'),
