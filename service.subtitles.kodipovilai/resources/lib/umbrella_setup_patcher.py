@@ -11,11 +11,12 @@
 #      external_provider.name    = cocoscrapers        (Umbrella imports this)
 #    Those are precisely the three values Umbrella's own picker writes (see
 #    its tools.external_providers), so nothing here is a private arrangement.
-#    The default is applied once. On later starts the marker is also a narrow
-#    integrity check: if the toggle is still on and only the Coco name/module
-#    pair went missing, put that pair back. A user who turns it off or picks a
-#    complete different provider keeps that choice, and Umbrella's own
-#    checkModules() (which blanks the names while off) is never fought.
+#    The default is applied once. On later starts the marker is also an
+#    integrity check: External Providers found off, or on with the Coco
+#    name/module pair missing, is wired to Coco again (since 0.3.52 -- in this
+#    build Umbrella finds practically nothing without it; see
+#    ensure_external_provider). A complete different provider is the user's
+#    choice and is left alone.
 #
 # 2) PICKED-SOURCE RELEASE NAME (code patch).
 #    Our subtitle matcher scores a Hebrew subtitle against the release name of
@@ -187,14 +188,64 @@ def _addon():
         return None
 
 
+def _settle(wiring, failed=(), waits=(2.0, 8.0)):
+    """Read the wiring again once Umbrella has had its turn, and put back
+    anything it undid. Returns the keys still not at their value; `failed`
+    (the first write's) stands if Kodi quits before the first look.
+
+    Umbrella's settings monitor can blank the names from a stale in-memory
+    copy of its settings (see ensure_external_provider), so the write is
+    looked at again after a pause, and once more after a longer one for a
+    slow box."""
+    failed = list(failed)
+    try:
+        import xbmc
+        monitor = xbmc.Monitor()
+    except Exception:
+        monitor = None
+    for wait in waits:
+        if monitor is not None:
+            try:
+                if monitor.waitForAbort(wait):
+                    return failed
+            except Exception:
+                pass
+        # A new Addon object every look: one made earlier keeps the settings
+        # it loaded then and would not see what Umbrella wrote since.
+        addon = _addon()
+        if addon is None:
+            return failed
+        try:
+            lost = [(k, v) for k, v in wiring
+                    if (addon.getSetting(k) or '').strip() != v]
+        except Exception:
+            return failed
+        failed = []
+        if not lost:
+            continue
+        _log('Umbrella undid {0} after the wiring -- writing again'.format(
+            ', '.join(k for k, _v in lost)), 'WARNING')
+        _changed, _restored, failed = addon_settings_safe.apply(
+            UMBRELLA_ADDON_ID, tuple(lost),
+            guard_property=UMBRELLA_GUARD_PROPERTY)
+    return failed
+
+
 def ensure_external_provider():
     """Point Umbrella at the CocoScrapers we ship with it, then self-heal.
 
     The first run is still a one-time default.  On later starts the marker is
-    also an integrity witness: when External Providers is still enabled but
-    one or both Coco identifiers disappeared, restore only that incomplete
-    Coco wiring.  An explicit off switch and a complete custom provider are
-    both user choices and stay untouched.
+    also an integrity witness: External Providers switched off, or on with
+    one or both Coco identifiers gone, is wired to Coco again.  Only a
+    complete custom provider is a user choice and stays untouched.
+
+    An off switch used to count as a choice too.  In this build Umbrella finds
+    practically nothing without an external provider -- apart from files
+    already in the debrid cloud, its own scrapers need accounts this build
+    does not set up -- and Umbrella switches the toggle off by itself when its
+    provider picker is backed out of.  Field report, 24 Oct 2026: TorBox
+    connected, POV found sources, Umbrella answered every search with no
+    results until External Providers was turned back on by hand.
     """
     addon = _addon()
     if addon is None:
@@ -214,15 +265,11 @@ def ensure_external_provider():
         return 'read_failed'
 
     if marker_done:
-        # Turning External Providers off after our one-time setup is an
-        # explicit choice. Umbrella itself blanks the two identifiers in this
-        # state, so restoring them would immediately fight its own monitor.
-        if enabled != 'true':
+        if enabled == 'true' and module == COCO_MODULE and name == COCO_NAME:
             return 'unchanged'
-        if module == COCO_MODULE and name == COCO_NAME:
-            return 'unchanged'
-        # Repair only a missing/partial Coco pair. A different complete pair
-        # is a provider the user picked and is none of our business.
+        # A different complete pair is a provider the user picked and is none
+        # of our business. Off or partial: wired again below (the docstring
+        # says why).
         if module not in ('', COCO_MODULE) or name not in ('', COCO_NAME):
             return 'unchanged'
     elif enabled == 'true' and module and name and (
@@ -248,23 +295,31 @@ def ensure_external_provider():
             return 'no_cocoscrapers'
     if addon_settings_safe is None:
         return 'write_failed'
-    # enabled LAST: Umbrella's checkModules() blanks both names whenever it
-    # sees the toggle off, so writing the toggle first could wipe them.
+    # The toggle FIRST. Umbrella's settings monitor runs checkModules(),
+    # which blanks both names whenever it reads the toggle off -- and it
+    # reads it from the service's in-memory copy of the settings, which can
+    # still say off after our write. Measured in the QA Kodi (24 Oct 2026):
+    # the toggle stuck, both names came back empty -- still no sources. The
+    # order does not prevent that; _settle() is what makes the wiring hold:
+    # it looks again and writes back whatever was lost, and by then Umbrella's
+    # copy says on.
+    wiring = (('provider.external.enabled', 'true'),
+              ('external_provider.module', COCO_MODULE),
+              ('external_provider.name', COCO_NAME))
     changed, _, failed = addon_settings_safe.apply(
-        UMBRELLA_ADDON_ID,
-        (('external_provider.module', COCO_MODULE),
-         ('external_provider.name', COCO_NAME),
-         ('provider.external.enabled', 'true')),
-        guard_property=UMBRELLA_GUARD_PROPERTY)
+        UMBRELLA_ADDON_ID, wiring, guard_property=UMBRELLA_GUARD_PROPERTY)
+    if changed:
+        failed = _settle(wiring, failed)
     if failed:
         # Half-wired is worse than unwired, and marking it done would make
         # that permanent. Leave the marker off so the next startup retries.
         _log('CocoScrapers not fully wired ({0}) -- will retry next startup'
              .format(', '.join(failed)), 'WARNING')
         return 'write_failed'
-    # Marker goes down even when there was nothing to change: having looked
-    # once is the point. Without it, a user who later turns External Providers
-    # back off would find us turning it on again at the next startup.
+    # Marker goes down even when there was nothing to change. It now only
+    # separates the first run (a custom provider the user enabled before us
+    # is recorded there and kept) from later starts, which repair off or
+    # partial wiring.
     try:
         from resources.lib import kodi_utils as _ku
         _ku.set_setting(PROVIDER_DONE_SETTING, 'done')
@@ -272,6 +327,10 @@ def ensure_external_provider():
         pass
     if not changed:
         return 'unchanged'
+    if marker_done and enabled != 'true':
+        _log('External Providers was off -- CocoScrapers switched back on '
+             '(Umbrella finds no sources without it)')
+        return 'reenabled'
     if marker_done:
         _log('repaired incomplete CocoScrapers provider wiring')
         return 'repaired'
