@@ -853,6 +853,12 @@ except Exception as _early_widget_error:
 
 _mu = None
 if CONFIG.get_setting('buildname'):
+    try:
+        from resources.libs import clear as _clear
+        _clear.auto_clean_startup()
+    except Exception as _clean_error:
+        logging.log('[Auto Clean Up] failed: {0}: {1}'.format(
+            type(_clean_error).__name__, _clean_error), level=xbmc.LOGWARNING)
     # Room for the updates below: a full LG TV (field log, 24 Oct 2026) failed
     # every update and had POV answer every search with no results.
     try:
