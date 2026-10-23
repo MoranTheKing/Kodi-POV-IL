@@ -3952,6 +3952,35 @@ def wait_for_home_rows(monitor, settle=1.5, first=5.0, cap=15.0):
 # --- standalone-only one-shots (the repo-channel add-on; the build ships its
 #     own temp handling and Kodi subtitle settings) ---------------------------
 
+# The 0.2.x standalone (its own slim service.py, up to 0.2.568) ran the same
+# one-shot migrations as the build's service, under these marker names.
+OLD_STANDALONE_MARKERS = (
+    ('_builtin_engine_rollout_v1', '_builtin_engine_rollout_v2'),
+    ('_fast_first_chunk_default_done', '_fast_first_chunk_default_v2'),
+)
+
+
+def _adopt_old_standalone_markers():
+    """Standalone: mark a one-shot done when the 0.2.x standalone already ran
+    it under its old marker. Running it again would undo a choice made since:
+    the built-in engine turned off (and with it Kodi's default subtitle service
+    and DarkSubs), or the fast first chunk turned off. 0.3.47 missed this."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    for old, new in OLD_STANDALONE_MARKERS:
+        try:
+            if (kodi_utils.get_setting(old, '') == '1'
+                    and kodi_utils.get_setting(new, '') != '1'):
+                kodi_utils.set_setting(new, '1')
+                kodi_utils.log('{0}: already done by the 0.2.x standalone '
+                               '({1}); not run again'.format(new, old),
+                               level='INFO')
+        except Exception:
+            pass
+
+
 def _maybe_purge_temp_once():
     """Delete stale subtitle files Kodi left in special://temp, once per
     TEMP_PURGE_VERSION. Standalone only."""
@@ -4140,6 +4169,12 @@ def main():
     # below so it mirrors Ktuvit subs to the pool already this session.
     if build_mode:
         _maybe_force_pool_share()
+
+    # An upgrade from the 0.2.x standalone already ran two of the one-shots
+    # below under older marker names; carry those over first, or they run a
+    # second time and undo what the user chose since.
+    if not build_mode:
+        _adopt_old_standalone_markers()
 
     # ROLLOUT: switch everyone to MoranSubs's built-in engine (one-shot, marker-
     # gated). Must run before _ensure_darksubs_enabled() so that when it flips
