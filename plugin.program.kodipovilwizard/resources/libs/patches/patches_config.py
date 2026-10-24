@@ -1791,6 +1791,31 @@ for _provider, _prefix in (('trakt', 'trakt'), ('mdblist', 'mdbl')):
                                     "\treturn pov_continue_watching.remote_toggle(globals(), '%s', action, mediatype, media_id, list_type)\n" % _provider)},
     ])
 
+# A failed write to POV's results cache must not empty the results: see
+# patches/pov_cache_guard.py. Module scope, so it is wrapped: a Wizard that is
+# gone must never stop sources.py from importing.
+PATCH_CONFIG.append({
+    "id": "pov_results_cache_guard",
+    "name": "Results survive a failed results-cache write",
+    "description": "Wraps ExternalProvidersCache.set so a malformed or full providerscache.db costs only the cache, not every provider's results.",
+    "addon_id": "plugin.video.pov",
+    "enabled": True,
+    "target_file": "resources/lib/modules/sources.py",
+    "marker": "# WIZARD_POV_RESULTS_CACHE_GUARD_v1",
+    "anchor": "from caches.providers_cache import ExternalProvidersCache",
+    "action": "append_after",
+    "hook": (
+        "try:\n"
+        "\timport sys, xbmcvfs\n"
+        "\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+        "\tsys.path.append(_p) if _p not in sys.path else None\n"
+        "\timport pov_cache_guard\n"
+        "\tpov_cache_guard.guard(ExternalProvidersCache)\n"
+        "except Exception:\n"
+        "\tpass\n"
+    )
+})
+
 # Function anchors are at column zero; retain the extra body indentation when
 # the engine dedents and reindents the hook to that anchor.
 for _entry in PATCH_CONFIG:

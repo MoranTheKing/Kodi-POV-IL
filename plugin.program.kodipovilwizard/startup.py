@@ -867,6 +867,14 @@ if CONFIG.get_setting('buildname'):
     except Exception as _storage_error:
         logging.log('[Storage] start-up check failed: ' + type(_storage_error).__name__,
                     level=xbmc.LOGWARNING)
+    # A full disk can leave a POV cache damaged; a damaged results cache makes
+    # every search end in "No Results" (field report, LG webOS TV, 24 Oct 2026).
+    try:
+        from resources.libs import pov_cache_repair
+        pov_cache_repair.run_at_startup()
+    except Exception as _cache_error:
+        logging.log('[POV caches] start-up check failed: {0}: {1}'.format(
+            type(_cache_error).__name__, _cache_error), level=xbmc.LOGWARNING)
     logging.log('[Startup] entering modular update gate', level=xbmc.LOGINFO)
     try:
         from resources.libs.patches import pov_source_remember
