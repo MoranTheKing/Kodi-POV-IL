@@ -118,9 +118,9 @@ class LogUploadTests(unittest.TestCase):
         for value in ('synthetic log', '', OSError('unreadable')):
             handle = Mock()
             if isinstance(value, Exception):
-                handle.read.side_effect = value
+                handle.readBytes.side_effect = value
             else:
-                handle.read.return_value = value
+                handle.readBytes.return_value = bytearray(value.encode('utf-8'))
             self.vfs.File.return_value = handle
             success, data = self.scope['read_log']('/synthetic/kodi.log')
             self.assertEqual(success, value == 'synthetic log')
