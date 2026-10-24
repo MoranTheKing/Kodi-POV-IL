@@ -624,7 +624,7 @@ def show_log_viewer(window_title="Viewing Log File", window_msg=None, log_file=N
             self.closebutton = 205
 
             if window_msg is None:
-                self.logmsg = tools.read_from_file(self.log_file)
+                self.logmsg = tools.read_from_file(self.log_file, errors='replace')
             else:
                 self.logmsg = window_msg
             self.logfile = os.path.basename(self.log_file)
