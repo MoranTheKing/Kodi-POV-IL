@@ -499,11 +499,19 @@ def collect(lib_dir='', addons_root=''):
     return rows
 
 
-def classify(rows, state):
+# Since the clean-POV handoff the Wizard patches POV and sets
+# `_pov_patching_off`, so MoranSubs' own POV patchers stand down on purpose.
+# Their markers are then absent by design: `switched_off`, never `lapsed`.
+POV_HOST = 'plugin.video.pov'
+
+
+def classify(rows, state, pov_off=False):
     """Fold this boot's readings against what previous boots saw.
 
     Returns (rows_with_status, new_state). The only status that is news is
-    'lapsed': present before, absent now.
+    'lapsed': present before, absent now. With `pov_off` an absent POV marker
+    is 'switched_off'; its `last_ok_version` is kept, so switching POV
+    patching back on brings the warning back if the repair then fails.
     """
     seen = dict(state.get('seen') or {})
     out = []
@@ -516,6 +524,8 @@ def classify(rows, state):
         elif r['present']:
             status = 'ok'
             seen[key] = {'last_ok_version': r['host_version']}
+        elif pov_off and r['host'] == POV_HOST:
+            status = 'switched_off'
         elif r.get('host_fixed'):
             # The host shipped the fix itself. Absent is EXPECTED here, so this
             # is reported and never warned about -- and the `last_ok_version`
@@ -571,7 +581,7 @@ def classify(rows, state):
 
 def _render(rows):
     order = {'lapsed': 0, 'unknown': 1, 'unverified': 2, 'superseded': 3,
-             'ok': 4, 'not_installed': 5}
+             'switched_off': 4, 'ok': 5, 'not_installed': 6}
     rows = sorted(rows, key=lambda r: (order.get(r['status'], 9),
                                        r['patcher'], r['marker']))
     lines = []
@@ -603,6 +613,14 @@ def lapsed(rows):
     return [r for r in rows if r['status'] == 'lapsed']
 
 
+def _pov_patching_off():
+    try:
+        return (kodi_utils.get_setting('_pov_patching_off', '') or ''
+                ).strip().lower() == 'true'
+    except Exception:
+        return False
+
+
 def run(lib_dir='', addons_root='', notify=True):
     """The boot entry point. Returns a short status string. Never raises."""
     try:
@@ -610,7 +628,7 @@ def run(lib_dir='', addons_root='', notify=True):
         if not rows:
             return 'nothing_to_check'
         state = _read_state()
-        rows, new_state = classify(rows, state)
+        rows, new_state = classify(rows, state, pov_off=_pov_patching_off())
         _write_state(new_state)
         text = _render(rows)
         p = _report_path()
@@ -650,6 +668,10 @@ def run(lib_dir='', addons_root='', notify=True):
         if n_sup:
             out += ', superseded={0} (the host fixed those itself)'.format(
                 n_sup)
+        n_off = sum(1 for r in rows if r['status'] == 'switched_off')
+        if n_off:
+            out += (', switched_off={0} (POV patching is off; the Wizard '
+                    'patches POV)').format(n_off)
         return out
     except Exception as exc:
         # A health report that breaks the boot is worse than no health report.
