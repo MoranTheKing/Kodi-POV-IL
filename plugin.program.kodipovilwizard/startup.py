@@ -628,6 +628,18 @@ def _start_watch(name, target):
         logging.log('[{0}] start failed: {1}'.format(name, watch_error), level=xbmc.LOGWARNING)
 
 
+# The shortcut receipt's Wizard copy (profile_store.RECEIPTS), made as early
+# as the Wizard runs. POV's service can start first (QA Kodi: 2.4 s earlier),
+# so on the first start after 0.4.82 POV's clean-up may still win once; from
+# then on this copy covers the starts where a POV update dropped the patch.
+try:
+    from resources.libs import profile_store as _profile_store
+    _profile_store.shortcuts_seeded(CONFIG.PROFILE)
+except Exception as _receipt_error:
+    logging.log('[Profiles] shortcut receipt mirror deferred: ' + type(_receipt_error).__name__,
+                level=xbmc.LOGWARNING)
+
+
 def _profile_guard():
     import profile_service
     profile_service.run()

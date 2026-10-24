@@ -31,11 +31,63 @@ def _shortcut_items(value):
     return None
 
 
+# The receipt that the build's shortcut folders were seeded once. POV's own
+# 3-day clean-up deleted the copy in its folder, so every start seeded again
+# and a folder the user had deleted came back; the Wizard's copy is out of
+# its reach. POV's copy alone always counts. The Wizard's copy counts only
+# while POV's menu still holds shortcut folders: when POV's data is wiped
+# (Remove Addon Data, POV reinstalled) the new menu has to be seeded again.
+RECEIPTS = ('addon_data/' + WIZARD + '/povil-shortcuts-defaults-v1.json',
+            'addon_data/plugin.video.pov/povil-shortcuts-defaults-v1.json')
+
+
+def _menu_shortcuts(profile):
+    """'yes' / 'no': POV's menu does or does not hold a shortcut folder;
+    'unknown' when it cannot be read (locked, damaged)."""
+    path = _inside(profile, 'addon_data/plugin.video.pov/navigator.db')
+    if not os.path.isfile(path):
+        return 'no'
+    try:
+        with closing(sqlite3.connect(path, timeout=1)) as conn:
+            row = conn.execute("SELECT 1 FROM navigator WHERE list_type='shortcut_folder' "
+                               "LIMIT 1").fetchone()
+        return 'yes' if row else 'no'
+    except sqlite3.OperationalError as exc:
+        return 'no' if 'no such table' in str(exc).lower() else 'unknown'
+    except sqlite3.Error:
+        return 'unknown'
+
+
+def _copy_receipt(profile, source, target):
+    try:
+        with open(_inside(profile, source), 'rb') as handle:
+            write_missing(profile, target, handle.read())
+    except (OSError, ValueError):
+        pass
+
+
+def shortcuts_seeded(profile):
+    """True when the build's shortcut folders were seeded here already; a lost
+    copy of the receipt is put back once that is certain."""
+    wizard_copy, pov_copy = RECEIPTS
+    if os.path.isfile(_inside(profile, pov_copy)):
+        if not os.path.isfile(_inside(profile, wizard_copy)):
+            _copy_receipt(profile, pov_copy, wizard_copy)
+        return True
+    if not os.path.isfile(_inside(profile, wizard_copy)):
+        return False
+    state = _menu_shortcuts(profile)
+    if state == 'no':
+        return False
+    if state == 'yes':
+        _copy_receipt(profile, wizard_copy, pov_copy)
+    # 'unknown': seeded for this start; looked at again on the next.
+    return True
+
+
 def _seed_shortcuts(profile, source):
     """Seed build menu records only; never copy accounts, history or whole DBs."""
-    relative = 'addon_data/plugin.video.pov/povil-shortcuts-defaults-v1.json'
-    receipt = _inside(profile, relative)
-    if os.path.isfile(receipt):
+    if shortcuts_seeded(profile):
         return 0
     database = _inside(profile, 'addon_data/plugin.video.pov/navigator.db')
     os.makedirs(os.path.dirname(database), exist_ok=True)
@@ -51,7 +103,7 @@ def _seed_shortcuts(profile, source):
         folders, personal = [], []
         with closing(sqlite3.connect(database, timeout=1)) as conn:
             conn.execute('BEGIN IMMEDIATE')
-            if os.path.isfile(receipt):
+            if shortcuts_seeded(profile):
                 return 0
             conn.execute('CREATE TABLE IF NOT EXISTS navigator (list_name text, list_type text, '
                          'list_contents text, UNIQUE(list_name,list_type))')
@@ -90,8 +142,18 @@ def _seed_shortcuts(profile, source):
                             reader.backup(dest)
             conn.executemany('INSERT OR REPLACE INTO navigator VALUES (?,?,?)', updates)
             conn.commit()
-        write_missing(profile, relative, json.dumps(dict(version=1, folders=folders,
-                      mdblist=personal), ensure_ascii=False).encode('utf8'))
+        content = json.dumps(dict(version=1, folders=folders, mdblist=personal),
+                             ensure_ascii=False).encode('utf8')
+        # Each copy on its own: one that fails (a full disk) must not keep the
+        # other from being written after navigator.db is already committed.
+        failed = None
+        for relative in RECEIPTS:
+            try:
+                write_missing(profile, relative, content)
+            except (OSError, ValueError) as exc:
+                failed = failed or exc
+        if failed is not None:
+            raise failed
         return len(updates)
     finally:
         if pending and os.path.isfile(pending):
@@ -99,7 +161,7 @@ def _seed_shortcuts(profile, source):
 
 
 def repair_build_shortcuts(addons, profile):
-    if os.path.isfile(_inside(profile, 'addon_data/plugin.video.pov/povil-shortcuts-defaults-v1.json')):
+    if shortcuts_seeded(profile):
         return 0
     archive = os.path.join(addons, WIZARD, 'resources', 'bootstrap', 'config.zip')
     with open(archive, 'rb') as handle:
