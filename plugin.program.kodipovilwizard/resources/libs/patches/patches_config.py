@@ -1816,6 +1816,30 @@ PATCH_CONFIG.append({
     )
 })
 
+# POV's 3-day clean-up deletes every non-POV file in its data folder,
+# including the build's shortcut receipt: see patches/pov_keep_files.py.
+PATCH_CONFIG.append({
+    "id": "pov_keep_build_files",
+    "name": "POV clean-up keeps the build's files",
+    "description": "remove_old_databases keeps the build's povil* files and menu backup in POV's data folder.",
+    "addon_id": "plugin.video.pov",
+    "enabled": True,
+    "target_file": "resources/lib/modules/cache.py",
+    "marker": "# WIZARD_POV_KEEP_BUILD_FILES_v1",
+    "anchor": "\tcurrent_dbs = kodi_utils.current_dbs()",
+    "action": "append_after",
+    "hook": (
+        "try:\n"
+        "\timport sys, xbmcvfs\n"
+        "\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+        "\tsys.path.append(_p) if _p not in sys.path else None\n"
+        "\timport pov_keep_files\n"
+        "\tcurrent_dbs = pov_keep_files.keep(current_dbs)\n"
+        "except Exception:\n"
+        "\tpass\n"
+    )
+})
+
 # Function anchors are at column zero; retain the extra body indentation when
 # the engine dedents and reindents the hook to that anchor.
 for _entry in PATCH_CONFIG:
