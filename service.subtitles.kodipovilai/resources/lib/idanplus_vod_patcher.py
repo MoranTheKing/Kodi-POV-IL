@@ -67,6 +67,16 @@
 # (the version the build installs from the Fishenzon repo). Every fix is safe
 # without the others and is applied on its own; one whose function has
 # changed stands down and is reported, and the rest still land.
+#
+# IDAN PLUS 4.0.3 (26 Oct 2026) READS KAN'S PLAYER ITSELF. Its PageStream reads
+# the same settings block as fix 2, a few lines after the one that records
+# where the credits start -- the time its new next-episode card waits for.
+# Fix 2 sits right after the page fetch, above that line, and returned before
+# it, so the card fell back to its default time. On an
+# Idan Plus that has PageStream, fix 2 is left to Idan Plus; the others (the
+# GetCF mirror its other Kan pages still use, the archive lobby, the null
+# title, i24NEWS English) are not in 4.0.3 and still apply. v2 takes back a
+# v1 fix 2 that already landed on 4.0.3.
 
 import os
 
@@ -86,7 +96,7 @@ COMMON_REL = 'resources/lib/common.py'
 KAN_REL = 'resources/lib/kan.py'
 I24_REL = 'resources/lib/i24news.py'
 
-MARKER = '# AI_SUBS_IDAN_VOD_v1'
+MARKER = '# AI_SUBS_IDAN_VOD_v2'
 # Prefix, never an enumerated list of predecessors.
 _MARKER_ANY = '# AI_SUBS_IDAN_VOD_v'
 
@@ -356,12 +366,17 @@ def _patch_common(content, fit):
                                    (_REFERER, _COMMON_CALL, False)),))
 
 
+# Idan Plus's own reader of the player settings (4.0.3+): fix 2 stays out.
+_KAN_OWN_PLAYER = 'def PageStream('
+
+
 def _patch_kan(content, fit):
-    return _insert(content, fit, (((_KAN_PAGE, _KAN_FIX, False),),
-                                  ((_ARCHIVE_HEAD, _ARCHIVE_FIX, False),),
-                                  ((_MOB_LOOP, _MOB_LOOP_FIX, True),),
-                                  ((_EPISODES_PAGE, _EPISODES_PAGE_FIX,
-                                    False),)))
+    groups = (((_ARCHIVE_HEAD, _ARCHIVE_FIX, False),),
+              ((_MOB_LOOP, _MOB_LOOP_FIX, True),),
+              ((_EPISODES_PAGE, _EPISODES_PAGE_FIX, False),))
+    if _KAN_OWN_PLAYER not in content:
+        groups = (((_KAN_PAGE, _KAN_FIX, False),),) + groups
+    return _insert(content, fit, groups)
 
 
 def _patch_i24(content, fit):
@@ -468,6 +483,7 @@ def ensure_patched():
         status = 'patched'
     else:
         return 'unchanged'
-    _log('Kan pages load through the mobile-API host, Kan\'s new player '
-         'and archive lobby are read, and i24NEWS English has its catalog')
+    _log('Kan pages load through the mobile-API host, Kan\'s archive lobby '
+         'is read (and its new player, where Idan Plus does not read it '
+         'itself), and i24NEWS English has its catalog')
     return status

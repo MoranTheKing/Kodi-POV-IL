@@ -1,3 +1,6 @@
+0.3.54
+- Idan Plus 4.0.3 (26 Oct 2026) adds a next-episode card that comes up when the credits start; it reads that time from the Kan episode page right after loading it. MoranSubs' Kan player fix sat just above that line and returned first, so on Kan the card came up at its default time instead. 4.0.3 reads Kan's player settings itself, so on 4.0.3 that one fix is left to Idan Plus and taken back where it already landed; the other Idan Plus fixes (Kan pages through the mobile host, the Kan archive, a missing episode title, i24NEWS English) still apply. Idan Plus 4.0.2 is unchanged. Checked in the QA Kodi on 4.0.3: the same Kan episode's card came up "at the default time" before and "at the credits" now; Kan programs, the archive and Continue watching work.
+
 0.3.53
 - Log only: with POV patching switched off (the Wizard patches a clean POV since the host handoff), MoranSubs' own POV repairs are reported as "switched_off" instead of "STOPPED APPLYING". QA Kodi: the Hebrew genres repair was reported as stopped since POV 6.10.06 while the genres showed in Hebrew through the Wizard. Switching POV patching back on brings the warning back if a repair then fails.
 
