@@ -553,6 +553,44 @@ class IdanPlusVodPatcherTests(unittest.TestCase):
         self.assertEqual(calls[-1], ('pages/section/HE', 'hebrew'))
         self.assertEqual(common.dirs[-1][1]['name'], 'HEBREW')
 
+    # --- Idan Plus 4.0.3 ---------------------------------------------------
+    PAGE = '    text = _getKanPage(url, fresh=True)\n'
+    CREDITS = ('    if page is not None and PageCredits(text):\n'
+               "        page['credits'] = PageCredits(text)\n")
+
+    def _kan_403(self):
+        """kan.py as 4.0.3 has it: its own PageStream, and the credits time
+        recorded on the line right after the page fetch."""
+        text = KAN.replace(self.PAGE, self.PAGE + self.CREDITS, 1).replace(
+            'def _resolvePlayerKanUrl(',
+            "def PageStream(text):\n    return ''\n\ndef _resolvePlayerKanUrl(", 1)
+        self.assertNotEqual(text, KAN)
+        return '\ufeff' + text.replace('\n', '\r\n')
+
+    def test_idan_403_reads_its_own_player_and_keeps_the_credits(self):
+        self.write('kan.py', self._kan_403())
+        self.assertEqual(self.mod.ensure_patched(), 'patched')
+        kan = self.read('kan.py')
+        self.assertNotIn("'data-redge-config' in text:", kan)
+        self.assertIn((self.PAGE + self.CREDITS).replace('\n', '\r\n'), kan)
+        # the archive lobby, null title and program-page fixes still land
+        self.assertGreaterEqual(kan.count(self.mod.MARKER), 3)
+
+    def test_a_v1_player_block_on_403_is_taken_back(self):
+        # 0.3.53 put fix 2 above 4.0.3's credits line on devices that had
+        # already updated Idan Plus: v2 takes it out again.
+        v1 = self.mod._KAN_FIX.replace(self.mod.MARKER, '# AI_SUBS_IDAN_VOD_v1')
+        self.write('kan.py', self._kan_403().replace(
+            self.PAGE.replace('\n', '\r\n'),
+            (self.PAGE + v1).replace('\n', '\r\n'), 1))
+        self.assertIn("'data-redge-config' in text:", self.read('kan.py'))
+        self.assertEqual(self.mod.ensure_patched(), 'repatched')
+        kan = self.read('kan.py')
+        self.assertNotIn("'data-redge-config' in text:", kan)
+        self.assertNotIn('AI_SUBS_IDAN_VOD_v1', kan)
+        self.assertIn((self.PAGE + self.CREDITS).replace('\n', '\r\n'), kan)
+        self.assertEqual(self.mod.ensure_patched(), 'unchanged')
+
     # --- wiring ------------------------------------------------------------
     def test_service_runs_it_every_boot(self):
         source = SERVICE.read_text('utf-8-sig')
