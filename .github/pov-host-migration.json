@@ -1,9 +1,9 @@
 {
   "id": "plugin.video.pov",
-  "version": "6.10.22",
-  "filename": "plugin.video.pov-6.10.22.zip",
-  "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.pov-6.10.22.zip",
-  "size": 794307,
-  "sha256": "126b9fbe690dded613d0c2bab177babd6ce2235bc9d67fb25e1c79aefc9dc0d3",
-  "upstream_zip": "https://kodifitzwell.github.io/repo/plugin.video.pov/plugin.video.pov-6.10.22.zip"
+  "version": "6.10.23",
+  "filename": "plugin.video.pov-6.10.23.zip",
+  "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.pov-6.10.23.zip",
+  "size": 797327,
+  "sha256": "c9b5d7e17e96e45e188722faf2d10eb16bfc6b3f9d618b9c3132cda0bbbe1fd8",
+  "upstream_zip": "https://kodifitzwell.github.io/repo/plugin.video.pov/plugin.video.pov-6.10.23.zip"
 }

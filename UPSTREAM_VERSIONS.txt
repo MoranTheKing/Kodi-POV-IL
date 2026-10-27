@@ -6,7 +6,7 @@
 # opens an issue when one moves. After re-running the patchers against the
 # new version (wizard patch engine, MoranSubs host patchers) and fixing any
 # moved anchor, update the line here.
-plugin.video.pov: 6.10.22
+plugin.video.pov: 6.10.23
 plugin.video.idanplus: 4.0.3
 skin.arctic.fuse.3: 3.4.12
 plugin.video.umbrella: 6.7.98
