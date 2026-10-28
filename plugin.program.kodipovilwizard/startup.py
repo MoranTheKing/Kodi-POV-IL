@@ -981,3 +981,14 @@ def _host_watch():
 
 
 _start_watch('POVILHostPatchWatch', _host_watch)
+
+# KODI-POV-IL - Kodi's own settings back at Kodi's defaults (English, Estuary,
+# 12-hour clock: field report 28 Oct 2026): offer the build's settings back.
+# Last, so an unanswered question holds nothing else up; never on a kids
+# profile, where the Wizard's menu is closed as well.
+try:
+    if profile_age_guard.active_policy() is None:
+        from resources.libs import gui_repair
+        gui_repair.offer_after_reset()
+except Exception as _gui_repair_err:
+    logging.log('[GUI Repair] skipped: {0}'.format(_gui_repair_err), level=xbmc.LOGWARNING)

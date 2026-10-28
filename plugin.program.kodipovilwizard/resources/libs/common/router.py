@@ -87,6 +87,11 @@ class Router:
         elif mode == 'profile_skin':
             from resources.libs import build_profiles
             build_profiles.choose_skin()
+        elif mode == 'restore_kodi_settings':
+            if handle >= 0:
+                xbmcplugin.endOfDirectory(handle, succeeded=False)
+            from resources.libs import gui_repair
+            gui_repair.restore()
         elif mode in ('choose_player_style', 'player_settings', 'player_change_source', 'player_episodes'):
             from resources.libs import player_styles
             {'choose_player_style': player_styles.choose,
