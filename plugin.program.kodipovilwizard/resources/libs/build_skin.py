@@ -12,7 +12,7 @@ import xbmc
 import xbmcvfs
 import xbmcgui
 
-SKINS = ('skin.estuary', 'skin.fentastic', 'skin.povil.nox', 'skin.arctic.fuse.3')
+SKINS = ('skin.estuary', 'skin.fentastic', 'skin.povil.nox', 'skin.arctic.fuse.3', 'skin.povil.onyx')
 
 
 def close_switch_menu():

@@ -52,15 +52,22 @@ def start_info_actions(infos, params):
             data=listitems,
             handle=params.get("handle", ""),
             limit=params.get("limit", 20),
+            rtl=params.get("povil_rtl") == "1",
         )
 
 
-def pass_list_to_skin(data=[], handle=None, limit=False):
+def pass_list_to_skin(data=[], handle=None, limit=False, rtl=False):
+    """rtl (skin.povil.onyx): the skin draws the row right to left, so the
+    best suggestion goes last and the skin starts the row there."""
     if data and limit and int(limit) < len(data):
         data = data[: int(limit)]
 
     if handle and data:
         items = create_listitems(data)
+        if rtl:
+            items.reverse()
+            for item in items:
+                item.setProperty('povil_rtl', '1')
         xbmcplugin.addDirectoryItems(
             handle=handle,
             items=[(i.getProperty("path"), i, False) for i in items],

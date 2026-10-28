@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<addon id="skin.povil.onyx" version="1.0.0" name="Kodi POV IL - Onyx" provider-name="MoranTheKing">
+	<requires>
+		<import addon="xbmc.gui" version="5.17.0"/>
+	</requires>
+	<extension point="xbmc.gui.skin" debugging="false">
+		<res width="1920" height="1080" aspect="16:9" default="true" folder="xml" />
+	</extension>
+	<extension point="xbmc.addon.metadata">
+		<platform>all</platform>
+		<license>CC BY-SA 4.0, GNU GENERAL PUBLIC LICENSE Version 2.0</license>
+		<summary lang="en_GB">Kodi POV IL - Onyx: a premium Hebrew skin built on Onyx</summary>
+		<summary lang="he_IL">סקין Onyx של Kodi POV IL: עיצוב יוקרתי בעברית</summary>
+		<description lang="en_GB">A premium, fast Hebrew skin for the Kodi POV IL build, built on Onyx (adamsbuilds), a fork of Quartz (pecinko). Switch skins from the Kodi POV IL Wizard.</description>
+		<description lang="he_IL">סקין יוקרתי ומהיר בעברית לבילד Kodi POV IL, מבוסס על Onyx של adamsbuilds, שמבוסס על Quartz של pecinko. החלפת סקין דרך הוויזארד של Kodi POV IL.</description>
+		<disclaimer lang="en_GB">Based on Onyx by adamsbuilds, a fork of Quartz by nonjon and pecinko.</disclaimer>
+		<source>https://github.com/MoranTheKing/Kodi-POV-IL</source>
+		<assets>
+			<icon>resources/icon.png</icon>
+			<fanart>resources/fanart.jpg</fanart>
+		</assets>
+	</extension>
+</addon>
