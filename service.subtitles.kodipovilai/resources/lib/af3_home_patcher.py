@@ -819,6 +819,31 @@ def _item_key(item):
         return ''
 
 
+_MISSING = object()
+
+
+def _merge_item(user, base, ours):
+    """A tile we still ship that the user also has. The user's own edits win
+    field by field -- AF3's editor writes them into the tile itself: its
+    "disable" switch ('disabled': 'True'), a new label, icon, style or number
+    of items. Every field the user left as we last wrote it takes our current
+    value. 'path' is the tile's identity, always ours (route upgrades)."""
+    if not isinstance(user, dict):
+        return ours
+    merged = dict(ours)
+    for field in set(user) | set(base):
+        if field == 'path':
+            continue
+        mine = user.get(field, _MISSING)
+        if mine == base.get(field, _MISSING):
+            continue
+        if mine is _MISSING:
+            merged.pop(field, None)
+        else:
+            merged[field] = mine
+    return merged
+
+
 def _merge_widget_nodes(filename, canonical, retired_keys=(),
                         forced_retired_keys=()):
     """3-way merge for a user-curated widget node, honoring the user's
@@ -829,8 +854,9 @@ def _merge_widget_nodes(filename, canonical, retired_keys=(),
       * canonical= what we ship now.
     Rules per tile keyed by path:
       - in current: keep the USER's copy BUT, if we still ship it, refresh
-        its fields to ours (so e.g. limit/style updates propagate) while
-        keeping the user's position; tiles the user added (not ours) stay.
+        the fields the user did not edit to ours (so e.g. limit/style
+        updates propagate) while keeping the user's position and edits
+        (_merge_item); tiles the user added (not ours) stay.
       - removed by user (in baseline, not in current): do NOT re-add.
       - explicitly retired build rows are removed only when they also occur in
         the previous build baseline. A user-added row with the same historical
@@ -840,7 +866,8 @@ def _merge_widget_nodes(filename, canonical, retired_keys=(),
       - brand-new (in canonical, not in baseline, not in current): append
         so everyone gets new tiles.
     On first run (no baseline) we seed canonical verbatim. Returns True if
-    the on-disk node changed. Always (re)writes the baseline to canonical.
+    the on-disk node changed. Always (re)writes the baseline: canonical plus
+    the tiles of the previous baseline we do not ship right now.
     """
     path = AF3_NODES + filename
     base_path = POV_BASELINE_DIR + filename
@@ -867,7 +894,8 @@ def _merge_widget_nodes(filename, canonical, retired_keys=(),
         return wrote
 
     baseline = _load(base_path)
-    if baseline is None or not isinstance(baseline, list):
+    had_baseline = isinstance(baseline, list)
+    if not had_baseline:
         # We've written this node before the merge feature existed (or the
         # baseline was lost). Treat the CURRENT on-disk state as the
         # baseline so we never resurrect what the user already removed;
@@ -881,6 +909,10 @@ def _merge_widget_nodes(filename, canonical, retired_keys=(),
         if k and k not in canon_by_key:
             canon_by_key[k] = it
             canon_order.append(k)
+    base_by_key = {}
+    for it in baseline:
+        if isinstance(it, dict):
+            base_by_key.setdefault(_item_key(it), it)
     base_keys = {_item_key(it) for it in baseline}
     cur_keys = {_item_key(it) for it in current}
     retired_keys = set(retired_keys or ())
@@ -895,7 +927,17 @@ def _merge_widget_nodes(filename, canonical, retired_keys=(),
                 or (k in retired_keys and k in base_keys)):
             continue
         if k in canon_by_key:
-            merged.append(canon_by_key[k])
+            # No baseline entry to tell the user's edits from our old values
+            # (a row hidden at the last start, a lost baseline): the fields we
+            # ship count as ours, the ones only the user's tile has (disabled,
+            # guid, widgets of its own) as theirs.
+            if had_baseline and k in base_by_key:
+                base = base_by_key[k]
+            elif isinstance(it, dict):
+                base = {f: v for f, v in it.items() if f in canon_by_key[k]}
+            else:
+                base = {}
+            merged.append(_merge_item(it, base, canon_by_key[k]))
         else:
             merged.append(it)  # user-added (or a tile we dropped) -> keep
     # 2) append brand-new canonical tiles: ours, never seen by this device
@@ -905,16 +947,25 @@ def _merge_widget_nodes(filename, canonical, retired_keys=(),
             merged.append(canon_by_key[k])
 
     merged_content = _json(merged)
-    changed = False
-    try:
-        changed = (not _exists(path)) or (_read(path) != merged_content)
-    except Exception:
-        changed = True
+    # Compare data, not text: AF3's editor writes the file in its own
+    # format, and an unchanged node must not cost an AF3 rebuild.
+    changed = merged != current
     if changed:
         _write(path, merged_content)
     # Always refresh the baseline to the current canonical so the next
-    # update's "brand-new" detection is correct.
-    _write(base_path, canon_content)
+    # update's "brand-new" detection is correct -- and keep the tiles we
+    # shipped before but not now (a service disconnected, Umbrella removed):
+    # when they come back they are not brand-new, so a tile the user removed
+    # meanwhile stays removed. Retired tiles are forgotten on purpose.
+    remembered = []
+    if had_baseline:
+        dropped = set(canon_by_key) | retired_keys | forced_retired_keys
+        for it in baseline:
+            k = _item_key(it)
+            if k and k not in dropped:
+                dropped.add(k)
+                remembered.append(it)
+    _write(base_path, _json(list(canonical) + remembered) if remembered else canon_content)
     return changed
 
 
