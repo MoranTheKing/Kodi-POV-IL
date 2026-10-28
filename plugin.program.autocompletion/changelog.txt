@@ -1,3 +1,7 @@
+2.1.4
+
+- Right-to-left suggestions for the Onyx skin (povil_rtl=1): the best suggestion is drawn on the right
+
 2.1.3
 
 - Kodi 20+21 Hebrew fix

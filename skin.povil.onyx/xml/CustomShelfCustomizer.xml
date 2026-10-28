@@ -1,0 +1,1056 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window id="1117">
+	<defaultcontrol always="true">50</defaultcontrol>
+	<controls>
+		<include>FullBackground</include> 
+		<control type="group" description="Content">
+			<include>OpenClose</include>
+			<control type="label" description="Heading">
+				<posx>495</posx>
+				<posy>120</posy>
+				<width>930</width>
+				<height>75</height>
+				<align>center</align>
+				<aligny>bottom</aligny>
+				<font>size28</font>
+				<label>31988</label>
+			</control>
+			<control type="group">
+				<posy>150</posy>
+				<control type="image" description="Line top">
+					<posx>0</posx>
+					<posy>130</posy>
+					<width>1920</width>
+					<height>1</height>
+					<texture>img/Line1.png</texture>
+				</control>
+				<control type="image" description="Line bottom">
+					<posx>0</posx>
+					<posy>236</posy>
+					<width>1920</width>
+					<height>1</height>
+					<texture>img/Line1.png</texture>
+				</control>
+				<control type="group">
+					<control type="fixedlist" id="50">
+						<posx>60</posx>
+						<posy>129</posy>
+						<width>1800</width>
+						<height>111</height>
+						<onleft>noop</onleft>
+						<onright>noop</onright>
+						<onup>53</onup>
+						<ondown>52</ondown>
+						<focusposition>1</focusposition>
+						<orientation>horizontal</orientation>
+						<pagecontrol>60</pagecontrol>
+						<itemlayout width="600" height="111">
+							<control type="label" description="Main Label">
+								<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+								<posx>0</posx>
+								<posy>0</posy>
+								<height>111</height>
+								<width>600</width>
+								<align>center</align>
+								<font>size24</font>
+								<scroll>false</scroll>
+								<textcolor>Grey</textcolor>
+								<label>$INFO[ListItem.Label]</label>
+							</control>
+						</itemlayout>
+						<focusedlayout width="600" height="111">
+							<control type="image" description="Selector">
+								<animation type="Conditional" condition="!Control.HasFocus(50)">
+									<effect type="fade" start="100" end="50" time="0" reversible="true" />
+								</animation>
+								<posx>0</posx>
+								<posy>0</posy>
+								<height>111</height>
+								<width>600</width>
+								<aspectratio>keep</aspectratio>
+								<texture>img/HomeBarFO.png</texture>
+							</control>
+							<control type="label" description="Main Label">
+								<visible>![[Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)] | [Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)] | [Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)] | [Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)] | [Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)] | [Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)] | [Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)]]</visible>
+								<posx>0</posx>
+								<posy>0</posy>
+								<height>111</height>
+								<width>600</width>
+								<align>center</align>
+								<font>size24</font>
+								<scroll>false</scroll>
+								<textcolor>White</textcolor>
+								<label>$INFO[ListItem.Label]</label>
+							</control>
+							<control type="label" description="Main Label">
+								<visible>[Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)] | [Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)] | [Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)] | [Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)] | [Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)] | [Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)] | [Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)]</visible>
+								<posx>0</posx>
+								<posy>0</posy>
+								<height>69</height>
+								<width>600</width>
+								<align>center</align>
+								<font>size24</font>
+								<scroll>false</scroll>
+								<textcolor>White</textcolor>
+								<label>$INFO[ListItem.Label]</label>
+							</control>
+							<control type="label" description="disabled">
+								<visible>[Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)] | [Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)] | [Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)] | [Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)] | [Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)] | [Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)] | [Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)]</visible>
+								<posx>0</posx>
+								<posy>60</posy>
+								<height>45</height>
+								<width>600</width>
+								<align>center</align>
+								<font>size18</font>
+								<textcolor>White</textcolor>
+								<label>1223</label>
+							</control>
+						</focusedlayout>
+						<content>
+							<item id="1000" description="Movies">
+								<label fallback="20342">$INFO[Skin.String(MoviesName)]</label>
+								<onclick>noop</onclick>
+							</item>
+							<item id="1001" description="PVR">
+								<visible>System.HasPVRAddon</visible>
+								<label fallback="19020">$INFO[Skin.String(PVRName)]</label>
+								<onclick>noop</onclick>
+							</item>
+							<item id="1002" description="TV">
+								<label fallback="20343">$INFO[Skin.String(TVName)]</label>
+								<onclick>noop</onclick>
+							</item>
+							<item id="1003" description="Custom 1">
+								<label fallback="Custom 1">$INFO[Skin.String(CustomSec1Name)]</label>
+								<onclick>noop</onclick>
+							</item>
+							<item id="1004" description="Custom 2">
+								<label fallback="Custom 2">$INFO[Skin.String(CustomSec2Name)]</label>
+								<onclick>noop</onclick>
+							</item>
+							<item id="1007" description="Custom 3">
+								<label fallback="Custom 3">$INFO[Skin.String(CustomSec3Name)]</label>
+								<onclick>noop</onclick>
+							</item>
+							<item id="1005" description="Addons">
+								<label fallback="24001">$INFO[Skin.String(AddonsName)]</label>
+								<onclick>noop</onclick>
+							</item>
+							<item id="1006" description="XBMC">
+								<label fallback="System">$INFO[Skin.String(XBMCName)]</label>
+								<onclick>noop</onclick>
+							</item>
+						</content>
+					</control>
+				</control>
+				<control type="grouplist" id="52">
+					<posx>600</posx>
+					<posy>270</posy>
+					<width>720</width>
+					<height>660</height>
+					<onup>50</onup>
+					<onleft>50</onleft>
+					<onright>50</onright>
+					<ondown>noop</ondown>
+					<itemgap>0</itemgap>
+					<pagecontrol>60</pagecontrol>
+					<!--MOVIES-->
+					<control type="button" id="100" description="Auto">
+						<visible>Library.HasContent(Movies)</visible>
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31986</label>
+						<label2>$VAR[MoviesShelfLabel2]</label2>
+						<onclick>Skin.ToggleSetting(MovieShelfAuto)</onclick>
+						<onclick>Skin.Reset(MoviesShelf_Custom)</onclick>
+						<onclick>Skin.Reset(MoviesShelf_Addon)</onclick>
+						<onclick>Skin.Reset(MoviesShelf_Image)</onclick>
+					</control>
+					<control type="radiobutton" id="101" description="Image">
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31984</label>
+						<onclick>Skin.Reset(MoviesShelf_Custom)</onclick>
+						<onclick>Skin.Reset(MovieShelfAuto)</onclick>
+						<onclick>Skin.Reset(MoviesShelf_Addon)</onclick>
+						<onclick>Skin.ToggleSetting(MoviesShelf_Image)</onclick>
+						<selected>Skin.HasSetting(MoviesShelf_Image)</selected>
+					</control>
+					<control type="button" id="102" description="Set image">
+						<visible>Skin.HasSetting(MoviesShelf_Image) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[1030]</label>
+						<label2>$INFO[Skin.String(MoviesShelf_Icon)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,image,MoviesShelf_Icon)</onclick>
+					</control>
+					<control type="radiobutton" id="115" description="Add-on widget">
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31990</label>
+						<onclick>Skin.Reset(MoviesShelf_Image)</onclick>
+						<onclick>Skin.Reset(MoviesShelf_Custom)</onclick>
+						<onclick>Skin.Reset(MovieShelfAuto)</onclick>
+						<onclick>Skin.ToggleSetting(MoviesShelf_Addon)</onclick>
+						<selected>Skin.HasSetting(MoviesShelf_Addon)</selected>
+					</control>
+					<control type="button" id="116" description="Add-on widget path">
+						<visible>Skin.HasSetting(MoviesShelf_Addon) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[31991]</label>
+						<label2>$INFO[Skin.String(MoviesShelf.Label)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,widget,MoviesShelf)</onclick>
+					</control>
+					<control type="radiobutton" id="103" description="Custom">
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31985</label>
+						<onclick>Skin.Reset(MoviesShelf_Image)</onclick>
+						<onclick>Skin.Reset(MovieShelfAuto)</onclick>
+						<onclick>Skin.Reset(MoviesShelf_Addon)</onclick>
+						<onclick>Skin.ToggleSetting(MoviesShelf_Custom)</onclick>
+						<selected>Skin.HasSetting(MoviesShelf_Custom)</selected>
+					</control>
+					<control type="button" id="104" description="ADDONS">
+						<visible>Skin.HasSetting(MoviesShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 1</label>
+						<label2>$INFO[Skin.String(ShelfMovies.1.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfMovies.1.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="105" description="ADDONS">
+						<visible>Skin.HasSetting(MoviesShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 2</label>
+						<label2>$INFO[Skin.String(ShelfMovies.2.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfMovies.2.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="106" description="ADDONS">
+						<visible>Skin.HasSetting(MoviesShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 3</label>
+						<label2>$INFO[Skin.String(ShelfMovies.3.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfMovies.3.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="107" description="ADDONS">
+						<visible>Skin.HasSetting(MoviesShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 4</label>
+						<label2>$INFO[Skin.String(ShelfMovies.4.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfMovies.4.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="108" description="ADDONS">
+						<visible>Skin.HasSetting(MoviesShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 5</label>
+						<label2>$INFO[Skin.String(ShelfMovies.5.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfMovies.5.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="109" description="FAVOURITES">
+						<visible>Skin.HasSetting(MoviesShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 1</label>
+						<label2>$INFO[Skin.String(ShelfMovies.6.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfMovies.6.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfMovies.6)</onclick>
+					</control>
+					<control type="button" id="110" description="FAVOURITES">
+						<visible>Skin.HasSetting(MoviesShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 2</label>
+						<label2>$INFO[Skin.String(ShelfMovies.7.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfMovies.7.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfMovies.7)</onclick>
+					</control>
+					<control type="button" id="112" description="FAVOURITES">
+						<visible>Skin.HasSetting(MoviesShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 3</label>
+						<label2>$INFO[Skin.String(ShelfMovies.8.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfMovies.8.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfMovies.8)</onclick>
+					</control>
+					<control type="button" id="113" description="FAVOURITES">
+						<visible>Skin.HasSetting(MoviesShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 4</label>
+						<label2>$INFO[Skin.String(ShelfMovies.9.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfMovies.9.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfMovies.9)</onclick>
+					</control>
+					<control type="button" id="114" description="FAVOURITES">
+						<visible>Skin.HasSetting(MoviesShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(MoviesSectionHide) + Container(50).HasFocus(1000)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 5</label>
+						<label2>$INFO[Skin.String(ShelfMovies.10.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfMovies.10.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfMovies.10)</onclick>
+					</control>
+					<!--PVR-->
+					<control type="button" id="700" description="Auto">
+						<visible>System.HasPVRAddon</visible>
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31986</label>
+						<label2>$VAR[PVRShelfLabel2]</label2>
+						<onclick>Skin.ToggleSetting(PVRShelfAuto)</onclick>
+						<onclick>Skin.Reset(PVRShelf_Custom)</onclick>
+						<onclick>Skin.Reset(PVRShelf_Image)</onclick>
+					</control>
+					<control type="radiobutton" id="701" description="Image">
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31984</label>
+						<onclick>Skin.Reset(PVRShelf_Custom)</onclick>
+						<onclick>Skin.Reset(PVRShelfAuto)</onclick>
+						<onclick>Skin.ToggleSetting(PVRShelf_Image)</onclick>
+						<selected>Skin.HasSetting(PVRShelf_Image)</selected>
+					</control>
+					<control type="button" id="702" description="Set image">
+						<visible>Skin.HasSetting(PVRShelf_Image) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[1030]</label>
+						<label2>$INFO[Skin.String(PVRShelf_Icon)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,image,PVRShelf_Icon)</onclick>
+					</control>
+					<control type="radiobutton" id="703" description="Custom">
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31985</label>
+						<onclick>Skin.Reset(PVRShelf_Image)</onclick>
+						<onclick>Skin.Reset(PVRShelfAuto)</onclick>
+						<onclick>Skin.ToggleSetting(PVRShelf_Custom)</onclick>
+						<selected>Skin.HasSetting(PVRShelf_Custom)</selected>
+					</control>
+					<control type="button" id="704" description="ADDONS">
+						<visible>Skin.HasSetting(PVRShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 1</label>
+						<label2>$INFO[Skin.String(ShelfPVR.1.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfPVR.1.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="705" description="ADDONS">
+						<visible>Skin.HasSetting(PVRShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 2</label>
+						<label2>$INFO[Skin.String(ShelfPVR.2.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfPVR.2.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="706" description="ADDONS">
+						<visible>Skin.HasSetting(PVRShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 3</label>
+						<label2>$INFO[Skin.String(ShelfPVR.3.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfPVR.3.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="707" description="ADDONS">
+						<visible>Skin.HasSetting(PVRShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 4</label>
+						<label2>$INFO[Skin.String(ShelfPVR.4.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfPVR.4.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="708" description="ADDONS">
+						<visible>Skin.HasSetting(PVRShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 5</label>
+						<label2>$INFO[Skin.String(ShelfPVR.5.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfPVR.5.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="709" description="FAVOURITES">
+						<visible>Skin.HasSetting(PVRShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 1</label>
+						<label2>$INFO[Skin.String(ShelfPVR.6.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfPVR.6.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfPVR.6)</onclick>
+					</control>
+					<control type="button" id="710" description="FAVOURITES">
+						<visible>Skin.HasSetting(PVRShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 2</label>
+						<label2>$INFO[Skin.String(ShelfPVR.7.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfPVR.7.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfPVR.7)</onclick>
+					</control>
+					<control type="button" id="712" description="FAVOURITES">
+						<visible>Skin.HasSetting(PVRShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 3</label>
+						<label2>$INFO[Skin.String(ShelfPVR.8.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfPVR.8.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfPVR.8)</onclick>
+					</control>
+					<control type="button" id="713" description="FAVOURITES">
+						<visible>Skin.HasSetting(PVRShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 4</label>
+						<label2>$INFO[Skin.String(ShelfPVR.9.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfPVR.9.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfPVR.9)</onclick>
+					</control>
+					<control type="button" id="714" description="FAVOURITES">
+						<visible>Skin.HasSetting(PVRShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(PVRSectionHide) + Container(50).HasFocus(1001)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 5</label>
+						<label2>$INFO[Skin.String(ShelfPVR.10.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfPVR.10.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfPVR.10)</onclick>
+					</control>					
+					<!--TV-->
+					<control type="button" id="200" description="TV Auto">
+						<visible>Library.HasContent(TVShows)</visible>
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31986</label>
+						<label2>$VAR[TVShelfLabel2]</label2>
+						<onclick>Skin.ToggleSetting(TVShelfAuto)</onclick>
+						<onclick>Skin.Reset(TVShelf_Custom)</onclick>
+						<onclick>Skin.Reset(TVShelf_Image)</onclick>
+					</control>
+					<control type="radiobutton" id="201" description="Image">
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31984</label>
+						<onclick>Skin.Reset(TVShelf_Custom)</onclick>
+						<onclick>Skin.Reset(TVShelfAuto)</onclick>
+						<onclick>Skin.Reset(TVShelf_Addon)</onclick>
+						<onclick>Skin.ToggleSetting(TVShelf_Image)</onclick>
+						<selected>Skin.HasSetting(TVShelf_Image)</selected>
+					</control>
+					<control type="button" id="202" description="Set image">
+						<visible>Skin.HasSetting(TVShelf_Image) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[1030]</label>
+						<label2>$INFO[Skin.String(TVShelf_Icon)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,image,TVShelf_Icon)</onclick>
+					</control>
+					<control type="radiobutton" id="214" description="Add-on widget">
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31990</label>
+						<onclick>Skin.Reset(TVShelf_Image)</onclick>
+						<onclick>Skin.Reset(TVShelf_Custom)</onclick>
+						<onclick>Skin.ToggleSetting(TVShelf_Addon)</onclick>
+						<selected>Skin.HasSetting(TVShelf_Addon)</selected>
+					</control>
+					<control type="button" id="215" description="Add-on widget path">
+						<visible>Skin.HasSetting(TVShelf_Addon) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[31991]</label>
+						<label2>$INFO[Skin.String(TVShelf.Label)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,widget,TVShelf)</onclick>
+					</control>
+					<control type="radiobutton" id="203" description="Custom">
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31985</label>
+						<onclick>Skin.Reset(TVShelf_Image)</onclick>
+						<onclick>Skin.Reset(TVShelfAuto)</onclick>
+						<onclick>Skin.Reset(TVShelf_Addon)</onclick>
+						<onclick>Skin.ToggleSetting(TVShelf_Custom)</onclick>
+						<selected>Skin.HasSetting(TVShelf_Custom)</selected>
+					</control>
+					<control type="button" id="204" description="ADDONS">
+						<visible>Skin.HasSetting(TVShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 1</label>
+						<label2>$INFO[Skin.String(ShelfTV.1.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfTV.1.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="205" description="ADDONS">
+						<visible>Skin.HasSetting(TVShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 2</label>
+						<label2>$INFO[Skin.String(ShelfTV.2.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfTV.2.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="206" description="ADDONS">
+						<visible>Skin.HasSetting(TVShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 3</label>
+						<label2>$INFO[Skin.String(ShelfTV.3.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfTV.3.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="207" description="ADDONS">
+						<visible>Skin.HasSetting(TVShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 4</label>
+						<label2>$INFO[Skin.String(ShelfTV.4.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfTV.4.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="208" description="ADDONS">
+						<visible>Skin.HasSetting(TVShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 5</label>
+						<label2>$INFO[Skin.String(ShelfTV.5.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfTV.5.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="209" description="FAVOURITES">
+						<visible>Skin.HasSetting(TVShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 1</label>
+						<label2>$INFO[Skin.String(ShelfTV.6.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfTV.6.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfTV.6)</onclick>
+					</control>
+					<control type="button" id="210" description="FAVOURITES">
+						<visible>Skin.HasSetting(TVShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 2</label>
+						<label2>$INFO[Skin.String(ShelfTV.7.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfTV.7.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfTV.7)</onclick>
+					</control>
+					<control type="button" id="211" description="FAVOURITES">
+						<visible>Skin.HasSetting(TVShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 3</label>
+						<label2>$INFO[Skin.String(ShelfTV.8.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfTV.8.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfTV.8)</onclick>
+					</control>
+					<control type="button" id="212" description="FAVOURITES">
+						<visible>Skin.HasSetting(TVShelf_Custom)</visible>
+						<visible>!Skin.HasSetting(TVSectionHide) + Container(50).HasFocus(1002)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 4</label>
+						<label2>$INFO[Skin.String(ShelfTV.9.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfTV.9.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfTV.9)</onclick>
+					</control>
+					<control type="radiobutton" id="10401" description="Image">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31984</label>
+						<onclick>Skin.Reset(CustomSec1Shelf_Custom)</onclick>
+						<onclick>Skin.Reset(CustomSec1Shelf_Addon)</onclick>
+						<onclick>Skin.ToggleSetting(CustomSec1Shelf_Image)</onclick>
+						<selected>Skin.HasSetting(CustomSec1Shelf_Image)</selected>
+					</control>
+					<control type="button" id="10402" description="Set image">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Image) + Container(50).HasFocus(1003)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[1030]</label>
+						<label2>$INFO[Skin.String(CustomSec1Shelf_Icon)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,image,CustomSec1Shelf_Icon)</onclick>
+					</control>
+					<control type="radiobutton" id="10450" description="Add-on widget">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31990</label>
+						<onclick>Skin.Reset(CustomSec1Shelf_Image)</onclick>
+						<onclick>Skin.Reset(CustomSec1Shelf_Custom)</onclick>
+						<onclick>Skin.ToggleSetting(CustomSec1Shelf_Addon)</onclick>
+						<selected>Skin.HasSetting(CustomSec1Shelf_Addon)</selected>
+					</control>
+					<control type="button" id="10451" description="Add-on widget path">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Addon) + Container(50).HasFocus(1003)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[31991]</label>
+						<label2>$INFO[Skin.String(CustomSec1Shelf.Label)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,widget,CustomSec1Shelf)</onclick>
+					</control>
+					<control type="radiobutton" id="10403" description="Custom">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31985</label>
+						<onclick>Skin.Reset(CustomSec1Shelf_Image)</onclick>
+						<onclick>Skin.Reset(CustomSec1Shelf_Addon)</onclick>
+						<onclick>Skin.ToggleSetting(CustomSec1Shelf_Custom)</onclick>
+						<selected>Skin.HasSetting(CustomSec1Shelf_Custom)</selected>
+					</control>
+					<control type="button" id="10404" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 1</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec1.1.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec1.1.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="10405" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 2</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec1.2.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec1.2.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="10406" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 3</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec1.3.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec1.3.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="10407" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 4</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec1.4.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec1.4.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="10408" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 5</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec1.5.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec1.5.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="10409" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 1</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec1.6.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec1.6.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec1.6)</onclick>
+					</control>
+					<control type="button" id="10410" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 2</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec1.7.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec1.7.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec1.7)</onclick>
+					</control>
+					<control type="button" id="10411" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 3</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec1.8.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec1.8.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec1.8)</onclick>
+					</control>
+					<control type="button" id="10412" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 4</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec1.9.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec1.9.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec1.9)</onclick>
+					</control>
+					<control type="button" id="10413" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec1Hide) + Container(50).HasFocus(1003)</visible>
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 5</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec1.10.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec1.10.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec1.10)</onclick>
+					</control>
+					<control type="radiobutton" id="20401" description="Image">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31984</label>
+						<onclick>Skin.Reset(CustomSec2Shelf_Custom)</onclick>
+						<onclick>Skin.Reset(CustomSec2Shelf_Addon)</onclick>
+						<onclick>Skin.ToggleSetting(CustomSec2Shelf_Image)</onclick>
+						<selected>Skin.HasSetting(CustomSec2Shelf_Image)</selected>
+					</control>
+					<control type="button" id="20402" description="Set image">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Image) + Container(50).HasFocus(1004)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[1030]</label>
+						<label2>$INFO[Skin.String(CustomSec2Shelf_Icon)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,image,CustomSec2Shelf_Icon)</onclick>
+					</control>
+					<control type="radiobutton" id="20450" description="Add-on widget">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31990</label>
+						<onclick>Skin.Reset(CustomSec2Shelf_Image)</onclick>
+						<onclick>Skin.Reset(CustomSec2Shelf_Custom)</onclick>
+						<onclick>Skin.ToggleSetting(CustomSec2Shelf_Addon)</onclick>
+						<selected>Skin.HasSetting(CustomSec2Shelf_Addon)</selected>
+					</control>
+					<control type="button" id="20451" description="Add-on widget path">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Addon) + Container(50).HasFocus(1004)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[31991]</label>
+						<label2>$INFO[Skin.String(CustomSec2Shelf.Label)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,widget,CustomSec2Shelf)</onclick>
+					</control>
+					<control type="radiobutton" id="20403" description="Custom">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31985</label>
+						<onclick>Skin.Reset(CustomSec2Shelf_Image)</onclick>
+						<onclick>Skin.Reset(CustomSec2Shelf_Addon)</onclick>
+						<onclick>Skin.ToggleSetting(CustomSec2Shelf_Custom)</onclick>
+						<selected>Skin.HasSetting(CustomSec2Shelf_Custom)</selected>
+					</control>
+					<control type="button" id="20404" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 1</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec2.1.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec2.1.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="20405" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 2</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec2.2.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec2.2.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="20406" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 3</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec2.3.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec2.3.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="20407" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 4</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec2.4.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec2.4.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="20408" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 5</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec2.5.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec2.5.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="20409" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 1</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec2.6.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec2.6.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec2.6)</onclick>
+					</control>
+					<control type="button" id="20410" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 2</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec2.7.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec2.7.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec2.7)</onclick>
+					</control>
+					<control type="button" id="20411" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 3</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec2.8.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec2.8.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec2.8)</onclick>
+					</control>
+					<control type="button" id="20412" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 4</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec2.9.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec2.9.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec2.9)</onclick>
+					</control>
+					<control type="button" id="20413" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec2Hide) + Container(50).HasFocus(1004)</visible>
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 5</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec2.10.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec2.10.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec2.10)</onclick>
+					</control>
+					<control type="radiobutton" id="30401" description="Image">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31984</label>
+						<onclick>Skin.Reset(CustomSec3Shelf_Custom)</onclick>
+						<onclick>Skin.Reset(CustomSec3Shelf_Addon)</onclick>
+						<onclick>Skin.ToggleSetting(CustomSec3Shelf_Image)</onclick>
+						<selected>Skin.HasSetting(CustomSec3Shelf_Image)</selected>
+					</control>
+					<control type="button" id="30402" description="Set image">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Image) + Container(50).HasFocus(1007)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[1030]</label>
+						<label2>$INFO[Skin.String(CustomSec3Shelf_Icon)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,image,CustomSec3Shelf_Icon)</onclick>
+					</control>
+					<control type="radiobutton" id="30450" description="Add-on widget">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31990</label>
+						<onclick>Skin.Reset(CustomSec3Shelf_Image)</onclick>
+						<onclick>Skin.Reset(CustomSec3Shelf_Custom)</onclick>
+						<onclick>Skin.ToggleSetting(CustomSec3Shelf_Addon)</onclick>
+						<selected>Skin.HasSetting(CustomSec3Shelf_Addon)</selected>
+					</control>
+					<control type="button" id="30451" description="Add-on widget path">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Addon) + Container(50).HasFocus(1007)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[31991]</label>
+						<label2>$INFO[Skin.String(CustomSec3Shelf.Label)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,widget,CustomSec3Shelf)</onclick>
+					</control>
+					<control type="radiobutton" id="30403" description="Custom">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31985</label>
+						<onclick>Skin.Reset(CustomSec3Shelf_Image)</onclick>
+						<onclick>Skin.Reset(CustomSec3Shelf_Addon)</onclick>
+						<onclick>Skin.ToggleSetting(CustomSec3Shelf_Custom)</onclick>
+						<selected>Skin.HasSetting(CustomSec3Shelf_Custom)</selected>
+					</control>
+					<control type="button" id="30404" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 1</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec3.1.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec3.1.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="30405" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 2</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec3.2.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec3.2.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="30406" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 3</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec3.3.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec3.3.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="30407" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 4</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec3.4.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec3.4.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="30408" description="ADDONS">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 5</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec3.5.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfCustomSec3.5.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="30409" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 1</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec3.6.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec3.6.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec3.6)</onclick>
+					</control>
+					<control type="button" id="30410" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 2</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec3.7.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec3.7.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec3.7)</onclick>
+					</control>
+					<control type="button" id="30411" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 3</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec3.8.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec3.8.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec3.8)</onclick>
+					</control>
+					<control type="button" id="30412" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 4</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec3.9.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec3.9.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec3.9)</onclick>
+					</control>
+					<control type="button" id="30413" description="FAVOURITES">
+						<visible>!Skin.HasSetting(CustomSec3Hide) + Container(50).HasFocus(1007)</visible>
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 5</label>
+						<label2>$INFO[Skin.String(ShelfCustomSec3.10.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfCustomSec3.10.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfCustomSec3.10)</onclick>
+					</control>
+					<!--ADDONS-->
+					<control type="radiobutton" id="501" description="Image">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31984</label>
+						<onclick>Skin.Reset(AddonsShelf_Custom)</onclick>
+						<onclick>Skin.ToggleSetting(AddonsShelf_Image)</onclick>
+						<selected>Skin.HasSetting(AddonsShelf_Image)</selected>
+					</control>
+					<control type="button" id="502" description="Set image">
+						<visible>Skin.HasSetting(AddonsShelf_Image) + Container(50).HasFocus(1005)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[1030]</label>
+						<label2>$INFO[Skin.String(AddonsShelf_Icon)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,image,AddonsShelf_Icon)</onclick>
+					</control>
+					<control type="radiobutton" id="503" description="Custom">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31985</label>
+						<onclick>Skin.Reset(AddonsShelf_Image)</onclick>
+						<onclick>Skin.ToggleSetting(AddonsShelf_Custom)</onclick>
+						<selected>Skin.HasSetting(AddonsShelf_Custom)</selected>
+					</control>
+					<control type="button" id="504" description="ADDONS">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 1</label>
+						<label2>$INFO[Skin.String(ShelfAddons.1.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfAddons.1.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="505" description="ADDONS">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 2</label>
+						<label2>$INFO[Skin.String(ShelfAddons.2.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfAddons.2.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="506" description="ADDONS">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 3</label>
+						<label2>$INFO[Skin.String(ShelfAddons.3.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfAddons.3.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="507" description="ADDONS">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 4</label>
+						<label2>$INFO[Skin.String(ShelfAddons.4.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfAddons.4.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="508" description="ADDONS">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[24000] 5</label>
+						<label2>$INFO[Skin.String(ShelfAddons.5.Label)]</label2>
+						<onclick>Skin.SetAddon(ShelfAddons.5.Label,xbmc.python.pluginsource)</onclick>
+					</control>
+					<control type="button" id="509" description="FAVOURITES">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 1</label>
+						<label2>$INFO[Skin.String(ShelfAddons.6.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfAddons.6.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfAddons.6)</onclick>
+					</control>
+					<control type="button" id="510" description="FAVOURITES">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 2</label>
+						<label2>$INFO[Skin.String(ShelfAddons.7.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfAddons.7.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfAddons.7)</onclick>
+					</control>
+					<control type="button" id="511" description="FAVOURITES">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 3</label>
+						<label2>$INFO[Skin.String(ShelfAddons.8.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfAddons.8.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfAddons.8)</onclick>
+					</control>
+					<control type="button" id="512" description="FAVOURITES">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 4</label>
+						<label2>$INFO[Skin.String(ShelfAddons.9.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfAddons.9.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfAddons.9)</onclick>
+					</control>
+					<control type="button" id="513" description="FAVOURITES">
+						<visible>!Skin.HasSetting(AddonsSectionHide) + Container(50).HasFocus(1005)</visible>
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>$LOCALIZE[31989] 5</label>
+						<label2>$INFO[Skin.String(ShelfAddons.10.Label)]</label2>
+						<thumb>$INFO[Skin.String(ShelfAddons.10.Icon)]</thumb>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,menu,ShelfAddons.10)</onclick>
+					</control>
+					<!--XBMC-->
+					<control type="radiobutton" id="601" description="Image">
+						<visible>Container(50).HasFocus(1006)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>31984</label>
+						<onclick>Skin.Reset(XBMCShelf_Custom)</onclick>
+						<onclick>Skin.ToggleSetting(XBMCShelf_Image)</onclick>
+						<selected>Skin.HasSetting(XBMCShelf_Image)</selected>
+					</control>
+					<control type="button" id="602" description="Set image">
+						<visible>Skin.HasSetting(XBMCShelf_Image) + Container(50).HasFocus(1006)</visible>
+						<include>SettingsSubmenuButtons</include>
+						<label>- $LOCALIZE[1030]</label>
+						<label2>$INFO[Skin.String(XBMCShelf_Icon)]</label2>
+						<onclick>RunScript(special://skin/scripts/onyx_tools.py,image,XBMCShelf_Icon)</onclick>
+					</control>
+				</control>
+			</control>
+		</control>
+	</controls>
+</window>

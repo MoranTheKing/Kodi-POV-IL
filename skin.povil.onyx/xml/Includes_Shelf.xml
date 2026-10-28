@@ -1,0 +1,1687 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+	<include name="ListVisibleFade">
+		<animation effect="fade" end="100" delay="250" time="150">Visible</animation>
+		<animation effect="fade" end="0" time="100">Hidden</animation>
+	</include>
+	<include name="LabelVisibleFade">
+		<animation effect="fade" end="100" delay="100" time="300">Visible</animation>
+		<animation effect="fade" end="0" time="100">Hidden</animation>
+	</include>
+	<include name="PlayingInfo">
+		<control type="label" description="Title label">
+			<posx>495</posx>
+			<posy>192</posy>
+			<height>45</height>
+			<width>750</width>
+			<label>$INFO[Player.Title]</label>
+			<align>left</align>
+			<aligny>center</aligny>
+			<font>size24</font>
+			<textcolor>White2</textcolor>
+			<shadowcolor>ShadowDark</shadowcolor>
+		</control>
+		<control type="label" description="Artist label">
+			<posx>495</posx>
+			<posy>243</posy>
+			<height>45</height>
+			<width>750</width>
+			<label>$INFO[MusicPlayer.Artist]$INFO[VideoPlayer.Artist]$INFO[VideoPlayer.TVShowTitle]</label>
+			<align>left</align>
+			<aligny>center</aligny>
+			<font>size18</font>
+			<textcolor>White</textcolor>
+			<shadowcolor>ShadowDark</shadowcolor>
+		</control>
+		<control type="label" description="Album Label">
+			<posx>495</posx>
+			<posy>279</posy>
+			<height>45</height>
+			<width>750</width>
+			<label>$INFO[MusicPlayer.Album]$INFO[VideoPlayer.Album]$INFO[VideoPlayer.Season,$LOCALIZE[20373] , - ]$INFO[VideoPlayer.episode,$LOCALIZE[20359] ]</label>
+			<align>left</align>
+			<aligny>center</aligny>
+			<font>size18</font>
+			<textcolor>White</textcolor>
+			<shadowcolor>ShadowDark</shadowcolor>
+		</control>
+		<control type="label" description="Time Label">
+			<visible>!String.isempty(Player.Duration)</visible>
+			<visible>Player.HasMedia + ![Player.HasGame | VideoPlayer.HasEpg]</visible>
+			<posx>495</posx>
+			<posy>315</posy>
+			<height>45</height>
+			<width>488</width>
+			<label>$INFO[Player.Time]$INFO[Player.Duration, / ]</label>
+			<align>left</align>
+			<aligny>center</aligny>
+			<font>size17</font>
+			<textcolor>White</textcolor>
+			<shadowcolor>ShadowDark</shadowcolor>
+		</control>
+		<control type="label" description="Time Label">
+			<visible>false + !String.isempty(PVR.Duration)</visible>
+			<visible>VideoPlayer.HasEpg</visible>
+			<posx>495</posx>
+			<posy>315</posy>
+			<height>45</height>
+			<width>488</width>
+			<label>$INFO[PVR.Time]$INFO[PVR.Duration, / ]</label>
+			<align>left</align>
+			<aligny>center</aligny>
+			<font>size17</font>
+			<textcolor>White</textcolor>
+			<shadowcolor>ShadowDark</shadowcolor>
+		</control>
+		<control type="image" description="Cover">
+			<visible>![Videoplayer.content(Movies) | VideoPlayer.HasEpg]</visible>
+			<posx>94</posx>
+			<posy>54</posy>
+			<width>303</width>
+			<height>303</height>
+			<texture>$INFO[MusicPlayer.Cover]$INFO[VideoPlayer.Cover]</texture>
+			<aspectratio>scale</aspectratio>
+		</control>
+		<control type="image" description="Movie poster">
+			<visible>VideoPlayer.content(Movies)</visible>
+			<posx>94</posx>
+			<posy>54</posy>
+			<width>303</width>
+			<height>303</height>
+			<texture>$INFO[Player.Art(poster)]</texture>
+			<aspectratio>keep</aspectratio>
+		</control>
+		<control type="image" description="Cover">
+			<visible>VideoPlayer.HasEpg</visible>
+			<posx>94</posx>
+			<posy>54</posy>
+			<width>303</width>
+			<height>303</height>
+			<texture>$INFO[Player.Art(thumb)]</texture>
+			<aspectratio>keep</aspectratio>
+		</control>
+	</include>
+	<include name="MoviesShortcutsCommons">
+		<include>ListVisibleFade</include>
+		<posx>72</posx>
+		<posy>84</posy>
+		<width>1778</width>
+		<height>402</height>
+		<orientation>horizontal</orientation>
+		<scrolltime>400</scrolltime>
+		<itemlayout condition="!Skin.HasSetting(MoviesShelf_Custom) + [Library.HasContent(Movies) | Skin.HasSetting(MoviesShelf_Addon)]" height="387" width="254">
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>17</posx>
+				<posy>18</posy>
+				<width>220</width>
+				<height>321</height>
+				<texture fallback="DefaultFolder.png" background="true" diffuse="img/RoundPoster.png">$VAR[ShelfPosterArt]</texture>
+				<aspectratio scalediffuse="false">scale</aspectratio>
+				<bordersize>9</bordersize>
+			</control>
+			<control type="label">
+				<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+				<include>HideMediaShelf</include>
+				<animation effect="fade" start="0" end="100" time="200" delay="100">UnFocus</animation>
+				<posx>17</posx>
+				<posy>345</posy>
+				<width>220</width>
+				<height>30</height>
+				<font>size17</font>
+				<textcolor>White2</textcolor>
+				<label>$INFO[ListItem.Property(SeasonEpisode)]</label>
+				<align>center</align>
+			</control>
+			<control type="image" description="Watched mark">
+				<include>HideMediaShelf</include>
+				<posx>193</posx>
+				<posy>291</posy>
+				<width>30</width>
+				<height>30</height>
+				<texture>$VAR[OverlayPercent]</texture>
+				<aspectratio>keep</aspectratio>
+			</control>
+			<control type="group" description="Percent watched">
+				<include>HideMediaShelf</include>
+				<visible>Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+				<posx>165</posx>
+				<posy>293</posy>
+				<control type="label">
+					<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+					<posx>0</posx>
+					<posy>0</posy>
+					<width>58</width>
+					<height>26</height>
+					<font>size15</font>
+					<textcolor>White2</textcolor>
+					<shadowcolor>Black</shadowcolor>
+					<align>right</align>
+					<aligny>center</aligny>
+					<label>[B]$VAR[WatchedPercent][/B]</label>
+				</control>
+			</control>
+		</itemlayout>
+		<focusedlayout condition="!Skin.HasSetting(MoviesShelf_Custom) + [Library.HasContent(Movies) | Skin.HasSetting(MoviesShelf_Addon)]" height="387" width="254">
+			<control type="image" description="Selection frame (part of the focused item, no animation)">
+				<posx>1</posx>
+				<posy>2</posy>
+				<width>252</width>
+				<height>352</height>
+				<texture border="49" colordiffuse="$VAR[FrameColor]">img/FrameRound.png</texture>
+				<bordersize>-9</bordersize>
+				<aspectratio>stretch</aspectratio>
+			</control>
+			<control type="group">
+				<control type="image">
+					<posx>17</posx>
+					<posy>18</posy>
+					<width>220</width>
+					<height>321</height>
+					<texture fallback="DefaultFolder.png" background="true" diffuse="img/RoundPoster.png">$VAR[ShelfPosterArt]</texture>
+					<aspectratio scalediffuse="false">scale</aspectratio>
+					<bordersize>9</bordersize>
+				</control>
+				<control type="image" description="Watched mark">
+					<posx>193</posx>
+					<posy>291</posy>
+					<width>30</width>
+					<height>30</height>
+					<texture>$VAR[OverlayPercent]</texture>
+					<aspectratio>keep</aspectratio>
+				</control>
+				<control type="group" description="Percent watched">
+					<visible>Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+					<posx>165</posx>
+					<posy>293</posy>
+					<control type="label">
+						<posx>0</posx>
+						<posy>0</posy>
+						<width>58</width>
+						<height>26</height>
+						<font>size15</font>
+						<textcolor>White2</textcolor>
+						<shadowcolor>Black</shadowcolor>
+						<align>right</align>
+						<aligny>center</aligny>
+						<label>[B]$VAR[WatchedPercent][/B]</label>
+					</control>
+				</control>
+			</control>
+		</focusedlayout>
+		<itemlayout condition="Skin.HasSetting(MoviesShelf_Custom)" height="357" width="354">
+			<control type="image">
+				<posx>27</posx>
+				<posy>27</posy>
+				<width>303</width>
+				<height>303</height>
+				<texture fallback="DefaultFolder.png" background="true" diffuse="img/RoundSquare.png">$INFO[ListItem.Thumb]</texture>
+				<aspectratio scalediffuse="false">scale</aspectratio>
+			</control>
+		</itemlayout>
+		<focusedlayout condition="Skin.HasSetting(MoviesShelf_Custom)" height="357" width="354">
+			<control type="image" description="Selection frame (part of the focused item, no animation)">
+				<posx>2</posx>
+				<posy>2</posy>
+				<width>350</width>
+				<height>350</height>
+				<texture border="49" colordiffuse="$VAR[FrameColor]">img/FrameRound.png</texture>
+				<bordersize>-9</bordersize>
+				<aspectratio>stretch</aspectratio>
+			</control>
+			<control type="group">
+				<control type="image">
+					<posx>27</posx>
+					<posy>27</posy>
+					<width>303</width>
+					<height>303</height>
+					<texture fallback="DefaultFolder.png" background="true" diffuse="img/RoundSquare.png">$INFO[ListItem.Thumb]</texture>
+					<aspectratio scalediffuse="false">scale</aspectratio>
+				</control>
+			</control>
+		</focusedlayout>
+	</include>
+	<include name="TVShortcutsThumbs">
+		<include>ListVisibleFade</include>
+		<posx>72</posx>
+		<posy>84</posy>
+		<width>1778</width>
+		<height>402</height>
+		<orientation>horizontal</orientation>
+		<scrolltime>400</scrolltime>
+		<itemlayout condition="$EXP[TVShelfThumb] + [Library.HasContent(TVShows) | Skin.HasSetting(TVShelf_Addon)]" height="357" width="444">
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>27</posx>
+				<posy>27</posy>
+				<width>393</width>
+				<height>303</height>
+				<texture background="true" diffuse="img/RoundThumb.png">$INFO[ListItem.Art(thumb)]</texture>
+				<aspectratio scalediffuse="false">scale</aspectratio>
+			</control>
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>27</posx>
+				<posy>252</posy>
+				<width>393</width>
+				<height>64</height>
+				<texture colordiffuse="d0d0d0d0">img/BlackDotST.png</texture>
+				<aspectratio>stretch</aspectratio>
+			</control>
+			<control type="label" description="show name">
+				<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+				<include>HideMediaShelf</include>
+				<posx>36</posx>
+				<posy>256</posy>
+				<width>375</width>
+				<height>30</height>
+				<font>size17</font>
+				<textcolor>Silver</textcolor>
+				<label>[B]$INFO[ListItem.TVShowTitle][/B]</label>
+				<align>center</align>
+			</control>
+			<control type="label" description="season and episode number">
+				<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+				<include>HideMediaShelf</include>
+				<visible>!String.IsEmpty(ListItem.Season) + !String.IsEmpty(ListItem.Episode)</visible>
+				<posx>36</posx>
+				<posy>279</posy>
+				<width>375</width>
+				<height>36</height>
+				<font>size15</font>
+				<textcolor>Silver</textcolor>
+				<label>[B]$LOCALIZE[79]$INFO[ListItem.Season]•$LOCALIZE[75]$INFO[ListItem.Episode][/B]</label>
+				<align>center</align>
+			</control>
+			<control type="image" description="Watched mark">
+				<include>HideMediaShelf</include>
+				<posx>385</posx>
+				<posy>216</posy>
+				<width>30</width>
+				<height>30</height>
+				<texture>$VAR[OverlayPercent]</texture>
+				<aspectratio>keep</aspectratio>
+			</control>
+			<control type="group" description="Percent watched">
+				<include>HideMediaShelf</include>
+				<visible>Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+				<posx>357</posx>
+				<posy>218</posy>
+				<control type="label">
+					<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+					<posx>0</posx>
+					<posy>0</posy>
+					<width>58</width>
+					<height>26</height>
+					<font>size15</font>
+					<textcolor>White2</textcolor>
+					<shadowcolor>Black</shadowcolor>
+					<align>right</align>
+					<aligny>center</aligny>
+					<label>[B]$VAR[WatchedPercent][/B]</label>
+				</control>
+			</control>
+		</itemlayout>
+		<focusedlayout condition="$EXP[TVShelfThumb] + [Library.HasContent(TVShows) | Skin.HasSetting(TVShelf_Addon)]" height="357" width="444">
+			<control type="image" description="Selection frame (part of the focused item, no animation)">
+				<posx>2</posx>
+				<posy>2</posy>
+				<width>443</width>
+				<height>350</height>
+				<texture border="49" colordiffuse="$VAR[FrameColor]">img/FrameRound.png</texture>
+				<bordersize>-9</bordersize>
+				<aspectratio>stretch</aspectratio>
+			</control>
+			<control type="group">
+				<control type="image">
+					<posx>27</posx>
+					<posy>27</posy>
+					<width>393</width>
+					<height>303</height>
+					<texture background="true" diffuse="img/RoundThumb.png">$INFO[ListItem.Art(thumb)]</texture>
+					<aspectratio scalediffuse="false">scale</aspectratio>
+				</control>
+				<control type="image">
+					<posx>27</posx>
+					<posy>252</posy>
+					<width>393</width>
+					<height>64</height>
+					<texture colordiffuse="d0d0d0d0">img/BlackDotST.png</texture>
+					<aspectratio>stretch</aspectratio>
+				</control>
+				<control type="label" description="show name">
+					<posx>36</posx>
+					<posy>256</posy>
+					<width>375</width>
+					<height>30</height>
+					<font>size17</font>
+					<textcolor>Silver</textcolor>
+					<label>[B]$INFO[ListItem.TVShowTitle][/B]</label>
+					<align>center</align>
+				</control>
+				<control type="label" description="season and episode number">
+				<visible>!String.IsEmpty(ListItem.Season) + !String.IsEmpty(ListItem.Episode)</visible>
+					<posx>36</posx>
+					<posy>279</posy>
+					<width>375</width>
+					<height>36</height>
+					<font>size15</font>
+					<textcolor>Silver</textcolor>
+					<label>[B]$LOCALIZE[79]$INFO[ListItem.Season]•$LOCALIZE[75]$INFO[ListItem.Episode][/B]</label>
+					<align>center</align>
+				</control>
+				<control type="image" description="Watched mark">
+					<posx>385</posx>
+					<posy>216</posy>
+					<width>30</width>
+					<height>30</height>
+					<texture>$VAR[OverlayPercent]</texture>
+					<aspectratio>keep</aspectratio>
+				</control>
+				<control type="group" description="Percent watched">
+					<visible>Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+					<posx>357</posx>
+					<posy>218</posy>
+					<control type="label">
+						<posx>0</posx>
+						<posy>0</posy>
+						<width>58</width>
+						<height>26</height>
+						<font>size15</font>
+						<textcolor>White2</textcolor>
+						<shadowcolor>Black</shadowcolor>
+						<align>right</align>
+						<aligny>center</aligny>
+						<label>[B]$VAR[WatchedPercent][/B]</label>
+					</control>
+				</control>
+			</control>
+		</focusedlayout>
+	</include>
+	<include name="TVShortcutsPosters">
+		<include>ListVisibleFade</include>
+		<posx>72</posx>
+		<posy>84</posy>
+		<width>1778</width>
+		<height>402</height>
+		<orientation>horizontal</orientation>
+		<scrolltime>400</scrolltime>
+		<itemlayout condition="$EXP[TVShelfPoster] + [Library.HasContent(TVShows) | Skin.HasSetting(TVShelf_Addon)]" height="387" width="254">
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>17</posx>
+				<posy>18</posy>
+				<width>220</width>
+				<height>321</height>
+				<texture fallback="DefaultFolder.png" background="true" diffuse="img/RoundPoster.png">$VAR[ShelfPosterArt]</texture>
+				<aspectratio scalediffuse="false">scale</aspectratio>
+				<bordersize>9</bordersize>
+			</control>
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<visible>!String.IsEmpty(ListItem.Episode)</visible>
+				<posx>17</posx>
+				<posy>276</posy>
+				<width>220</width>
+				<height>54</height>
+				<texture colordiffuse="d0d0d0d0">img/BlackDotST.png</texture>
+				<aspectratio>scale</aspectratio>
+				<bordersize>9</bordersize>
+			</control>
+			<control type="label">
+				<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+				<include>HideMediaShelf</include>
+				<visible>!String.IsEmpty(ListItem.Episode)</visible>
+				<posx>17</posx>
+				<posy>282</posy>
+				<width>220</width>
+				<height>42</height>
+				<font>size17</font>
+				<textcolor>Silver</textcolor>
+				<label>[B]$INFO[ListItem.Season,,.]$INFO[ListItem.Episode][/B]</label>
+				<align>center</align>
+			</control>
+			<control type="image" description="Watched mark">
+				<include>HideMediaShelf</include>
+				<visible>String.IsEmpty(ListItem.Episode)</visible>
+				<posx>193</posx>
+				<posy>291</posy>
+				<width>30</width>
+				<height>30</height>
+				<texture>$VAR[OverlayPercent]</texture>
+				<aspectratio>keep</aspectratio>
+			</control>
+			<control type="group" description="Percent watched">
+				<include>HideMediaShelf</include>
+				<visible>String.IsEmpty(ListItem.Episode) + Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+				<posx>165</posx>
+				<posy>293</posy>
+				<control type="label">
+					<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+					<posx>0</posx>
+					<posy>0</posy>
+					<width>58</width>
+					<height>26</height>
+					<font>size15</font>
+					<textcolor>White2</textcolor>
+					<shadowcolor>Black</shadowcolor>
+					<align>right</align>
+					<aligny>center</aligny>
+					<label>[B]$VAR[WatchedPercent][/B]</label>
+				</control>
+			</control>
+			<control type="image" description="Watched mark">
+				<include>HideMediaShelf</include>
+				<visible>!String.IsEmpty(ListItem.Episode)</visible>
+				<posx>193</posx>
+				<posy>249</posy>
+				<width>30</width>
+				<height>30</height>
+				<texture>$VAR[OverlayPercent]</texture>
+				<aspectratio>keep</aspectratio>
+			</control>
+			<control type="group" description="Percent watched">
+				<include>HideMediaShelf</include>
+				<visible>!String.IsEmpty(ListItem.Episode) + Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+				<posx>165</posx>
+				<posy>251</posy>
+				<control type="label">
+					<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+					<posx>0</posx>
+					<posy>0</posy>
+					<width>58</width>
+					<height>26</height>
+					<font>size15</font>
+					<textcolor>White2</textcolor>
+					<shadowcolor>Black</shadowcolor>
+					<align>right</align>
+					<aligny>center</aligny>
+					<label>[B]$VAR[WatchedPercent][/B]</label>
+				</control>
+			</control>
+		</itemlayout>
+		<focusedlayout condition="$EXP[TVShelfPoster] + [Library.HasContent(TVShows) | Skin.HasSetting(TVShelf_Addon)]" height="387" width="254">
+			<control type="image" description="Selection frame (part of the focused item, no animation)">
+				<posx>1</posx>
+				<posy>2</posy>
+				<width>252</width>
+				<height>352</height>
+				<texture border="49" colordiffuse="$VAR[FrameColor]">img/FrameRound.png</texture>
+				<bordersize>-9</bordersize>
+				<aspectratio>stretch</aspectratio>
+			</control>
+			<control type="group">
+				<control type="image">
+					<posx>17</posx>
+					<posy>18</posy>
+					<width>220</width>
+					<height>321</height>
+					<texture fallback="DefaultFolder.png" background="true" diffuse="img/RoundPoster.png">$VAR[ShelfPosterArt]</texture>
+					<aspectratio scalediffuse="false">scale</aspectratio>
+					<bordersize>9</bordersize>
+				</control>
+				<control type="image">
+					<visible>!String.IsEmpty(ListItem.Episode)</visible>
+					<posx>17</posx>
+					<posy>276</posy>
+					<width>220</width>
+					<height>54</height>
+					<texture colordiffuse="d0d0d0d0">img/BlackDotST.png</texture>
+					<aspectratio>scale</aspectratio>
+					<bordersize>9</bordersize>
+				</control>
+				<control type="label">
+					<visible>!String.IsEmpty(ListItem.Episode)</visible>
+					<posx>17</posx>
+					<posy>282</posy>
+					<width>220</width>
+					<height>42</height>
+					<font>size17</font>
+					<textcolor>Silver</textcolor>
+					<label>[B]$INFO[ListItem.Season,,.]$INFO[ListItem.Episode][/B]</label>
+					<align>center</align>
+				</control>
+				<control type="image" description="Watched mark">
+					<visible>String.IsEmpty(ListItem.Episode)</visible>
+					<posx>193</posx>
+					<posy>291</posy>
+					<width>30</width>
+					<height>30</height>
+					<texture>$VAR[OverlayPercent]</texture>
+					<aspectratio>keep</aspectratio>
+				</control>
+				<control type="group" description="Percent watched">
+					<visible>String.IsEmpty(ListItem.Episode) + Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+					<posx>165</posx>
+					<posy>293</posy>
+					<control type="label">
+						<posx>0</posx>
+						<posy>0</posy>
+						<width>58</width>
+						<height>26</height>
+						<font>size15</font>
+						<textcolor>White2</textcolor>
+						<shadowcolor>Black</shadowcolor>
+						<align>right</align>
+						<aligny>center</aligny>
+						<label>[B]$VAR[WatchedPercent][/B]</label>
+					</control>
+				</control>
+				<control type="image" description="Watched mark">
+					<visible>!String.IsEmpty(ListItem.Episode)</visible>
+					<posx>193</posx>
+					<posy>249</posy>
+					<width>30</width>
+					<height>30</height>
+					<texture>$VAR[OverlayPercent]</texture>
+					<aspectratio>keep</aspectratio>
+				</control>
+				<control type="group" description="Percent watched">
+					<visible>!String.IsEmpty(ListItem.Episode) + Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+					<posx>165</posx>
+					<posy>251</posy>
+					<control type="label">
+						<posx>0</posx>
+						<posy>0</posy>
+						<width>58</width>
+						<height>26</height>
+						<font>size15</font>
+						<textcolor>White2</textcolor>
+						<shadowcolor>Black</shadowcolor>
+						<align>right</align>
+						<aligny>center</aligny>
+						<label>[B]$VAR[WatchedPercent][/B]</label>
+					</control>
+				</control>
+			</control>
+		</focusedlayout>
+	</include>
+	<include name="TVShortcutsCommons">
+		<include>ListVisibleFade</include>
+		<posx>72</posx>
+		<posy>84</posy>
+		<width>1778</width>
+		<height>402</height>
+		<orientation>horizontal</orientation>
+		<scrolltime>400</scrolltime>
+		<itemlayout condition="Skin.HasSetting(TVShelf_Custom)" height="357" width="354">
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>27</posx>
+				<posy>27</posy>
+				<width>303</width>
+				<height>303</height>
+				<texture fallback="DefaultFolder.png" background="true" diffuse="img/RoundSquare.png">$INFO[ListItem.Thumb]</texture>
+				<aspectratio scalediffuse="false">scale</aspectratio>
+			</control>
+		</itemlayout>
+		<focusedlayout condition="Skin.HasSetting(TVShelf_Custom)" height="357" width="354">
+			<control type="image" description="Selection frame (part of the focused item, no animation)">
+				<posx>3</posx>
+				<posy>3</posy>
+				<width>351</width>
+				<height>351</height>
+				<texture border="49" colordiffuse="$VAR[FrameColor]">img/FrameRound.png</texture>
+				<bordersize>-9</bordersize>
+				<aspectratio>stretch</aspectratio>
+			</control>
+			<control type="group">
+				<control type="image">
+					<posx>27</posx>
+					<posy>27</posy>
+					<width>303</width>
+					<height>303</height>
+					<texture fallback="DefaultFolder.png" background="true" diffuse="img/RoundSquare.png">$INFO[ListItem.Thumb]</texture>
+					<aspectratio scalediffuse="false">scale</aspectratio>
+				</control>
+			</control>
+		</focusedlayout>
+	</include>
+	<include name="PVRShortcutsChannels">
+		<include>ListVisibleFade</include>
+		<posx>72</posx>
+		<posy>84</posy>
+		<width>1776</width>
+		<height>402</height>
+		<orientation>horizontal</orientation>
+		<scrolltime>400</scrolltime>
+		<itemlayout condition="!Skin.HasSetting(PVRShelf_Image) + !Skin.HasSetting(PVRShelf_Custom)" height="357" width="354">
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>18</posx>
+				<posy>18</posy>
+				<width>321</width>
+				<height>321</height>
+				<texture background="true">img/ListFO.png</texture>
+				<aspectratio>scale</aspectratio>
+				<bordersize>7</bordersize>
+			</control>
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>18</posx>
+				<posy>0</posy>
+				<width>321</width>
+				<height>321</height>
+				<texture fallback="livetv.png" background="true">$INFO[ListItem.Thumb]</texture>
+				<aspectratio>keep</aspectratio>
+				<!--<bordertexture border="12">img/ThumbBorder.png</bordertexture>-->
+				<bordersize>19</bordersize>
+			</control>
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>18</posx>
+				<posy>278</posy>
+				<width>321</width>
+				<height>50</height>
+				<texture colordiffuse="90909090">img/BlackDotST.png</texture>
+				<aspectratio>scale</aspectratio>
+				<bordersize>7</bordersize>
+			</control>
+			<control type="label">
+				<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+				<include>HideMediaShelf</include>
+				<posx>18</posx>
+				<posy>282</posy>
+				<width>321</width>
+				<height>42</height>
+				<font>size17</font>
+				<textcolor>Silver</textcolor>
+				<label>[B]$INFO[ListItem.ChannelNumberLabel][/B]</label>
+				<align>center</align>
+			</control>
+		</itemlayout>
+		<focusedlayout condition="!Skin.HasSetting(PVRShelf_Custom)" height="357" width="354">
+			<control type="group">
+				<control type="image">
+					<posx>18</posx>
+					<posy>18</posy>
+					<width>321</width>
+					<height>321</height>
+					<texture background="true">img/ListFO.png</texture>
+					<aspectratio>scale</aspectratio>
+					<bordersize>7</bordersize>
+				</control>
+				<control type="image">
+					<posx>18</posx>
+					<posy>0</posy>
+					<width>321</width>
+					<height>321</height>
+					<texture fallback="livetv.png" background="true">$INFO[ListItem.Thumb]</texture>
+					<aspectratio>keep</aspectratio>
+					<!--<bordertexture border="12">img/ThumbBorder.png</bordertexture>-->
+					<bordersize>19</bordersize>
+				</control>
+				<control type="image">
+					<posx>18</posx>
+					<posy>278</posy>
+					<width>321</width>
+					<height>50</height>
+					<texture colordiffuse="90909090">img/BlackDotST.png</texture>
+					<aspectratio>scale</aspectratio>
+					<bordersize>7</bordersize>
+				</control>
+				<control type="label">
+					<posx>30</posx>
+					<posy>282</posy>
+					<width>295</width>
+					<height>42</height>
+					<font>size17</font>
+					<textcolor>Silver</textcolor>
+					<label>[B]$INFO[ListItem.ChannelNumberLabel][/B] • [B]$INFO[ListItem.Label][/B]</label>
+					<align>center</align>
+				</control>
+				<control type="label">
+					<visible>ControlGroup(700).HasFocus()</visible>
+					<posx>20</posx>
+					<posy>345</posy>
+					<width>310</width>
+					<height>30</height>
+					<font>size17</font>
+					<textcolor>White2</textcolor>
+					<label>$INFO[ListItem.Title]</label>
+					<align>center</align>
+				</control>
+			</control>
+			<control type="image" description="Selection frame (part of the focused item, no animation). Square frame for the square icons; follows the focus color like the widget frames (FrameColor).">
+				<posx>3</posx>
+				<posy>3</posy>
+				<width>351</width>
+				<height>351</height>
+				<texture border="36" colordiffuse="$VAR[FrameColor]">focus/FrameSquare.png</texture>
+				<bordersize>-9</bordersize>
+				<aspectratio>stretch</aspectratio>
+			</control>
+		</focusedlayout>
+	</include>
+	<include name="PVRShortcutsRecordings">
+		<include>ListVisibleFade</include>
+		<posx>72</posx>
+		<posy>84</posy>
+		<width>1778</width>
+		<height>402</height>
+		<orientation>horizontal</orientation>
+		<scrolltime>400</scrolltime>
+		<itemlayout height="387" width="254">
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>17</posx>
+				<posy>18</posy>
+				<width>220</width>
+				<height>321</height>
+				<texture fallback="livetv.png" background="true">$INFO[ListItem.Icon]</texture>
+				<aspectratio>stretch</aspectratio>
+				<bordertexture border="12">img/ThumbBorder.png</bordertexture>
+				<bordersize>9</bordersize>
+			</control>
+			<control type="image">
+				<visible>false</visible>
+				<posx>16</posx>
+				<posy>276</posy>
+				<width>221</width>
+				<height>54</height>
+				<texture>img/BlackDotST.png</texture>
+				<aspectratio>scale</aspectratio>
+				<bordersize>9</bordersize>
+			</control>
+			<control type="label">
+				<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+				<visible>false</visible>
+				<posx>17</posx>
+				<posy>281</posy>
+				<width>220</width>
+				<height>42</height>
+				<font>size15</font>
+				<textcolor>Silver</textcolor>
+				<label>[B]$INFO[ListItem.Duration][/B]</label>
+				<align>center</align>
+			</control>
+			<control type="image" description="Watched marks">
+				<visible>false</visible>
+				<posx>195</posx>
+				<posy>289</posy>
+				<height>28</height>
+				<width>28</width>
+				<texture>$VAR[Overlay]</texture>
+				<aspectratio>keep</aspectratio>
+			</control>
+		</itemlayout>
+		<focusedlayout height="387" width="254">
+			<control type="group">
+				<control type="image">
+					<posx>17</posx>
+					<posy>18</posy>
+					<width>220</width>
+					<height>321</height>
+					<texture fallback="livetv.png" background="true">$INFO[ListItem.Thumb]</texture>
+					<aspectratio>stretch</aspectratio>
+					<bordertexture border="12">img/ThumbBorder.png</bordertexture>
+					<bordersize>9</bordersize>
+				</control>
+				<control type="image">
+					<visible>false</visible>
+					<posx>16</posx>
+					<posy>276</posy>
+					<width>221</width>
+					<height>54</height>
+					<texture>img/BlackDotST.png</texture>
+					<aspectratio>scale</aspectratio>
+					<bordersize>9</bordersize>
+				</control>
+				<control type="label">
+					<visible>false</visible>
+					<posx>17</posx>
+					<posy>281</posy>
+					<width>220</width>
+					<height>42</height>
+					<font>size15</font>
+					<textcolor>Silver</textcolor>
+					<label>[B]$INFO[ListItem.Duration][/B]</label>
+					<align>center</align>
+				</control>
+				<control type="image" description="Watched marks">
+					<visible>false</visible>
+					<posx>195</posx>
+					<posy>289</posy>
+					<height>28</height>
+					<width>28</width>
+					<texture>$VAR[Overlay]</texture>
+					<aspectratio>keep</aspectratio>
+				</control>
+				<control type="label">
+					<visible>ControlGroup(700).HasFocus()</visible>
+					<posx>17</posx>
+					<posy>339</posy>
+					<width>220</width>
+					<height>42</height>
+					<font>size17</font>
+					<textcolor>White2</textcolor>
+					<label>$INFO[ListItem.Title]</label>
+					<align>center</align>
+				</control>
+			</control>
+			<control type="image" description="Selection frame (part of the focused item, no animation). Square frame for the square icons; follows the focus color like the widget frames (FrameColor).">
+				<posx>1</posx>
+				<posy>3</posy>
+				<width>252</width>
+				<height>352</height>
+				<texture border="36" colordiffuse="$VAR[FrameColor]">focus/FrameSquare.png</texture>
+				<bordersize>-9</bordersize>
+				<aspectratio>stretch</aspectratio>
+			</control>
+		</focusedlayout>
+	</include>		
+	<include name="PVRShortcutsCustom">
+		<include>ListVisibleFade</include>
+		<posx>72</posx>
+		<posy>84</posy>
+		<width>1776</width>
+		<height>402</height>
+		<orientation>horizontal</orientation>
+		<scrolltime>400</scrolltime>
+		<itemlayout condition="Skin.HasSetting(PVRShelf_Custom)" height="357" width="354">
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>18</posx>
+				<posy>18</posy>
+				<width>321</width>
+				<height>321</height>
+				<texture fallback="DefaultFolder.png" background="true">$INFO[ListItem.Thumb]</texture>
+				<aspectratio>scale</aspectratio>
+				<bordertexture border="12">img/ThumbBorder.png</bordertexture>
+				<bordersize>9</bordersize>
+			</control>
+			<control type="label">
+				<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+				<include>HideMediaShelf</include>
+				<posx>5</posx>
+				<posy>345</posy>
+				<width>344</width>
+				<height>30</height>
+				<font>size17</font>
+				<textcolor>White2</textcolor>
+				<label>$INFO[ListItem.TVShowTitle]</label>
+				<align>center</align>
+			</control>
+		</itemlayout>
+		<focusedlayout condition="Skin.HasSetting(PVRShelf_Custom)" height="357" width="354">
+			<control type="group">
+				<control type="image">
+					<posx>18</posx>
+					<posy>18</posy>
+					<width>321</width>
+					<height>321</height>
+					<texture fallback="DefaultFolder.png" background="true">$INFO[ListItem.Thumb]</texture>
+					<aspectratio>scale</aspectratio>
+					<bordertexture border="12">img/ThumbBorder.png</bordertexture>
+					<bordersize>9</bordersize>
+				</control>
+				<control type="label">
+					<visible>ControlGroup(700).HasFocus()</visible>
+					<posx>5</posx>
+					<posy>345</posy>
+					<width>344</width>
+					<height>30</height>
+					<font>size17</font>
+					<textcolor>White2</textcolor>
+					<label>$INFO[ListItem.Label]</label>
+					<align>center</align>
+				</control>
+			</control>
+			<control type="image" description="Selection frame (part of the focused item, no animation). Square frame for the square icons; follows the focus color like the widget frames (FrameColor).">
+				<posx>3</posx>
+				<posy>3</posy>
+				<width>351</width>
+				<height>351</height>
+				<texture border="36" colordiffuse="$VAR[FrameColor]">focus/FrameSquare.png</texture>
+				<bordersize>-9</bordersize>
+				<aspectratio>stretch</aspectratio>
+			</control>
+		</focusedlayout>
+	</include>
+	<include name="MusicShortcutsCommons">
+		<include>ListVisibleFade</include>
+		<posx>72</posx>
+		<posy>84</posy>
+		<width>1776</width>
+		<height>402</height>
+		<orientation>horizontal</orientation>
+		<scrolltime>400</scrolltime>
+		<itemlayout height="357" width="354">
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>18</posx>
+				<posy>18</posy>
+				<width>321</width>
+				<height>321</height>
+				<texture fallback="DefaultFolder.png" background="true">$INFO[ListItem.Thumb]</texture>
+				<aspectratio>scale</aspectratio>
+				<bordertexture border="12">img/ThumbBorder.png</bordertexture>
+				<bordersize>9</bordersize>
+			</control>
+			<control type="label">
+				<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+				<include>HideMediaShelf</include>
+				<posx>5</posx>
+				<posy>345</posy>
+				<width>344</width>
+				<height>30</height>
+				<font>size17</font>
+				<textcolor>White2</textcolor>
+				<label>$INFO[ListItem.TVShowTitle]</label>
+				<align>center</align>
+			</control>
+		</itemlayout>
+		<focusedlayout height="357" width="354">
+			<control type="group">
+				<control type="image">
+					<posx>18</posx>
+					<posy>18</posy>
+					<width>321</width>
+					<height>321</height>
+					<texture fallback="DefaultFolder.png" background="true">$INFO[ListItem.Thumb]</texture>
+					<aspectratio>scale</aspectratio>
+					<bordertexture border="12">img/ThumbBorder.png</bordertexture>
+					<bordersize>9</bordersize>
+				</control>
+				<control type="label">
+					<visible>ControlGroup(700).HasFocus()</visible>
+					<posx>5</posx>
+					<posy>345</posy>
+					<width>344</width>
+					<height>30</height>
+					<font>size17</font>
+					<textcolor>White2</textcolor>
+					<label>$INFO[ListItem.Label]</label>
+					<align>center</align>
+				</control>
+			</control>
+			<control type="image" description="Selection frame (part of the focused item, no animation). Square frame for the square icons; follows the focus color like the widget frames (FrameColor).">
+				<posx>4</posx>
+				<posy>4</posy>
+				<width>350</width>
+				<height>350</height>
+				<texture border="36" colordiffuse="$VAR[FrameColor]">focus/FrameSquare.png</texture>
+				<bordersize>-9</bordersize>
+				<aspectratio>stretch</aspectratio>
+			</control>
+		</focusedlayout>
+	</include>
+	<!--RA-->
+	<include name="MoviesAddonClick" description="Add-on widget clicks. Kodi's built-in widget click did not open add-on folders (e.g. Next Page) from this skin's home shelf, so add-on mode handles every click itself: folders open in the Videos window, playable items play, anything else is run as a plugin call. Library/custom shelves keep Kodi's default click.">
+		<onclick condition="Container(310).ListItem.IsFolder">ActivateWindow(Videos,"$INFO[Container(310).ListItem.FolderPath]",return)</onclick>
+		<onclick condition="!Container(310).ListItem.IsFolder + String.IsEqual(Container(310).ListItem.Property(IsPlayable),true)">PlayMedia("$INFO[Container(310).ListItem.FileNameAndPath]")</onclick>
+		<onclick condition="!Container(310).ListItem.IsFolder + !String.IsEqual(Container(310).ListItem.Property(IsPlayable),true)">RunPlugin("$INFO[Container(310).ListItem.FileNameAndPath]")</onclick>
+	</include>
+	<include name="TVAddonClick" description="Add-on widget clicks. Kodi's built-in widget click did not open add-on folders (e.g. Next Page) from this skin's home shelf, so add-on mode handles every click itself: folders open in the Videos window, playable items play, anything else is run as a plugin call. Library/custom shelves keep Kodi's default click.">
+		<onclick condition="Container(312).ListItem.IsFolder">ActivateWindow(Videos,"$INFO[Container(312).ListItem.FolderPath]",return)</onclick>
+		<onclick condition="!Container(312).ListItem.IsFolder + String.IsEqual(Container(312).ListItem.Property(IsPlayable),true)">PlayMedia("$INFO[Container(312).ListItem.FileNameAndPath]")</onclick>
+		<onclick condition="!Container(312).ListItem.IsFolder + !String.IsEqual(Container(312).ListItem.Property(IsPlayable),true)">RunPlugin("$INFO[Container(312).ListItem.FileNameAndPath]")</onclick>
+	</include>
+	<include name="Movies_RA">
+		<control type="group">
+			<control type="panel" id="310" description="TOP Shortcuts">
+				<visible>[Library.HasContent(Movies) | Skin.HasSetting(MoviesShelf_Custom) | $EXP[MoviesShelfAddon]] + [ControlGroup(9000).HasFocus(300) | Control.HasFocus(310)]</visible>
+				<onup>noop</onup>
+				<ondown>300</ondown>
+				<onleft>310</onleft>
+				<onright>310</onright>
+				<include condition="!Skin.HasSetting(MoviesShelf_Custom) + Skin.HasSetting(MoviesShelf_Addon) + !String.IsEmpty(Skin.String(MoviesShelf.Path))">MoviesAddonClick</include>
+				<include>MoviesShortcutsCommons</include>
+				<include condition="Skin.HasSetting(MoviesShelf_Custom)">Movies_Custom_Items</include>
+				<include condition="!Skin.HasSetting(MoviesShelf_Custom) + Skin.HasSetting(MoviesShelf_Addon) + !String.IsEmpty(Skin.String(MoviesShelf.Path))">Movies_Addon_Items</include>
+				<include condition="!Skin.HasSetting(MoviesShelf_Custom) + ![Skin.HasSetting(MoviesShelf_Addon) + !String.IsEmpty(Skin.String(MoviesShelf.Path))]">Movies_RA_Items</include>
+			</control>
+			<control type="label" description="Focused item title">
+				<visible>Control.HasFocus(310)</visible>
+				<include>HideMediaShelf</include>
+				<posx>72</posx>
+				<posy>429</posy>
+				<width>1778</width>
+				<height>34</height>
+				<font>size19</font>
+				<align>center</align>
+				<aligny>center</aligny>
+				<scroll>false</scroll>
+				<textcolor>White2</textcolor>
+				<label>$VAR[ShelfTitleMovies]</label>
+			</control>
+		</control>
+	</include>
+	<include name="PVR_RW">
+		<control type="group">
+			<control type="panel" id="311" description="TOP Shortcuts">
+				<visible>[System.HasPVRAddon | Skin.HasSetting(PVRShelf_Custom)] + [ControlGroup(9000).HasFocus(301) | Control.HasFocus(311)]</visible>
+				<onup>301</onup>
+				<ondown>301</ondown>
+				<onleft>311</onleft>
+				<onright>311</onright>
+				<include condition="$EXP[PVRShelfRecordings]">PVRShortcutsRecordings</include>
+				<include condition="$EXP[PVRShelfChannels]">PVRShortcutsChannels</include>
+				<include>PVRShortcutsCustom</include>
+				<include condition="Skin.HasSetting(PVRShelf_Custom)">PVR_Custom_Items</include>
+				<include condition="$EXP[PVRShelfChannels]">PVR_RW_Items</include>
+				<include condition="$EXP[PVRShelfRecordings]">PVR_RR_Items</include>
+			</control>
+		</control>
+	</include>
+	<include name="TV_RA">
+		<control type="group">
+			<control type="panel" id="312" description="TOP Shortcuts">
+				<visible>[Library.HasContent(TVShows) | Skin.HasSetting(TVShelf_Custom) | $EXP[TVShelfAddon]] + [ControlGroup(9000).HasFocus(302) | Control.HasFocus(312)]</visible>
+				<onup>noop</onup>
+				<ondown>302</ondown>
+				<onleft>312</onleft>
+				<onright>312</onright>
+				<include condition="!Skin.HasSetting(TVShelf_Custom) + Skin.HasSetting(TVShelf_Addon) + !String.IsEmpty(Skin.String(TVShelf.Path))">TVAddonClick</include>
+				<include>TVShortcutsCommons</include>
+				<include condition="$EXP[TVShelfThumb]">TVShortcutsThumbs</include>
+				<include condition="$EXP[TVShelfPoster]">TVShortcutsPosters</include>
+				<include condition="Skin.HasSetting(TVShelf_Custom)">TV_Custom_Items</include>
+				<include condition="!Skin.HasSetting(TVShelf_Custom) + Skin.HasSetting(TVShelf_Addon) + !String.IsEmpty(Skin.String(TVShelf.Path))">TV_Addon_Items</include>
+				<include condition="!Skin.HasSetting(TVShelf_Custom) + ![Skin.HasSetting(TVShelf_Addon) + !String.IsEmpty(Skin.String(TVShelf.Path))]">TV_Recent_Items</include>
+			</control>
+			<control type="label" description="Focused item title">
+				<visible>Control.HasFocus(312)</visible>
+				<include>HideMediaShelf</include>
+				<posx>72</posx>
+				<posy>429</posy>
+				<width>1778</width>
+				<height>34</height>
+				<font>size19</font>
+				<align>center</align>
+				<aligny>center</aligny>
+				<scroll>false</scroll>
+				<textcolor>White2</textcolor>
+				<label>$VAR[ShelfTitleTV]</label>
+			</control>
+		</control>
+	</include>
+	<include name="CustomWidgetCommons" description="Poster-style widget layout for Custom 1/2/3 add-on widgets (same look as the Movies widget; no Movies settings in its conditions)">
+		<include>ListVisibleFade</include>
+		<posx>72</posx>
+		<posy>84</posy>
+		<width>1778</width>
+		<height>402</height>
+		<orientation>horizontal</orientation>
+		<scrolltime>400</scrolltime>
+		<itemlayout height="387" width="254">
+			<control type="image">
+				<include>HideMediaShelf</include>
+				<posx>17</posx>
+				<posy>18</posy>
+				<width>220</width>
+				<height>321</height>
+				<texture fallback="DefaultFolder.png" background="true" diffuse="img/RoundPoster.png">$VAR[ShelfPosterArt]</texture>
+				<aspectratio scalediffuse="false">scale</aspectratio>
+				<bordersize>9</bordersize>
+			</control>
+			<control type="label">
+				<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+				<include>HideMediaShelf</include>
+				<animation effect="fade" start="0" end="100" time="200" delay="100">UnFocus</animation>
+				<posx>17</posx>
+				<posy>345</posy>
+				<width>220</width>
+				<height>30</height>
+				<font>size17</font>
+				<textcolor>White2</textcolor>
+				<label>$INFO[ListItem.Property(SeasonEpisode)]</label>
+				<align>center</align>
+			</control>
+			<control type="image" description="Watched mark">
+				<include>HideMediaShelf</include>
+				<posx>193</posx>
+				<posy>291</posy>
+				<width>30</width>
+				<height>30</height>
+				<texture>$VAR[OverlayPercent]</texture>
+				<aspectratio>keep</aspectratio>
+			</control>
+			<control type="group" description="Percent watched">
+				<include>HideMediaShelf</include>
+				<visible>Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+				<posx>165</posx>
+				<posy>293</posy>
+				<control type="label">
+					<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+					<posx>0</posx>
+					<posy>0</posy>
+					<width>58</width>
+					<height>26</height>
+					<font>size15</font>
+					<textcolor>White2</textcolor>
+					<shadowcolor>Black</shadowcolor>
+					<align>right</align>
+					<aligny>center</aligny>
+					<label>[B]$VAR[WatchedPercent][/B]</label>
+				</control>
+			</control>
+		</itemlayout>
+		<focusedlayout height="387" width="254">
+			<control type="image" description="Selection frame (part of the focused item, no animation)">
+				<posx>1</posx>
+				<posy>2</posy>
+				<width>252</width>
+				<height>352</height>
+				<texture border="49" colordiffuse="$VAR[FrameColor]">img/FrameRound.png</texture>
+				<bordersize>-9</bordersize>
+				<aspectratio>stretch</aspectratio>
+			</control>
+			<control type="group">
+				<control type="image">
+					<posx>17</posx>
+					<posy>18</posy>
+					<width>220</width>
+					<height>321</height>
+					<texture fallback="DefaultFolder.png" background="true" diffuse="img/RoundPoster.png">$VAR[ShelfPosterArt]</texture>
+					<aspectratio scalediffuse="false">scale</aspectratio>
+					<bordersize>9</bordersize>
+				</control>
+				<control type="image" description="Watched mark">
+					<posx>193</posx>
+					<posy>291</posy>
+					<width>30</width>
+					<height>30</height>
+					<texture>$VAR[OverlayPercent]</texture>
+					<aspectratio>keep</aspectratio>
+				</control>
+				<control type="group" description="Percent watched">
+					<visible>Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+					<posx>165</posx>
+					<posy>293</posy>
+					<control type="label">
+						<posx>0</posx>
+						<posy>0</posy>
+						<width>58</width>
+						<height>26</height>
+						<font>size15</font>
+						<textcolor>White2</textcolor>
+						<shadowcolor>Black</shadowcolor>
+						<align>right</align>
+						<aligny>center</aligny>
+						<label>[B]$VAR[WatchedPercent][/B]</label>
+					</control>
+				</control>
+			</control>
+		</focusedlayout>
+	</include>
+
+	<include name="CustomSec1AddonClick" description="Add-on widget clicks for Custom 1 (same handling as the Movies add-on widget): folders open in the Videos window, playable items play, anything else is run as a plugin call.">
+		<onclick condition="Container(313).ListItem.IsFolder">ActivateWindow(Videos,"$INFO[Container(313).ListItem.FolderPath]",return)</onclick>
+		<onclick condition="!Container(313).ListItem.IsFolder + String.IsEqual(Container(313).ListItem.Property(IsPlayable),true)">PlayMedia("$INFO[Container(313).ListItem.FileNameAndPath]")</onclick>
+		<onclick condition="!Container(313).ListItem.IsFolder + !String.IsEqual(Container(313).ListItem.Property(IsPlayable),true)">RunPlugin("$INFO[Container(313).ListItem.FileNameAndPath]")</onclick>
+	</include>
+	<include name="CustomSec1_Widget" description="Custom 1 add-on widget (panel 313). Loads 303 content from Skin.String(CustomSec1Shelf.Path) in its staggered slot, see Timers.xml.">
+		<control type="group">
+			<control type="panel" id="313" description="TOP Shortcuts">
+				<visible>!String.IsEmpty(Skin.String(CustomSec1Shelf.Path)) + [ControlGroup(9000).HasFocus(303) | Control.HasFocus(313)]</visible>
+				<onup>noop</onup>
+				<ondown>303</ondown>
+				<onleft>313</onleft>
+				<onright>313</onright>
+				<include>CustomSec1AddonClick</include>
+				<include>CustomWidgetCommons</include>
+				<content target="video">$VAR[GateCustomSec1Addon]</content>
+			</control>
+			<control type="label" description="Focused item title">
+				<visible>Control.HasFocus(313)</visible>
+				<include>HideMediaShelf</include>
+				<posx>72</posx>
+				<posy>429</posy>
+				<width>1778</width>
+				<height>34</height>
+				<font>size19</font>
+				<align>center</align>
+				<aligny>center</aligny>
+				<scroll>false</scroll>
+				<textcolor>White2</textcolor>
+				<label>$VAR[ShelfTitleCustomSec1]</label>
+			</control>
+		</control>
+	</include>
+
+	<include name="CustomSec2AddonClick" description="Add-on widget clicks for Custom 2 (same handling as the Movies add-on widget): folders open in the Videos window, playable items play, anything else is run as a plugin call.">
+		<onclick condition="Container(314).ListItem.IsFolder">ActivateWindow(Videos,"$INFO[Container(314).ListItem.FolderPath]",return)</onclick>
+		<onclick condition="!Container(314).ListItem.IsFolder + String.IsEqual(Container(314).ListItem.Property(IsPlayable),true)">PlayMedia("$INFO[Container(314).ListItem.FileNameAndPath]")</onclick>
+		<onclick condition="!Container(314).ListItem.IsFolder + !String.IsEqual(Container(314).ListItem.Property(IsPlayable),true)">RunPlugin("$INFO[Container(314).ListItem.FileNameAndPath]")</onclick>
+	</include>
+	<include name="CustomSec2_Widget" description="Custom 2 add-on widget (panel 314). Loads 304 content from Skin.String(CustomSec2Shelf.Path) in its staggered slot, see Timers.xml.">
+		<control type="group">
+			<control type="panel" id="314" description="TOP Shortcuts">
+				<visible>!String.IsEmpty(Skin.String(CustomSec2Shelf.Path)) + [ControlGroup(9000).HasFocus(304) | Control.HasFocus(314)]</visible>
+				<onup>noop</onup>
+				<ondown>304</ondown>
+				<onleft>314</onleft>
+				<onright>314</onright>
+				<include>CustomSec2AddonClick</include>
+				<include>CustomWidgetCommons</include>
+				<content target="video">$VAR[GateCustomSec2Addon]</content>
+			</control>
+			<control type="label" description="Focused item title">
+				<visible>Control.HasFocus(314)</visible>
+				<include>HideMediaShelf</include>
+				<posx>72</posx>
+				<posy>429</posy>
+				<width>1778</width>
+				<height>34</height>
+				<font>size19</font>
+				<align>center</align>
+				<aligny>center</aligny>
+				<scroll>false</scroll>
+				<textcolor>White2</textcolor>
+				<label>$VAR[ShelfTitleCustomSec2]</label>
+			</control>
+		</control>
+	</include>
+
+	<include name="CustomSec3AddonClick" description="Add-on widget clicks for Custom 3 (same handling as the Movies add-on widget): folders open in the Videos window, playable items play, anything else is run as a plugin call.">
+		<onclick condition="Container(317).ListItem.IsFolder">ActivateWindow(Videos,"$INFO[Container(317).ListItem.FolderPath]",return)</onclick>
+		<onclick condition="!Container(317).ListItem.IsFolder + String.IsEqual(Container(317).ListItem.Property(IsPlayable),true)">PlayMedia("$INFO[Container(317).ListItem.FileNameAndPath]")</onclick>
+		<onclick condition="!Container(317).ListItem.IsFolder + !String.IsEqual(Container(317).ListItem.Property(IsPlayable),true)">RunPlugin("$INFO[Container(317).ListItem.FileNameAndPath]")</onclick>
+	</include>
+	<include name="CustomSec3_Widget" description="Custom 3 add-on widget (panel 317). Loads 307 content from Skin.String(CustomSec3Shelf.Path) in its staggered slot, see Timers.xml.">
+		<control type="group">
+			<control type="panel" id="317" description="TOP Shortcuts">
+				<visible>!String.IsEmpty(Skin.String(CustomSec3Shelf.Path)) + [ControlGroup(9000).HasFocus(307) | Control.HasFocus(317)]</visible>
+				<onup>noop</onup>
+				<ondown>307</ondown>
+				<onleft>317</onleft>
+				<onright>317</onright>
+				<include>CustomSec3AddonClick</include>
+				<include>CustomWidgetCommons</include>
+				<content target="video">$VAR[GateCustomSec3Addon]</content>
+			</control>
+			<control type="label" description="Focused item title">
+				<visible>Control.HasFocus(317)</visible>
+				<include>HideMediaShelf</include>
+				<posx>72</posx>
+				<posy>429</posy>
+				<width>1778</width>
+				<height>34</height>
+				<font>size19</font>
+				<align>center</align>
+				<aligny>center</aligny>
+				<scroll>false</scroll>
+				<textcolor>White2</textcolor>
+				<label>$VAR[ShelfTitleCustomSec3]</label>
+			</control>
+		</control>
+	</include>
+
+	<include name="CustomSec1_Shortcuts">
+		<control type="group">
+			<control type="panel" id="313" description="TOP Shortcuts">
+				<visible>ControlGroup(9000).HasFocus(303) | Control.HasFocus(313)</visible>
+				<onup>303</onup>
+				<ondown>303</ondown>
+				<onleft>313</onleft>
+				<onright>313</onright>
+				<include>MusicShortcutsCommons</include>
+				<content>
+					<item id="1" description="Addons">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec1.1.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec1.1.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec1.1.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec1.1.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="2" description="Addons">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec1.2.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec1.2.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec1.2.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec1.2.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="3" description="Addons">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec1.3.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec1.3.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec1.3.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec1.3.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="4" description="Addons">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec1.4.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec1.4.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec1.4.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec1.4.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="5" description="Addons">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec1.5.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec1.5.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec1.5.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec1.5.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="6" description="Fav">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec1.6.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec1.6.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec1.6.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec1.6.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="7" description="Fav">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec1.7.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec1.7.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec1.7.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec1.7.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="8" description="Fav">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec1.8.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec1.8.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec1.8.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec1.8.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="9" description="Fav">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec1.9.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec1.9.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec1.9.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec1.9.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="10" description="Fav">
+						<visible>Skin.HasSetting(CustomSec1Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec1.10.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec1.10.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec1.10.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec1.10.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+				</content>
+			</control>
+		</control>
+	</include>
+	<include name="CustomSec2_Shortcuts">
+		<control type="group">
+			<control type="panel" id="314" description="TOP Shortcuts">
+				<visible>ControlGroup(9000).HasFocus(304) | Control.HasFocus(314)</visible>
+				<onup>304</onup>
+				<ondown>304</ondown>
+				<onleft>314</onleft>
+				<onright>314</onright>
+				<include>MusicShortcutsCommons</include>
+				<content>
+					<item id="1" description="Addons">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec2.1.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec2.1.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec2.1.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec2.1.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="2" description="Addons">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec2.2.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec2.2.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec2.2.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec2.2.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="3" description="Addons">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec2.3.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec2.3.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec2.3.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec2.3.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="4" description="Addons">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec2.4.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec2.4.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec2.4.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec2.4.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="5" description="Addons">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec2.5.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec2.5.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec2.5.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec2.5.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="6" description="Fav">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec2.6.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec2.6.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec2.6.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec2.6.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="7" description="Fav">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec2.7.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec2.7.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec2.7.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec2.7.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="8" description="Fav">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec2.8.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec2.8.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec2.8.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec2.8.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="9" description="Fav">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec2.9.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec2.9.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec2.9.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec2.9.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="10" description="Fav">
+						<visible>Skin.HasSetting(CustomSec2Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec2.10.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec2.10.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec2.10.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec2.10.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+				</content>
+			</control>
+		</control>
+	</include>
+	<include name="CustomSec3_Shortcuts">
+		<control type="group">
+			<control type="panel" id="317" description="TOP Shortcuts">
+				<visible>ControlGroup(9000).HasFocus(307) | Control.HasFocus(317)</visible>
+				<onup>307</onup>
+				<ondown>307</ondown>
+				<onleft>317</onleft>
+				<onright>317</onright>
+				<include>MusicShortcutsCommons</include>
+				<content>
+					<item id="1" description="Addons">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec3.1.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec3.1.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec3.1.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec3.1.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="2" description="Addons">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec3.2.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec3.2.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec3.2.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec3.2.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="3" description="Addons">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec3.3.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec3.3.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec3.3.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec3.3.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="4" description="Addons">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec3.4.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec3.4.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec3.4.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec3.4.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="5" description="Addons">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec3.5.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfCustomSec3.5.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfCustomSec3.5.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfCustomSec3.5.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="6" description="Fav">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec3.6.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec3.6.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec3.6.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec3.6.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="7" description="Fav">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec3.7.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec3.7.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec3.7.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec3.7.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="8" description="Fav">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec3.8.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec3.8.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec3.8.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec3.8.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="9" description="Fav">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec3.9.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec3.9.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec3.9.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec3.9.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="10" description="Fav">
+						<visible>Skin.HasSetting(CustomSec3Shelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfCustomSec3.10.Path))</visible>
+						<label>$INFO[Skin.String(ShelfCustomSec3.10.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfCustomSec3.10.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfCustomSec3.10.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+				</content>
+			</control>
+		</control>
+	</include>
+	<include name="Addons_Shortcuts">
+		<control type="group">
+			<control type="panel" id="315" description="TOP Shortcuts">
+				<visible>ControlGroup(9000).HasFocus(305) | Control.HasFocus(315)</visible>
+				<onup>305</onup>
+				<ondown>305</ondown>
+				<onleft>315</onleft>
+				<onright>315</onright>
+				<include>MusicShortcutsCommons</include>
+				<content>
+					<item id="1" description="Addons">
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfAddons.1.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfAddons.1.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfAddons.1.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfAddons.1.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="2" description="Addons">
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfAddons.2.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfAddons.2.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfAddons.2.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfAddons.2.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="3" description="Addons">
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfAddons.3.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfAddons.3.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfAddons.3.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfAddons.3.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="4" description="Addons">
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfAddons.4.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfAddons.4.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfAddons.4.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfAddons.4.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="5" description="Addons">
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfAddons.5.Label))</visible>
+						<label>$INFO[system.addontitle(Skin.String(ShelfAddons.5.Label))]</label>
+						<thumb>$INFO[system.addonicon(Skin.String(ShelfAddons.5.Label))]</thumb>
+						<onclick>RunAddon($INFO[Skin.String(ShelfAddons.5.Label)])</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="6" description="Fav">
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfAddons.6.Path))</visible>
+						<label>$INFO[Skin.String(ShelfAddons.6.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfAddons.6.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfAddons.6.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="7" description="Fav">
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfAddons.7.Path))</visible>
+						<label>$INFO[Skin.String(ShelfAddons.7.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfAddons.7.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfAddons.7.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="8" description="Fav">
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfAddons.8.Path))</visible>
+						<label>$INFO[Skin.String(ShelfAddons.8.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfAddons.8.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfAddons.8.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="9" description="Fav">
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfAddons.9.Path))</visible>
+						<label>$INFO[Skin.String(ShelfAddons.9.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfAddons.9.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfAddons.9.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+					<item id="10" description="Fav">
+						<visible>Skin.HasSetting(AddonsShelf_Custom)</visible>
+						<visible>!String.IsEmpty(Skin.String(ShelfAddons.10.Path))</visible>
+						<label>$INFO[Skin.String(ShelfAddons.10.Label)]</label>
+						<thumb>$INFO[Skin.String(ShelfAddons.10.Icon)]</thumb>
+						<onclick>$INFO[Skin.String(ShelfAddons.10.Path)]</onclick>
+						<property name="ItemType">$LOCALIZE[111]</property>
+					</item>
+				</content>
+			</control>
+		</control>
+	</include>
+</includes>
