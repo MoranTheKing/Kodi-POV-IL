@@ -4,33 +4,17 @@
     python gen_dialogs.py ../../skin.povil.onyx
 
 Busy: a thin gold arc turning in the middle of the screen, no dark curtain
-over what is loading. Notifications: a floating card at the top centre, the
-icon on the right and the heading in gold above the message (right to left).
+over what is loading (its images, spinner.png and spinner_track.png, come
+from gen_textures.py). Notifications: a floating card at the top centre,
+the icon on the right and the heading in gold above the message (right to
+left).
 """
 import os
 import sys
 
-from PIL import Image, ImageDraw
-
 import gen_home as H
 
 NL = chr(10)
-
-
-def spinner(media):
-    size, ss = 96, 4
-    big = Image.new('L', (size * ss, size * ss), 0)
-    d = ImageDraw.Draw(big)
-    d.arc((6 * ss, 6 * ss, (size - 6) * ss, (size - 6) * ss), -90, 200, fill=255, width=5 * ss)
-    mask = big.resize((size, size), Image.LANCZOS)
-    img = Image.new('RGBA', (size, size), (255, 255, 255, 0))
-    img.putalpha(mask)
-    img.save(os.path.join(media, 'spinner.png'), optimize=True)
-    ring = Image.new('L', (size * ss, size * ss), 0)
-    ImageDraw.Draw(ring).ellipse((6 * ss, 6 * ss, (size - 6) * ss, (size - 6) * ss), outline=255, width=5 * ss)
-    track = Image.new('RGBA', (size, size), (255, 255, 255, 0))
-    track.putalpha(ring.resize((size, size), Image.LANCZOS))
-    track.save(os.path.join(media, 'spinner_track.png'), optimize=True)
 
 
 def busy():
@@ -91,7 +75,6 @@ def notification():
 
 def main():
     skin = sys.argv[1]
-    spinner(os.path.join(skin, 'media', 'povil'))
     with open(os.path.join(skin, 'xml', 'DialogBusy.xml'), 'w', encoding='utf-8', newline=NL) as f:
         f.write(busy())
     with open(os.path.join(skin, 'xml', 'DialogNotification.xml'), 'w', encoding='utf-8', newline=NL) as f:
