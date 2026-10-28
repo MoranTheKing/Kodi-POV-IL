@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window>
+	<defaultcontrol always="true">5550</defaultcontrol>
+	<animation effect="fade" start="0" end="100" time="300">WindowOpen</animation>
+	<animation effect="fade" start="100" end="0" time="200">WindowClose</animation>
+	<controls>
+		<control type="group">
+			<top>0</top>
+			<height>250</height>
+			<animation effect="slide" end="0,-80" time="150" condition="PVR.IsTimeShift">conditional</animation>
+			<control type="image">
+				<left>0</left>
+				<top>0</top>
+				<!--<right>10</right>-->
+				<width>1920</width>
+				<height>270</height>
+				<texture colordiffuse="$VAR[OSDTransperancy]" border="40">OSD/OSDBackground.png</texture>
+			</control>
+			<control type="grouplist">
+				<left>52</left>
+				<top>8</top>
+				<visible>Control.HasFocus(5551)</visible>
+				<control type="label">
+					<width>1200</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo3]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+				<control type="label">
+					<width>1200</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo4]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+				<control type="label">
+					<width>1200</width>
+					<height>30</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo5]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+				<control type="label">
+					<width>1200</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo6]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+				<control type="label">
+					<width>1200</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo7]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+				<control type="label">
+					<width>1200</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo8]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+			</control>
+			<control type="grouplist">
+				<left>1250</left>
+				<top>8</top>
+				<visible>Control.HasFocus(5551)</visible>
+				<usecontrolcoords>true</usecontrolcoords>
+				<control type="label">
+					<width>600</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo9]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+				<control type="label">
+					<width>600</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo10]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+				<control type="label">
+					<width>600</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo11]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+				<control type="label">
+					<width>600</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo12]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+				<control type="progress">
+					<top>5</top>
+					<width>600</width>
+					<height>16</height>
+					<info>PVR.ActStreamProgrSignal</info>
+				</control>
+				<control type="label">
+					<top>5</top>
+					<width>1600</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo13]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+				<control type="progress">
+					<top>0</top>
+					<width>600</width>
+					<height>16</height>
+					<info>PVR.ActStreamProgrSNR</info>
+				</control>
+			</control>
+			<control type="grouplist">
+				<left>52</left>
+				<top>8</top>
+				<visible>Control.HasFocus(5552)</visible>
+				<control type="label">
+					<width>1600</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo14]$VAR[VideoHWDecoder, (,)]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+					<visible>Player.HasVideo</visible>
+				</control>
+				<control type="label">
+					<width>1600</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo15]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+					<visible>Player.HasVideo</visible>
+				</control>
+				<control type="label">
+					<width>1600</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo16]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+					<visible>Player.HasVideo</visible>
+				</control>
+				<control type="label">
+					<width>1600</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo17]$INFO[Player.Process(videoheight),, px]$INFO[Player.Process(videodar),$COMMA , AR]$INFO[Player.Process(videofps),$COMMA , FPS]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+					<visible>Player.HasVideo</visible>
+				</control>
+				<control type="label">
+					<width>1600</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>[COLOR $VAR[FocusColor]]$LOCALIZE[460]:[/COLOR] $INFO[Player.Process(audiochannels),,$COMMA ]$INFO[Player.Process(audiodecoder)]$INFO[Player.Process(audiobitspersample),$COMMA , bits]$INFO[Player.Process(audiosamplerate),$COMMA , Hz]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+				<control type="label">
+					<width>1600</width>
+					<height>34</height>
+					<aligny>top</aligny>
+					<label>$VAR[FcPlayerProcessInfo18]$VAR[FcPlayerProcessInfo19]</label>
+					<font>size17</font>
+					<shadowcolor>black</shadowcolor>
+				</control>
+			</control>
+			<control type="grouplist" id="5550">
+				<right>8</right>
+				<top>276</top>
+				<width>1000</width>
+				<height>80</height>
+				<align>right</align>
+				<orientation>horizontal</orientation>
+				<itemgap>8</itemgap>
+				<onup>Close</onup>
+				<ondown>Close</ondown>
+				<usecontrolcoords>true</usecontrolcoords>
+				<control type="button" id="5551">
+					<width>auto</width>
+					<height>auto</height>
+					<label>$LOCALIZE[31162]</label>
+					<font>size20</font>
+					<texturenofocus colordiffuse="$VAR[OSDTransperancy]">OSD/OSDBackground.png</texturenofocus>
+					<texturefocus colordiffuse="$VAR[OSDTransperancy]">OSD/OSDBackground.png</texturefocus>
+					<enable>VideoPlayer.Content(livetv)</enable>
+					<onclick>Close</onclick>
+				</control>
+				<control type="button" id="5552">
+					<width>auto</width>
+					<height>auto</height>
+					<font>size20</font>
+					<label>$LOCALIZE[31163]</label>
+					<texturenofocus colordiffuse="$VAR[OSDTransperancy]">OSD/OSDBackground.png</texturenofocus>
+					<texturefocus colordiffuse="$VAR[OSDTransperancy]">OSD/OSDBackground.png</texturefocus>
+					<onclick>Close</onclick>
+				</control>
+			</control>
+		</control>
+	</controls>
+</window>

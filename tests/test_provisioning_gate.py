@@ -126,12 +126,15 @@ class ProvisioningGateTests(unittest.TestCase):
         updater = types.SimpleNamespace(
             get_local_version=lambda aid: versions.get(aid),
             _version_tuple=lambda ver: tuple(int(part) for part in ver.split('.')),
-            ON_DEMAND_SKINS=frozenset(('skin.povil.nox',)),
+            ON_DEMAND_SKINS=frozenset(('skin.povil.nox', 'skin.povil.onyx')),
+            OPTIONAL_SKINS=frozenset(('skin.povil.onyx',)),
             _pending_addon_receipt=lambda _aid: False,
             CORE_PROVISION_IDS=('plugin.video.pov', 'plugin.video.idanplus'))
         manifest = {'addons': {aid: {'version': ver} for aid, ver in versions.items()},
                     'config': {'config_version': '2.0.7'}}
         manifest['addons']['skin.povil.nox'] = {'version': '1.0.11'}
+        # Onyx is optional: published but not installed never blocks a fresh install
+        manifest['addons']['skin.povil.onyx'] = {'version': '1.0.0'}
         self.assertFalse(fn(updater, manifest), 'missing default skin must block completion')
         versions['skin.povil.nox'] = '1.0.11'
         self.assertTrue(fn(updater, manifest))
@@ -159,14 +162,17 @@ class ProvisioningGateTests(unittest.TestCase):
                                                 'version': '0.4.3'},
             'service.subtitles.kodipovilai': {'id': 'service.subtitles.kodipovilai',
                                               'version': '0.3.18'},
-            'skin.povil.nox': {'id': 'skin.povil.nox', 'version': '1.0.11'}},
+            'skin.povil.nox': {'id': 'skin.povil.nox', 'version': '1.0.11'},
+            # optional: a fresh install never downloads it (Switch Skin does)
+            'skin.povil.onyx': {'id': 'skin.povil.onyx', 'version': '1.0.0'}},
             'config': {'config_version': '2.0.7'}}
         seen = []
         updater = types.SimpleNamespace(
             _load_manifest=lambda: manifest,
             get_local_version=lambda _id: None,
             _on_disk=lambda _id: False,
-            ON_DEMAND_SKINS=frozenset(('skin.povil.nox',)),
+            ON_DEMAND_SKINS=frozenset(('skin.povil.nox', 'skin.povil.onyx')),
+            OPTIONAL_SKINS=frozenset(('skin.povil.onyx',)),
             _pending_addon_receipt=lambda _aid: False,
             install_missing=True, fresh=True,
             _record_build_identity=lambda _manifest: True,
@@ -225,7 +231,7 @@ class ProvisioningGateTests(unittest.TestCase):
             _runtime_addon_enabled=lambda _aid: True,
             _complete_pending_service_handoff=lambda: False,
             _version_tuple=lambda version: tuple(int(x) for x in version.split('.')),
-            ON_DEMAND_SKINS=frozenset(), background=True,
+            ON_DEMAND_SKINS=frozenset(), OPTIONAL_SKINS=frozenset(), background=True,
             _record_build_identity=lambda _manifest: False,
             _config_pending=lambda _manifest: False,
             execute_updates=lambda items: queued.extend(items) or True)

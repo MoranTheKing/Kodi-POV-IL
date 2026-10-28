@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+	<include name="View_50" description="50">
+		<control type="group" description="List 50 base">
+			<visible>Control.IsVisible(50)</visible>
+			<include>DefaultThumbs</include>
+			<control type="group" description="Slider and List">
+				<include>SlimListItemCount</include>
+				<posx>1020</posx>
+				<posy>141</posy>
+				<include>SlimListSlider</include>
+				<control type="fixedlist" id="50">
+					<posx>0</posx>
+					<posy>0</posy>
+					<width>802</width>
+					<height>891</height>
+					<pagecontrol>60</pagecontrol>
+					<onleft condition="!Skin.HasSetting(ViewOptions_Hide)">9000</onleft>
+					<onright condition="$EXP[isEnabledScrollbar] + Integer.IsGreater(Container.NumItems,11)">9001</onright>
+					<onup>50</onup>
+					<ondown>50</ondown>
+					<viewtype label="535">List</viewtype>
+					<scrolltime>0</scrolltime><!-- rows change instantly when the list scrolls (Kodi animates it over 200 ms by default, so the text slid from line to line) -->
+					<focusposition>5</focusposition>
+					<movement>5</movement>
+					<preloaditems>4</preloaditems>
+					<itemlayout condition="String.Contains(Container.FolderPath,plugin://,left)" width="802" height="81">
+						<control type="label" description="Main Label">
+							<width>720</width>
+							<include>52MainLabel</include>
+							<label>$INFO[ListItem.Label]</label>
+						</control>
+					</itemlayout>
+					<focusedlayout condition="String.Contains(Container.FolderPath,plugin://,left)" width="802" height="81">
+						<control type="group" description="Name (hidden while the focus-color override is shown)">
+							<!-- Focus animation: hides the add-on-colored name while this row is focused, and brings it back the instant focus leaves (no blank gap). Pair with FocusColorOverride. -->
+							<animation effect="fade" start="100" end="0" time="0" condition="$EXP[FocusedLabelColorTagged]">Focus</animation>
+							<control type="label" description="Main Label">
+								<width>720</width>
+								<include>52MainLabelFO</include>
+								<label>$VAR[FocusListLabel]</label>
+								<scroll>false</scroll>
+								<animation effect="fade" start="100" end="0" time="0" delay="1000">Focus</animation>
+							</control>
+							<control type="label" description="Main Label">
+								<width>720</width>
+								<include>52MainLabelFO</include>
+								<label>$VAR[FocusListLabel]</label>
+								<scroll>true</scroll>
+								<animation effect="fade" start="0" end="100" time="0" delay="1000">Focus</animation>
+							</control>
+						</control>
+					</focusedlayout>
+					<itemlayout width="802" height="81">
+						<include>Watched_Marks</include>
+						<include>HD_Badge</include>
+						<include>3D_Badge</include>
+						<include>ArrowNF</include>
+						<control type="label" description="Main Label">
+							<visible>$EXP[IsVideoHD] | ListItem.IsFolder</visible>
+							<include>52MainLabel</include>
+							<label>$INFO[ListItem.Label]</label>
+						</control>
+						<control type="label" description="Main Label">
+							<visible>![$EXP[IsVideoHD] | ListItem.IsFolder]</visible>
+							<width>711</width>
+							<include>52MainLabel</include>
+							<label>$INFO[ListItem.Label]</label>
+						</control>
+						<control type="label" description="Label2">
+							<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+							<visible>container.content(songs) | container.content(musicvideos)</visible>
+							<include>52Label2</include>
+							<label>$INFO[ListItem.Duration]</label>
+						</control>
+					</itemlayout>
+					<focusedlayout width="802" height="81">
+						<include>Watched_Marks</include>
+						<include>HD_Badge</include>
+						<include>3D_Badge</include>
+						<include>ArrowFO</include>
+						<control type="group" description="Name (hidden while the focus-color override is shown)">
+							<!-- Focus animation: hides the add-on-colored name while this row is focused, and brings it back the instant focus leaves (no blank gap). Pair with FocusColorOverride. -->
+							<animation effect="fade" start="100" end="0" time="0" condition="$EXP[FocusedLabelColorTagged]">Focus</animation>
+							<control type="label" description="Main Label">
+								<visible>$EXP[IsVideoHD] | ListItem.IsFolder</visible>
+								<include>52MainLabelFO</include>
+								<label>$VAR[FocusListLabel]</label>
+								<scroll>false</scroll>
+								<animation effect="fade" start="100" end="0" time="0" delay="1000">Focus</animation>
+							</control>
+							<control type="label" description="Main Label">
+								<visible>$EXP[IsVideoHD] | ListItem.IsFolder</visible>
+								<include>52MainLabelFO</include>
+								<label>$VAR[FocusListLabel]</label>
+								<scroll>true</scroll>
+								<animation effect="fade" start="0" end="100" time="0" delay="1000">Focus</animation>
+							</control>
+							<control type="label" description="Main Label">
+								<visible>![$EXP[IsVideoHD] | ListItem.IsFolder]</visible>
+								<width>711</width>
+								<include>52MainLabelFO</include>
+								<label>$VAR[FocusListLabel]</label>
+								<scroll>false</scroll>
+								<animation effect="fade" start="100" end="0" time="0" delay="1000">Focus</animation>
+							</control>
+							<control type="label" description="Main Label">
+								<visible>![$EXP[IsVideoHD] | ListItem.IsFolder]</visible>
+								<width>711</width>
+								<include>52MainLabelFO</include>
+								<label>$VAR[FocusListLabel]</label>
+								<scroll>true</scroll>
+								<animation effect="fade" start="0" end="100" time="0" delay="1000">Focus</animation>
+							</control>
+						</control>
+						<control type="label" description="Label2">
+							<visible>container.content(songs) | container.content(musicvideos)</visible>
+							<include>52Label2FO</include>
+							<label>$INFO[ListItem.Duration]</label>
+						</control>
+					</focusedlayout>
+				</control>
+				<include content="FocusColorOverride">
+				<param name="font">size24</param>
+				<param name="maxwidth">711</param>
+				<param name="slide_time">0</param>
+				</include>
+			</control>
+		</control>
+	</include>
+</includes>

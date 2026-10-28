@@ -106,7 +106,8 @@ def _offer_skin(defaults):
             not xbmc.getCondVisibility('System.HasAddon({0})'.format(target))):
         return
     names = {'skin.povil.nox': 'NOX', 'skin.fentastic': 'FENtastic',
-             'skin.estuary': 'Estuary', 'skin.arctic.fuse.3': 'Arctic Fuse 3'}
+             'skin.estuary': 'Estuary', 'skin.arctic.fuse.3': 'Arctic Fuse 3',
+             'skin.povil.onyx': 'Onyx'}
     if xbmcgui.Dialog().yesno(TITLE, 'לחזור גם לסקין {0}?'.format(names.get(target, target)),
                               nolabel='לא', yeslabel='כן'):
         if not build_skin.activate(target):
