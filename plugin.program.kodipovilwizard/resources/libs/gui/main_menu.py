@@ -63,6 +63,9 @@ class MainMenu:
                 directory.add_dir('חיבור שירותים (Account Manager)', {'mode': 'run_acctmgr'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
                 ##############################################################################################
                 
+            # KODI-POV-IL - Kodi's own settings back to the build's (see gui_repair),
+            # from the Wizard's own seed: also when the online build check fails.
+            directory.add_file('שחזור הגדרות קודי של הבילד', {'mode': 'restore_kodi_settings'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
             from resources.libs.gui.build_menu import BuildMenu
             themefile = BuildMenu().theme_count(CONFIG.BUILDNAME)
             if themefile:
