@@ -132,9 +132,11 @@ class FreshHomeReadinessTests(unittest.TestCase):
                 Monitor=lambda: types.SimpleNamespace(abortRequested=lambda: False,
                     waitForAbort=lambda seconds: waits.append(seconds) or False),
                 getSkinDir=lambda: skin[0], getCondVisibility=lambda _cond: _cond != 'Window.IsVisible(yesnodialog)')
+            live = _load_function(FRESH, 'apply_live_settings', {'re': re, 'xbmc': xbmc, '_rpc': rpc})
             fn = _load_function(FRESH, 'apply_live_defaults', {
                 'ET': ET, 'os': os, 're': re, 'threading': threading, 'CONFIG': types.SimpleNamespace(USERDATA=raw),
-                'xbmc': xbmc, '_rpc': rpc, '_accept_initial_skin_confirmation': lambda: False})
+                'xbmc': xbmc, '_rpc': rpc, '_accept_initial_skin_confirmation': lambda: False,
+                'apply_live_settings': live})
             activate = _load_function(SKIN, 'activate', {'SKINS': ('skin.povil.nox',),
                 'enable_skin': lambda _target: True, 'xbmc': xbmc, 'rpc': rpc,
                 'threading': threading, 'confirm_requested_skin': lambda _target: False,
@@ -162,7 +164,8 @@ class FreshHomeReadinessTests(unittest.TestCase):
                 getSkinDir=lambda: 'skin.povil.nox', getCondVisibility=lambda _c: home[0],
                 executebuiltin=builtin)
             fn = _load_function(FRESH, 'apply_live_defaults', {'ET': ET, 'os': os,
-                'CONFIG': types.SimpleNamespace(USERDATA=raw), 'xbmc': xbmc})
+                'CONFIG': types.SimpleNamespace(USERDATA=raw), 'xbmc': xbmc,
+                'apply_live_settings': _load_function(FRESH, 'apply_live_settings', {'re': re, 'xbmc': xbmc})})
             with patch.dict('sys.modules', skin_modules(lambda _target: True)):
                 self.assertTrue(fn())
             self.assertEqual(calls, ['ActivateWindow(Home)'])

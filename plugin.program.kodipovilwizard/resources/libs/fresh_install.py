@@ -93,6 +93,62 @@ def _accept_initial_skin_confirmation():
     return confirm_requested_skin('skin.povil.nox')
 
 
+def apply_live_settings(root, strict=False):
+    """Set every non-default build setting in `root` (a guisettings <settings>)
+    through Kodi's Settings API. In Kodi 21 that changes memory only: the
+    callers save (build_skin.activate / persist_live_settings). The skin,
+    services and unknown sources are left alone. strict (a fresh install): a rejected
+    setting raises, so a half-applied build is never certified; otherwise it
+    is skipped and listed. Returns (changed, rejected), or None when Kodi is
+    shutting down."""
+    monitor = xbmc.Monitor()
+    changed, rejected = 0, []
+    for setting in root.findall('setting'):
+        key = setting.get('id', '')
+        if key.startswith('services.') or key == 'addons.unknownsources':
+            continue
+        if key == 'lookandfeel.skin':
+            continue
+        if setting.get('default') == 'true' or setting.text is None:
+            continue
+        if monitor.abortRequested():
+            return None
+        # Unknown/deprecated Kodi settings must not prevent a supported build.
+        try:
+            current = _rpc('Settings.GetSettingValue', {'setting': key})['value']
+        except (RuntimeError, KeyError):
+            continue
+        text = setting.text
+        try:
+            if isinstance(current, bool):
+                value = text.lower() == 'true'
+            elif isinstance(current, int):
+                value = int(text)
+            elif isinstance(current, float):
+                value = float(text)
+            elif isinstance(current, list):
+                values = [v.strip() for v in re.split(r'[|,]', text) if v.strip()]
+                value = [int(v) if re.fullmatch('-?[0-9]+', v) else v for v in values]
+            else:
+                value = text
+            if current == value:
+                continue
+            accepted = _rpc('Settings.SetSettingValue', {'setting': key, 'value': value}) is True
+        except (RuntimeError, ValueError):
+            # A value Kodi cannot take: a fresh install stops; a repair
+            # goes on with the rest and lists it.
+            if strict:
+                raise
+            accepted = False
+        if not accepted:
+            if strict:
+                raise RuntimeError('Fresh setting was rejected: ' + key)
+            rejected.append(key)
+        else:
+            changed += 1
+    return changed, rejected
+
+
 def apply_live_defaults(defaults_path=None):
     """Persist fresh GUI defaults through Kodi, which owns the in-memory copy.
 
@@ -103,36 +159,8 @@ def apply_live_defaults(defaults_path=None):
     root = ET.parse(defaults_path or os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')).getroot()
     target_skin = root.findtext("setting[@id='lookandfeel.skin']", 'skin.povil.nox')
     monitor = xbmc.Monitor()
-    for setting in root.findall('setting'):
-        key = setting.get('id', '')
-        if key.startswith('services.') or key == 'addons.unknownsources':
-            continue
-        if key == 'lookandfeel.skin':
-            continue
-        if setting.get('default') == 'true' or setting.text is None:
-            continue
-        if monitor.abortRequested():
-            return False
-        # Unknown/deprecated Kodi settings must not prevent a supported build.
-        try:
-            current = _rpc('Settings.GetSettingValue', {'setting': key})['value']
-        except (RuntimeError, KeyError):
-            continue
-        text = setting.text
-        if isinstance(current, bool):
-            value = text.lower() == 'true'
-        elif isinstance(current, int):
-            value = int(text)
-        elif isinstance(current, float):
-            value = float(text)
-        elif isinstance(current, list):
-            values = [v.strip() for v in re.split(r'[|,]', text) if v.strip()]
-            value = [int(v) if re.fullmatch(r'-?\d+', v) else v for v in values]
-        else:
-            value = text
-        if current != value and _rpc('Settings.SetSettingValue',
-                                      {'setting': key, 'value': value}) is not True:
-            raise RuntimeError('Fresh setting was rejected: ' + key)
+    if apply_live_settings(root, strict=True) is None:
+        return False
     from resources.libs import build_skin
     if not build_skin.activate(target_skin):
         return False
