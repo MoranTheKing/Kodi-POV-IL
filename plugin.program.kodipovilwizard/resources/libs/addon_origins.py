@@ -64,6 +64,7 @@ BUILD_OWNED = frozenset((
     'skin.estuary',
     'skin.fentastic',
     'skin.povil.old',
+    'skin.povil.onyx',
 ))
 
 

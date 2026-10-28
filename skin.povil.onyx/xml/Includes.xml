@@ -1,0 +1,643 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+	<!--
+	  CUSTOM WINDOWS LIST
+		_DVD 1112
+		_Watchlist 1113
+		_Quit 1114
+		_Sources 1115
+		_MenuCustomizer 1116
+		_ShelfCustomizer 1117
+	-->
+	<expression name="isFullscreenVideo">Window.IsActive(fullscreenvideo)</expression>
+	<expression name="isnotFullscreenVideo">!Window.IsActive(fullscreenvideo)</expression>
+	<expression name="isVideoAddon">String.Contains(Container.FolderPath,plugin://plugin.video)</expression>
+	<expression name="isMovie">String.IsEqual(ListItem.DBTYPE,movie)</expression>
+	<expression name="isVideo">String.IsEqual(ListItem.DBTYPE,video)</expression>
+	<expression name="isTvshow">String.IsEqual(ListItem.DBTYPE,tvshow)</expression>
+	<expression name="isSeason">String.IsEqual(ListItem.DBTYPE,season)</expression>
+	<expression name="isSet">String.IsEqual(ListItem.DBTYPE,set)</expression>
+	<expression name="isEpisode">String.IsEqual(ListItem.DBTYPE,episode)</expression>
+	<expression name="isMusicvideo">String.IsEqual(ListItem.DBTYPE,musicvideo)</expression>
+	<expression name="isArtist">String.IsEqual(ListItem.DBTYPE,artist)</expression>
+	<expression name="isnotArtist">!String.IsEqual(ListItem.DBTYPE,artist)</expression>
+	<expression name="isAlbum">String.IsEqual(ListItem.DBTYPE,album)</expression>
+	<expression name="isSong">String.IsEqual(ListItem.DBTYPE,song)</expression>
+	<expression name="isEmptyIcon">String.IsEmpty(ListItem.Icon)</expression>
+	<expression name="isnotEmptyIcon">!String.IsEmpty(ListItem.Icon)</expression>
+	<expression name="isEmptyDBID">String.IsEmpty(ListItem.DBID)</expression>
+	<expression name="isnotEmptyDBID">!String.IsEmpty(ListItem.DBID)</expression>
+	<expression name="isDefaultIcon">String.StartsWith(ListItem.Icon,Default)</expression>
+	<expression name="isnotDefaultIcon">!String.StartsWith(ListItem.Icon,Default)</expression>
+	<expression name="isEnabledParentDirectory">System.GetBool(filelists.showparentdiritems)</expression>
+	<expression name="isnotEnabledParentDirectory">!System.GetBool(filelists.showparentdiritems)</expression>
+	<expression name="PVRShelfChannels">[!Skin.HasSetting(PVRShelfAuto) + !Skin.HasSetting(PVRShelf_Custom) + !Skin.HasSetting(PVRShelf_Image)]</expression>
+	<expression name="PVRShelfRecordings">[Skin.HasSetting(PVRShelfAuto) + !Skin.HasSetting(PVRShelf_Custom) + !Skin.HasSetting(PVRShelf_Image)]</expression>
+	<expression name="MoviesShelfAddon">[Skin.HasSetting(MoviesShelf_Addon) + !String.IsEmpty(Skin.String(MoviesShelf.Path))]</expression>
+	<expression name="TVShelfAddon">[Skin.HasSetting(TVShelf_Addon) + !String.IsEmpty(Skin.String(TVShelf.Path))]</expression>
+	<expression name="TVShelfThumb">[!Skin.HasSetting(TVShelfAuto) + !$EXP[TVShelfAddon] + !Skin.HasSetting(TVShelf_Custom) + !Skin.HasSetting(TVShelf_Image)]</expression>
+	<expression name="TVShelfPoster">[[Skin.HasSetting(TVShelfAuto) | $EXP[TVShelfAddon]] + !Skin.HasSetting(TVShelf_Custom) + !Skin.HasSetting(TVShelf_Image)]</expression>
+	<!-- HOME WIDGET SLOTS (seconds after Home appears; 1 second is the smallest step Kodi skin timers allow). A widget only takes a slot if it is actually in use:
+	     its section is shown AND it is set to an add-on widget with a path. WidgetAddon<name> = that test. Library widgets (default Movies / TV shelves, Live TV)
+	     are built into Kodi, so they just load at 1 second. Each add-on widget loads at 1 second + 1 for every add-on widget ahead of it (order: Movies, TV,
+	     Custom 1, Custom 2, Custom 3), so unused or hidden widgets cost no waiting time. If you see a crash after playback, change 1 to 2 in HomeStageLib and
+	     in the "+ 1" below. To add a widget: add a WidgetAddon expression, extend the lists below, and add a Gate variable in Includes_Variables.xml. -->
+	<expression name="WidgetAddonMovies">[!Skin.HasSetting(MoviesSectionHide) + !Skin.HasSetting(MoviesShelf_Image) + !Skin.HasSetting(MoviesShelf_Custom) + $EXP[MoviesShelfAddon]]</expression>
+	<expression name="WidgetAddonTV">[[!Skin.HasSetting(TVSectionHide) | [System.HasPVRAddon + Skin.HasSetting(PVRSectionHide)]] + !Skin.HasSetting(TVShelf_Image) + !Skin.HasSetting(TVShelf_Custom) + $EXP[TVShelfAddon]]</expression>
+	<expression name="WidgetAddonCustomSec1">[!Skin.HasSetting(CustomSec1Hide) + Skin.HasSetting(CustomSec1Shelf_Addon) + !String.IsEmpty(Skin.String(CustomSec1Shelf.Path))]</expression>
+	<expression name="WidgetAddonCustomSec2">[!Skin.HasSetting(CustomSec2Hide) + Skin.HasSetting(CustomSec2Shelf_Addon) + !String.IsEmpty(Skin.String(CustomSec2Shelf.Path))]</expression>
+	<expression name="WidgetAddonCustomSec3">[!Skin.HasSetting(CustomSec3Hide) + Skin.HasSetting(CustomSec3Shelf_Addon) + !String.IsEmpty(Skin.String(CustomSec3Shelf.Path))]</expression>
+	<expression name="HomeStageLib">[Skin.TimerIsRunning(home_widgets) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),1)]</expression>
+	<expression name="HomeStagePVR">$EXP[HomeStageLib]</expression>
+	<expression name="HomeStageMoviesAddon">[Skin.TimerIsRunning(home_widgets) + [[Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),1)]]]</expression>
+	<expression name="HomeStageTVAddon">[Skin.TimerIsRunning(home_widgets) + [[$EXP[WidgetAddonMovies] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),2)] | [!$EXP[WidgetAddonMovies] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),1)]]]</expression>
+	<expression name="HomeStageCustomSec1Addon">[Skin.TimerIsRunning(home_widgets) + [[$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),3)] | [$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),2)] | [!$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),2)] | [!$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),1)]]]</expression>
+	<expression name="HomeStageCustomSec2Addon">[Skin.TimerIsRunning(home_widgets) + [[$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),4)] | [$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),3)] | [$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),3)] | [$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),2)] | [!$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),3)] | [!$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),2)] | [!$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),2)] | [!$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),1)]]]</expression>
+	<expression name="HomeStageCustomSec3Addon">[Skin.TimerIsRunning(home_widgets) + [[$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + $EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),5)] | [$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + !$EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),4)] | [$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + $EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),4)] | [$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + !$EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),3)] | [$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + $EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),4)] | [$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + !$EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),3)] | [$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + $EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),3)] | [$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + !$EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),2)] | [!$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + $EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),4)] | [!$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + !$EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),3)] | [!$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + $EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),3)] | [!$EXP[WidgetAddonMovies] + $EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + !$EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),2)] | [!$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + $EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),3)] | [!$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + $EXP[WidgetAddonCustomSec1] + !$EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),2)] | [!$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + $EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),2)] | [!$EXP[WidgetAddonMovies] + !$EXP[WidgetAddonTV] + !$EXP[WidgetAddonCustomSec1] + !$EXP[WidgetAddonCustomSec2] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(home_widgets),1)]]]</expression>
+	<!-- "Browse" on the home menu is automatic: it only shows while a section has no other item visible (no library, everything hidden, no shortcuts set). These expressions are the same visibility rules as that section's other items; if you add an item to the Movies or TV list, add its condition here too. -->
+	<expression name="MoviesHasItems">[!Skin.HasSetting(Movies1) + Library.HasContent(Movies)] | [!Skin.HasSetting(Movies2) + Library.HasContent(Movies)] | [!Skin.HasSetting(Movies3) + Library.HasContent(Movies)] | !String.IsEmpty(Skin.String(CustomMovies.1.Path)) | !String.IsEmpty(Skin.String(CustomMovies.2.Path)) | !String.IsEmpty(Skin.String(CustomMovies.3.Path)) | !String.IsEmpty(Skin.String(CustomMovies.4.Path)) | !String.IsEmpty(Skin.String(CustomMovies.5.Path)) | !String.IsEmpty(Skin.String(CustomMovies.6.Path)) | !String.IsEmpty(Skin.String(CustomMovies.7.Path)) | !String.IsEmpty(Skin.String(CustomMovies.8.Path)) | !String.IsEmpty(Skin.String(CustomMovies.9.Path)) | !String.IsEmpty(Skin.String(CustomMovies.10.Path)) | !String.IsEmpty(Skin.String(CustomMovies.11.Path)) | !String.IsEmpty(Skin.String(CustomMovies.12.Path)) | !String.IsEmpty(Skin.String(CustomMovies.13.Path)) | !String.IsEmpty(Skin.String(CustomMovies.14.Path)) | !String.IsEmpty(Skin.String(CustomMovies.15.Path)) | !String.IsEmpty(Skin.String(CustomMovies.16.Path)) | !String.IsEmpty(Skin.String(CustomMovies.17.Path)) | !String.IsEmpty(Skin.String(CustomMovies.18.Path)) | !String.IsEmpty(Skin.String(CustomMovies.19.Path)) | !String.IsEmpty(Skin.String(CustomMovies.20.Path)) | [!Skin.HasSetting(Movies5) + Library.HasContent(Movies)]</expression>
+	<expression name="TVHasItems">[!Skin.HasSetting(TV1) + Library.HasContent(TVShows)] | [!Skin.HasSetting(TV2) + Library.HasContent(TVShows)] | [!Skin.HasSetting(TV5) + Library.HasContent(TVShows)] | !String.IsEmpty(Skin.String(CustomTV.1.Path)) | !String.IsEmpty(Skin.String(CustomTV.2.Path)) | !String.IsEmpty(Skin.String(CustomTV.3.Path)) | !String.IsEmpty(Skin.String(CustomTV.4.Path)) | !String.IsEmpty(Skin.String(CustomTV.5.Path)) | !String.IsEmpty(Skin.String(CustomTV.6.Path)) | !String.IsEmpty(Skin.String(CustomTV.7.Path)) | !String.IsEmpty(Skin.String(CustomTV.8.Path)) | !String.IsEmpty(Skin.String(CustomTV.9.Path)) | !String.IsEmpty(Skin.String(CustomTV.10.Path)) | !String.IsEmpty(Skin.String(CustomTV.11.Path)) | !String.IsEmpty(Skin.String(CustomTV.12.Path)) | !String.IsEmpty(Skin.String(CustomTV.13.Path)) | !String.IsEmpty(Skin.String(CustomTV.14.Path)) | !String.IsEmpty(Skin.String(CustomTV.15.Path)) | !String.IsEmpty(Skin.String(CustomTV.16.Path)) | !String.IsEmpty(Skin.String(CustomTV.17.Path)) | !String.IsEmpty(Skin.String(CustomTV.18.Path)) | !String.IsEmpty(Skin.String(CustomTV.19.Path)) | !String.IsEmpty(Skin.String(CustomTV.20.Path)) | [!Skin.HasSetting(TV4) + Library.HasContent(TVShows)]</expression>
+	<!-- Custom 1/2/3: true when that section has at least one shortcut set. Used to show the automatic "Browse" item only while a custom section is empty. -->
+	<expression name="CustomSec1HasItems">!String.IsEmpty(Skin.String(CustomSec1.1.Path)) | !String.IsEmpty(Skin.String(CustomSec1.2.Path)) | !String.IsEmpty(Skin.String(CustomSec1.3.Path)) | !String.IsEmpty(Skin.String(CustomSec1.4.Path)) | !String.IsEmpty(Skin.String(CustomSec1.5.Path)) | !String.IsEmpty(Skin.String(CustomSec1.6.Path)) | !String.IsEmpty(Skin.String(CustomSec1.7.Path)) | !String.IsEmpty(Skin.String(CustomSec1.8.Path)) | !String.IsEmpty(Skin.String(CustomSec1.9.Path)) | !String.IsEmpty(Skin.String(CustomSec1.10.Path)) | !String.IsEmpty(Skin.String(CustomSec1.11.Path)) | !String.IsEmpty(Skin.String(CustomSec1.12.Path)) | !String.IsEmpty(Skin.String(CustomSec1.13.Path)) | !String.IsEmpty(Skin.String(CustomSec1.14.Path)) | !String.IsEmpty(Skin.String(CustomSec1.15.Path)) | !String.IsEmpty(Skin.String(CustomSec1.16.Path)) | !String.IsEmpty(Skin.String(CustomSec1.17.Path)) | !String.IsEmpty(Skin.String(CustomSec1.18.Path)) | !String.IsEmpty(Skin.String(CustomSec1.19.Path)) | !String.IsEmpty(Skin.String(CustomSec1.20.Path))</expression>
+	<expression name="CustomSec2HasItems">!String.IsEmpty(Skin.String(CustomSec2.1.Path)) | !String.IsEmpty(Skin.String(CustomSec2.2.Path)) | !String.IsEmpty(Skin.String(CustomSec2.3.Path)) | !String.IsEmpty(Skin.String(CustomSec2.4.Path)) | !String.IsEmpty(Skin.String(CustomSec2.5.Path)) | !String.IsEmpty(Skin.String(CustomSec2.6.Path)) | !String.IsEmpty(Skin.String(CustomSec2.7.Path)) | !String.IsEmpty(Skin.String(CustomSec2.8.Path)) | !String.IsEmpty(Skin.String(CustomSec2.9.Path)) | !String.IsEmpty(Skin.String(CustomSec2.10.Path)) | !String.IsEmpty(Skin.String(CustomSec2.11.Path)) | !String.IsEmpty(Skin.String(CustomSec2.12.Path)) | !String.IsEmpty(Skin.String(CustomSec2.13.Path)) | !String.IsEmpty(Skin.String(CustomSec2.14.Path)) | !String.IsEmpty(Skin.String(CustomSec2.15.Path)) | !String.IsEmpty(Skin.String(CustomSec2.16.Path)) | !String.IsEmpty(Skin.String(CustomSec2.17.Path)) | !String.IsEmpty(Skin.String(CustomSec2.18.Path)) | !String.IsEmpty(Skin.String(CustomSec2.19.Path)) | !String.IsEmpty(Skin.String(CustomSec2.20.Path))</expression>
+	<expression name="CustomSec3HasItems">!String.IsEmpty(Skin.String(CustomSec3.1.Path)) | !String.IsEmpty(Skin.String(CustomSec3.2.Path)) | !String.IsEmpty(Skin.String(CustomSec3.3.Path)) | !String.IsEmpty(Skin.String(CustomSec3.4.Path)) | !String.IsEmpty(Skin.String(CustomSec3.5.Path)) | !String.IsEmpty(Skin.String(CustomSec3.6.Path)) | !String.IsEmpty(Skin.String(CustomSec3.7.Path)) | !String.IsEmpty(Skin.String(CustomSec3.8.Path)) | !String.IsEmpty(Skin.String(CustomSec3.9.Path)) | !String.IsEmpty(Skin.String(CustomSec3.10.Path)) | !String.IsEmpty(Skin.String(CustomSec3.11.Path)) | !String.IsEmpty(Skin.String(CustomSec3.12.Path)) | !String.IsEmpty(Skin.String(CustomSec3.13.Path)) | !String.IsEmpty(Skin.String(CustomSec3.14.Path)) | !String.IsEmpty(Skin.String(CustomSec3.15.Path)) | !String.IsEmpty(Skin.String(CustomSec3.16.Path)) | !String.IsEmpty(Skin.String(CustomSec3.17.Path)) | !String.IsEmpty(Skin.String(CustomSec3.18.Path)) | !String.IsEmpty(Skin.String(CustomSec3.19.Path)) | !String.IsEmpty(Skin.String(CustomSec3.20.Path))</expression>
+	<!-- FOCUS COLOR OVERRIDE. An add-on can put [COLOR] formatting in a name, and Kodi lets that beat our focus color; a skin cannot strip it. The one thing Kodi ignores it for is a DISABLED stand-alone label (drawn in one solid color). So when the focused name has color formatting and no clean title, a disabled label in the focus color takes the place of the focused row's own label (see FocusColorOverride in CommonViews.xml). FocusedLabelColorTagged is the condition of the Focus animation that hides the row's own label (used inside the list row); Container50LabelColorTagged shows the replacement (used outside the list). Keep the two in step. -->
+	<!-- Focus box and focused text color. Focused text takes the focus color, except when the box is shown (Hide focus box off) and its sub-setting
+	     "Plain text in the focus box" (FocusBoxPlainText) is on: then the box alone marks the focused row and the text keeps its normal color.
+	     Select dialogs always show the box in the OSD pickers and the color pickers, so there the sub-setting applies whatever Hide focus box says.
+	     The four expressions below only redraw add-on-colored names in the focus color while the box is hidden (see also FocusTextColor,
+	     DialogFocusTextColor and FocusListLabel in Includes_Variables.xml). -->
+	<expression name="FocusedLabelColorTagged">[[String.Contains(ListItem.Label,COLOR) | String.Contains(ListItem.Label,color) | String.Contains(ListItem.Label,Color)] + [String.IsEmpty(ListItem.Title) | [String.Contains(ListItem.Title,COLOR) | String.Contains(ListItem.Title,color) | String.Contains(ListItem.Title,Color)]]] + [Skin.HasSetting(NoFocusBox) | !Skin.HasSetting(FocusBoxPlainText)]</expression>
+	<expression name="Container50LabelColorTagged">[[String.Contains(Container(50).ListItem.Label,COLOR) | String.Contains(Container(50).ListItem.Label,color) | String.Contains(Container(50).ListItem.Label,Color)] + [String.IsEmpty(Container(50).ListItem.Title) | [String.Contains(Container(50).ListItem.Title,COLOR) | String.Contains(Container(50).ListItem.Title,color) | String.Contains(Container(50).ListItem.Title,Color)]]] + [Skin.HasSetting(NoFocusBox) | !Skin.HasSetting(FocusBoxPlainText)]</expression>
+	<expression name="Container51LabelColorTagged">[[String.Contains(Container(51).ListItem.Label,COLOR) | String.Contains(Container(51).ListItem.Label,color) | String.Contains(Container(51).ListItem.Label,Color)] + [String.IsEmpty(Container(51).ListItem.Title) | [String.Contains(Container(51).ListItem.Title,COLOR) | String.Contains(Container(51).ListItem.Title,color) | String.Contains(Container(51).ListItem.Title,Color)]]] + [Skin.HasSetting(NoFocusBox) | !Skin.HasSetting(FocusBoxPlainText)]</expression>
+	<expression name="DialogRowColorTagged">[[String.Contains(ListItem.Label,COLOR) | String.Contains(ListItem.Label,color) | String.Contains(ListItem.Label,Color)] + [String.IsEmpty(ListItem.Title) | [String.Contains(ListItem.Title,COLOR) | String.Contains(ListItem.Title,color) | String.Contains(ListItem.Title,Color)]] + String.IsEmpty(ListItem.Property(PlainLabel)) + String.IsEmpty(ListItem.Property(KeepColor))] + [[Skin.HasSetting(NoFocusBox) + !Window.IsVisible(VideoFullScreen.xml) + String.IsEmpty(Window(Home).Property(onyx.boxalways))] | !Skin.HasSetting(FocusBoxPlainText)]</expression>
+	<expression name="isEnabledScrollbar">!Skin.HasSetting(_ScrollbarsOff)</expression>
+	<expression name="BGvideoPlaying">Player.HasVideo + !Skin.HasSetting(BGvideoOff)</expression>
+	<expression name="isFanartSourceContextual">Skin.HasSetting(UseFanartSlideshow) + [Skin.HasSetting(FanartSource1) | [!Skin.HasSetting(FanartSource1) + !Skin.HasSetting(FanartSource2) + !Skin.HasSetting(FanartSource3) + !Skin.HasSetting(FanartSource4)]]</expression>
+	<expression name="isFanartSourceMovies">Skin.HasSetting(UseFanartSlideshow) + Skin.HasSetting(FanartSource2)</expression>
+	<expression name="isFanartSourceTVshows">Skin.HasSetting(UseFanartSlideshow) + Skin.HasSetting(FanartSource3)</expression>
+	<expression name="isFanartSourceMusic">Skin.HasSetting(UseFanartSlideshow) + Skin.HasSetting(FanartSource4)</expression>
+	<!-- Clear logo instead of the movie / TV show name in the views (Skin settings > General, on by default: the setting stores the "off" state).
+	     Only for movie and TV show lists; seasons and episodes keep their text titles. Falls back to the text title when the item has no clear logo. -->
+	<expression name="ShowClearLogo">!Skin.HasSetting(ClearLogoOff) + [Container.Content(movies) | Container.Content(tvshows)] + !String.IsEmpty(ListItem.Art(clearlogo))</expression>
+	<!-- A TV show or season whose episodes are all watched. Add-ons such as Red Light do not always mark a finished season as played (play count),
+	     but publish episode counts instead; Kodi's library sets the same counts. Either watched = total, or unwatched is set and is 0 (a missing
+	     UnWatchedEpisodes would read as 0, so it must be non-empty). Used by OverlayNoUnwatched for the watched check mark. -->
+	<expression name="AllEpisodesWatched">Integer.IsGreater(ListItem.Property(TotalEpisodes),0) + [String.IsEqual(ListItem.Property(WatchedEpisodes),ListItem.Property(TotalEpisodes)) | [!String.IsEmpty(ListItem.Property(UnWatchedEpisodes)) + Integer.IsEqual(ListItem.Property(UnWatchedEpisodes),0)]]</expression>
+	<!-- Power menu (DialogButtonMenu.xml): which items show. Picked in Skin settings > General > Power menu items (CustomPowerMenu.xml); an item the device cannot do stays hidden. -->
+	<expression name="PowerMenuRestartApp">Skin.HasSetting(PowerMenuRestartApp) + [System.Platform.Windows | [System.Platform.Linux + !System.Platform.Android]]</expression>
+	<expression name="PowerMenuMinimise">Skin.HasSetting(PowerMenuMinimise) + [System.Platform.Windows | System.Platform.OSX | [System.Platform.Linux + !System.Platform.Android]]</expression>
+	<expression name="PowerMenuShutdown">!Skin.HasSetting(PowerMenuHideShutdown) + System.CanPowerDown</expression>
+	<expression name="PowerMenuSuspend">!Skin.HasSetting(PowerMenuHideSuspend) + System.CanSuspend</expression>
+	<expression name="PowerMenuHibernate">Skin.HasSetting(PowerMenuHibernate) + System.CanHibernate</expression>
+	<expression name="PowerMenuReboot">!Skin.HasSetting(PowerMenuHideReboot) + System.CanReboot</expression>
+	<expression name="PowerMenuTimer">Skin.HasSetting(PowerMenuTimer)</expression>
+	<expression name="PowerMenuLogOff">Skin.HasSetting(PowerMenuLogOff) + [System.HasLoginScreen | Integer.IsGreater(System.ProfileCount,1)]</expression>
+	<expression name="PowerMenuMasterMode">Skin.HasSetting(PowerMenuMasterMode) + System.HasLocks</expression>
+	<expression name="PowerMenuReloadSkin">Skin.HasSetting(PowerMenuReloadSkin)</expression>
+	<expression name="PowerMenuSettings">Skin.HasSetting(PowerMenuSettings)</expression>
+	<expression name="PowerMenuQuit" description="Exit is also shown when every other power menu item is off or not possible here, so the menu is never empty">!Skin.HasSetting(PowerMenuHideQuit) | ![$EXP[PowerMenuRestartApp] | $EXP[PowerMenuMinimise] | $EXP[PowerMenuShutdown] | $EXP[PowerMenuSuspend] | $EXP[PowerMenuHibernate] | $EXP[PowerMenuReboot] | $EXP[PowerMenuTimer] | $EXP[PowerMenuLogOff] | $EXP[PowerMenuMasterMode] | $EXP[PowerMenuReloadSkin] | $EXP[PowerMenuSettings]]</expression>
+	<expression name="ShelfHasFocus">Control.HasFocus(310) | Control.HasFocus(311) | Control.HasFocus(312) | Control.HasFocus(313) | Control.HasFocus(314) | Control.HasFocus(315) | Control.HasFocus(317)</expression>
+	<expression name="IsVideoHD">[Integer.IsGreater(ListItem.VideoResolution,700) | String.IsEqual(ListItem.VideoResolution,4K)] + !Skin.HasSetting(HideHD)</expression>
+
+	<include file="Includes_Variables.xml" />
+	<include file="Includes_DialogSelect.xml" />
+	<include file="defaults.xml" />
+	<include file="CommonViews.xml" />
+	<include file="View_50_List.xml" />
+	<include file="View_51_BigList.xml" />
+	<include file="View_52_MediaInfo.xml" />
+	<include file="View_53_Icons.xml" />
+	<include file="View_54_MediaInfo2.xml" />
+	<include file="View_55.xml" />
+	<include file="Includes_POVIL_Home.xml" />
+	<include file="View_POVIL.xml" />
+	<include file="View_57_FanArt1.xml" />
+	<include file="View_59_FanArt2.xml" />
+	<include file="View_500_FanArt3.xml" />
+	<include file="View_501_BigIcons.xml" />
+	<include file="View_502_Panel.xml" />
+	<include file="View_510.xml" />
+	<include file="View_PVR.xml" />
+	<include file="Includes_Home.xml" />
+	<include file="Includes_Shelf.xml" />
+	<include file="Includes_Shelf_Items.xml" />
+	<include name="RandImageOn">
+		<randomize>true</randomize>
+	</include>
+	<include name="RandImageOff">
+		<randomize>false</randomize>
+	</include>
+	<include name="FanartTimer1" description="10 seconds">
+		<autoscroll time="10000">true</autoscroll> 	</include>	
+	<include name="FanartTimer2" description="15 seconds">
+		<autoscroll time="15000">true</autoscroll> 	</include>	
+	<include name="FanartTimer3" description="20 seconds">
+		<autoscroll time="20000">true</autoscroll> 	</include>	
+	<include name="FanartTimer4" description="25 seconds">
+		<autoscroll time="25000">true</autoscroll> 	</include>	
+	<include name="FanartTimer5" description="30 seconds">
+		<autoscroll time="30000">true</autoscroll> 	</include>	
+	<include name="FanartTimer6" description="45 seconds">
+		<autoscroll time="45000">true</autoscroll> 	</include>	
+	<include name="FanartTimer7" description="60 seconds">
+		<timeperimage>60000</timeperimage>	</include>
+	<include name="FanartTimers">
+		<include condition="Skin.HasSetting(FanartTime1)">FanartTimer1</include>
+		<include condition="Skin.HasSetting(FanartTime2)">FanartTimer2</include>
+		<include condition="Skin.HasSetting(FanartTime3)">FanartTimer3</include>
+		<include condition="Skin.HasSetting(FanartTime4)">FanartTimer4</include>
+		<include condition="Skin.HasSetting(FanartTime5)">FanartTimer5</include>
+		<include condition="Skin.HasSetting(FanartTime6)">FanartTimer6</include>
+		<include condition="Skin.HasSetting(FanartTime7)">FanartTimer7</include>
+		<include condition="!Skin.HasSetting(FanartTime1) + !Skin.HasSetting(FanartTime2) + !Skin.HasSetting(FanartTime3) + !Skin.HasSetting(FanartTime4) + !Skin.HasSetting(FanartTime5) + !Skin.HasSetting(FanartTime6) + !Skin.HasSetting(FanartTime7)">FanartTimer3</include>
+	</include>
+	<include name="TimePerImage1" description="Slideshow 1 min">
+		<timeperimage>60000</timeperimage>
+	</include>	
+	<include name="TimePerImage2" description="Slideshow 3 min">
+		<timeperimage>180000</timeperimage>
+	</include>
+	<include name="TimePerImage3" description="Slideshow 5 min">
+		<timeperimage>300000</timeperimage>
+	</include>
+	<include name="TimePerImage4" description="Slideshow 7 min">
+		<timeperimage>420000</timeperimage>
+	</include>
+	<include name="TimePerImage5" description="Slideshow 10 min">
+		<timeperimage>600000</timeperimage>
+	</include>
+	<include name="TimePerImage6" description="Slideshow 15 min">
+		<timeperimage>900000</timeperimage>
+	</include>
+	<include name="TimePerImage7" description="Slideshow 20 min">
+		<timeperimage>1200000</timeperimage>
+	</include>
+	<include name="HideMediaShelf">
+		<visible>!Skin.HasSetting(HideMediaShelves) | [Skin.HasSetting(HideMediaShelves) + $EXP[ShelfHasFocus]]</visible>
+		<visible>!$EXP[BGvideoPlaying] | [$EXP[BGvideoPlaying] + $EXP[ShelfHasFocus]]</visible>
+	</include>
+	<include name="UpDownArrows">
+		<param name="up_posy">134</param>
+		<param name="down_posy">910</param>
+		<param name="posx">936</param>
+		<param name="visible">true</param>
+		<definition>
+			<control type="button" id="$PARAM[container_id]588">
+				<left>$PARAM[posx]</left>
+				<top>$PARAM[down_posy]</top>
+				<width>48</width>
+				<height>24</height>
+				<texturefocus colordiffuse="Grey2" flipy="true">img/Carat.png</texturefocus>
+				<texturenofocus colordiffuse="Grey2" flipy="true">img/Carat.png</texturenofocus>
+				<animation effect="zoom" start="100,0" end="100,100" center="auto" time="80" delay="10">VisibleChange</animation>
+				<animation effect="zoom" start="100,0" end="100,100" delay="140" center="auto" time="200">WindowOpen</animation>
+				<animation effect="zoom" start="100,100" end="100,0" center="auto" time="80">WindowClose</animation>
+				<onclick>SetFocus($PARAM[container_id])</onclick>
+				<onclick>PageDown</onclick>
+				<visible>Container($PARAM[container_id]).HasNext + Control.IsVisible($PARAM[container_id])</visible>
+				<visible>$PARAM[visible]</visible>
+			</control>
+			<control type="button" id="$PARAM[container_id]589">
+				<left>$PARAM[posx]</left>
+				<top>$PARAM[up_posy]</top>
+				<width>48</width>
+				<height>24</height>
+				<texturefocus colordiffuse="Grey2">img/Carat.png</texturefocus>
+				<texturenofocus colordiffuse="Grey2">img/Carat.png</texturenofocus>
+				<animation effect="zoom" start="100,0" end="100,100" center="auto" time="80" delay="10">VisibleChange</animation>
+				<animation effect="zoom" start="100,0" end="100,100" delay="140" center="auto" time="200">WindowOpen</animation>
+				<animation effect="zoom" start="100,100" end="100,0" center="auto" time="80">WindowClose</animation>
+				<onclick>SetFocus($PARAM[container_id])</onclick>
+				<onclick>PageUp</onclick>
+				<visible>Container($PARAM[container_id]).HasPrevious + Control.IsVisible($PARAM[container_id])</visible>
+				<visible>$PARAM[visible]</visible>
+			</control>
+		</definition>
+	</include>
+	<include name="AutoMuteBG">
+		<onload condition="Player.Muted + Skin.HasSetting(BGsoundOff)">Mute</onload>
+		<onload condition="Window.IsActive(10104) + Skin.HasSetting(BGsoundOff)">Dialog.Close(10104)</onload>
+		<onunload condition="!Player.Muted + Player.HasVideo + Skin.HasSetting(BGsoundOff)">Mute</onunload>
+	</include>
+	<include name="MuteIcon">
+		<control type="group">
+			<visible>!Skin.HasSetting(DebugInfo)</visible>
+			<visible>!Window.IsVisible(CustomFanart.xml) + !Window.IsActive(fullscreenvideo) + !Window.IsActive(FullscreenGame) +  !Window.IsVisible(DialogExtendedProgressBar.xml)</visible>
+			<visible>Player.Muted</visible>
+			<control type="image" description="Mute icon all windows">
+				<right>0</right>
+				<posy>10</posy>
+				<width>66</width>
+				<height>66</height>
+				<texture colordiffuse="Grey3">HUD/VolumeMuted.png</texture>
+			</control>
+		</control>
+	</include>
+	<include name="SystemClock" description="Clock all windows">
+		<control type="grouplist">
+				<visible>Skin.HasSetting(ShowClock) + !Skin.HasSetting(DebugInfo)</visible>
+				<visible>![Window.IsVisible(CustomFanart.xml) | Window.IsVisible(VideoFullScreen.xml) | Window.IsVisible(MusicVisualisation.xml) | Window.IsVisible(DialogExtendedProgressBar.xml) | Window.IsVisible(home) | [Window.IsVisible(videos) + [String.IsEqual(Container.ViewMode,תצוגת יוקרה) | String.IsEqual(Container.ViewMode,תצוגת פרקים)]]]</visible>
+				<right>65</right>
+				<width min="0" max="140">auto</width>
+				<height>75</height>
+				<align>right</align>
+				<aligny>center</aligny>
+				<itemgap>0</itemgap>
+				<orientation>horizontal</orientation>
+				<include>VisibleFadeEffect</include>
+			<control type="label" description="hours">
+				<width min="0" max="140">auto</width>
+				<font>size25</font>
+				<textcolor>Grey3</textcolor>
+				<label>$INFO[System.Time(hh)]:$INFO[System.Time(mm)]</label>
+			</control>
+			<control type="label" description="am/pm">
+				<width min="0" max="140">auto</width>
+				<height>66</height>
+				<font>size14</font>
+				<label>$INFO[System.Time(xx)]</label>
+				<textcolor>Grey3</textcolor>
+			</control>
+		</control>
+	</include>
+	<include name="Weather">
+		<control type="grouplist">
+			<visible>Weather.IsFetched</visible>
+			<visible>Skin.HasSetting(ShowWeather) + !Skin.HasSetting(DebugInfo)</visible>
+			<visible>![Window.IsVisible(CustomFanart.xml) | Window.IsVisible(VideoFullScreen.xml) | Window.IsVisible(MusicVisualisation.xml) | Window.IsVisible(DialogExtendedProgressBar.xml)]</visible>
+			<left>65</left>
+			<width>1000</width>
+			<height>75</height>
+			<orientation>horizontal</orientation>
+			<align>left</align>
+			<aligny>center</aligny>
+			<itemgap>0</itemgap>
+			<include>VisibleFadeEffect</include>
+			<control type="label" description="Current temp">
+				<visible>Weather.IsFetched | true</visible>
+				<width min="0" max="300">auto</width>
+				<!--<height>30</height>-->
+				<align>left</align>
+				<aligny>center</aligny>
+				<font>size25</font>
+				<textcolor>Grey3</textcolor>
+				<label>$INFO[Window(Weather).Property(Current.Temperature)]</label>
+			</control>
+			<control type="label" description="Temp units">
+				<width min="0" max="100">auto</width>
+				<height>66</height>
+				<font>size14</font>
+				<aligny>center</aligny>
+				<label>$INFO[System.TemperatureUnits]</label>
+				<textcolor>Grey3</textcolor>
+				<visible>!String.IsEmpty(Window(Weather).Property(Current.Temperature))</visible>
+			</control>
+			<control type="label" description="Current conditions">
+				<width>500</width>
+				<height>66</height>
+				<font>size14</font>
+				<aligny>center</aligny>
+				<label>$INFO[Window(Weather).Property(Current.Condition),  ]</label>
+				<textcolor>Grey3</textcolor>
+			</control>
+		</control>
+	</include>
+	<include name="DiffuseBG">
+		<control type="image" description="BG">
+			<visible>Skin.HasSetting(HideFanart)</visible>
+			<include>Dimensions_Fullscreen</include>
+			<aspectratio>stretch</aspectratio>
+			<texture>img/BGOverlay.png</texture>
+			<colordiffuse>Overlay</colordiffuse>
+		</control>
+		<control type="image" description="BG">
+			<visible>!Skin.HasSetting(HideFanart)</visible>
+			<include>Dimensions_Fullscreen</include>
+			<aspectratio>stretch</aspectratio>
+			<texture fallback="img/BGOverlay4.png">img/BGOverlay$INFO[Skin.String(FanartVisibility)].png</texture>
+			<colordiffuse>Overlay</colordiffuse>
+		</control>
+	</include> 
+	<include name="FullBackground">
+		<control type="image" description="Show picture thumbs">
+			<visible>!$EXP[BGvideoPlaying]</visible>
+			<visible>Window.IsActive(MyPics.xml) + !Container.Content(addons)</visible>
+			<visible>!Skin.HasSetting(HideFanart)</visible>
+			<depth>-0.80</depth>
+			<include>Dimensions_Fullscreen</include>
+			<aspectratio>scale</aspectratio>
+			<fadetime>400</fadetime>
+			<texture background="true" fallback="img/BlackDot.png">$INFO[ListItem.Thumb]</texture>
+		</control>
+		<control type="image" description="Show fanart">
+			<visible>!$EXP[BGvideoPlaying]</visible>
+			<visible>![Window.IsActive(MyPics.xml) + !Container.Content(addons)]</visible>
+			<visible>!Skin.HasSetting(HideFanart)</visible>
+			<depth>-0.80</depth>
+			<include>Dimensions_Fullscreen</include>
+			<aspectratio>stretch</aspectratio>
+			<fadetime>400</fadetime>
+			<texture background="true" fallback="img/BlackDot.png">$INFO[ListItem.Art(fanart)]</texture>
+		</control>
+		<control type="image" description="Hide fanart">
+			<visible>!$EXP[BGvideoPlaying]</visible>
+			<visible>!Window.IsActive(MyPics.xml) + Skin.HasSetting(HideFanart)</visible>
+			<include>Dimensions_Fullscreen</include>
+			<aspectratio>stretch</aspectratio>
+			<fadetime>400</fadetime>
+			<texture background="true" >img/BlackDot.png</texture>
+		</control>
+		<control type="videowindow">
+			<visible>$EXP[BGvideoPlaying]</visible>
+			<depth>-0.80</depth>
+			<include>Dimensions_Fullscreen</include>
+		</control>
+		<include>WeatherBackground</include>
+		<include>DiffuseBG</include>
+	</include>
+	<include name="MiniBackground">
+		<control type="image" description="Default BG">
+			<include>Dimensions_Fullscreen</include>
+			<texture>img/BlackDot.png</texture>
+		</control>
+	</include>
+	<include name="DialogFilterButton">
+		<control type="button" id="19">
+			<visible>Container.CanFilter + !Container.CanFilterAdvanced</visible>
+			<textoffsetx>14</textoffsetx>
+			<textwidth>144</textwidth>
+			<include>9000Buttons</include>
+			<onclick>left</onclick>
+			<label>$LOCALIZE[137]</label>
+		</control>
+		<control type="button" id="199">
+			<visible>Container.CanFilterAdvanced</visible>
+			<include>9000Buttons</include>
+			<label>$LOCALIZE[587]</label>
+			<onclick>left</onclick>
+			<onclick>Filter</onclick>
+		</control>
+	</include>
+	<include name="SkinSettingsButton">
+		<!--<width max="880">auto</width>-->
+		<height>81</height>
+		<width>1260</width>
+		<textoffsetx>20</textoffsetx>
+		<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+		<texturefocus border="5" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+		<!--<textoffsetx>20</textoffsetx>-->
+		<align>left</align>
+		<aligny>center</aligny>
+		<font>size23</font>
+		<pulseonselect>false</pulseonselect>
+	</include>
+	<include name="DimBG">
+		<control type="image" description="Default BG">
+			<include>Dimensions_Fullscreen</include>
+			<texture colordiffuse="$VAR[DialogDimmer]">img/BGDiffuse.png</texture>
+			<aspectratio>stretch</aspectratio>
+		</control>
+	</include>
+	<include name="VisibleFadeEffect">
+		<animation effect="fade" time="200">Visible</animation>
+		<animation effect="fade" time="200">Hidden</animation>
+	</include>
+	<include name="OpenClose">
+		<animation effect="fade" time="160">WindowOpen</animation>
+		<animation effect="fade" time="160">WindowClose</animation>
+	</include>
+	<include name="DialogOpenClose">
+		<animation type="WindowOpen">
+			<effect type="fade" start="0" end="100" time="240" />
+			<effect type="zoom" tween="cubic" easing="out" start="30" end="100" center="auto" time="240" />
+		</animation>
+		<animation type="WindowClose">
+			<effect type="fade" start="100" end="0" time="180" />
+			<effect type="zoom" tween="cubic" easing="in" start="100" end="30" center="auto" time="180" />
+		</animation>
+	</include>
+	<include name="DialogOpenCloseVisible">
+		<animation type="Visible">
+			<effect type="fade" start="0" end="100" time="240" />
+			<effect type="zoom" tween="cubic" easing="out" start="30" end="100" center="auto" time="240" />
+		</animation>
+		<animation type="Hidden">
+			<effect type="fade" start="100" end="0" time="180" />
+			<effect type="zoom" tween="cubic" easing="in" start="100" end="30" center="auto" time="180" />
+		</animation>
+	</include>
+	<include name="Fanart_Fade">
+		<fadetime>320</fadetime>
+		<animation effect="fade" time="320">Visible</animation>
+		<animation effect="fade" time="280">Hidden</animation>
+	</include>
+	<include name="Icon_Fade">
+		<fadetime>200</fadetime>
+		<animation effect="fade" time="200">Visible</animation>
+		<animation effect="fade" time="100">Hidden</animation>
+	</include>
+	<include name="HiddenButton">
+		<posx>-30</posx>
+		<posy>-30</posy>
+		<width>1</width>
+		<height>1</height>
+		<label></label>
+		<texturenofocus></texturenofocus>
+		<texturefocus></texturefocus>
+	</include>
+	<include name="Heading">
+		<posx>330</posx>
+		<posy>0</posy>
+		<align>center</align>
+		<aligny>center</aligny>
+		<width>1260</width>
+		<height>75</height>
+		<textcolor>$VAR[FocusColor]</textcolor>
+		<font>size28</font>
+	</include>
+	<include name="HeadingR">
+		<posx>960</posx>
+		<posy>60</posy>
+		<width>930</width>
+		<height>75</height>
+		<align>center</align>
+		<aligny>bottom</aligny>
+		<textcolor>$VAR[FocusColor]</textcolor>
+		<font>size28</font>
+	</include>
+	<include name="Dimensions_Fullscreen">
+		<posx>0</posx>
+		<posy>0</posy>
+		<width>100%</width>
+		<height>100%</height>
+	</include>
+
+	<include name="Header">
+		<control type="group">
+			<visible>![Window.IsVisible(home) | Window.IsVisible(LoginScreen.xml)]</visible>
+			<!--<include>SystemClock</include>-->
+			<control type="label" description="Heading">
+				<posx>0</posx>
+				<posy>0</posy>
+				<align>center</align>
+				<aligny>center</aligny>
+				<width>1920</width>
+				<height>75</height>
+				<textcolor>$VAR[HighlightColor]</textcolor>
+				<font>size28</font>
+				<label>$VAR[GlobalHeadings]</label>
+			</control>
+		</control>
+	</include>
+	<include name="MediaHeader">
+		<!--<include>SystemClock</include>-->
+		<control type="group" description="Player Info">
+			<visible>!Player.HasVideo + !Player.HasGame + !VideoPlayer.HasEpg</visible>
+			<visible>!Control.HasFocus(300) + Player.HasAudio + ![Window.IsActive(DialogBusy.xml) | Window.IsActive(VideoFullscreen.xml) | Window.IsActive(MyPlaylist.xml)]</visible>
+			<visible>!Integer.IsGreater(Player.Time,8) | !Integer.IsGreater(Player.TimeRemaining,8)</visible>
+			<include>VisibleFadeEffect</include>
+			<posx>15</posx>
+			<posy>960</posy>
+			<control type="image" description="Playing BG">
+				<width>390</width>
+				<height>105</height>
+				<texture border="14">img/ProgressBG.png</texture>
+			</control>
+			<control type="group">
+				<visible>!String.IsEmpty(MusicPlayer.Title) | !String.IsEmpty(VideoPlayer.Title)</visible>
+				<control type="image">
+					<posx>15</posx>
+					<posy>15</posy>
+					<width>75</width>
+					<height>75</height>
+					<texture>$INFO[MusicPlayer.Cover]</texture>
+					<aspectratio>keep</aspectratio>
+				</control>
+				<control type="image">
+					<posx>15</posx>
+					<posy>15</posy>
+					<width>75</width>
+					<height>75</height>
+					<texture>$INFO[VideoPlayer.Cover]</texture>
+					<aspectratio>keep</aspectratio>
+				</control>
+				<control type="label">
+					<posx>105</posx>
+					<posy>9</posy>
+					<aligny>center</aligny>
+					<width>261</width>
+					<height>36</height>
+					<font>size16</font>
+					<textcolor>White2</textcolor>
+					<label>$INFO[MusicPlayer.Title]</label>
+				</control>
+				<control type="label">
+					<posx>105</posx>
+					<posy>36</posy>
+					<aligny>center</aligny>
+					<width>261</width>
+					<height>36</height>
+					<font>size14</font>
+					<label>$INFO[MusicPlayer.Artist]</label>
+				</control>
+				<control type="label">
+					<posx>105</posx>
+					<posy>60</posy>
+					<aligny>center</aligny>
+					<width>261</width>
+					<height>36</height>
+					<font>size14</font>
+					<label>$INFO[MusicPlayer.Album]</label>
+				</control>
+				<control type="label">
+					<posx>105</posx>
+					<posy>9</posy>
+					<aligny>center</aligny>
+					<width>261</width>
+					<height>36</height>
+					<font>size16</font>
+					<textcolor>White2</textcolor>
+					<label>$INFO[VideoPlayer.Title]</label>
+				</control>
+				<control type="label">
+					<posx>105</posx>
+					<posy>36</posy>
+					<aligny>center</aligny>
+					<width>261</width>
+					<height>36</height>
+					<font>size14</font>
+					<label>$INFO[VideoPlayer.Artist]</label>
+				</control>
+				<control type="label">
+					<posx>105</posx>
+					<posy>60</posy>
+					<aligny>center</aligny>
+					<width>261</width>
+					<height>36</height>
+					<font>size14</font>
+					<label>$INFO[VideoPlayer.Album]</label>
+				</control>
+			</control>
+		</control>
+	</include>
+	<include name="SeekbarLabels">
+		<posx>0</posx>
+		<posy>525</posy>
+		<height>75</height>
+		<width>1920</width>
+		<align>center</align>
+		<font>size24B</font>
+		<textcolor>White</textcolor>
+		<shadowcolor>Black</shadowcolor>
+		<animation effect="fade" time="200">VisibleChange</animation>
+	</include>
+	<include name="ArtworkConstants">
+		<posx>0</posx>
+		<posy>0</posy>
+		<width>1920</width>
+		<height>1080</height>
+		<timeperimage>10000</timeperimage>
+		<fadetime>300</fadetime>
+		<randomize>true</randomize>
+		<animation effect="fade" time="300">Visible</animation>
+		<animation effect="fade" time="300">Hidden</animation>
+		<aspectratio>stretch</aspectratio>
+	</include>
+	<include name="WeatherBackground">
+		<control type="multiimage">
+			<include>ArtworkConstants</include>
+			<imagepath background="true" >$VAR[WeatherFanartVar]</imagepath>			
+			<visible>Window.IsActive(MyWeather.xml) + !$EXP[BGvideoPlaying]</visible>
+		</control>
+	</include>
+	<include name="VideosBackground">
+		<control type="image" description="Fanart">
+			<visible>![Skin.HasSetting(HideFanart) | Control.IsVisible(56) | Control.IsVisible(54) | Control.IsVisible(53)]</visible>
+			<include>ArtworkConstants</include>
+			<texture background="true">$INFO[ListItem.Art(fanart)]</texture>
+		</control>
+	</include>
+	<include name="MusicBackground">
+		<control type="image" description="Fanart">
+			<visible>![Skin.HasSetting(HideFanart) | Control.IsVisible(56) | Control.IsVisible(54) | Control.IsVisible(53)]</visible>
+			<include>ArtworkConstants</include>
+			<texture background="true">$INFO[ListItem.Art(fanart)]</texture>
+		</control>
+		<include>DiffuseBG</include>
+	</include>
+	<include name="AddonsBackground">
+		<control type="image" description="Fanart">
+			<visible>![Skin.HasSetting(HideFanart) | Control.IsVisible(56) | Control.IsVisible(54) | Control.IsVisible(53)]</visible>
+			<include>ArtworkConstants</include>
+			<texture background="true">$INFO[ListItem.Art(fanart)]</texture>
+		</control>
+	</include>
+	<include name="PicturesBackground">
+		<control type="image" description="Fanart">
+			<visible>![Skin.HasSetting(HideFanart) | Control.IsVisible(56) | Control.IsVisible(54) | Control.IsVisible(53)]</visible>
+			<include>ArtworkConstants</include>
+			<texture background="true">$INFO[ListItem.Art(fanart)]</texture>
+		</control>
+	</include>
+</includes>

@@ -1,2 +1,4 @@
 repo/addons.xml text eol=lf
 repo/addons.xml.md5 text eol=lf
+# The Onyx skin is generated (tools/skin_onyx) and checked byte for byte
+skin.povil.onyx/** text=auto eol=lf

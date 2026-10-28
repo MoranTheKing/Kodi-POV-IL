@@ -1,0 +1,425 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+	<include name="View_53" description="All Video Views">
+		<control type="group" description="Grid view">
+			<visible>Control.IsVisible(53)</visible>
+			<control type="group" description="Container and frame">
+				<control type="panel" id="53" description="Grid">
+					<visible>!String.IsEmpty(Container.FolderPath)</visible>
+					<viewtype label="536">Grid</viewtype>
+					<posx>60</posx>
+					<posy>210</posy>
+					<width>1800</width>
+					<height>900</height>
+					<orientation>vertical</orientation>
+					<onleft condition="!Skin.HasSetting(ViewOptions_Hide)">9000</onleft>
+					<onright condition="!Skin.HasSetting(ViewOptions_Hide)">9000</onright>
+					<onup>PageUp</onup>
+					<ondown>PageDown</ondown>
+					<preloaditems>4</preloaditems>
+					<itemlayout condition="Container.Content(Movies) | Container.content(tvshows) | container.content(seasons) | container.content(Favourites)" height="384" width="257">
+						<control type="image">
+							<visible>ListItem.IsParentFolder</visible>
+							<posx>35</posx>
+							<posy>24</posy>
+							<width>197</width>
+							<height>294</height>
+							<texture colordiffuse="$VAR[IconColor]" background="true">DefaultFolderBack.png</texture>
+							<aspectratio>scale</aspectratio>
+						</control>
+						<control type="image">
+							<visible>!ListItem.IsParentFolder</visible>
+							<posx>35</posx>
+							<posy>24</posy>
+							<width>197</width>
+							<height>294</height>
+							<texture background="true" diffuse="img/Round_197x294.png">$VAR[Thumb]</texture>
+							<aspectratio scalediffuse="false">scale</aspectratio>
+						</control>
+						<control type="image" description="Overlay">
+							<visible>!String.Contains(ListItem.Path,videodb://movies/sets/)</visible>
+							<posx>195</posx>
+							<posy>285</posy>
+							<height>30</height>
+							<width>30</width>
+							<aspectratio>keep</aspectratio>
+							<texture>$VAR[OverlayPercent]</texture>
+						</control>
+						<control type="group" description="Percent watched">
+							<visible>!String.Contains(ListItem.Path,videodb://movies/sets/) + Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+							<posx>167</posx>
+							<posy>287</posy>
+							<control type="label">
+								<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+								<posx>0</posx>
+								<posy>0</posy>
+								<width>58</width>
+								<height>26</height>
+								<font>size15</font>
+								<textcolor>White2</textcolor>
+								<shadowcolor>Black</shadowcolor>
+								<align>right</align>
+								<aligny>center</aligny>
+								<label>[B]$VAR[WatchedPercent][/B]</label>
+							</control>
+						</control>
+						<control type="group">
+							<visible>container.content(TVshows) | container.content(seasons)</visible>
+						<!--<control type="image">
+								<visible>Integer.IsGreater(ListItem.Property(UnwatchedEpisodes),0)</visible>
+								<right>9</right>
+								<top>9</top>
+								<height>51</height>
+								<width>51</width>
+								<aspectratio>keep</aspectratio>
+								<texture>overlay/UnwatchedNib.png</texture>
+								<colordiffuse>Overlay</colordiffuse>
+							</control> -->
+							<control type="label" description="Label2">
+								<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+								<visible>false + Integer.IsGreater(ListItem.Property(UnwatchedEpisodes),0)</visible>
+								<right>12</right>
+								<top>12</top>
+								<height>45</height>
+								<width>45</width>
+								<font>size16</font>
+								<align>center</align>
+								<textcolor>$VAR[FocusColor]</textcolor>
+								<label>[B]$INFO[ListItem.Property(UnwatchedEpisodes)][/B]</label>
+							</control>
+						</control>
+					</itemlayout>
+					<focusedlayout condition="Container.Content(Movies) | Container.content(tvshows) | container.content(seasons) | container.content(Favourites)" height="384" width="257">
+						<control type="image" description="Selection frame (part of the focused item, no animation)">
+							<posx>9</posx>
+							<posy>0</posy>
+							<width>249</width>
+							<height>343</height>
+							<texture border="49" colordiffuse="$VAR[FrameColor]">img/FrameRound.png</texture>
+							<bordersize>-9</bordersize>
+							<aspectratio>stretch</aspectratio>
+						</control>
+						<control type="image">
+							<visible>ListItem.IsParentFolder</visible>
+							<posx>35</posx>
+							<posy>24</posy>
+							<width>197</width>
+							<height>294</height>
+							<texture colordiffuse="$VAR[IconColor]" background="true">DefaultFolderBack.png</texture>
+							<aspectratio>scale</aspectratio>
+						</control>
+						<control type="image">
+							<visible>!ListItem.IsParentFolder</visible>
+							<posx>35</posx>
+							<posy>24</posy>
+							<width>197</width>
+							<height>294</height>
+							<texture background="true" diffuse="img/Round_197x294.png">$VAR[Thumb]</texture>
+							<aspectratio scalediffuse="false">scale</aspectratio>
+						</control>
+						<control type="label">
+							<animation effect="fade" start="0" end="100" time="200" delay="100">Focus</animation>
+							<posx>5</posx>
+							<posy>330</posy>
+							<width>257</width>
+							<height>45</height>
+							<font>size18</font>
+							<textcolor>$VAR[FocusColor]</textcolor>
+							<shadowcolor>Black</shadowcolor>
+							<align>center</align>
+							<label>[B]$INFO[ListItem.Label][/B]</label>
+						</control>
+						<control type="image" description="Overlay">
+							<visible>!String.Contains(ListItem.Path,videodb://movies/sets/)</visible>
+							<posx>195</posx>
+							<posy>285</posy>
+							<height>30</height>
+							<width>30</width>
+							<aspectratio>keep</aspectratio>
+							<texture>$VAR[OverlayPercent]</texture>
+						</control>						
+						<control type="group" description="Percent watched">
+							<visible>!String.Contains(ListItem.Path,videodb://movies/sets/) + Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+							<posx>167</posx>
+							<posy>287</posy>
+							<control type="label">
+								<posx>0</posx>
+								<posy>0</posy>
+								<width>58</width>
+								<height>26</height>
+								<font>size15</font>
+								<textcolor>White2</textcolor>
+								<shadowcolor>Black</shadowcolor>
+								<align>right</align>
+								<aligny>center</aligny>
+								<label>[B]$VAR[WatchedPercent][/B]</label>
+							</control>
+						</control>
+						<control type="group">
+							<visible>container.content(TVshows) | container.content(seasons)</visible>
+						<!--<control type="image">
+								<visible>Integer.IsGreater(ListItem.Property(UnwatchedEpisodes),0)</visible>
+								<right>9</right>
+								<top>9</top>
+								<height>51</height>
+								<width>51</width>
+								<aspectratio>keep</aspectratio>
+								<texture>overlay/UnwatchedNib.png</texture>
+								<colordiffuse>Overlay</colordiffuse>
+							</control> -->
+							<control type="label" description="Label2">
+								<visible>false + Integer.IsGreater(ListItem.Property(UnwatchedEpisodes),0)</visible>
+								<right>12</right>
+								<top>12</top>
+								<height>45</height>
+								<width>45</width>
+								<font>size16</font>
+								<align>center</align>
+								<textcolor>$VAR[FocusColor]</textcolor>
+								<label>[B]$INFO[ListItem.Property(UnwatchedEpisodes)][/B]</label>
+							</control>
+						</control>
+					</focusedlayout>
+					<itemlayout condition="container.content(addons)" height="360" width="360">
+						<control type="image">
+							<posx>45</posx>
+							<posy>9</posy>
+							<width>255</width>
+							<height>255</height>
+							<texture fallback="DefaultFolder.png" background="true" diffuse="img/Round_255x255.png">$INFO[ListItem.Thumb]</texture>
+							<aspectratio>stretch</aspectratio>
+						</control>
+					</itemlayout>
+					<focusedlayout condition="container.content(addons)" height="360" width="360">
+						<control type="image" description="Selection frame (part of the focused item, no animation)">
+							<posx>18</posx>
+							<posy>-18</posy>
+							<width>309</width>
+							<height>309</height>
+							<texture border="49" colordiffuse="$VAR[FrameColor]">img/FrameRound.png</texture>
+							<bordersize>-9</bordersize>
+							<aspectratio>stretch</aspectratio>
+						</control>
+						<control type="image">
+							<posx>45</posx>
+							<posy>9</posy>
+							<width>255</width>
+							<height>255</height>
+							<texture fallback="DefaultFolder.png" background="true" diffuse="img/Round_255x255.png">$INFO[ListItem.Thumb]</texture>
+							<aspectratio>stretch</aspectratio>
+						</control>
+						<control type="label">
+							<animation effect="fade" start="0" end="100" time="200" delay="100">Focus</animation>
+							<posx>45</posx>
+							<posy>270</posy>
+							<width>255</width>
+							<height>45</height>
+							<font>size18</font>
+							<textcolor>$VAR[FocusColor]</textcolor>
+							<shadowcolor>Black</shadowcolor>
+							<align>center</align>
+							<label>[B]$INFO[ListItem.Label][/B]</label>
+						</control>
+					</focusedlayout>
+					<itemlayout condition="![container.content(addons) | container.content(movies) | container.content(seasons) | container.content(tvshows)]" height="375" width="450">
+						<control type="image">
+							<visible>container.content(episodes)</visible>
+							<posx>45</posx>
+							<posy>24</posy>
+							<width>360</width>
+							<height>255</height>
+							<texture fallback="DefaultFolder.png" background="true" diffuse="img/Round_360x255.png">$INFO[ListItem.Thumb]</texture>
+							<aspectratio scalediffuse="false">scale</aspectratio>
+						</control>
+						<control type="image">
+							<visible>![container.content(episodes)]</visible>
+							<posx>45</posx>
+							<posy>24</posy>
+							<width>360</width>
+							<height>255</height>
+							<texture fallback="DefaultFolder.png" background="true">$INFO[ListItem.Thumb]</texture>
+							<aspectratio>keep</aspectratio>
+						</control>
+						<control type="image" description="Watched mark">
+							<visible>container.content(episodes)</visible>
+							<posx>370</posx>
+							<posy>240</posy>
+							<width>30</width>
+							<height>30</height>
+							<texture>$VAR[OverlayPercent]</texture>
+							<aspectratio>keep</aspectratio>
+						</control>
+						<control type="group" description="Percent watched">
+							<visible>container.content(episodes) + Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+							<posx>342</posx>
+							<posy>242</posy>
+							<control type="label">
+								<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+								<posx>0</posx>
+								<posy>0</posy>
+								<width>58</width>
+								<height>26</height>
+								<font>size15</font>
+								<textcolor>White2</textcolor>
+								<shadowcolor>Black</shadowcolor>
+								<align>right</align>
+								<aligny>center</aligny>
+								<label>[B]$VAR[WatchedPercent][/B]</label>
+							</control>
+						</control>
+					</itemlayout>
+					<focusedlayout condition="![container.content(addons) | container.content(movies) | container.content(seasons) | container.content(tvshows)]" height="375" width="450">
+						<control type="image" description="Selection frame (part of the focused item, no animation)">
+							<posx>18</posx>
+							<posy>-4</posy>
+							<width>414</width>
+							<height>309</height>
+							<texture border="49" colordiffuse="$VAR[FrameColor]">img/FrameRound.png</texture>
+							<bordersize>-9</bordersize>
+							<aspectratio>stretch</aspectratio>
+						</control>
+						<control type="image">
+							<visible>container.content(episodes)</visible>
+							<posx>45</posx>
+							<posy>24</posy>
+							<width>360</width>
+							<height>255</height>
+							<texture fallback="DefaultFolder.png" background="true" diffuse="img/Round_360x255.png">$INFO[ListItem.Thumb]</texture>
+							<aspectratio scalediffuse="false">scale</aspectratio>
+						</control>
+						<control type="image">
+							<visible>![container.content(episodes)]</visible>
+							<posx>45</posx>
+							<posy>24</posy>
+							<width>360</width>
+							<height>255</height>
+							<texture fallback="DefaultFolder.png" background="true">$INFO[ListItem.Thumb]</texture>
+							<aspectratio>keep</aspectratio>
+						</control>
+						<control type="label">
+							<animation effect="fade" start="0" end="100" time="200" delay="100">Focus</animation>
+							<posx>45</posx>
+							<posy>300</posy>
+							<width>360</width>
+							<height>45</height>
+							<font>size18</font>
+							<textcolor>$VAR[FocusColor]</textcolor>
+							<shadowcolor>Black</shadowcolor>
+							<align>center</align>
+							<label>[B]$INFO[ListItem.Label][/B]</label>
+						</control>
+						<control type="image" description="Watched mark">
+							<visible>container.content(episodes)</visible>
+							<posx>370</posx>
+							<posy>240</posy>
+							<width>30</width>
+							<height>30</height>
+							<texture>$VAR[OverlayPercent]</texture>
+							<aspectratio>keep</aspectratio>
+						</control>
+						<control type="group" description="Percent watched">
+							<visible>container.content(episodes) + Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+							<posx>342</posx>
+							<posy>242</posy>
+							<control type="label">
+								<posx>0</posx>
+								<posy>0</posy>
+								<width>58</width>
+								<height>26</height>
+								<font>size15</font>
+								<textcolor>White2</textcolor>
+								<shadowcolor>Black</shadowcolor>
+								<align>right</align>
+								<aligny>center</aligny>
+								<label>[B]$VAR[WatchedPercent][/B]</label>
+							</control>
+						</control>
+					</focusedlayout>
+				</control>
+			</control>
+			<control type="image" description="Line Split">
+				<posx>105</posx>
+				<posy>164</posy>
+				<width>1702</width>
+				<height>1</height>
+				<texture>img/LineL.png</texture>
+				<aspectratio>stretch</aspectratio>
+			</control>
+			<control type="label" description="Media details">
+				<visible>!String.Contains(ListItem.Path,videodb://movies/sets/)</visible>
+				<posx>105</posx>
+				<posy>117</posy>
+				<width>1500</width>
+				<textcolor>$VAR[FocusColor]</textcolor>
+				<include>Genre51Commons</include>
+				<label>$INFO[ListItem.label][COLOR=White]$VAR[TopLabel,  ][/COLOR]</label>
+			</control>
+			<control type="label" description="Media details sets">
+				<visible>String.Contains(ListItem.Path,videodb://movies/sets/)</visible>
+				<posx>105</posx>
+				<posy>117</posy>
+				<width>1500</width>
+				<textcolor>$VAR[FocusColor]</textcolor>
+				<include>Genre51Commons</include>
+				<label>$INFO[ListItem.label]</label>
+			</control>
+
+			<control type="image" description="Sets">
+				<visible>!Skin.HasSetting(HideSetsIcon)</visible>
+				<visible>String.Contains(ListItem.Path,videodb://movies/sets/)</visible>
+				<posx>50</posx>
+				<posy>123</posy>
+				<height>33</height>
+				<width>60</width>
+				<aspectratio>keep</aspectratio>
+				<texture>badges/setsFO.png</texture>
+			</control>
+			<control type="grouplist">
+				<posx>354r</posx>
+				<posy>126</posy>
+				<height>24</height>
+				<width>290</width>
+				<itemgap>15</itemgap>
+				<align>right</align>
+				<orientation>horizontal</orientation>
+				<control type="image">
+					<include>3D_Badge_visibility</include>
+					<height>24</height>
+					<width>45</width>
+					<aspectratio>keep</aspectratio>
+					<texture>$VAR[3D_badge_texture]</texture>
+				</control>
+				<control type="image">
+					<visible>$EXP[IsVideoHD]</visible>
+					<height>24</height>
+					<width>45</width>
+					<aspectratio>keep</aspectratio>
+					<texture>$INFO[ListItem.VideoResolution,badges/,.png]</texture>
+				</control>
+				<control type="image" description="Rating">
+					<visible>!String.IsEmpty(ListItem.Rating)</visible>
+					<posy>0</posy>
+					<include>10Rating</include>
+					<colordiffuse>$VAR[FocusColor]</colordiffuse>
+				</control>
+				<control type="label" description="Media details">
+					<visible>container.content(addons)</visible>
+					<height>24</height>
+					<width>240</width>
+					<font>size18</font>
+					<align>right</align>
+					<textcolor>Silver</textcolor>
+					<label>$INFO[ListItem.Label2]</label>
+				</control>
+			</control>
+			<control type="image" description="Bottom fade">
+				<posx>0</posx>
+				<posy>1035</posy>
+				<width>1920</width>
+				<height>45</height>
+				<texture border="1,0,1,0">img/Gradient.png</texture>
+				<aspectratio>stretch</aspectratio>
+			</control>
+		</control>
+	</include>
+</includes>

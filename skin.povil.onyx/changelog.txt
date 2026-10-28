@@ -1,0 +1,220 @@
+[B]Kodi POV IL - Onyx 1.0.0[/B]
+- First version: a home with movies, TV shows, Israeli content, live TV, kids, favourites, search and settings
+- Everything right to left: rows start on the right, Hebrew logos with Hebrew posters
+- Views 51 and 55 for POV lists, a new player screen with MoranSubs subtitles, change source and next episode
+- A new information screen, a keyboard with voice search and Hebrew suggestions, the Heebo font
+- Rows load the first time their tab opens
+
+[B]Onyx (adamsbuilds) changelog follows[/B]
+
+[B][COLOR FFFFFFFF]Version 1.0.6[/COLOR][/B]
+
+[B]Focus box[/B]
+- The focus box is now a solid, softly lit panel with slightly rounded corners instead of a thin outline, so it stands out clearly from any background. It is used everywhere the skin shows a focus box: lists, menus, settings, dialogs and buttons. Hide focus box in lists and menus still turns it off.
+- The List, Big list, Fanart 1 and Fanart 2 views, Settings, the file browser and search now use the same box. They still had the old outline.
+- The focus box no longer slides from row to row. It moves straight to the new row in Settings, My add-ons, the file browser, search, the PVR channel and recording lists and guide, the channel list on the player screen and the disc menu. The lists in those windows also scroll straight away instead of gliding.
+- The outline around the cast list in the video info screen and around the profiles on the login screen no longer glides either.
+- New Plain text in the focus box setting in Menus, under Hide focus box (off by default). With it on, the focused text keeps its normal color and the box alone shows where you are, instead of the text also turning the focus color. Add-on names keep their own colors. It only shows while the focus box is on. The color pickers and the audio and subtitle pickers during playback always show the box, so it applies there whatever Hide focus box says.
+
+[B]Lists[/B]
+- The List view (video, music, pictures, programs, playlist, search and My add-ons) no longer animates when it scrolls. The rows change straight away as you move, instead of the text sliding from one line to the next.
+
+[B]Colors[/B]
+- In the color pickers, the focused color name keeps its own color instead of turning into the focus color, so you can see the color you are about to pick. The box around it shows where you are.
+- The default entry at the top of each color picker (Sand, Mint or Blue) is now shown in its own color too, like the rest of the list.
+
+[B]Views[/B]
+- New Show clear logos setting in General (on by default). Movie and TV show lists show the clear logo in place of the name in Fanart 3, Big Icons, Panel, Media info, Media info 2 and Fanart 2, and fall back to the name when there is no logo. Seasons and episodes keep their names.
+- TV shows and seasons now get their details in the views that left them out, because Kodi treats a show as a folder:
+-- Fanart 3 and Fanart 1 show year, episodes and rating (for example 2009 • 23 episodes • 7.4), and Fanart 1 shows the genre again.
+-- Fanart 2 shows the details line, the genre and the star rating.
+-- Big Icons shows the rating number after the year and episodes.
+
+[B]Home menu[/B]
+- Clearing a shortcut in the menu customizer now closes the gap: the shortcuts below it move up one slot. Moving a shortcut up, down, to the top or to the bottom also closes any gaps first, so a section never has empty slots between shortcuts. Sections that already have gaps close up the next time you clear or move something in them.
+
+[B][COLOR FFFFFFFF]Version 1.0.5[/COLOR][/B]
+
+[B]Add-ons[/B]
+- Add-on information now has a Versions button, like Estuary. It lets you pick and install another available version of the add-on, and shows in place of Update when no update is waiting.
+- The Update button on that screen was labeled Versions by mistake. It now says Update.
+- In My add-ons, moving over to the side panel takes the focus color off the add-on you left, so only one place looks focused at a time. It comes back as soon as you return to the list.
+
+[B]Power menu[/B]
+- The power menu is rebuilt. The selection outline is now part of the focused icon, so it no longer slides between options and fast navigation can't leave it behind. The outline follows the focus color (with "Use focus color on selection outline"), and the icons stay white.
+- New Power menu items setting in General. Pick what the menu shows: Quit, Shutdown, Suspend and Reboot (on by default, so your menu stays the same until you change it), plus Restart Kodi, Minimise, Hibernate, Shutdown timer, Log off, Master lock, Reload skin and Skin settings.
+-- Shutdown timer turns into Cancel shutdown timer while a timer is running, and Master lock switches between entering and leaving master mode.
+-- Items your device can't do are hidden instead of greyed out, for example Shutdown on Android. Restart Kodi shows on Windows and desktop Linux, Minimise on those and on Mac, Log off only with profiles or the login screen, and Master lock only when locks are set up.
+-- If everything ends up switched off or hidden, Quit still shows, so the menu is never empty.
+- The menu stays centered and widens to fit however many items are showing.
+- Every item closes the menu before it runs, so Reload skin and Skin settings act right away, and the shutdown timer and master lock prompts no longer open on top of the menu.
+- New icons for the new items, in the same style as the original four.
+
+[B]Home screen[/B]
+- The add-on shortcut row and the Custom 1, 2 and 3 shortcut rows now draw the selection outline as part of the focused item, like the widgets, so it no longer glides between shortcuts. The Live TV row does the same.
+- That outline now follows the focus color too, like the widget outlines.
+- Moving quickly along a shortcut row no longer shows the outline on two shortcuts at once. The name under a shortcut now appears straight away instead of fading in, which is what was holding the old outline on screen.
+- Custom 1, 2 and 3 now show the focused item's fanart as the background, like Movies and TV shows.
+- In Set shortcut, Kodi favourites now has a Favourites entry at the top that makes a shortcut to the Favourites window itself. It works even before you have saved any favourites, so the "no favourites yet" message is gone. Your saved favourites are still listed below it.
+
+[B]Views[/B]
+- Fanart 3 for episodes and files (video, games and music windows) now starts at the left edge and shows four full images, instead of three with a gap on the left. Focus scrolls in the second slot, so you can always see the next two items coming up.
+- Fanart 3 for episodes shows the rating as a number at the end of the details line (for example 56 Minutes • 7.8) instead of stars.
+- Fanart 3 for episodes: the episode title and plot moved up, and the plot now shows five full lines before it auto-scrolls, with no half-cut line at the bottom.
+- Big Icons: the plot now shows six full lines, with room for letters like p and g on the last one.
+- TV shows and seasons with every episode watched now get the watched check mark, also from add-ons such as Red Light that publish episode counts instead of marking the season played. This applies to every view and to the home TV widget.
+
+[B]Lists and colors[/B]
+- The current item in a list is now drawn in the highlight color, and the row you are on stays in the focus color, so the two no longer look the same. This covers the installed version in Versions, the current audio and subtitle track, the current choice in the color pickers, the playing item in a playlist and every other list that marks a current item. When you land on the current item itself, it shows the focus color.
+
+[B]Episodes[/B]
+- New Focus first unwatched episode setting in General (off by default). When you open a list of episodes, focus jumps to the first one that is unwatched or in progress. It works for your library and for add-ons, without Python.
+-- It jumps once each time you enter a list. Opening info or the context menu and closing it again doesn't move you.
+-- After watching an episode you come back to the next one. If you stopped part way, you come back to that one.
+-- A fully watched list stays where it is. The first 300 items of a list are checked.
+-- Kodi shows the last item you were on for a moment before the jump.
+
+[B]Advanced[/B]
+- With Debug on (Skin settings > Advanced), the Videos window also shows the focused item's watched details (play count, progress, episode counts) and what the first unwatched jump did. Handy for telling a skin problem from missing add-on data.
+
+[B][COLOR FFFFFFFF]Version 1.0.4[/COLOR][/B]
+
+[B]Colors[/B]
+- The focus color is now kept in your settings, like the Highlight and Player button colors, instead of in a color theme file in the skin folder. A skin update can no longer reset it, and picking a focus color no longer reloads the skin. A focus color you picked in 1.0.2 carries over.
+- The default player button color is now Blue instead of the focus color. The Same as focus color choice is removed. If you picked a player button color yourself, it stays.
+- Reset in Skin settings now also puts the focus color back to Sand.
+- The About page shows the name of your focus color instead of the Kodi color theme.
+- The Custom color theme is removed. The other color themes in Kodi's skin settings still work until you pick a focus color in Onyx.
+
+[B]Lists and focus[/B]
+- A focused row whose add-on colors its own name (for example a build wizard) now shows in the focus color in the List view of the Programs, Pictures and Music windows and in the Big list view of the Programs window, as it already did in the video list and My add-ons. The Big list view of the Pictures, Music and video windows does the same for lists Kodi reports as add-ons.
+- In the shortcut, widget and menu pickers, and in Kodi's own add-on chooser (Get more...), a focused add-on whose name has its own colors now shows in the focus color.
+- Back now closes the view options panel and returns to the list, instead of leaving the page. This applies to the video, music, pictures, programs, favourites, games, playlist and PVR windows, and to the scroll buttons beside the list.
+
+[B]Views[/B]
+- The Icons view of the Programs, Pictures and Music add-on windows now draws the selection outline as part of the selected item, like the video views, so it no longer glides from item to item.
+- The Big Icons and both Fanart 3 views of the Music window now draw the rounded selection outline as part of the selected item too, in the focus color when "Use focus color on selection outline" is on, and it no longer glides between items.
+
+[B]Home menu[/B]
+- The Reload skin item under System on the home screen is always shown. It used to be hidden on a fresh install and after Reset, and its switch in the Homepage menu settings is removed.
+
+[B][COLOR FFFFFFFF]Version 1.0.2[/COLOR][/B]
+
+[B]Colors[/B]
+- New Highlight color setting in General (default Mint). It colors window and dialog headings, section titles, the settings level label, the section titles in Skin settings (such as Music player and Video player) and the description text, so they no longer share the focus color. Item titles in the media views keep the focus color.
+- The default focus color is now Sand (it was blue). The old blue is still in the picker as Blue.
+- The Focus color setting shows the name of the color you picked: Sand (default) for the stock color, or #RRGGBB for a custom hex.
+- A focus color you pick is kept through skin updates. The first time Kodi starts after an update, the skin writes it back to its color theme file, with one quick skin reload.
+- The color pickers no longer list their default twice. Focus color, Highlight color and Player button color each have their own default entry at the top, and Sand and Mint can be picked in every picker.
+- Skin settings and this changelog now use the spelling color instead of colour.
+
+[B]Lists and focus[/B]
+- Text list dialogs now show the focused row in the focus color when the focus box is hidden, so you can see where you are. This covers Set shortcut and the widget source pickers, and also file stacking, add media source, picture info, the file manager, the event log, PVR timers, the smart playlist editor and the transparency rows in Skin settings.
+- The focus box is always shown in the color pickers and in the video OSD pickers (audio track, subtitles and so on), whatever Hide focus box says, because the selected item and the focused item share a color there.
+- A list row only takes the focus color while its list has focus. Menu transparency and OSD transparency in Skin settings stay white until you move onto them, and the same applies to the file manager, event log, PVR timers and the other lists above.
+
+[B]Skin settings[/B]
+- Images and the slideshow folder you pick (shelf images, custom backgrounds, PVR channel and recording backgrounds) are saved as special:// paths, so a build made on one device, such as Windows, works on another, such as Android.
+- An image from outside Kodi's folders is copied into the skin's data folder first. For the slideshow folder you choose between copying its pictures and keeping the folder where it is.
+- The image and folder pickers open at special://home.
+- Backing out of a picker, or of the copy question, changes nothing.
+- Choices you saved before this version are left as they are.
+
+[B][COLOR FFFFFFFF]Version 1.0.1[/COLOR][/B]
+
+[B]Home menu[/B]
+- Music and Pictures are replaced by Custom 1, Custom 2 and Custom 3. All three can be renamed, start switched off and have 20 shortcuts each. Each can show a custom image, a shortcut shelf or an add-on widget. Settings from the old Music and Pictures sections are not carried over.
+- The home menu now handles up to eight sections and scrolls to keep the last ones on screen. The bar follows correctly for any mix of shown and hidden sections.
+- A focus-colored underline marks the current section, sized to the section name.
+- The bar slide is faster (100 ms) so fast scrolling cannot outrun it. The underline no longer sweeps in from the first section.
+- The focus box behind the selected submenu item now matches the item's width and position.
+- The selected submenu item goes back to the normal text color when focus moves up into the widgets.
+- Browse now shows automatically when a section has no other items. It no longer has an on/off setting.
+
+[B]Home widgets[/B]
+- Widgets now load one after another instead of all at once, and the sequence restarts each time Home appears. This fixes crashes with add-ons that use reuselanguageinvoker, including a crash after stopping playback.
+- Only widgets in use take a loading slot. Hidden sections, widgets that are not set to an add-on and empty libraries load nothing.
+- The Live TV widget only loads when a PVR add-on is installed.
+- Custom 1, 2 and 3 can each have an add-on widget, set the same way as the Movies widget.
+
+[B]Watched and progress indicators[/B]
+- Percent watched replaces the progress pie in the Icons, Big icons, Panel and Fanart 3 views.
+- Home widgets show the watched mark and the percent watched.
+- The unwatched pie is hidden everywhere in the skin.
+- Add-ons that publish their own progress (the WatchedProgress property, for example Red Light) are treated as in progress, so they get the right overlay and percentage.
+
+[B]Lists and focus[/B]
+- A focused add-on or folder name that has its own color formatting now shows in the focus color. This applies to My add-ons, repositories and the List view. Other lists use the plain title when there is one.
+- Hide focus box in lists and menus now also covers settings rows, the add-on manager, the context menu, view option menus and text list dialogs. The filled boxes in the left panes and the frames around artwork are not affected.
+
+[B]Skin settings[/B]
+- Show parent folder item moved to General.
+- Hide focus box in lists and menus moved to Menus, and Reset in Menus now resets it.
+- The Disable menu animations setting is removed. Dialogs and pop-ups always use the fade and zoom, and Low Power Mode no longer changes animations.
+
+[B]Defaults[/B]
+- Custom 1, Custom 2 and Custom 3 start switched off, on new and existing installs.
+
+[B][COLOR FFFFFFFF]Version 1.0.0 - First release of Onyx[/COLOR][/B]
+Onyx is a fork of Quartz (original design by pecinko, code by nonjon). Everything below is new or changed compared to Quartz.
+
+[B]Identity and compatibility[/B]
+- Renamed to Onyx (add-on id skin.onyx). New skin name, "Settings - Onyx" header, README.
+- About screen: skin name Onyx, maintained by Valar Morghulis, credits list Quartz first.
+- Works on Kodi 21 and Kodi 22.
+- Removed the second texture theme (Angular); only the default look remains.
+- Dependencies cut down to Kodi's GUI API only. script.favourites, script.image.resource.select and the weather fanart images are no longer required.
+- Weather fanart helpers are offered for install only when you use that setting. Turning on Show weather tells you if Kodi has no weather service set.
+- Kodi favourites are now read straight from Kodi and turned into shortcuts by the skin's own picker, so the script.favourites helper is gone.
+- All helper logic is one small script (onyx_tools.py) that only runs when you change a setting. Nothing runs in the background.
+
+[B]Home menu and shortcuts[/B]
+- Menu shortcuts can now point at anything, not just the local library: browse video, music, picture and program add-ons, the video and music library, playlists, Kodi favourites, Kodi Live TV and Radio windows, or type a path.
+- 20 custom shortcuts per home section (was 6-7). The same picker is used for the widget shortcut slots in the shelf customizer.
+- Move a shortcut up, down, to the top or to the bottom from its picker.
+- System menu: new Add-on browser item with an on/off toggle in the customizer.
+- The KODI category is now called System by default.
+- Wider submenu columns so labels scroll less.
+- Labels wait about a second before they start scrolling, in lists and under the home menu.
+- The home menu stops at the first and last section instead of looping while a key is held.
+- The customizer shortcut list stops at the bottom instead of looping.
+
+[B]Home widgets (Movies and TV)[/B]
+- New "Add-on widget" option: show any add-on directory in the widget row instead of the library, with a Widget source picker. Falls back to the library if no source is set.
+- Clicking add-on widget items works properly: folders (including Next Page) open, playable items play.
+- Add-on TV widgets show posters, like Movies.
+- The per-item text under each poster is gone. One centered title shows below the row and follows the selection: Name • Year • Rating (TMDB rating).
+- Rounded corners on widget artwork.
+- Rounded selection outline that is part of the selected item, so it no longer glides between posters.
+
+[B]Views[/B]
+- Rounded artwork in Panel, Icons, Big icons, Fanart 1, 2 and 3, Wide thumbs, Media info 2, the large poster beside List and Big List, and the music, picture and program views.
+- Rounded selection outline in the poster-style views, drawn with the selected item (no gliding, no clipping).
+- List and menu highlight boxes now snap with the focused text, with no lag, including in Fanart 1 and 2.
+- Media info and Media info 2 use the same single-line rows as the basic List view (air time line removed, tighter spacing, more rows).
+- Big icons: TMDB rating number added after the age rating.
+- List and Big List: the poster on the left is moved up to sit nearer the middle of the screen.
+- Removed the square frames behind posters and the square overlay on Fanart 1 and 2 so rounded corners show.
+- With the focus box hidden, a focused list row shows in the focus color even when an add-on tints its own labels.
+
+[B]Player[/B]
+- New buttons on the video OSD for audio, subtitle and video settings.
+- New Player button color picker for the focused player buttons.
+
+[B]Skin settings[/B]
+- Focus color picker with 57 colors plus custom hex.
+- Option to use the focus color on the selection outline (on by default for new installs).
+- Option to hide the focus box in lists and menus.
+- Option to show or hide the parent folder (..) item.
+- The "Disable options menus" setting is now named "Disable view options menu (left/up press)".
+- Settings pages stop at the first and last item instead of looping, and no longer run into the description text.
+- About screen layout fixed so nothing is cut off; the credits line is split over two lines.
+- New Changelog section below About.
+
+[B]Defaults for new installs[/B]
+- Show clock on. Power button set to Quit.
+- Music and Pictures hidden from the home menu.
+- Update library and Disc hidden from the System shortcuts.
+- Video OSD: extended info bar on, auto-dismiss after 3 seconds.
+- Watched and unwatched/progress icons on.
+- Focus box hidden, selection outline tinted with the focus color.
