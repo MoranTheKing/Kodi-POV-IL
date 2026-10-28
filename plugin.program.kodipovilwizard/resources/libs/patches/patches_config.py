@@ -1840,6 +1840,105 @@ PATCH_CONFIG.append({
     )
 })
 
+# Account Manager's sign-in window has no QR on a device without PIL: see
+# patches/acctmgr_qr.py. Both ways its generate_qr gives up get a QR drawn
+# by the Wizard instead (qrcode missing; qrcode present but no image).
+# Optional: Account Manager updates itself, so a missing file or a moved
+# anchor skips these patches and never counts as a failed install.
+PATCH_CONFIG.extend([
+    {
+        "id": "acctmgr_qr_without_qrcode",
+        "name": "Account Manager QR without qrcode",
+        "description": "generate_qr draws the sign-in QR with the Wizard when the qrcode module is missing.",
+        "addon_id": "script.module.acctmgr",
+        "enabled": True,
+        "optional": True,
+        "target_file": "lib/acctmgr/modules/auth/base_auth.py",
+        "marker": "# WIZARD_ACCTMGR_QR_NO_MODULE_v1",
+        "anchor": "            log_utils.error('qrcode library not available - showing code/URL without QR')",
+        "action": "prepend_before",
+        "hook": (
+            "try:\n"
+            "    import sys as _povil_sys, xbmcvfs as _povil_vfs\n"
+            "    _povil_p = _povil_vfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "    _povil_sys.path.append(_povil_p) if _povil_p not in _povil_sys.path else None\n"
+            "    import acctmgr_qr\n"
+            "    _povil_qr = acctmgr_qr.make(data, control.translatePath(QR_TEMP_DIR), QR_DIR_PREFIX, QR_FILE_NAME)\n"
+            "except Exception:\n"
+            "    _povil_qr = None\n"
+            "if _povil_qr:\n"
+            "    return _povil_qr\n"
+        )
+    },
+    {
+        "id": "acctmgr_qr_without_pil",
+        "name": "Account Manager QR without PIL",
+        "description": "generate_qr draws the sign-in QR with the Wizard when qrcode cannot make the image.",
+        "addon_id": "script.module.acctmgr",
+        "enabled": True,
+        "optional": True,
+        "target_file": "lib/acctmgr/modules/auth/base_auth.py",
+        "marker": "# WIZARD_ACCTMGR_QR_NO_IMAGE_v1",
+        "anchor": "            self._cleanup_qr_files(path)",
+        "action": "append_after",
+        "hook": (
+            "try:\n"
+            "    import sys as _povil_sys, xbmcvfs as _povil_vfs\n"
+            "    _povil_p = _povil_vfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "    _povil_sys.path.append(_povil_p) if _povil_p not in _povil_sys.path else None\n"
+            "    import acctmgr_qr\n"
+            "    _povil_qr = acctmgr_qr.make(data, control.translatePath(QR_TEMP_DIR), QR_DIR_PREFIX, QR_FILE_NAME)\n"
+            "except Exception:\n"
+            "    _povil_qr = None\n"
+            "if _povil_qr:\n"
+            "    return _povil_qr\n"
+        )
+    }
+])
+
+# Account Manager's TorBox window shows TorBox's 50-character sign-in link,
+# cut short to fit ("https://torbox.app/oauth/device?app..."), so a user who
+# does not scan cannot read it (field report, 28 Oct 2026). TorBox's own answer
+# also carries a short link for typing (friendly_verification_url,
+# https://tor.box/link) and one with the code inside for the QR
+# (verification_url_complete): the window shows the first, the QR the second.
+PATCH_CONFIG.extend([
+    {
+        "id": "acctmgr_torbox_links",
+        "name": "TorBox sign-in links for Account Manager",
+        "description": "Keeps TorBox's short link and its code-filled link for the sign-in window.",
+        "addon_id": "script.module.acctmgr",
+        "enabled": True,
+        "optional": True,
+        "target_file": "lib/acctmgr/modules/auth/torbox.py",
+        "marker": "# WIZARD_ACCTMGR_TORBOX_LINKS_v1",
+        "anchor": "\t\t\turl = data.get('verification_url') or data.get('friendly_verification_url')",
+        "action": "append_after",
+        "hook": (
+            "self._povil_links = (data.get('friendly_verification_url') or '', data.get('verification_url_complete') or '')\n"
+        )
+    },
+    {
+        "id": "acctmgr_short_link",
+        "name": "Account Manager sign-in window shows the short link",
+        "description": "The sign-in window shows a short link to type and puts the code-filled link in the QR.",
+        "addon_id": "script.module.acctmgr",
+        "enabled": True,
+        "optional": True,
+        "target_file": "lib/acctmgr/modules/auth/base_auth.py",
+        "marker": "# WIZARD_ACCTMGR_SHORT_LINK_v1",
+        "anchor": "            verification_url = str(device_data['verification_url'])",
+        "action": "append_after",
+        "hook": (
+            "_povil_short, _povil_full = getattr(self, '_povil_links', ('', ''))\n"
+            "if _povil_full:\n"
+            "    device_data['qr_data'] = _povil_full\n"
+            "if _povil_short:\n"
+            "    verification_url = str(_povil_short)\n"
+        )
+    }
+])
+
 # Function anchors are at column zero; retain the extra body indentation when
 # the engine dedents and reindents the hook to that anchor.
 for _entry in PATCH_CONFIG:

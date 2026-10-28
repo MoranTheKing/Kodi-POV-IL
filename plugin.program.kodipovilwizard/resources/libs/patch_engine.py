@@ -398,6 +398,9 @@ class PatchEngine(object):
                 'hook': entry['hook'],
                 'enabled': is_enabled,
                 'alternatives': entry.get('alternatives', []),
+                # A host that updates itself (Account Manager): its patch may
+                # find no file or no anchor without that being a failure.
+                'optional': bool(entry.get('optional')),
             }
         except Exception as err:
             logging.log('[PatchEngine] Error normalizing patch entry #{0}: {1}'.format(idx, err),
@@ -439,8 +442,9 @@ class PatchEngine(object):
                     addon_id, len(patch_list), target_file),
                 level=xbmc.LOGWARNING)
             # Optional hosts need no repair until they are installed. A file
-            # missing inside an installed host still fails the integrity pass.
-            if addon_id == 'plugin.video.umbrella':
+            # missing inside an installed host still fails the integrity pass,
+            # unless every patch for it is optional.
+            if addon_id == 'plugin.video.umbrella' or all(p.get('optional') for p in patch_list):
                 self._stats['optional_absent'] = self._stats.get('optional_absent', 0) + len(patch_list)
             else:
                 self._stats['missing'] += len(patch_list)
@@ -451,7 +455,10 @@ class PatchEngine(object):
                 "[PatchEngine] Target file not found: {0} (addon={1}); skipping {2} patch(es).".format(
                     target_file, addon_id, len(patch_list)),
                 level=xbmc.LOGWARNING)
-            self._stats['missing'] += len(patch_list)
+            if all(p.get('optional') for p in patch_list):
+                self._stats['optional_absent'] = self._stats.get('optional_absent', 0) + len(patch_list)
+            else:
+                self._stats['missing'] += len(patch_list)
             return
 
         try:
@@ -473,6 +480,10 @@ class PatchEngine(object):
         for patch in patch_list:
             try:
                 content, changed, status = self._apply_single_patch(content, patch, newline)
+                # An optional patch whose anchor moved is skipped, not failed:
+                # its host updated itself to a shape the patch does not know.
+                if status == 'anchor_missing' and patch.get('optional'):
+                    status = 'optional_unmatched'
                 self._stats[status] = self._stats.get(status, 0) + 1
 
                 if status in ('applied', 'upgraded', 'removed'):
@@ -480,7 +491,7 @@ class PatchEngine(object):
                         "[PatchEngine] [{0}] '{1}' ({2}) -> {3}/{4}".format(
                             status.upper(), patch['id'], patch['name'], addon_id, target_file),
                         level=xbmc.LOGINFO)
-                elif status == 'anchor_missing':
+                elif status in ('anchor_missing', 'optional_unmatched'):
                     logging.log(
                         "[PatchEngine] Anchor not found for patch '{0}' in {1}/{2}; "
                         "leaving file untouched for this patch.".format(
