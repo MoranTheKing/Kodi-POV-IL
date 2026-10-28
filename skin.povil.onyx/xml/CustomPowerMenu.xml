@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="dialog" id="1119">
+	<!-- Skin settings > General > Power menu items: pick what the power menu (DialogButtonMenu.xml) shows. Skin-only, no Python.
+	     Items on by default (Exit, Shutdown, Suspend, Reboot) store a "Hide" setting so existing setups keep them; the rest store a "show" setting. -->
+	<defaultcontrol always="true">9000</defaultcontrol>
+	<include>DialogOpenClose</include>
+	<controls>
+		<control type="group" description="All dialog content">
+			<control type="image">
+				<centerleft>960</centerleft>
+				<centertop>540</centertop>
+				<width>760</width>
+				<height>1010</height>
+				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			</control>
+			<control type="label" description="Dialog heading">
+				<centerleft>960</centerleft>
+				<posy>70</posy>
+				<width>690</width>
+				<height>52</height>
+				<label>$LOCALIZE[31960]</label>
+				<align>center</align>
+				<aligny>center</aligny>
+				<textcolor>$VAR[HighlightColor]</textcolor>
+				<include>TitleCommons</include>
+			</control>
+			<control type="grouplist" id="9000" description="Power menu items">
+				<centerleft>960</centerleft>
+				<posy>135</posy>
+				<width>600</width>
+				<height>792</height>
+				<onleft>noop</onleft>
+				<onright>noop</onright>
+				<onup>9000</onup>
+				<ondown>9000</ondown>
+				<itemgap>0</itemgap>
+					<control type="radiobutton" id="701" description="PowerMenuQuit">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[13009]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuHideQuit)</onclick>
+						<selected>!Skin.HasSetting(PowerMenuHideQuit)</selected>
+					</control>
+					<control type="radiobutton" id="702" description="PowerMenuRestartApp">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[31961]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuRestartApp)</onclick>
+						<selected>Skin.HasSetting(PowerMenuRestartApp)</selected>
+					</control>
+					<control type="radiobutton" id="703" description="PowerMenuMinimise">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[13014]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuMinimise)</onclick>
+						<selected>Skin.HasSetting(PowerMenuMinimise)</selected>
+					</control>
+					<control type="radiobutton" id="704" description="PowerMenuShutdown">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[13005]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuHideShutdown)</onclick>
+						<selected>!Skin.HasSetting(PowerMenuHideShutdown)</selected>
+					</control>
+					<control type="radiobutton" id="705" description="PowerMenuSuspend">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[13011]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuHideSuspend)</onclick>
+						<selected>!Skin.HasSetting(PowerMenuHideSuspend)</selected>
+					</control>
+					<control type="radiobutton" id="706" description="PowerMenuHibernate">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[13010]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuHibernate)</onclick>
+						<selected>Skin.HasSetting(PowerMenuHibernate)</selected>
+					</control>
+					<control type="radiobutton" id="707" description="PowerMenuReboot">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[13013]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuHideReboot)</onclick>
+						<selected>!Skin.HasSetting(PowerMenuHideReboot)</selected>
+					</control>
+					<control type="radiobutton" id="708" description="PowerMenuTimer">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[31962]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuTimer)</onclick>
+						<selected>Skin.HasSetting(PowerMenuTimer)</selected>
+					</control>
+					<control type="radiobutton" id="709" description="PowerMenuLogOff">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[20126]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuLogOff)</onclick>
+						<selected>Skin.HasSetting(PowerMenuLogOff)</selected>
+					</control>
+					<control type="radiobutton" id="710" description="PowerMenuMasterMode">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[12360]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuMasterMode)</onclick>
+						<selected>Skin.HasSetting(PowerMenuMasterMode)</selected>
+					</control>
+					<control type="radiobutton" id="711" description="PowerMenuReloadSkin">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[31972]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuReloadSkin)</onclick>
+						<selected>Skin.HasSetting(PowerMenuReloadSkin)</selected>
+					</control>
+					<control type="radiobutton" id="712" description="PowerMenuSettings">
+						<width>600</width>
+						<height>66</height>
+						<font>size22</font>
+						<label>$LOCALIZE[20077]</label>
+						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<onclick>Skin.ToggleSetting(PowerMenuSettings)</onclick>
+						<selected>Skin.HasSetting(PowerMenuSettings)</selected>
+					</control>
+			</control>
+			<control type="textbox" description="Note">
+				<centerleft>960</centerleft>
+				<posy>939</posy>
+				<width>600</width>
+				<height>60</height>
+				<font>size18</font>
+				<align>center</align>
+				<textcolor>$VAR[HighlightColor]</textcolor>
+				<label>$LOCALIZE[31963]</label>
+			</control>
+		</control>
+	</controls>
+</window>

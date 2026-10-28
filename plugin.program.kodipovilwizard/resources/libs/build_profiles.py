@@ -15,7 +15,8 @@ from resources.libs.patches import profile_age_guard
 
 WIZARD = 'plugin.program.kodipovilwizard'
 SKINS = (('skin.povil.nox', 'NOX'), ('skin.fentastic', 'FENtastic'),
-         ('skin.estuary', 'Estuary'), ('skin.arctic.fuse.3', 'Arctic Fuse 3'))
+         ('skin.estuary', 'Estuary'), ('skin.arctic.fuse.3', 'Arctic Fuse 3'),
+         ('skin.povil.onyx', 'Onyx'))
 
 
 def _rpc(method, params=None):
@@ -218,7 +219,7 @@ def prepare_first_login():
     build_addons = ('script.module.acctmgr', 'plugin.video.umbrella',
                     'plugin.video.idanplus', 'plugin.video.youtube',
                     'plugin.video.themoviedb.helper', 'resource.language.he_il',
-                    'skin.estuary', 'skin.fentastic', 'repository.kodipovil')
+                    'skin.estuary', 'skin.fentastic', 'skin.povil.onyx', 'repository.kodipovil')
     required += tuple(ident for ident in build_addons if ident in graph)
     if all(addon_enabled(ident) for ident in required):
         profile_store.write_missing(active, 'kodipovil.profile_addons_ready', b'1')

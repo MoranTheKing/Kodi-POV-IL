@@ -440,6 +440,9 @@ NOX_PACKS = [
         'addon_ids': ['skin.povil.nox'],
     },
 ]
+# Onyx (skin.povil.onyx) is optional too: installed from the modular manifest
+# only when the user picks it from Switch Skin.
+ONYX_SKIN_VERSION = '1.0.0'
 
 
 # KODI-POV-IL - UMBRELLA PILOT (opt-in, on-demand). Umbrella + CocoScrapers
@@ -934,19 +937,27 @@ def ensure_arctic_fuse_3_installed():
 
 def ensure_nox_installed():
     """Use the verified modular skin, never the obsolete static pack."""
+    return ensure_modular_skin('skin.povil.nox', NOX_SKIN_VERSION, 'NOX')
+
+
+def ensure_onyx_installed():
+    return ensure_modular_skin('skin.povil.onyx', ONYX_SKIN_VERSION, 'Onyx')
+
+
+def ensure_modular_skin(ident, floor, tag):
+    """Install an on-demand build skin from the verified modular manifest."""
     from resources.libs.modular_updater import ModularUpdater
     from resources.libs import build_skin
     updater = ModularUpdater(background=True)
-    ident = 'skin.povil.nox'
-    if updater._version_tuple(updater.get_local_version(ident)) >= updater._version_tuple(NOX_SKIN_VERSION):
+    if updater._version_tuple(updater.get_local_version(ident)) >= updater._version_tuple(floor):
         return build_skin.enable_skin(ident)
     manifest = updater._load_manifest() or {}
     entry = (manifest.get('addons') or {}).get(ident)
-    if not entry or updater._version_tuple(entry.get('version')) < updater._version_tuple(NOX_SKIN_VERSION):
+    if not entry or updater._version_tuple(entry.get('version')) < updater._version_tuple(floor):
         return False
     entry = dict(entry, id=ident)
     tools.ensure_folders(CONFIG.PACKAGES)
-    package = os.path.join(CONFIG.PACKAGES, 'nox-modular.zip')
+    package = os.path.join(CONFIG.PACKAGES, '%s-modular.zip' % tag.lower())
     try:
         updater._download_background_zip(entry['zip'], package, entry)
         updater._install_verified_module(package, entry, entry['sha256'])
@@ -955,7 +966,7 @@ def ensure_nox_installed():
         return (updater.get_local_version(ident) == entry['version'] and
                 build_skin.enable_skin(ident))
     except Exception as err:
-        logging.log('[NOX] modular installation failed: {}'.format(type(err).__name__), level=xbmc.LOGERROR)
+        logging.log('[{}] modular installation failed: {}'.format(tag, type(err).__name__), level=xbmc.LOGERROR)
         return False
 
 
@@ -1276,7 +1287,7 @@ def build_switch_skin():
     if not build_skin.close_switch_menu():
         return
     from resources.libs.gui import window
-    msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין NOX"
+    msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין NOX\n5. סקין Onyx"
     if policy is None:
         window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
 
@@ -1284,7 +1295,8 @@ def build_switch_skin():
         'סקין Estuary - מראה פשוט עם כפתורים': 'skin.estuary',
         'סקין FENtastic - יפהפה': 'skin.fentastic',
         'סקין Arctic Fuse 3 - מודרני (ניסיוני)': 'skin.arctic.fuse.3',
-        'סקין NOX - עברית מלאה (ניסיוני)': 'skin.povil.nox'
+        'סקין NOX - עברית מלאה (ניסיוני)': 'skin.povil.nox',
+        'סקין Onyx - יוקרתי, מימין לשמאל (ניסיוני)': 'skin.povil.onyx'
     }
 
     # Get the name of the current active skin. If the user manually
@@ -1335,6 +1347,13 @@ def build_switch_skin():
                 logging.log_notify(
                     CONFIG.ADDONTITLE,
                     '[COLOR {0}]סקין NOX לא הותקן - מבטל[/COLOR]'.format(
+                        CONFIG.COLOR2))
+                return
+        elif gotoskin == 'skin.povil.onyx':
+            if not ensure_onyx_installed():
+                logging.log_notify(
+                    CONFIG.ADDONTITLE,
+                    '[COLOR {0}]סקין Onyx לא הותקן - מבטל[/COLOR]'.format(
                         CONFIG.COLOR2))
                 return
 

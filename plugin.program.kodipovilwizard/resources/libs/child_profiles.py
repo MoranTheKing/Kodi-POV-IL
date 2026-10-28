@@ -8,7 +8,7 @@ import xbmc
 import xbmcaddon
 import xbmcgui
 
-SKINS = ('skin.povil.nox', 'skin.estuary', 'skin.fentastic', 'skin.arctic.fuse.3')
+SKINS = ('skin.povil.nox', 'skin.estuary', 'skin.fentastic', 'skin.arctic.fuse.3', 'skin.povil.onyx')
 # Kodi's native settings controls are generated from negative IDs (-180).
 # Positive IDs belong to dialog chrome/templates, not the editable settings.
 NATIVE_SETTING_CONTROLS = range(-180, -160)

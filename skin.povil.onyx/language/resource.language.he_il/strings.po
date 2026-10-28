@@ -1,0 +1,790 @@
+# Kodi Media Center language file
+# Addon Name: Kodi POV IL - Onyx
+# Addon id: skin.povil.onyx
+msgid ""
+msgstr ""
+"Project-Id-Version: Kodi POV IL - Onyx\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: he_IL\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgctxt "#31000"
+msgid "Recently"
+msgstr "לאחרונה"
+
+msgctxt "#31001"
+msgid "Video decoder"
+msgstr "מפענח וידאו"
+
+msgctxt "#31004"
+msgid "Show"
+msgstr "הצגת"
+
+msgctxt "#31005"
+msgid "recorded"
+msgstr "הוקלטו"
+
+msgctxt "#31007"
+msgid "Memory"
+msgstr "זיכרון"
+
+msgctxt "#31008"
+msgid "CPU"
+msgstr "מעבד"
+
+msgctxt "#31020"
+msgid "Recently Added"
+msgstr "נוספו לאחרונה"
+
+msgctxt "#31023"
+msgid "Playing"
+msgstr "מתנגן"
+
+msgctxt "#31024"
+msgid "Page"
+msgstr "עמוד"
+
+msgctxt "#31025"
+msgid "Items"
+msgstr "פריטים"
+
+msgctxt "#31026"
+msgid "Misc Options"
+msgstr "אפשרויות נוספות"
+
+msgctxt "#31037"
+msgid "Cinema"
+msgstr "קולנוע"
+
+msgctxt "#31040"
+msgid "Current playlist"
+msgstr "רשימת ההשמעה הנוכחית"
+
+msgctxt "#31048"
+msgid "Visualization Presets"
+msgstr "הגדרות מוכנות להדמיה"
+
+msgctxt "#31049"
+msgid "Ends"
+msgstr "מסתיים"
+
+msgctxt "#31050"
+msgid "Ascending"
+msgstr "סדר עולה"
+
+msgctxt "#31051"
+msgid "Descending"
+msgstr "סדר יורד"
+
+msgctxt "#31052"
+msgid "No bookmarks created yet."
+msgstr "עדיין לא נוצרו סימניות."
+
+msgctxt "#31053"
+msgid "MPAA"
+msgstr "סיווג גיל"
+
+msgctxt "#31058"
+msgid "System music files"
+msgstr "קובצי המוזיקה של המערכת"
+
+msgctxt "#31059"
+msgid "Current playlist"
+msgstr "רשימת ההשמעה הנוכחית"
+
+msgctxt "#31099"
+msgid "Disable menu animations"
+msgstr "ביטול הנפשות בתפריטים"
+
+msgctxt "#31100"
+msgid "General"
+msgstr "כללי"
+
+msgctxt "#31101"
+msgid "Views"
+msgstr "תצוגות"
+
+msgctxt "#31102"
+msgid "Homepage"
+msgstr "מסך הבית"
+
+msgctxt "#31104"
+msgid "Advanced"
+msgstr "מתקדם"
+
+msgctxt "#31105"
+msgid "About"
+msgstr "אודות"
+
+msgctxt "#31106"
+msgid "Disable animations in music player"
+msgstr "ביטול הנפשות בנגן המוזיקה"
+
+msgctxt "#31107"
+msgid "Disable auto scrolling for plot & review"
+msgstr "ביטול גלילה אוטומטית של תקציר וביקורת"
+
+msgctxt "#31108"
+msgid "Prevents automatic scrolling of text that has been truncated by the limits of a container."
+msgstr "מונע גלילה אוטומטית של טקסט שנחתך בגבולות המסגרת."
+
+msgctxt "#31109"
+msgid "Disable scrollbars"
+msgstr "ביטול פסי גלילה"
+
+msgctxt "#31110"
+msgid "Disables option to scroll through content a page at a time."
+msgstr "מבטל את האפשרות לגלול בתוכן עמוד בכל פעם."
+
+msgctxt "#31111"
+msgid "Show clock"
+msgstr "הצגת שעון"
+
+msgctxt "#31112"
+msgid "Display current time in the upper-right-hand corner of the screen."
+msgstr "הצגת השעה בראש המסך."
+
+msgctxt "#31113"
+msgid "Disable view options menu (left/up press)"
+msgstr "ביטול תפריט אפשרויות התצוגה"
+
+msgctxt "#31114"
+msgid "Prevent access to certain menus for altering the look and feel of Onyx."
+msgstr "מונע גישה לתפריטים שמשנים את מראה הסקין."
+
+msgctxt "#31115"
+msgid "KODI 'Quit' button function"
+msgstr "פעולת כפתור היציאה"
+
+msgctxt "#31116"
+msgid "Choose what action to perform when exiting KODI."
+msgstr "בחירת הפעולה ביציאה מקודי."
+
+msgctxt "#31117"
+msgid "Reset above settings to default"
+msgstr "איפוס ההגדרות שלמעלה לברירת המחדל"
+
+msgctxt "#31118"
+msgid "Resets only the displayed settings to skin defaults."
+msgstr "מאפס רק את ההגדרות המוצגות לברירת המחדל של הסקין."
+
+msgctxt "#31119"
+msgid "Show unwatched/progress icons"
+msgstr "הצגת סימני \"לא נצפה\" והתקדמות"
+
+msgctxt "#31120"
+msgid "Show icons that indicate whether media is unwatched or in-progress."
+msgstr "הצגת סימנים שמראים אם תוכן לא נצפה או נצפה בחלקו."
+
+msgctxt "#31121"
+msgid "Hide background art"
+msgstr "הסתרת תמונות הרקע"
+
+msgctxt "#31122"
+msgid "Do not display artwork in the background of various views."
+msgstr "לא להציג תמונות ברקע התצוגות."
+
+msgctxt "#31123"
+msgid "Background art visibility"
+msgstr "בהירות תמונת הרקע"
+
+msgctxt "#31124"
+msgid "Adjust the visibility of background art.  Enter a number from 1 to 10.  Ten is the brightest (default=4)."
+msgstr "כוונון בהירות תמונת הרקע: מספר בין 1 ל-10, כש-10 הבהיר ביותר (ברירת מחדל 4)."
+
+msgctxt "#31125"
+msgid "Display current temperature in the upper-left-hand corner of the screen."
+msgstr "הצגת הטמפרטורה הנוכחית בראש המסך."
+
+msgctxt "#31126"
+msgid "Home menus customizer"
+msgstr "התאמת תפריטי מסך הבית"
+
+msgctxt "#31127"
+msgid "Customize Home menu categories and the available menus under each."
+msgstr "התאמת הקטגוריות במסך הבית והתפריטים שבכל אחת."
+
+msgctxt "#31128"
+msgid "Home media shelf customizer"
+msgstr "התאמת המדפים במסך הבית"
+
+msgctxt "#31129"
+msgid "Manage options for displaying content above the Home menu."
+msgstr "ניהול התוכן שמוצג מעל תפריט מסך הבית."
+
+msgctxt "#31130"
+msgid "Enable onscreen debug info"
+msgstr "הצגת מידע לאיתור תקלות"
+
+msgctxt "#31131"
+msgid "When enabled, the current KODI module and focus object will be displayed. Useful for troubleshooting."
+msgstr "מציג את החלון הנוכחי והפקד שבפוקוס. שימושי לאיתור תקלות."
+
+msgctxt "#31133"
+msgid "Turn debug logging on or off. Useful for troubleshooting."
+msgstr "הפעלה או כיבוי של רישום מורחב בלוג. שימושי לאיתור תקלות."
+
+msgctxt "#31134"
+msgid "Backup skin settings"
+msgstr "גיבוי הגדרות הסקין"
+
+msgctxt "#31135"
+msgid "Saves Onyx skin settings in a time-stamped .zip archive."
+msgstr "שומר את הגדרות הסקין בקובץ zip עם תאריך ושעה."
+
+msgctxt "#31136"
+msgid "Restore skin settings"
+msgstr "שחזור הגדרות הסקין"
+
+msgctxt "#31137"
+msgid "Choose weather fanart"
+msgstr "בחירת תמונות רקע למזג האוויר"
+
+msgctxt "#31138"
+msgid "Install and select weather fanart pack add-ons."
+msgstr "התקנה ובחירה של חבילות תמונות רקע למזג האוויר."
+
+msgctxt "#31140"
+msgid "Restore previously saved Onyx skin settings."
+msgstr "שחזור הגדרות סקין ששמרתם קודם."
+
+msgctxt "#31141"
+msgid "Reset ALL skin settings to default values"
+msgstr "איפוס כל הגדרות הסקין לברירת המחדל"
+
+msgctxt "#31142"
+msgid "Skin settings in all categories will be reset."
+msgstr "כל הגדרות הסקין, בכל הקטגוריות, יאופסו."
+
+msgctxt "#31143"
+msgid "Skin name:"
+msgstr "שם הסקין:"
+
+msgctxt "#31144"
+msgid "Skin version:"
+msgstr "גרסת הסקין:"
+
+msgctxt "#31145"
+msgid "Color theme:"
+msgstr "ערכת צבעים:"
+
+msgctxt "#31146"
+msgid "Screen mode:"
+msgstr "מצב מסך:"
+
+msgctxt "#31147"
+msgid "Original skin design:"
+msgstr "עיצוב הסקין המקורי:"
+
+msgctxt "#31148"
+msgid "Presently maintained by:"
+msgstr "מתוחזק כיום על ידי:"
+
+msgctxt "#31149"
+msgid "With assets or inspiration from:"
+msgstr "בהשראת:"
+
+msgctxt "#31150"
+msgid "Skin info"
+msgstr "מידע על הסקין"
+
+msgctxt "#31151"
+msgid "Credits"
+msgstr "קרדיטים"
+
+msgctxt "#31152"
+msgid "Adjust settings for low performance devices"
+msgstr "התאמה למכשירים חלשים"
+
+msgctxt "#31153"
+msgid "Simplifies various image and animation effects for resource constrained hardware."
+msgstr "מפשט אפקטים של תמונות והנפשות במכשירים חלשים."
+
+msgctxt "#31154"
+msgid "Enable custom background for homepage"
+msgstr "רקע מותאם אישית למסך הבית"
+
+msgctxt "#31155"
+msgid "Customize the Onyx home screen by displaying artwork in the background."
+msgstr "הצגת תמונה לבחירתכם ברקע מסך הבית."
+
+msgctxt "#31156"
+msgid "Image"
+msgstr "תמונה"
+
+msgctxt "#31158"
+msgid "Menu transparency"
+msgstr "שקיפות התפריטים"
+
+msgctxt "#31159"
+msgid "Adjust the level of transparency for pop-up menus."
+msgstr "כוונון השקיפות של תפריטים קופצים."
+
+msgctxt "#31160"
+msgid "OSD menu transparency"
+msgstr "שקיפות תפריטי הנגן"
+
+msgctxt "#31161"
+msgid "Adjust the level of transparency for menus and controls that pop-up over the video player."
+msgstr "כוונון השקיפות של תפריטים ופקדים שמופיעים מעל הנגן."
+
+msgctxt "#31162"
+msgid "PVR info"
+msgstr "מידע על השידור"
+
+msgctxt "#31163"
+msgid "Player process info"
+msgstr "מידע על הניגון"
+
+msgctxt "#31164"
+msgid "Play music fullscreen"
+msgstr "ניגון מוזיקה במסך מלא"
+
+msgctxt "#31165"
+msgid "Automatically launch fullscreen visualizer on music playback."
+msgstr "פתיחה אוטומטית של הדמיה במסך מלא בניגון מוזיקה."
+
+msgctxt "#31166"
+msgid "Hide fanart in music player"
+msgstr "הסתרת תמונות רקע בנגן המוזיקה"
+
+msgctxt "#31167"
+msgid "Prevents the video player from showing in the background of various windows."
+msgstr "מונע הצגה של הנגן ברקע החלונות."
+
+msgctxt "#31168"
+msgid "Hide media shelves on homepage"
+msgstr "הסתרת המדפים במסך הבית"
+
+msgctxt "#31169"
+msgid "Enable fanart slideshow for homepage"
+msgstr "מצגת תמונות רקע במסך הבית"
+
+msgctxt "#31170"
+msgid "Show watched content icons"
+msgstr "הצגת סימני \"נצפה\""
+
+msgctxt "#31171"
+msgid "Show icons that indicate when media has been watched."
+msgstr "הצגת סימן על תוכן שכבר נצפה."
+
+msgctxt "#31172"
+msgid "Show titles"
+msgstr "הצגת כותרות"
+
+msgctxt "#31173"
+msgid "Show titles on homepage."
+msgstr "הצגת כותרות במסך הבית."
+
+msgctxt "#31174"
+msgid "Mute background video"
+msgstr "השתקת וידאו ברקע"
+
+msgctxt "#31176"
+msgid "Automatically mutes the volume of now playing background video."
+msgstr "משתיק אוטומטית וידאו שמתנגן ברקע."
+
+msgctxt "#31178"
+msgid "Panel"
+msgstr "לוח"
+
+msgctxt "#31181"
+msgid "Menus"
+msgstr "תפריטים"
+
+msgctxt "#31183"
+msgid "seconds"
+msgstr "שניות"
+
+msgctxt "#31184"
+msgid "Auto dismiss OSD (0 disables)"
+msgstr "סגירה אוטומטית של תפריט הנגן (0 מבטל)"
+
+msgctxt "#31185"
+msgid "Enable onscreen debug grid"
+msgstr "הצגת רשת עזר על המסך"
+
+msgctxt "#31186"
+msgid "Hide 'Live TV' menu option on homepage"
+msgstr "הסתרת \"טלוויזיה חיה\" במסך הבית"
+
+msgctxt "#31187"
+msgid "Useful when repurposing a homepage category to create a dedicated TV section."
+msgstr "שימושי כשמשתמשים בקטגוריה אחרת במסך הבית לטלוויזיה."
+
+msgctxt "#31188"
+msgid "Use extended info bar for OSD"
+msgstr "פס מידע מורחב בנגן"
+
+msgctxt "#31189"
+msgid "Show extended info bar on video playback"
+msgstr "הצגת פס מידע מורחב בזמן ניגון"
+
+msgctxt "#31190"
+msgid "Enter the time in seconds.  Enter zero to disable this feature."
+msgstr "הזינו זמן בשניות. 0 מבטל."
+
+msgctxt "#31191"
+msgid "Substitutes the extended info bar for the default single-line bar atop the video player OSD."
+msgstr "מציג פס מידע מורחב במקום השורה הרגילה בראש תפריט הנגן."
+
+msgctxt "#31194"
+msgid "Disabling unused views can improve UI performance."
+msgstr "ביטול תצוגות שאינכם משתמשים בהן יכול לשפר את מהירות הממשק."
+
+msgctxt "#31195"
+msgid "Default yes/no questions to no"
+msgstr "ברירת מחדל \"לא\" בשאלות כן/לא"
+
+msgctxt "#31196"
+msgid "This option changes the default focus button in confirmation dialogs from yes to no."
+msgstr "בחלונות אישור, הכפתור המסומן מראש יהיה \"לא\" במקום \"כן\"."
+
+msgctxt "#31197"
+msgid "Disable update library feature in options menus"
+msgstr "ביטול עדכון הספרייה בתפריטי האפשרויות"
+
+msgctxt "#31198"
+msgid "Prevents library update access from pop-up menus.  Access elsewhere is unaffected by this setting."
+msgstr "מסתיר את עדכון הספרייה מתפריטים קופצים. מקומות אחרים לא מושפעים."
+
+msgctxt "#31199"
+msgid "Useful on low power devices."
+msgstr "שימושי במכשירים חלשים."
+
+msgctxt "#31200"
+msgid "1 minute"
+msgstr "דקה אחת"
+
+msgctxt "#31201"
+msgid "3 minutes"
+msgstr "3 דקות"
+
+msgctxt "#31202"
+msgid "5 minutes"
+msgstr "5 דקות"
+
+msgctxt "#31203"
+msgid "7 minutes"
+msgstr "7 דקות"
+
+msgctxt "#31204"
+msgid "10 minutes"
+msgstr "10 דקות"
+
+msgctxt "#31205"
+msgid "15 minutes"
+msgstr "15 דקות"
+
+msgctxt "#31206"
+msgid "20 minutes"
+msgstr "20 דקות"
+
+msgctxt "#31207"
+msgid "pecinko"
+msgstr ""
+
+msgctxt "#31208"
+msgid "Valar Morghulis"
+msgstr ""
+
+msgctxt "#31209"
+msgid "Quartz, Amber, Box, Confluence, Estuary & Titan"
+msgstr ""
+
+msgctxt "#31210"
+msgid "10 seconds"
+msgstr "10 שניות"
+
+msgctxt "#31211"
+msgid "15 seconds"
+msgstr "15 שניות"
+
+msgctxt "#31212"
+msgid "20 seconds"
+msgstr "20 שניות"
+
+msgctxt "#31213"
+msgid "25 seconds"
+msgstr "25 שניות"
+
+msgctxt "#31214"
+msgid "30 seconds"
+msgstr "30 שניות"
+
+msgctxt "#31215"
+msgid "45 seconds"
+msgstr "45 שניות"
+
+msgctxt "#31216"
+msgid "60 seconds"
+msgstr "60 שניות"
+
+msgctxt "#31217"
+msgid "Contextual"
+msgstr "לפי הקשר"
+
+msgctxt "#31218"
+msgid "Home screen media shelves will be invisible until browsed."
+msgstr "המדפים במסך הבית יוצגו רק כשעוברים עליהם."
+
+msgctxt "#31219"
+msgid "Hide 3D icons"
+msgstr "הסתרת סימני 3D"
+
+msgctxt "#31220"
+msgid "Hide HD icons"
+msgstr "הסתרת סימני HD"
+
+msgctxt "#31221"
+msgid "Hide TV logos"
+msgstr "הסתרת לוגואים של ערוצים"
+
+msgctxt "#31222"
+msgid "Hide KODI logos"
+msgstr "הסתרת לוגואים של קודי"
+
+msgctxt "#31223"
+msgid "Hide movie set icons"
+msgstr "הסתרת סימני אוסף סרטים"
+
+msgctxt "#31224"
+msgid "Hides this icon in list style media views."
+msgstr "מסתיר את הסימן בתצוגות רשימה."
+
+msgctxt "#31225"
+msgid "Hides TV station logos in channels window."
+msgstr "מסתיר לוגואים של ערוצים בחלון הערוצים."
+
+msgctxt "#31226"
+msgid "Hide KODI logos on homescreen media shelves."
+msgstr "מסתיר לוגואים של קודי במדפים של מסך הבית."
+
+msgctxt "#31286"
+msgid "Reset progress"
+msgstr "איפוס התקדמות"
+
+msgctxt "#31287"
+msgid "Local subtitle available"
+msgstr "יש כתוביות מקומיות"
+
+msgctxt "#31289"
+msgid "Recents"
+msgstr "אחרונים"
+
+msgctxt "#31290"
+msgid "Do not show background art in the fullscreen music player."
+msgstr "לא להציג תמונות רקע בנגן המוזיקה במסך מלא."
+
+msgctxt "#31291"
+msgid "Add-on manager"
+msgstr "ניהול הרחבות"
+
+msgctxt "#31297"
+msgid "min"
+msgstr "דק'"
+
+msgctxt "#31299"
+msgid "Level:"
+msgstr "רמה:"
+
+msgctxt "#31309"
+msgid "Memory Used:"
+msgstr "זיכרון בשימוש:"
+
+msgctxt "#31322"
+msgid "Aired"
+msgstr "שודר"
+
+msgctxt "#31325"
+msgid "Playlist Options"
+msgstr "אפשרויות רשימת השמעה"
+
+msgctxt "#31336"
+msgid "Decoder"
+msgstr "מפענח"
+
+msgctxt "#31351"
+msgid "Pause"
+msgstr "השהיה"
+
+msgctxt "#31352"
+msgid "Stop"
+msgstr "עצירה"
+
+msgctxt "#31501"
+msgid "Scheduled Time"
+msgstr "מועד מתוכנן"
+
+msgctxt "#31502"
+msgid "Live TV"
+msgstr "טלוויזיה חיה"
+
+msgctxt "#31503"
+msgid "Add Group"
+msgstr "הוספת קבוצה"
+
+msgctxt "#31504"
+msgid "Rename Group"
+msgstr "שינוי שם קבוצה"
+
+msgctxt "#31505"
+msgid "Delete Group"
+msgstr "מחיקת קבוצה"
+
+msgctxt "#31506"
+msgid "Available[CR]Groups"
+msgstr "קבוצות[CR]זמינות"
+
+msgctxt "#31510"
+msgid "Timer Set"
+msgstr "הקלטה מתוזמנת"
+
+msgctxt "#31511"
+msgid "Channel Options"
+msgstr "אפשרויות ערוץ"
+
+msgctxt "#31972"
+msgid "Reload skin"
+msgstr "טעינת הסקין מחדש"
+
+msgctxt "#31974"
+msgid "Enable custom slideshow for homepage"
+msgstr "מצגת מותאמת אישית במסך הבית"
+
+msgctxt "#31976"
+msgid "Panel"
+msgstr "לוח"
+
+msgctxt "#31977"
+msgid "Now playing"
+msgstr "מתנגן עכשיו"
+
+msgctxt "#31978"
+msgid "Length"
+msgstr "אורך"
+
+msgctxt "#31979"
+msgid "Info not available"
+msgstr "אין מידע"
+
+msgctxt "#31983"
+msgid "Choose from menu"
+msgstr "בחירה מתפריט"
+
+msgctxt "#31984"
+msgid "Custom image"
+msgstr "תמונה לבחירתכם"
+
+msgctxt "#31985"
+msgid "Custom media shortcuts"
+msgstr "קיצורי דרך מותאמים"
+
+msgctxt "#31986"
+msgid "Auto populate"
+msgstr "מילוי אוטומטי"
+
+msgctxt "#31988"
+msgid "Media shelf items"
+msgstr "פריטי המדף"
+
+msgctxt "#31989"
+msgid "Shortcut"
+msgstr "קיצור דרך"
+
+msgctxt "#31990"
+msgid "Add-on widget"
+msgstr "רשימה מהרחבה"
+
+msgctxt "#31991"
+msgid "Widget source"
+msgstr "מקור הרשימה"
+
+msgctxt "#31992"
+msgid "Hide focus box in lists and menus"
+msgstr "הסתרת מסגרת הסימון ברשימות ובתפריטים"
+
+msgctxt "#31993"
+msgid "Show parent folder item (..)"
+msgstr "הצגת פריט התיקייה הקודמת (..)"
+
+msgctxt "#31994"
+msgid "Changelog"
+msgstr "מה חדש"
+
+msgctxt "#31995"
+msgid "Focus color"
+msgstr "צבע הסימון"
+
+msgctxt "#31996"
+msgid "Use focus color on selection outline"
+msgstr "צבע הסימון גם במסגרת הבחירה"
+
+msgctxt "#31997"
+msgid "Player button color"
+msgstr "צבע הכפתורים בנגן"
+
+msgctxt "#31998"
+msgid "Blue (default)"
+msgstr "כחול (ברירת מחדל)"
+
+msgctxt "#31999"
+msgid "Add-on browser"
+msgstr "דפדפן ההרחבות"
+
+msgctxt "#31980"
+msgid "Mint (default)"
+msgstr "זהב (ברירת מחדל)"
+
+msgctxt "#31981"
+msgid "Highlight color"
+msgstr "צבע ההדגשה"
+
+msgctxt "#31982"
+msgid "Sand (default)"
+msgstr "זהב (ברירת מחדל)"
+
+msgctxt "#31960"
+msgid "Power menu items"
+msgstr "פריטי תפריט הכיבוי"
+
+msgctxt "#31961"
+msgid "Restart Kodi"
+msgstr "הפעלה מחדש של קודי"
+
+msgctxt "#31962"
+msgid "Shutdown timer"
+msgstr "טיימר כיבוי"
+
+msgctxt "#31963"
+msgid "Items your device can't do stay hidden. Exit is always shown when nothing else is."
+msgstr "פעולות שהמכשיר לא תומך בהן מוסתרות. יציאה מוצגת תמיד כשאין אחרות."
+
+msgctxt "#31964"
+msgid "Choose which items the power menu shows."
+msgstr "בחירת הפריטים שבתפריט הכיבוי."
+
+msgctxt "#31965"
+msgid "Focus first unwatched episode"
+msgstr "מעבר לפרק הראשון שלא נצפה"
+
+msgctxt "#31966"
+msgid "When you open a list of episodes, start on the first one that is unwatched or in progress. Works for your library and for add-ons."
+msgstr "כשפותחים רשימת פרקים, מתחילים בפרק הראשון שלא נצפה או שנצפה בחלקו."
+
+msgctxt "#31967"
+msgid "Show clear logos"
+msgstr "הצגת לוגואים"
+
+msgctxt "#31968"
+msgid "Show a movie's or TV show's clear logo in the views instead of its name. The name is still shown when there is no logo."
+msgstr "הצגת הלוגו של הסרט או הסדרה במקום השם. כשאין לוגו מוצג השם."
+
+msgctxt "#31969"
+msgid "Plain text in the focus box"
+msgstr "טקסט רגיל במסגרת הסימון"
+
+msgctxt "#31970"
+msgid "With the focus box shown, keep the focused text in its normal color and let the box alone show where you are, instead of also using the focus color."
+msgstr "כשמסגרת הסימון מוצגת, הטקסט נשאר בצבעו הרגיל והמסגרת לבדה מראה את הבחירה."
