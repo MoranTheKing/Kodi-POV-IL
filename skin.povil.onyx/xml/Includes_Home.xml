@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+	<include name="Width6">
+		<width max="1920">auto</width>
+	</include>
+	<include name="Width7">
+		<width max="2220">auto</width>
+	</include>
+	<include name="Width8">
+		<width max="2520">auto</width>
+	</include>
+	<!-- Number of visible home sections (System always shows). Menu8 = all 8 are on; Menu7 = exactly 7. Anything else = 6 or fewer. Used to size and scroll the menu. -->
+	<expression name="Menu7">[!Skin.HasSetting(TVSectionHide) + !Skin.HasSetting(CustomSec1Hide) + !Skin.HasSetting(CustomSec2Hide) + !Skin.HasSetting(CustomSec3Hide) + !Skin.HasSetting(AddonsSectionHide) + [!Skin.HasSetting(PVRSectionHide) + System.HasPVRAddon] + Skin.HasSetting(MoviesSectionHide)] | [!Skin.HasSetting(MoviesSectionHide) + !Skin.HasSetting(CustomSec1Hide) + !Skin.HasSetting(CustomSec2Hide) + !Skin.HasSetting(CustomSec3Hide) + !Skin.HasSetting(AddonsSectionHide) + [!Skin.HasSetting(PVRSectionHide) + System.HasPVRAddon] + Skin.HasSetting(TVSectionHide)] | [!Skin.HasSetting(MoviesSectionHide) + !Skin.HasSetting(TVSectionHide) + !Skin.HasSetting(CustomSec2Hide) + !Skin.HasSetting(CustomSec3Hide) + !Skin.HasSetting(AddonsSectionHide) + [!Skin.HasSetting(PVRSectionHide) + System.HasPVRAddon] + Skin.HasSetting(CustomSec1Hide)] | [!Skin.HasSetting(MoviesSectionHide) + !Skin.HasSetting(TVSectionHide) + !Skin.HasSetting(CustomSec1Hide) + !Skin.HasSetting(CustomSec3Hide) + !Skin.HasSetting(AddonsSectionHide) + [!Skin.HasSetting(PVRSectionHide) + System.HasPVRAddon] + Skin.HasSetting(CustomSec2Hide)] | [!Skin.HasSetting(MoviesSectionHide) + !Skin.HasSetting(TVSectionHide) + !Skin.HasSetting(CustomSec1Hide) + !Skin.HasSetting(CustomSec2Hide) + !Skin.HasSetting(AddonsSectionHide) + [!Skin.HasSetting(PVRSectionHide) + System.HasPVRAddon] + Skin.HasSetting(CustomSec3Hide)] | [!Skin.HasSetting(MoviesSectionHide) + !Skin.HasSetting(TVSectionHide) + !Skin.HasSetting(CustomSec1Hide) + !Skin.HasSetting(CustomSec2Hide) + !Skin.HasSetting(CustomSec3Hide) + [!Skin.HasSetting(PVRSectionHide) + System.HasPVRAddon] + Skin.HasSetting(AddonsSectionHide)] | [!Skin.HasSetting(MoviesSectionHide) + !Skin.HasSetting(TVSectionHide) + !Skin.HasSetting(CustomSec1Hide) + !Skin.HasSetting(CustomSec2Hide) + !Skin.HasSetting(CustomSec3Hide) + !Skin.HasSetting(AddonsSectionHide) + ![!Skin.HasSetting(PVRSectionHide) + System.HasPVRAddon]]</expression>
+	<expression name="Menu8">!Skin.HasSetting(MoviesSectionHide) + !Skin.HasSetting(TVSectionHide) + !Skin.HasSetting(CustomSec1Hide) + !Skin.HasSetting(CustomSec2Hide) + !Skin.HasSetting(CustomSec3Hide) + !Skin.HasSetting(AddonsSectionHide) + [!Skin.HasSetting(PVRSectionHide) + System.HasPVRAddon]</expression>
+	<!-- Focus box behind the selected submenu item. Its width is the same as the submenu lists (420) and the Sliders group list in Home.xml uses the same item gap as the lists (-120), so every box sits exactly on its item. -->
+	<include name="SliderCommons">
+		<visible>!Skin.HasSetting(NoFocusBox)</visible>
+		<posx>0</posx>
+		<width>420</width>
+		<height>78</height>
+		<texture border="9">img/MediaButton2.png</texture>
+		<aspectratio>stretch</aspectratio>
+	</include>
+	<include name="HomeButtonsCommons">
+		<posx>0</posx>
+		<width>300</width>
+		<height>81</height>
+		<texturefocus></texturefocus>
+		<label></label>
+	</include>
+	<include name="HomeBarAnimation">
+		<!-- Slides the bar (100 ms, kept short so fast key repeat cannot outrun it; keep the same time as the menu scroll in Home.xml) 300px for every VISIBLE section to the left of the focused one (the animations add up), so any mix of shown/hidden sections works. Order: 300 301 302 303 304 307 305 306. -->
+		<animation condition="[Control.HasFocus(301) | Control.HasFocus(311)] + Control.IsVisible(300)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(302) | Control.HasFocus(312)] + Control.IsVisible(300)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(302) | Control.HasFocus(312)] + Control.IsVisible(301)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(303) | Control.HasFocus(313)] + Control.IsVisible(300)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(303) | Control.HasFocus(313)] + Control.IsVisible(301)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(303) | Control.HasFocus(313)] + Control.IsVisible(302)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(304) | Control.HasFocus(314)] + Control.IsVisible(300)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(304) | Control.HasFocus(314)] + Control.IsVisible(301)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(304) | Control.HasFocus(314)] + Control.IsVisible(302)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(304) | Control.HasFocus(314)] + Control.IsVisible(303)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(307) | Control.HasFocus(317)] + Control.IsVisible(300)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(307) | Control.HasFocus(317)] + Control.IsVisible(301)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(307) | Control.HasFocus(317)] + Control.IsVisible(302)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(307) | Control.HasFocus(317)] + Control.IsVisible(303)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(307) | Control.HasFocus(317)] + Control.IsVisible(304)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(305) | Control.HasFocus(315)] + Control.IsVisible(300)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(305) | Control.HasFocus(315)] + Control.IsVisible(301)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(305) | Control.HasFocus(315)] + Control.IsVisible(302)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(305) | Control.HasFocus(315)] + Control.IsVisible(303)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(305) | Control.HasFocus(315)] + Control.IsVisible(304)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="[Control.HasFocus(305) | Control.HasFocus(315)] + Control.IsVisible(307)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="Control.HasFocus(306) + Control.IsVisible(300)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="Control.HasFocus(306) + Control.IsVisible(301)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="Control.HasFocus(306) + Control.IsVisible(302)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="Control.HasFocus(306) + Control.IsVisible(303)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="Control.HasFocus(306) + Control.IsVisible(304)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="Control.HasFocus(306) + Control.IsVisible(307)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+		<animation condition="Control.HasFocus(306) + Control.IsVisible(305)" effect="slide" start="0,0" end="300,0" time="100" easing="inout" reversible="true">Conditional</animation>
+	</include>
+	<include name="Animation300">
+		<animation type="Conditional" condition="!ControlGroup(9000).HasFocus(300)">
+			<effect type="fade" start="100" end="0" time="0" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="ControlGroup(9000).HasFocus(300)">
+			<effect type="fade" start="0" end="100" time="150" delay="250" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="Control.HasFocus(310)">
+			<effect type="fade" start="100" end="60" time="100" reversible="true" />
+		</animation>
+	</include>
+	<include name="Animation301">
+		<animation type="Conditional" condition="!ControlGroup(9000).HasFocus(301)">
+			<effect type="fade" start="100" end="0" time="0" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="ControlGroup(9000).HasFocus(301)">
+			<effect type="fade" start="0" end="100" time="150" delay="250" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="Control.HasFocus(311)">
+			<effect type="fade" start="100" end="60" time="100" reversible="true" />
+		</animation>
+	</include>
+	<include name="Animation302">
+		<animation type="Conditional" condition="!ControlGroup(9000).HasFocus(302)">
+			<effect type="fade" start="100" end="0" time="0" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="ControlGroup(9000).HasFocus(302)">
+			<effect type="fade" start="0" end="100" time="150" delay="250" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="Control.HasFocus(312)">
+			<effect type="fade" start="100" end="60" time="100" reversible="true" />
+		</animation>
+	</include>
+	<include name="Animation303">
+		<animation type="Conditional" condition="!ControlGroup(9000).HasFocus(303)">
+			<effect type="fade" start="100" end="0" time="0" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="ControlGroup(9000).HasFocus(303)">
+			<effect type="fade" start="0" end="100" time="150" delay="250" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="Control.HasFocus(313)">
+			<effect type="fade" start="100" end="60" time="100" reversible="true" />
+		</animation>
+	</include>
+	<include name="Animation304">
+		<animation type="Conditional" condition="!ControlGroup(9000).HasFocus(304)">
+			<effect type="fade" start="100" end="0" time="0" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="ControlGroup(9000).HasFocus(304)">
+			<effect type="fade" start="0" end="100" time="150" delay="250" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="Control.HasFocus(314)">
+			<effect type="fade" start="100" end="60" time="100" reversible="true" />
+		</animation>
+	</include>
+	<include name="Animation307">
+		<animation type="Conditional" condition="!ControlGroup(9000).HasFocus(307)">
+			<effect type="fade" start="100" end="0" time="0" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="ControlGroup(9000).HasFocus(307)">
+			<effect type="fade" start="0" end="100" time="150" delay="250" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="Control.HasFocus(317)">
+			<effect type="fade" start="100" end="60" time="100" reversible="true" />
+		</animation>
+	</include>
+	<include name="Animation305">
+		<animation type="Conditional" condition="!ControlGroup(9000).HasFocus(305)">
+			<effect type="fade" start="100" end="0" time="0" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="ControlGroup(9000).HasFocus(305)">
+			<effect type="fade" start="0" end="100" time="150" delay="250" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="Control.HasFocus(315)">
+			<effect type="fade" start="100" end="60" time="100" reversible="true" />
+		</animation>
+	</include>
+	<include name="Animation306">
+		<animation type="Conditional" condition="!ControlGroup(9000).HasFocus(306)">
+			<effect type="fade" start="100" end="0" time="0" reversible="false" />
+		</animation>
+		<animation type="Conditional" condition="ControlGroup(9000).HasFocus(306)">
+			<effect type="fade" start="0" end="100" time="150" delay="250" reversible="false" />
+		</animation>
+	</include>
+	<include name="Sublist">
+		<posy>592</posy>
+		<width>420</width>
+		<height>430</height>
+		<scrolltime>280</scrolltime>
+		<itemlayout height="72" width="420">
+			<control type="label">
+				<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+				<posx>5</posx>
+				<posy>0</posy>
+				<width>410</width>
+				<height>72</height>
+				<textoffsetx>0</textoffsetx>
+				<font>size25</font>
+				<label>$INFO[ListItem.Label]</label>
+				<align>center</align>
+				<aligny>center</aligny>
+				<scroll>false</scroll>
+			</control>
+		</itemlayout>
+		<focusedlayout height="72" width="420">
+			<!-- Only show the highlight color while the submenu itself has focus. When focus moves up into the widgets, the selected item falls back to the normal unfocused look. -->
+			<control type="label">
+				<visible>!ControlGroup(9000).HasFocus()</visible>
+				<posx>5</posx>
+				<posy>0</posy>
+				<width>410</width>
+				<height>72</height>
+				<textoffsetx>0</textoffsetx>
+				<font>size25</font>
+				<label>$INFO[ListItem.Label]</label>
+				<align>center</align>
+				<aligny>center</aligny>
+				<scroll>false</scroll>
+			</control>
+			<control type="label">
+				<visible>ControlGroup(9000).HasFocus()</visible>
+				<posx>5</posx>
+				<posy>0</posy>
+				<width>410</width>
+				<height>72</height>
+				<textoffsetx>0</textoffsetx>
+				<font>size25</font>
+				<textcolor>$VAR[FocusTextColor]</textcolor>
+				<label>$INFO[ListItem.Label]</label>
+				<align>center</align>
+				<aligny>center</aligny>
+				<scroll>false</scroll>
+				<animation effect="fade" start="100" end="0" time="0" delay="1000">Focus</animation>
+			</control>
+			<control type="label">
+				<visible>ControlGroup(9000).HasFocus()</visible>
+				<posx>5</posx>
+				<posy>0</posy>
+				<width>410</width>
+				<height>72</height>
+				<textoffsetx>0</textoffsetx>
+				<font>size25</font>
+				<textcolor>$VAR[FocusTextColor]</textcolor>
+				<label>$INFO[ListItem.Label]</label>
+				<align>center</align>
+				<aligny>center</aligny>
+				<scroll>true</scroll>
+				<animation effect="fade" start="0" end="100" time="0" delay="1000">Focus</animation>
+			</control>
+		</focusedlayout>
+	</include>
+	<include name="Slider300">
+		<control type="image">
+			<visible>Control.IsVisible(300)</visible>
+			<include>SliderCommons</include>
+			<animation condition="Container(300).Position(0)" effect="slide" start="0,0" end="0,0" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(300).Position(1)" effect="slide" start="0,0" end="0,72" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(300).Position(2)" effect="slide" start="0,0" end="0,144" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(300).Position(3)" effect="slide" start="0,0" end="0,216" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(300).Position(4)" effect="slide" start="0,0" end="0,288" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(300).Position(5)" effect="slide" start="0,0" end="0,360" time="0" reversible="true">Conditional</animation>
+			<include>Animation300</include>
+		</control>
+	</include>
+	<include name="Slider301">
+		<control type="image" description="Slider301">
+			<visible>Control.IsVisible(301)</visible>
+			<include>SliderCommons</include>
+			<animation condition="Container(301).Position(0)" effect="slide" start="0,0" end="0,0" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(301).Position(1)" effect="slide" start="0,0" end="0,72" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(301).Position(2)" effect="slide" start="0,0" end="0,144" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(301).Position(3)" effect="slide" start="0,0" end="0,216" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(301).Position(4)" effect="slide" start="0,0" end="0,288" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(301).Position(5)" effect="slide" start="0,0" end="0,360" time="0" reversible="true">Conditional</animation>
+			<include>Animation301</include>
+		</control>
+	</include>
+	<include name="Slider302">
+		<control type="image">
+			<visible>Control.IsVisible(302)</visible>
+			<include>SliderCommons</include>
+			<animation condition="Container(302).Position(0)" effect="slide" start="0,0" end="0,0" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(302).Position(1)" effect="slide" start="0,0" end="0,72" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(302).Position(2)" effect="slide" start="0,0" end="0,144" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(302).Position(3)" effect="slide" start="0,0" end="0,216" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(302).Position(4)" effect="slide" start="0,0" end="0,288" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(302).Position(5)" effect="slide" start="0,0" end="0,360" time="0" reversible="true">Conditional</animation>
+			<include>Animation302</include>
+		</control>
+	</include>
+	<include name="Slider303">
+		<control type="image">
+			<visible>Control.IsVisible(303)</visible>
+			<include>SliderCommons</include>
+			<animation condition="Container(303).Position(0)" effect="slide" start="0,0" end="0,0" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(303).Position(1)" effect="slide" start="0,0" end="0,72" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(303).Position(2)" effect="slide" start="0,0" end="0,144" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(303).Position(3)" effect="slide" start="0,0" end="0,216" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(303).Position(4)" effect="slide" start="0,0" end="0,288" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(303).Position(5)" effect="slide" start="0,0" end="0,360" time="0" reversible="true">Conditional</animation>
+			<include>Animation303</include>
+		</control>
+	</include>
+	<include name="Slider304">
+		<control type="image">
+			<visible>Control.IsVisible(304)</visible>
+			<include>SliderCommons</include>
+			<animation condition="Container(304).Position(0)" effect="slide" start="0,0" end="0,0" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(304).Position(1)" effect="slide" start="0,0" end="0,72" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(304).Position(2)" effect="slide" start="0,0" end="0,144" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(304).Position(3)" effect="slide" start="0,0" end="0,216" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(304).Position(4)" effect="slide" start="0,0" end="0,288" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(304).Position(5)" effect="slide" start="0,0" end="0,360" time="0" reversible="true">Conditional</animation>
+			<include>Animation304</include>
+		</control>
+	</include>
+
+	<include name="Slider307">
+		<control type="image">
+			<visible>Control.IsVisible(307)</visible>
+			<include>SliderCommons</include>
+			<animation condition="Container(307).Position(0)" effect="slide" start="0,0" end="0,0" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(307).Position(1)" effect="slide" start="0,0" end="0,72" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(307).Position(2)" effect="slide" start="0,0" end="0,144" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(307).Position(3)" effect="slide" start="0,0" end="0,216" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(307).Position(4)" effect="slide" start="0,0" end="0,288" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(307).Position(5)" effect="slide" start="0,0" end="0,360" time="0" reversible="true">Conditional</animation>
+			<include>Animation307</include>
+		</control>
+	</include>
+	<include name="Slider305">
+		<control type="image">
+			<visible>Control.IsVisible(305)</visible>
+			<include>SliderCommons</include>
+			<animation condition="Container(305).Position(0)" effect="slide" start="0,0" end="0,0" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(305).Position(1)" effect="slide" start="0,0" end="0,72" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(305).Position(2)" effect="slide" start="0,0" end="0,144" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(305).Position(3)" effect="slide" start="0,0" end="0,216" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(305).Position(4)" effect="slide" start="0,0" end="0,288" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(305).Position(5)" effect="slide" start="0,0" end="0,360" time="0" reversible="true">Conditional</animation>
+			<include>Animation305</include>
+		</control>
+	</include>
+	<include name="Slider306">
+		<control type="image">
+			<visible>Control.IsVisible(306)</visible>
+			<include>SliderCommons</include>
+			<animation condition="Container(306).Position(0)" effect="slide" start="0,0" end="0,0" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(306).Position(1)" effect="slide" start="0,0" end="0,72" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(306).Position(2)" effect="slide" start="0,0" end="0,144" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(306).Position(3)" effect="slide" start="0,0" end="0,216" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(306).Position(4)" effect="slide" start="0,0" end="0,288" time="0" reversible="true">Conditional</animation>
+			<animation condition="Container(306).Position(5)" effect="slide" start="0,0" end="0,360" time="0" reversible="true">Conditional</animation>
+			<include>Animation306</include>
+		</control>
+	</include>
+	<include name="HomeFanartList">	
+		<control type="group">
+			<animation effect="fade" time="400">VisibleChange</animation>
+			<visible>Skin.HasSetting(UseFanartSlideshow)</visible>
+			<control type="list" id="3300">
+				<left>-1280</left>
+				<width>1</width>
+				<height>20</height>
+				<orientation>vertical</orientation>
+				<include>FanartTimers</include>
+				<itemgap>0</itemgap>
+				<itemlayout width="1" height="1">
+				</itemlayout>
+				<focusedlayout  width="1" height="1">
+				</focusedlayout>
+				<include condition="$EXP[isFanartSourceContextual] | $EXP[isFanartSourceMovies]">RandomItemsMovies</include>
+			</control>
+			<control type="list" id="3302">
+				<left>-1280</left>
+				<width>1</width>
+				<height>20</height>
+				<orientation>vertical</orientation>
+				<include>FanartTimers</include>
+				<itemgap>0</itemgap>
+				<itemlayout width="1" height="1">
+				</itemlayout>
+				<focusedlayout  width="1" height="1">
+				</focusedlayout>
+				<include condition="$EXP[isFanartSourceContextual] | $EXP[isFanartSourceTVshows]">RandomItemsTVshows</include>
+			</control>
+			<control type="list" id="3303">
+				<left>-1280</left>
+				<width>1</width>
+				<height>20</height>
+				<orientation>vertical</orientation>
+				<include>FanartTimers</include>
+				<itemgap>0</itemgap>
+				<itemlayout width="1" height="1">
+				</itemlayout>
+				<focusedlayout  width="1" height="1">
+				</focusedlayout>
+				<include condition="$EXP[isFanartSourceContextual] | $EXP[isFanartSourceMusic]">RandomItemsArtists</include>
+			</control>
+		</control>
+	</include>	
+	<include name="FanartSlideshow">
+		<control type="group">
+			<visible>Skin.HasSetting(UseFanartSlideshow) + !$EXP[BGvideoPlaying]</visible>
+			<visible>!$EXP[isFanartSourceContextual] | [$EXP[isFanartSourceContextual] + [Control.HasFocus(300) | Control.HasFocus(302)]]</visible>
+			<include>HomeFanartList</include>
+			<animation effect="fade" time="200">VisibleChange</animation>
+			<control type="image">
+				<include>Dimensions_Fullscreen</include>
+				<fadetime>700</fadetime>
+				<texture>$VAR[FanartSource]</texture>
+				<aspectratio>scale</aspectratio>
+				<visible>Skin.HasSetting(UseFanartSlideshow) + !Window.IsVisible(favourites)</visible>
+			</control>
+		</control>
+	</include>
+	<include name="RandomItemsTVshows">
+		<content>special://skin/playlists/tvshowsBG.xsp</content>
+	</include>	
+	<include name="RandomItemsArtists">
+		<content>special://skin/playlists/artistsBG.xsp</content>
+	</include>	
+	<include name="RandomItemsMovies">
+		<content>special://skin/playlists/moviesBG.xsp</content>
+	</include>
+</includes>

@@ -15,7 +15,10 @@ from resources.libs.common import tools
 class ModularUpdater:
     # NOX is required for fresh installs. Existing users install it only
     # through Switch Skin; OTA never changes their chosen skin.
-    ON_DEMAND_SKINS = frozenset(('skin.povil.nox',))
+    ON_DEMAND_SKINS = frozenset(('skin.povil.nox', 'skin.povil.onyx'))
+    # Optional skins are never installed automatically, not even on a fresh
+    # install: only Switch Skin installs them (wizard.ensure_onyx_installed).
+    OPTIONAL_SKINS = frozenset(('skin.povil.onyx',))
 
     @staticmethod
     def _pending_addon_receipt(addon_id):
@@ -259,7 +262,7 @@ class ModularUpdater:
                     os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID), addon_id)
             if not local_ver:
                 if (addon_id in self.ON_DEMAND_SKINS and not pending
-                        and not getattr(self, 'fresh', False)):
+                        and (not getattr(self, 'fresh', False) or addon_id in self.OPTIONAL_SKINS)):
                     logging.log('[ModularUpdater] on-demand skin remains optional: {0}'
                                 .format(addon_id), level=xbmc.LOGINFO)
                     continue
@@ -1041,6 +1044,8 @@ class ModularUpdater:
         for addon_id, mod in (manifest.get('addons') or {}).items():
             expected = mod.get('version')
             actual = self.get_local_version(addon_id)
+            if not actual and addon_id in self.OPTIONAL_SKINS:
+                continue
             if self._pending_addon_receipt(addon_id):
                 missing.append('{0} (extraction not verified)'.format(addon_id))
             if (not expected or not actual or

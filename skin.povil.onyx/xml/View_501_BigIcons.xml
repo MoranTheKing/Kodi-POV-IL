@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+	<include name="View_501" description="All Video Views">
+		<control type="group" description="Big Icons">
+			<visible>Control.IsVisible(501)</visible>
+			<control type="fixedlist" id="501">
+				<visible>Container.content(movies) | Container.content(tvshows) | Container.content(seasons)| container.content(Favourites)</visible>
+				<posx>-270</posx>
+				<posy>111</posy>
+				<width>2400</width>
+				<height>885</height>
+				<pagecontrol>60</pagecontrol>
+				<onup condition="!Skin.HasSetting(ViewOptions_Hide)">9000</onup>
+				<ondown condition="$EXP[isEnabledScrollbar]">9002</ondown>
+				<onleft>501</onleft>
+				<onright>501</onright>
+				<viewtype label="538">Big Icons 501</viewtype>
+				<focusposition>2</focusposition>
+				<movement></movement>
+				<preloaditems>4</preloaditems>
+				<orientation>horizontal</orientation>
+				<scrolltime easing="inout">280</scrolltime>
+				<itemlayout condition="Container.content(movies) | Container.content(tvshows) | Container.content(seasons)| container.content(Favourites)" width="330" height="480">
+					<control type="image" description="Thumb">
+						<visible>ListItem.IsParentFolder</visible>
+						<posx>12</posx>
+						<posy>12</posy>
+						<height>450</height>
+						<width>300</width>
+						<aspectratio>scale</aspectratio>
+						<texture colordiffuse="$VAR[IconColor]" background="true">DefaultFolderBack.png</texture>
+					</control>
+					<control type="image" description="Thumb">
+						<visible>!ListItem.IsParentFolder</visible>
+						<posx>12</posx>
+						<posy>12</posy>
+						<height>450</height>
+						<width>300</width>
+						<aspectratio scalediffuse="false">scale</aspectratio>
+						<texture background="true" diffuse="img/Round_300x450.png">$VAR[Thumb]</texture>
+					</control>
+					<control type="image">
+						<posx>278</posx>
+						<posy>428</posy>
+						<width>30</width>
+						<height>30</height>
+						<texture>$VAR[OverlayPercent]</texture>
+						<aspectratio>keep</aspectratio>
+					</control>					
+					<control type="group" description="Percent watched">
+						<visible>Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+						<posx>250</posx>
+						<posy>430</posy>
+						<control type="label">
+							<selectedcolor>$VAR[HighlightColor]</selectedcolor>
+							<posx>0</posx>
+							<posy>0</posy>
+							<width>58</width>
+							<height>26</height>
+							<font>size15</font>
+							<textcolor>White2</textcolor>
+							<shadowcolor>Black</shadowcolor>
+							<align>right</align>
+							<aligny>center</aligny>
+							<label>[B]$VAR[WatchedPercent][/B]</label>
+						</control>
+					</control>
+				</itemlayout>
+				<focusedlayout condition="Container.content(movies) | Container.content(tvshows) | Container.content(seasons)| container.content(Favourites)" width="330" height="480">
+					<control type="image" description="Selection frame (part of the focused item, no animation)">
+						<posx>-12</posx>
+						<posy>-9</posy>
+						<width>348</width>
+						<height>495</height>
+						<texture border="49" colordiffuse="$VAR[FrameColor]">img/FrameRound.png</texture>
+						<bordersize>-9</bordersize>
+						<aspectratio>stretch</aspectratio>
+					</control>
+					<control type="image" description="Thumb">
+						<visible>ListItem.IsParentFolder</visible>
+						<posx>12</posx>
+						<posy>12</posy>
+						<height>450</height>
+						<width>300</width>
+						<aspectratio>scale</aspectratio>
+						<texture colordiffuse="$VAR[IconColor]" background="true">DefaultFolderBack.png</texture>
+					</control>
+					<control type="image" description="Thumb">
+						<visible>!ListItem.IsParentFolder</visible>
+						<posx>12</posx>
+						<posy>12</posy>
+						<height>450</height>
+						<width>300</width>
+						<aspectratio scalediffuse="false">scale</aspectratio>
+						<texture background="true" diffuse="img/Round_300x450.png">$VAR[Thumb]</texture>
+					</control>
+					<control type="image">
+						<posx>278</posx>
+						<posy>428</posy>
+						<width>30</width>
+						<height>30</height>
+						<texture>$VAR[OverlayPercent]</texture>
+						<aspectratio>keep</aspectratio>
+					</control>										
+					<control type="group" description="Percent watched">
+						<visible>Skin.HasSetting(_ShowUnwatched) + [Integer.IsGreater(ListItem.Property(WatchedProgress),0) | Integer.IsGreater(ListItem.PercentPlayed,0)]</visible>
+						<posx>250</posx>
+						<posy>430</posy>
+						<control type="label">
+							<posx>0</posx>
+							<posy>0</posy>
+							<width>58</width>
+							<height>26</height>
+							<font>size15</font>
+							<textcolor>White2</textcolor>
+							<shadowcolor>Black</shadowcolor>
+							<align>right</align>
+							<aligny>center</aligny>
+							<label>[B]$VAR[WatchedPercent][/B]</label>
+						</control>
+					</control>
+				</focusedlayout>
+			</control>
+			<control type="group" description="Media details">
+				<left>394</left>
+				<top>630</top>
+				<control type="image" description="Clear logo in place of the title (Skin settings > General > Show clear logos). Bottom sits where the title text was; grows upward into free space.">
+					<visible>$EXP[ShowClearLogo]</visible>
+					<posx>0</posx>
+					<posy>-42</posy>
+					<width>700</width>
+					<height>96</height>
+					<aspectratio align="left" aligny="bottom">keep</aspectratio>
+					<texture background="true">$INFO[ListItem.Art(clearlogo)]</texture>
+				</control>
+				<control type="label" description="Media details">
+					<visible>!$EXP[ShowClearLogo]</visible>
+					<width>1230</width>
+					<textcolor>$VAR[FocusColor]</textcolor>
+					<font>size24B</font>
+					<label>$INFO[ListItem.Label]</label>
+				</control>
+				<control type="label" description="Media details">
+					<visible>!ListItem.IsParentFolder</visible>
+					<top>54</top>
+					<width>1200</width>
+					<font>size22</font>
+					<label>$INFO[ListItem.Genre]</label>
+				</control>
+				<control type="grouplist" description="Media details line: info, then numeric rating">
+					<visible>!ListItem.IsParentFolder + !String.Contains(ListItem.Path,videodb://movies/sets/)</visible>
+					<top>102</top>
+					<width>1200</width>
+					<height>75</height>
+					<orientation>horizontal</orientation>
+					<itemgap>0</itemgap>
+					<control type="label">
+						<width max="1000">auto</width>
+						<label>$VAR[TopLabel]</label>
+					</control>
+					<control type="label" description="Rating">
+						<visible>[!ListItem.IsFolder | Container.Content(tvshows) | Container.Content(seasons)] + Integer.IsGreater(ListItem.Rating,0)</visible>
+						<width>auto</width>
+						<label> • $INFO[ListItem.Rating]</label>
+					</control>
+				</control>
+				<control type="textbox" description="Movies Plot (6 full lines of size20 = 6 x 36, +2 so descenders on the last line are not clipped; a 7th line does not peek in; longer plots auto-scroll)">
+					<visible>!ListItem.IsParentFolder</visible>
+					<posy>174</posy>
+					<width>1200</width>
+					<height>218</height>
+					<font>size20</font>
+					<align>left</align>
+					<autoscroll delay="8000" time="4300" repeat="10000">!Skin.HasSetting(_AutoScrollOff)</autoscroll>
+					<label>$VAR[Plots]</label>
+				</control>
+			</control>
+		</control>
+	</include>
+</includes>

@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window type="buttonMenu" id="111">
+	<!-- Power menu. Which items show is picked in Skin settings > General > Power menu items (expressions PowerMenu* in Includes.xml).
+	     The selection outline is part of the focused item (no sliding selector), like the home shortcut rows; it carries the focus color, the icon stays white.
+	     Kodi only auto-closes this menu when a button is clicked, not a list item, so every item runs Dialog.Close(shutdownmenu,true) before its action. -->
+	<defaultcontrol>9000</defaultcontrol>
+	<include>DialogOpenClose</include>
+	<coordinates>
+		<system>1</system>
+		<posx>0</posx>
+		<posy>0</posy>
+	</coordinates>
+	<controls>
+		<control type="image" description="Background for up to 4 items">
+			<visible>!Integer.IsGreater(Container(9000).NumItems,4)</visible>
+			<centerleft>960</centerleft>
+			<centertop>540</centertop>
+			<width>800</width>
+			<height>400</height>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+		</control>
+		<control type="image" description="Background for 5 items">
+			<visible>Integer.IsEqual(Container(9000).NumItems,5)</visible>
+			<centerleft>960</centerleft>
+			<centertop>540</centertop>
+			<width>880</width>
+			<height>400</height>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+		</control>
+		<control type="image" description="Background for 6 items">
+			<visible>Integer.IsEqual(Container(9000).NumItems,6)</visible>
+			<centerleft>960</centerleft>
+			<centertop>540</centertop>
+			<width>1024</width>
+			<height>400</height>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+		</control>
+		<control type="image" description="Background for 7 items">
+			<visible>Integer.IsEqual(Container(9000).NumItems,7)</visible>
+			<centerleft>960</centerleft>
+			<centertop>540</centertop>
+			<width>1168</width>
+			<height>400</height>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+		</control>
+		<control type="image" description="Background for 8 items">
+			<visible>Integer.IsEqual(Container(9000).NumItems,8)</visible>
+			<centerleft>960</centerleft>
+			<centertop>540</centertop>
+			<width>1312</width>
+			<height>400</height>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+		</control>
+		<control type="image" description="Background for 9 items">
+			<visible>Integer.IsEqual(Container(9000).NumItems,9)</visible>
+			<centerleft>960</centerleft>
+			<centertop>540</centertop>
+			<width>1456</width>
+			<height>400</height>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+		</control>
+		<control type="image" description="Background for 10 items">
+			<visible>Integer.IsEqual(Container(9000).NumItems,10)</visible>
+			<centerleft>960</centerleft>
+			<centertop>540</centertop>
+			<width>1600</width>
+			<height>400</height>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+		</control>
+		<control type="image" description="Background for 11 items">
+			<visible>Integer.IsEqual(Container(9000).NumItems,11)</visible>
+			<centerleft>960</centerleft>
+			<centertop>540</centertop>
+			<width>1744</width>
+			<height>400</height>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+		</control>
+		<control type="image" description="Background for 12 items">
+			<visible>Integer.IsEqual(Container(9000).NumItems,12)</visible>
+			<centerleft>960</centerleft>
+			<centertop>540</centertop>
+			<width>1888</width>
+			<height>400</height>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+		</control>
+		<control type="label" description="Name of the focused item">
+			<centerleft>960</centerleft>
+			<posy>90</posy>
+			<width>1728</width>
+			<height>675</height>
+			<align>center</align>
+			<font>size26B</font>
+			<textcolor>$VAR[HighlightColor]</textcolor>
+			<label>$INFO[Container(9000).ListItem.Label]</label>
+		</control>
+		<control type="list" id="9000">
+			<description>Items, centred: the list starts at the screen centre and slides left by half its width (no animation, time 0)</description>
+			<posx>960</posx>
+			<posy>499</posy>
+			<width>1728</width>
+			<height>160</height>
+			<animation effect="slide" start="0,0" end="-72,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,1)">Conditional</animation>
+			<animation effect="slide" start="0,0" end="-144,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,2)">Conditional</animation>
+			<animation effect="slide" start="0,0" end="-216,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,3)">Conditional</animation>
+			<animation effect="slide" start="0,0" end="-288,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,4)">Conditional</animation>
+			<animation effect="slide" start="0,0" end="-360,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,5)">Conditional</animation>
+			<animation effect="slide" start="0,0" end="-432,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,6)">Conditional</animation>
+			<animation effect="slide" start="0,0" end="-504,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,7)">Conditional</animation>
+			<animation effect="slide" start="0,0" end="-576,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,8)">Conditional</animation>
+			<animation effect="slide" start="0,0" end="-648,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,9)">Conditional</animation>
+			<animation effect="slide" start="0,0" end="-720,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,10)">Conditional</animation>
+			<animation effect="slide" start="0,0" end="-792,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,11)">Conditional</animation>
+			<animation effect="slide" start="0,0" end="-864,0" time="0" condition="Integer.IsEqual(Container(9000).NumItems,12)">Conditional</animation>
+			<onleft>9000</onleft>
+			<onright>9000</onright>
+			<onup>noop</onup>
+			<ondown>noop</ondown>
+			<orientation>horizontal</orientation>
+			<scrolltime>0</scrolltime>
+			<itemlayout width="144" height="160">
+				<control type="image">
+					<posx>36</posx>
+					<posy>44</posy>
+					<width>72</width>
+					<height>72</height>
+					<texture>$INFO[ListItem.Icon]</texture>
+				</control>
+			</itemlayout>
+			<focusedlayout width="144" height="160">
+				<control type="image" description="Selection frame (part of the focused item, no animation). Follows the focus color like the widget frames (FrameColor).">
+					<posx>-1</posx>
+					<posy>7</posy>
+					<width>146</width>
+					<height>146</height>
+					<texture border="36" colordiffuse="$VAR[FrameColor]">focus/FrameSquare.png</texture>
+					<bordersize>-9</bordersize>
+					<aspectratio>stretch</aspectratio>
+				</control>
+				<control type="image">
+					<posx>36</posx>
+					<posy>44</posy>
+					<width>72</width>
+					<height>72</height>
+					<texture>$INFO[ListItem.Icon]</texture>
+				</control>
+			</focusedlayout>
+			<content>
+				<!-- POVIL power menu -->
+				<item>
+					<label>$LOCALIZE[20077]</label>
+					<icon>bmsettings.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>ActivateWindow(SkinSettings)</onclick>
+					<visible>$EXP[PowerMenuSettings]</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[31972]</label>
+					<icon>bmreload.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>ReloadSkin()</onclick>
+					<visible>$EXP[PowerMenuReloadSkin]</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[20046]</label>
+					<icon>bmunlock.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>Mastermode</onclick>
+					<visible>$EXP[PowerMenuMasterMode] + System.IsMaster</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[20045]</label>
+					<icon>bmlock.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>Mastermode</onclick>
+					<visible>$EXP[PowerMenuMasterMode] + !System.IsMaster</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[20126]</label>
+					<icon>bmlogoff.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>System.LogOff</onclick>
+					<visible>$EXP[PowerMenuLogOff]</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[20151]</label>
+					<icon>bmtimercancel.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>CancelAlarm(shutdowntimer)</onclick>
+					<visible>$EXP[PowerMenuTimer] + System.HasAlarm(shutdowntimer)</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[20150]</label>
+					<icon>bmtimer.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>AlarmClock(shutdowntimer,Shutdown())</onclick>
+					<visible>$EXP[PowerMenuTimer] + !System.HasAlarm(shutdowntimer)</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[13013]</label>
+					<icon>bmrestart.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>Reset()</onclick>
+					<visible>$EXP[PowerMenuReboot]</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[13010]</label>
+					<icon>bmhibernate.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>Hibernate()</onclick>
+					<visible>$EXP[PowerMenuHibernate]</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[13011]</label>
+					<icon>bmsleep.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>Suspend()</onclick>
+					<visible>$EXP[PowerMenuSuspend]</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[13005]</label>
+					<icon>bmshutdown.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>Powerdown()</onclick>
+					<visible>$EXP[PowerMenuShutdown]</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[13014]</label>
+					<icon>bmminimise.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>Minimize</onclick>
+					<visible>$EXP[PowerMenuMinimise]</visible>
+				</item>
+				<item>
+					<label>$LOCALIZE[31961]</label>
+					<icon>bmrestartapp.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>RestartApp</onclick>
+					<visible>$EXP[PowerMenuRestartApp]</visible>
+				</item>
+				<item>
+					<label>מי צופה? פרופילים</label>
+					<icon>DefaultUser.png</icon>
+					<onclick>Dialog.Close(all)</onclick>
+					<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profiles)</onclick>
+				</item>
+				<item>
+					<label>החלפת סקין</label>
+					<icon>DefaultAddonSkin.png</icon>
+					<onclick>Dialog.Close(all)</onclick>
+					<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profile_skin)</onclick>
+				</item>
+				<item>
+					<label>$LOCALIZE[13009]</label>
+					<icon>bmquit.png</icon>
+					<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+					<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?action=force_close)</onclick>
+					<visible>$EXP[PowerMenuQuit]</visible>
+				</item>
+			</content>
+		</control>
+	</controls>
+</window>
