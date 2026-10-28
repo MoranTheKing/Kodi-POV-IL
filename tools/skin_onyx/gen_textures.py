@@ -151,3 +151,15 @@ noise = Image.effect_noise((W, H), 9).convert('L')
 base = Image.blend(base, Image.merge('RGB', (noise, noise, noise)), 0.035)
 base.save(os.path.join(os.path.dirname(OUT.rstrip('/')), '..', 'extras', 'povil_ambient.jpg') if False else os.path.join(OUT, 'ambient.jpg'), quality=90, optimize=True, progressive=True)
 print('ambient done')
+
+# Busy indicator (DialogBusy.xml): a gold arc turning over a faint ring
+def circle_line(size, draw):
+    big = Image.new('L', (size * SS, size * SS), 0)
+    draw(ImageDraw.Draw(big), (6 * SS, 6 * SS, (size - 6) * SS, (size - 6) * SS))
+    img = Image.new('RGBA', (size, size), (255, 255, 255, 0))
+    img.putalpha(big.resize((size, size), Image.LANCZOS))
+    return img
+
+
+save(circle_line(96, lambda d, box: d.arc(box, -90, 200, fill=255, width=5 * SS)), 'spinner.png')
+save(circle_line(96, lambda d, box: d.ellipse(box, outline=255, width=5 * SS)), 'spinner_track.png')

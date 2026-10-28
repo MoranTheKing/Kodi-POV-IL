@@ -5,7 +5,9 @@
 
 Home.xml + Includes_POVIL_Home.xml + RTL timers, the views, then the OSD
 (its variables are appended to Includes_POVIL_Home.xml, so it runs last).
-Textures and fonts are separate: gen_textures.py, gen_icons.py, gen_fonts.py.
+Textures and fonts are separate: gen_textures.py, gen_icons.py, gen_fonts.py
+(they need Pillow and fontTools; the XML generators use the standard library
+only, so the tests can run them anywhere).
 """
 import os
 import subprocess
