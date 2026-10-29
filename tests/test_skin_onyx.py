@@ -94,6 +94,41 @@ class GeneratedXmlTests(unittest.TestCase):
         ups = [(n.get('condition'), n.text) for n in lists['5065'].findall('onup')]
         self.assertEqual([t for _c, t in ups], ['5064', '5063', '5062', '5061', '9172'])
 
+    def test_the_touch_keymap_swipes_between_home_rows(self):
+        import ast
+        tree = ast.parse((SKIN / 'scripts' / 'onyx_tools.py').read_text(encoding='utf-8'))
+        xml = next(node.value.value for node in tree.body if isinstance(node, ast.Assign)
+                   and getattr(node.targets[0], 'id', '') == 'TOUCH_KEYMAP_XML')
+        swipes = {s.get('direction'): s.text for s in ET.fromstring(xml).find('home').find('touch')}
+        # a swipe only names itself: under any other skin it moves nothing
+        self.assertEqual(swipes, {'up': 'SetProperty(povil.swipe,down,home)',
+                                  'down': 'SetProperty(povil.swipe,up,home)'})
+        home = (XML / 'Home.xml').read_text(encoding='utf-8')
+        self.assertIn('System.Platform.Android', home.split('touchkeymap')[0].rsplit('<onload', 1)[1])
+        self.assertIn('<onload>ClearProperty(povil.swipe,home)</onload>', home)
+        timers = ET.parse(XML / 'Timers.xml').getroot()
+        timer = next(t for t in timers.iter('timer') if t.findtext('name') == 'povil_swipe')
+        acts = [(a.get('condition') or '', a.text) for a in timer.findall('onstart')]
+        self.assertEqual([t for _c, t in acts], ['Action(Down)', 'Action(Up)', 'ClearProperty(povil.swipe,home)'])
+        self.assertIn('Window.IsActive(home)', acts[0][0])
+        self.assertIn('Window.IsActive(home)', acts[1][0])
+
+    def test_rows_retry_and_say_empty_only_when_the_retries_are_spent(self):
+        home = ET.parse(XML / 'Home.xml').getroot()
+        movies_btn = next(c for c in home.iter('control') if c.get('id') == '9010')
+        resets = [n for n in movies_btn.findall('onfocus') if 'povil.retry.5011' in (n.text or '')]
+        self.assertEqual(len(resets), 1, 'choosing the tab again asks again')
+        self.assertIn('String.IsEqual(Window(home).Property(povil.retry.5011),2)', resets[0].get('condition'))
+        text = (XML / 'Home.xml').read_text(encoding='utf-8')
+        empty = re.findall(r'<visible>([^<]*povil\.retry\.5011[^<]*)</visible>', text)
+        self.assertTrue(empty)
+        for cond in empty:
+            self.assertNotIn('!!', cond)
+        self.assertTrue(any('!Integer.IsGreater(Container(5011).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5011),2)' in c
+                            for c in empty), 'the placeholder stays up while it retries')
+        self.assertTrue(any(c.startswith('!String.IsEmpty(') and '+ String.IsEqual(Window(home).Property(povil.retry.5011),2)' in c
+                            for c in empty), '"nothing here" only once the retries are spent')
+
     def test_conditions_group_with_brackets(self):
         # Kodi groups a condition with [ ] only; "!(" splits it into broken parts
         for name in ('Home.xml', 'Includes_POVIL_Home.xml', 'View_POVIL.xml', 'Timers.xml', 'DialogKeyboard.xml'):
@@ -148,7 +183,7 @@ class _Item:
 class RtlPatchTests(unittest.TestCase):
     def _run(self, query, skin='skin.povil.onyx', window=10000, view='51', pov=True, umbrella=False, umbrella_db='',
              sort=None, plugin=None, content='movies', keep_module=False, home=None, labels=('', '', ''),
-             pinned=None):
+             pinned=None, argv0='plugin://plugin.video.pov/', builtins=None):
         if plugin is None:
             plugin, calls = _plugin_stub()
         else:
@@ -158,7 +193,8 @@ class RtlPatchTests(unittest.TestCase):
             getProperty=lambda k: home.get(k, view if k.startswith('pov_view.') else ''),
             setProperty=home.__setitem__)
         fake = {'xbmcplugin': plugin,
-                'xbmc': types.SimpleNamespace(getSkinDir=lambda: skin),
+                'xbmc': types.SimpleNamespace(getSkinDir=lambda: skin,
+                                              executebuiltin=(builtins if builtins is not None else []).append),
                 'xbmcgui': types.SimpleNamespace(getCurrentWindowId=lambda: window,
                                                  Window=lambda _id: home_window),
                 'xbmcvfs': types.SimpleNamespace(translatePath=lambda _p: umbrella_db)}
@@ -170,7 +206,7 @@ class RtlPatchTests(unittest.TestCase):
             if not keep_module:
                 sys.modules.pop('povil_rtl', None)
             import povil_rtl
-            sys.argv = ['plugin://plugin.video.pov/', '1', query]
+            sys.argv = [argv0, '1', query]
             povil_rtl.install(pov=pov and not umbrella, umbrella=umbrella)
             items = [_Item(label) for label in labels]
             for index, where in (pinned or {}).items():
@@ -294,6 +330,22 @@ class RtlPatchTests(unittest.TestCase):
         self.assertIn(('many', ['a', 'c', 'b']), calls, 'reversed: פרק 10, פרק 2, בית')
         self.assertEqual([c[1] for c in calls if c[0] == 'sort'], [40], 'the reversed list only')
         self.assertTrue(all(i.props.get('povil_rtl') == '1' for i in items))
+
+    def test_idan_plus_full_screen_lists_turn_right_to_left_in_view_51(self):
+        views = []
+        saved = sys.modules.get('pov_view_mode')
+        sys.modules['pov_view_mode'] = types.SimpleNamespace(force_view=lambda view, content: views.append((view, content)))
+        try:
+            calls, items = self._run('?mode=2&module=kan', window=10025, pov=False, content='episodes',
+                                     argv0='plugin://plugin.video.idanplus/')
+        finally:
+            if saved is None:
+                sys.modules.pop('pov_view_mode', None)
+            else:
+                sys.modules['pov_view_mode'] = saved
+        self.assertIn(('many', ['c', 'b', 'a']), calls)
+        self.assertEqual(views, [('51', 'episodes')], 'view 51 once the list is on screen')
+        self.assertNotIn(('content', 'tvshows'), calls, 'a list with playable items keeps its content')
 
     def test_other_requests_keep_their_order(self):
         for kwargs in ({'window': 10025, 'view': '50'}, {'window': 10000}, {'skin': 'skin.povil.nox', 'window': 10025}):
