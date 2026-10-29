@@ -124,6 +124,13 @@ def view(x, vid, label, layout):
     x(4, '<scrolltime tween="cubic" easing="out">260</scrolltime>')
     x(4, '<onup condition="!Skin.HasSetting(ViewOptions_Hide)">9000</onup>')
     x(4, '<onleft>noop</onleft><onright>noop</onright>')   # no wrap: the far end stays put
+    # a list shorter than a page starts at the right margin too
+    # (NumAllItems: Kodi's ".." counts when the user shows it)
+    if layout == 'episodes':
+        H.short_rows(x, 4, 'Container(%d)' % vid, 'landscape', count='NumAllItems')
+    else:
+        for kind in ('poster', 'landscape', 'square'):
+            H.short_rows(x, 4, 'Container(%d)' % vid, kind, H.VIEW_COND[kind], count='NumAllItems')
     if layout != 'episodes':
         for kind in ('landscape', 'square'):
             k = H.GEOM[kind]

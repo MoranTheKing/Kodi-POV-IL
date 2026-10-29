@@ -4,6 +4,10 @@
 	<defaultcontrol>9000</defaultcontrol>
 	<onload condition="System.GetBool(filelists.showparentdiritems) + !Skin.HasSetting(POVILParentDirChosen) + !Skin.HasSetting(POVILParentDirOff)">RunScript(special://skin/scripts/onyx_tools.py,parentdir)</onload>
 	<onload condition="!Skin.HasSetting(POVILParentDirOff)">Skin.SetBool(POVILParentDirOff)</onload>
+	<onload condition="Window.Previous(favouritesbrowser)">SetProperty(povil.fav.t,$INFO[System.Time(hh:mm:ss)],home)</onload>
+	<onload>ClearProperty(povil.swipe,home)</onload>
+	<onload condition="System.Platform.Android + String.IsEmpty(Window(home).Property(povil.touchmap))">RunScript(special://skin/scripts/onyx_tools.py,touchkeymap)</onload>
+	<onload condition="System.Platform.Android">SetProperty(povil.touchmap,1,home)</onload>
 	<onload condition="String.IsEmpty(Window(home).Property(povil.tab))">SetProperty(povil.tab,movies,home)</onload>
 	<onload condition="String.IsEmpty(Window(home).Property(povil.tab.movies))">SetProperty(povil.tab.movies,1,home)</onload>
 	<backgroundcolor>FF000000</backgroundcolor>
@@ -94,6 +98,8 @@
 				<label>סרטים</label>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.movies,1,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5011),2) + !Integer.IsGreater(Container(5011).NumItems,0)">ClearProperty(povil.retry.5011,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5012),2) + !Integer.IsGreater(Container(5012).NumItems,0)">ClearProperty(povil.retry.5012,home)</onfocus>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.main&amp;action=MovieList&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D",return)</onclick>
 				<onleft>9011</onleft>
 				<ondown>9112</ondown>
@@ -112,6 +118,8 @@
 				<label>סדרות</label>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.tv,1,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5021),2) + !Integer.IsGreater(Container(5021).NumItems,0)">ClearProperty(povil.retry.5021,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5022),2) + !Integer.IsGreater(Container(5022).NumItems,0)">ClearProperty(povil.retry.5022,home)</onfocus>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.main&amp;action=TVShowList&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA",return)</onclick>
 				<onleft>9012</onleft>
 				<onright>9010</onright>
@@ -131,6 +139,9 @@
 				<label>ישראלי</label>
 				<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.israeli,1,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5031),2) + !Integer.IsGreater(Container(5031).NumItems,0)">ClearProperty(povil.retry.5031,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5032),2) + !Integer.IsGreater(Container(5032).NumItems,0)">ClearProperty(povil.retry.5032,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5033),2) + !Integer.IsGreater(Container(5033).NumItems,0)">ClearProperty(povil.retry.5033,home)</onfocus>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/",return)</onclick>
 				<onleft>9013</onleft>
 				<onright>9011</onright>
@@ -150,6 +161,8 @@
 				<label>שידור חי</label>
 				<onfocus>SetProperty(povil.tab,live,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.live,1,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5041),2) + !Integer.IsGreater(Container(5041).NumItems,0)">ClearProperty(povil.retry.5041,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5042),2) + !Integer.IsGreater(Container(5042).NumItems,0)">ClearProperty(povil.retry.5042,home)</onfocus>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?iconimage=&amp;mode=1&amp;module&amp;moredata&amp;name=%5bB%5d%d7%a9%d7%99%d7%93%d7%95%d7%a8%d7%99%d7%9d%20%d7%97%d7%99%d7%99%d7%9d%5b%2fB%5d&amp;url",return)</onclick>
 				<onleft>9014</onleft>
 				<onright>9012</onright>
@@ -169,6 +182,9 @@
 				<label>ילדים</label>
 				<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.kids,1,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5051),2) + !Integer.IsGreater(Container(5051).NumItems,0)">ClearProperty(povil.retry.5051,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5052),2) + !Integer.IsGreater(Container(5052).NumItems,0)">ClearProperty(povil.retry.5052,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5053),2) + !Integer.IsGreater(Container(5053).NumItems,0)">ClearProperty(povil.retry.5053,home)</onfocus>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_genres&amp;genre_id=10751&amp;name=%D7%99%D7%9C%D7%93%D7%99%D7%9D",return)</onclick>
 				<onleft>9015</onleft>
 				<onright>9013</onright>
@@ -869,7 +885,7 @@
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
-				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites) + Integer.IsGreater(Container(5065).NumItems,0)</visible>
+				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites) + [String.IsEqual(Window(home).Property(povil.svc.mdblist),1) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible>
 			</control>
 			<control type="button" id="9174">
 				<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
@@ -882,7 +898,7 @@
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
-				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites) + Integer.IsGreater(Container(5064).NumItems,0)</visible>
+				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites) + [String.IsEqual(Window(home).Property(povil.svc.mdblist),1) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible>
 			</control>
 			<control type="button" id="9173">
 				<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
@@ -966,15 +982,34 @@
 		<control type="group" description="rows movies">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
-			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5012) | Control.HasFocus(9612) | Control.HasFocus(9613)]">Conditional</animation>
-			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5013) | Control.HasFocus(9615)]">Conditional</animation>
+			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5012)">Conditional</animation>
+			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5013)">Conditional</animation>
 			<control type="group" description="פופולריים עכשיו">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5012) | Control.HasFocus(9612) | Control.HasFocus(9613)] | [Control.HasFocus(5013) | Control.HasFocus(9615)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5012) | Control.HasFocus(5013)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5011]</textcolor><label>פופולריים עכשיו</label>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5011).IsUpdating | [!Container(5011).IsUpdating + Integer.IsGreater(Container(5011).NumItems,1) + Integer.IsEqual(Container(5011).CurrentItem,1) + String.IsEqual(Container(5011).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5011).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5011))] | [!Integer.IsGreater(Container(5011).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5011),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>52</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>278</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>504</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>730</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>956</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1182</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1408</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1634</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>179</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.tab.movies)) + String.IsEqual(Window(home).Property(povil.retry.5011),2) + !Container(5011).IsUpdating + !Integer.IsGreater(Container(5011).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 				</control>
 				<control type="list" id="5011">
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
@@ -986,6 +1021,13 @@
 					<ondown condition="Integer.IsGreater(Container(5012).NumItems,0)">5012</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5012).NumItems,0) + Integer.IsGreater(Container(5013).NumItems,0)">5013</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5011).IsUpdating + Integer.IsGreater(Container(5011).NumItems,1) + Integer.IsEqual(Container(5011).CurrentItem,1) + String.IsEqual(Container(5011).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5011).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5011))">Conditional</animation>
+					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5011).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5011).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1130,0" time="0" condition="Integer.IsEqual(Container(5011).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="904,0" time="0" condition="Integer.IsEqual(Container(5011).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="678,0" time="0" condition="Integer.IsEqual(Container(5011).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="452,0" time="0" condition="Integer.IsEqual(Container(5011).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="226,0" time="0" condition="Integer.IsEqual(Container(5011).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5011" /></include>
 					<content target="videos">$VAR[POVIL_Path_5011]</content>
 				</control>
@@ -999,11 +1041,26 @@
 			</control>
 			<control type="group" description="טרנדיים השבוע">
 				<left>0</left><top>402</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5013) | Control.HasFocus(9615)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5013)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5012]</textcolor><label>טרנדיים השבוע</label>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5012).IsUpdating | [!Container(5012).IsUpdating + Integer.IsGreater(Container(5012).NumItems,1) + Integer.IsEqual(Container(5012).CurrentItem,1) + String.IsEqual(Container(5012).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5012).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5012))] | [!Integer.IsGreater(Container(5012).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5012),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>131</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.deep.movies)) + String.IsEqual(Window(home).Property(povil.retry.5012),2) + !Container(5012).IsUpdating + !Integer.IsGreater(Container(5012).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 				</control>
 				<control type="list" id="5012">
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
@@ -1015,6 +1072,9 @@
 					<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5013).NumItems,0)">5013</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5012).IsUpdating + Integer.IsGreater(Container(5012).NumItems,1) + Integer.IsEqual(Container(5012).CurrentItem,1) + String.IsEqual(Container(5012).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5012).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5012))">Conditional</animation>
+					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5012).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5012).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5012).NumItems,3)">Conditional</animation>
 					<include content="POVIL_Item_landscape"><param name="id" value="5012" /></include>
 					<content target="videos">$VAR[POVIL_Path_5012]</content>
 				</control>
@@ -1034,6 +1094,14 @@
 					<textcolor>$VAR[POVIL_RowTitleColor_5013]</textcolor><label>ממשיכים לצפות</label>
 					<visible>Integer.IsGreater(Container(5013).NumItems,0)</visible>
 				</control>
+				<control type="group" description="loading">
+					<visible>Container(5013).IsUpdating | [!Container(5013).IsUpdating + Integer.IsGreater(Container(5013).NumItems,1) + Integer.IsEqual(Container(5013).CurrentItem,1) + String.IsEqual(Container(5013).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5013).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5013))]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
 				<control type="list" id="5013">
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
@@ -1044,6 +1112,9 @@
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5013).IsUpdating + Integer.IsGreater(Container(5013).NumItems,1) + Integer.IsEqual(Container(5013).CurrentItem,1) + String.IsEqual(Container(5013).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5013).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5013))">Conditional</animation>
+					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5013).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5013).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5013).NumItems,3)">Conditional</animation>
 					<include content="POVIL_Item_landscape"><param name="id" value="5013" /></include>
 					<content target="videos">$VAR[POVIL_Path_5013]</content>
 				</control>
@@ -1056,42 +1127,37 @@
 				</control>
 			</control>
 		</control>
-		<control type="button" id="9610" description="touch: next row">
-			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5011) | Control.HasFocus(9610)] + [Integer.IsGreater(Container(5012).NumItems,0) | Integer.IsGreater(Container(5013).NumItems,0)]</visible><onup>5011</onup><ondown>5011</ondown><onleft>5011</onleft><onright>5011</onright>
-			<onclick condition="Integer.IsGreater(Container(5012).NumItems,0)">SetFocus(5012)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5012).NumItems,0) + Integer.IsGreater(Container(5013).NumItems,0)">SetFocus(5013)</onclick>
-		</control>
-		<control type="button" id="9612" description="touch: next row">
-			<left>0</left><top>970</top><width>1920</width><height>110</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5012) | Control.HasFocus(9612) | Control.HasFocus(9613)] + [Integer.IsGreater(Container(5013).NumItems,0)]</visible><onup>5012</onup><ondown>5012</ondown><onleft>5012</onleft><onright>5012</onright>
-			<onclick condition="Integer.IsGreater(Container(5013).NumItems,0)">SetFocus(5013)</onclick>
-		</control>
-		<control type="button" id="9613" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5012) | Control.HasFocus(9612) | Control.HasFocus(9613)]</visible><onup>5012</onup><ondown>5012</ondown><onleft>5012</onleft><onright>5012</onright>
-			<onclick condition="Integer.IsGreater(Container(5011).NumItems,0)">SetFocus(5011)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5011).NumItems,0)">SetFocus(9112)</onclick>
-		</control>
-		<control type="button" id="9615" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5013) | Control.HasFocus(9615)]</visible><onup>5013</onup><ondown>5013</ondown><onleft>5013</onleft><onright>5013</onright>
-			<onclick condition="Integer.IsGreater(Container(5012).NumItems,0)">SetFocus(5012)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5012).NumItems,0) + Integer.IsGreater(Container(5011).NumItems,0)">SetFocus(5011)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5012).NumItems,0) + !Integer.IsGreater(Container(5011).NumItems,0)">SetFocus(9112)</onclick>
-		</control>
 		<control type="group" description="rows tv">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
-			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5022) | Control.HasFocus(9622) | Control.HasFocus(9623)]">Conditional</animation>
-			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5023) | Control.HasFocus(9625)]">Conditional</animation>
+			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5022)">Conditional</animation>
+			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5023)">Conditional</animation>
 			<control type="group" description="טרנדיות עכשיו">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5022) | Control.HasFocus(9622) | Control.HasFocus(9623)] | [Control.HasFocus(5023) | Control.HasFocus(9625)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5022) | Control.HasFocus(5023)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5021]</textcolor><label>טרנדיות עכשיו</label>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5021).IsUpdating | [!Container(5021).IsUpdating + Integer.IsGreater(Container(5021).NumItems,1) + Integer.IsEqual(Container(5021).CurrentItem,1) + String.IsEqual(Container(5021).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021))] | [!Integer.IsGreater(Container(5021).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5021),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>52</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>278</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>504</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>730</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>956</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1182</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1408</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1634</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>179</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.tab.tv)) + String.IsEqual(Window(home).Property(povil.retry.5021),2) + !Container(5021).IsUpdating + !Integer.IsGreater(Container(5021).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 				</control>
 				<control type="list" id="5021">
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
@@ -1103,6 +1169,13 @@
 					<ondown condition="Integer.IsGreater(Container(5022).NumItems,0)">5022</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5022).NumItems,0) + Integer.IsGreater(Container(5023).NumItems,0)">5023</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5021).IsUpdating + Integer.IsGreater(Container(5021).NumItems,1) + Integer.IsEqual(Container(5021).CurrentItem,1) + String.IsEqual(Container(5021).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021))">Conditional</animation>
+					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5021).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5021).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1130,0" time="0" condition="Integer.IsEqual(Container(5021).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="904,0" time="0" condition="Integer.IsEqual(Container(5021).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="678,0" time="0" condition="Integer.IsEqual(Container(5021).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="452,0" time="0" condition="Integer.IsEqual(Container(5021).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="226,0" time="0" condition="Integer.IsEqual(Container(5021).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5021" /></include>
 					<content target="videos">$VAR[POVIL_Path_5021]</content>
 				</control>
@@ -1116,11 +1189,26 @@
 			</control>
 			<control type="group" description="פופולריות">
 				<left>0</left><top>402</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5023) | Control.HasFocus(9625)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5023)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5022]</textcolor><label>פופולריות</label>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5022).IsUpdating | [!Container(5022).IsUpdating + Integer.IsGreater(Container(5022).NumItems,1) + Integer.IsEqual(Container(5022).CurrentItem,1) + String.IsEqual(Container(5022).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5022).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5022))] | [!Integer.IsGreater(Container(5022).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5022),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>131</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.deep.tv)) + String.IsEqual(Window(home).Property(povil.retry.5022),2) + !Container(5022).IsUpdating + !Integer.IsGreater(Container(5022).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 				</control>
 				<control type="list" id="5022">
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
@@ -1132,6 +1220,9 @@
 					<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5023).NumItems,0)">5023</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5022).IsUpdating + Integer.IsGreater(Container(5022).NumItems,1) + Integer.IsEqual(Container(5022).CurrentItem,1) + String.IsEqual(Container(5022).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5022).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5022))">Conditional</animation>
+					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5022).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5022).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5022).NumItems,3)">Conditional</animation>
 					<include content="POVIL_Item_landscape"><param name="id" value="5022" /></include>
 					<content target="videos">$VAR[POVIL_Path_5022]</content>
 				</control>
@@ -1151,6 +1242,14 @@
 					<textcolor>$VAR[POVIL_RowTitleColor_5023]</textcolor><label>הפרק הבא</label>
 					<visible>Integer.IsGreater(Container(5023).NumItems,0)</visible>
 				</control>
+				<control type="group" description="loading">
+					<visible>Container(5023).IsUpdating | [!Container(5023).IsUpdating + Integer.IsGreater(Container(5023).NumItems,1) + Integer.IsEqual(Container(5023).CurrentItem,1) + String.IsEqual(Container(5023).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023))]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
 				<control type="list" id="5023">
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
@@ -1161,6 +1260,9 @@
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5023).IsUpdating + Integer.IsGreater(Container(5023).NumItems,1) + Integer.IsEqual(Container(5023).CurrentItem,1) + String.IsEqual(Container(5023).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023))">Conditional</animation>
+					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5023).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5023).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5023).NumItems,3)">Conditional</animation>
 					<include content="POVIL_Item_landscape"><param name="id" value="5023" /></include>
 					<content target="videos">$VAR[POVIL_Path_5023]</content>
 				</control>
@@ -1173,42 +1275,37 @@
 				</control>
 			</control>
 		</control>
-		<control type="button" id="9620" description="touch: next row">
-			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5021) | Control.HasFocus(9620)] + [Integer.IsGreater(Container(5022).NumItems,0) | Integer.IsGreater(Container(5023).NumItems,0)]</visible><onup>5021</onup><ondown>5021</ondown><onleft>5021</onleft><onright>5021</onright>
-			<onclick condition="Integer.IsGreater(Container(5022).NumItems,0)">SetFocus(5022)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5022).NumItems,0) + Integer.IsGreater(Container(5023).NumItems,0)">SetFocus(5023)</onclick>
-		</control>
-		<control type="button" id="9622" description="touch: next row">
-			<left>0</left><top>970</top><width>1920</width><height>110</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5022) | Control.HasFocus(9622) | Control.HasFocus(9623)] + [Integer.IsGreater(Container(5023).NumItems,0)]</visible><onup>5022</onup><ondown>5022</ondown><onleft>5022</onleft><onright>5022</onright>
-			<onclick condition="Integer.IsGreater(Container(5023).NumItems,0)">SetFocus(5023)</onclick>
-		</control>
-		<control type="button" id="9623" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5022) | Control.HasFocus(9622) | Control.HasFocus(9623)]</visible><onup>5022</onup><ondown>5022</ondown><onleft>5022</onleft><onright>5022</onright>
-			<onclick condition="Integer.IsGreater(Container(5021).NumItems,0)">SetFocus(5021)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5021).NumItems,0)">SetFocus(9124)</onclick>
-		</control>
-		<control type="button" id="9625" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5023) | Control.HasFocus(9625)]</visible><onup>5023</onup><ondown>5023</ondown><onleft>5023</onleft><onright>5023</onright>
-			<onclick condition="Integer.IsGreater(Container(5022).NumItems,0)">SetFocus(5022)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5022).NumItems,0) + Integer.IsGreater(Container(5021).NumItems,0)">SetFocus(5021)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5022).NumItems,0) + !Integer.IsGreater(Container(5021).NumItems,0)">SetFocus(9124)</onclick>
-		</control>
 		<control type="group" description="rows israeli">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),israeli)</visible>
-			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5032) | Control.HasFocus(9632) | Control.HasFocus(9633)]">Conditional</animation>
-			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5033) | Control.HasFocus(9635)]">Conditional</animation>
+			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5032)">Conditional</animation>
+			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5033)">Conditional</animation>
 			<control type="group" description="קשת 12">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5032) | Control.HasFocus(9632) | Control.HasFocus(9633)] | [Control.HasFocus(5033) | Control.HasFocus(9635)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5032) | Control.HasFocus(5033)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5031]</textcolor><label>קשת 12</label>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5031).IsUpdating | [!Container(5031).IsUpdating + Integer.IsGreater(Container(5031).NumItems,1) + Integer.IsEqual(Container(5031).CurrentItem,1) + String.IsEqual(Container(5031).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5031).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5031))] | [!Integer.IsGreater(Container(5031).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5031),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>52</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>278</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>504</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>730</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>956</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1182</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1408</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1634</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>179</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.tab.israeli)) + String.IsEqual(Window(home).Property(povil.retry.5031),2) + !Container(5031).IsUpdating + !Integer.IsGreater(Container(5031).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 				</control>
 				<control type="list" id="5031">
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
@@ -1220,6 +1317,13 @@
 					<ondown condition="Integer.IsGreater(Container(5032).NumItems,0)">5032</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5032).NumItems,0) + Integer.IsGreater(Container(5033).NumItems,0)">5033</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5031).IsUpdating + Integer.IsGreater(Container(5031).NumItems,1) + Integer.IsEqual(Container(5031).CurrentItem,1) + String.IsEqual(Container(5031).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5031).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5031))">Conditional</animation>
+					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5031).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5031).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1130,0" time="0" condition="Integer.IsEqual(Container(5031).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="904,0" time="0" condition="Integer.IsEqual(Container(5031).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="678,0" time="0" condition="Integer.IsEqual(Container(5031).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="452,0" time="0" condition="Integer.IsEqual(Container(5031).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="226,0" time="0" condition="Integer.IsEqual(Container(5031).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5031" /></include>
 					<content target="videos">$VAR[POVIL_Path_5031]</content>
 				</control>
@@ -1233,11 +1337,26 @@
 			</control>
 			<control type="group" description="רשת 13">
 				<left>0</left><top>402</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5033) | Control.HasFocus(9635)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5033)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5032]</textcolor><label>רשת 13</label>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5032).IsUpdating | [!Container(5032).IsUpdating + Integer.IsGreater(Container(5032).NumItems,1) + Integer.IsEqual(Container(5032).CurrentItem,1) + String.IsEqual(Container(5032).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5032).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5032))] | [!Integer.IsGreater(Container(5032).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5032),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>131</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.deep.israeli)) + String.IsEqual(Window(home).Property(povil.retry.5032),2) + !Container(5032).IsUpdating + !Integer.IsGreater(Container(5032).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 				</control>
 				<control type="list" id="5032">
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
@@ -1249,6 +1368,9 @@
 					<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5033).NumItems,0)">5033</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5032).IsUpdating + Integer.IsGreater(Container(5032).NumItems,1) + Integer.IsEqual(Container(5032).CurrentItem,1) + String.IsEqual(Container(5032).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5032).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5032))">Conditional</animation>
+					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5032).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5032).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5032).NumItems,3)">Conditional</animation>
 					<include content="POVIL_Item_landscape"><param name="id" value="5032" /></include>
 					<content target="videos">$VAR[POVIL_Path_5032]</content>
 				</control>
@@ -1267,6 +1389,25 @@
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5033]</textcolor><label>כאן 11</label>
 				</control>
+				<control type="group" description="loading">
+					<visible>Container(5033).IsUpdating | [!Container(5033).IsUpdating + Integer.IsGreater(Container(5033).NumItems,1) + Integer.IsEqual(Container(5033).CurrentItem,1) + String.IsEqual(Container(5033).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5033).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5033))] | [!Integer.IsGreater(Container(5033).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5033),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>52</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>278</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>504</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>730</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>956</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1182</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1408</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1634</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>179</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.deep.israeli)) + String.IsEqual(Window(home).Property(povil.retry.5033),2) + !Container(5033).IsUpdating + !Integer.IsGreater(Container(5033).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
+				</control>
 				<control type="list" id="5033">
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
@@ -1277,6 +1418,13 @@
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5033).IsUpdating + Integer.IsGreater(Container(5033).NumItems,1) + Integer.IsEqual(Container(5033).CurrentItem,1) + String.IsEqual(Container(5033).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5033).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5033))">Conditional</animation>
+					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5033).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5033).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1130,0" time="0" condition="Integer.IsEqual(Container(5033).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="904,0" time="0" condition="Integer.IsEqual(Container(5033).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="678,0" time="0" condition="Integer.IsEqual(Container(5033).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="452,0" time="0" condition="Integer.IsEqual(Container(5033).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="226,0" time="0" condition="Integer.IsEqual(Container(5033).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5033" /></include>
 					<content target="videos">$VAR[POVIL_Path_5033]</content>
 				</control>
@@ -1289,41 +1437,36 @@
 				</control>
 			</control>
 		</control>
-		<control type="button" id="9630" description="touch: next row">
-			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5031) | Control.HasFocus(9630)] + [Integer.IsGreater(Container(5032).NumItems,0) | Integer.IsGreater(Container(5033).NumItems,0)]</visible><onup>5031</onup><ondown>5031</ondown><onleft>5031</onleft><onright>5031</onright>
-			<onclick condition="Integer.IsGreater(Container(5032).NumItems,0)">SetFocus(5032)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5032).NumItems,0) + Integer.IsGreater(Container(5033).NumItems,0)">SetFocus(5033)</onclick>
-		</control>
-		<control type="button" id="9632" description="touch: next row">
-			<left>0</left><top>970</top><width>1920</width><height>110</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5032) | Control.HasFocus(9632) | Control.HasFocus(9633)] + [Integer.IsGreater(Container(5033).NumItems,0)]</visible><onup>5032</onup><ondown>5032</ondown><onleft>5032</onleft><onright>5032</onright>
-			<onclick condition="Integer.IsGreater(Container(5033).NumItems,0)">SetFocus(5033)</onclick>
-		</control>
-		<control type="button" id="9633" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5032) | Control.HasFocus(9632) | Control.HasFocus(9633)]</visible><onup>5032</onup><ondown>5032</ondown><onleft>5032</onleft><onright>5032</onright>
-			<onclick condition="Integer.IsGreater(Container(5031).NumItems,0)">SetFocus(5031)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5031).NumItems,0)">SetFocus(9136)</onclick>
-		</control>
-		<control type="button" id="9635" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5033) | Control.HasFocus(9635)]</visible><onup>5033</onup><ondown>5033</ondown><onleft>5033</onleft><onright>5033</onright>
-			<onclick condition="Integer.IsGreater(Container(5032).NumItems,0)">SetFocus(5032)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5032).NumItems,0) + Integer.IsGreater(Container(5031).NumItems,0)">SetFocus(5031)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5032).NumItems,0) + !Integer.IsGreater(Container(5031).NumItems,0)">SetFocus(9136)</onclick>
-		</control>
 		<control type="group" description="rows live">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),live)</visible>
-			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5042) | Control.HasFocus(9643)]">Conditional</animation>
+			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5042)">Conditional</animation>
 			<control type="group" description="ערוצים">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5042) | Control.HasFocus(9643)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5042)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5041]</textcolor><label>ערוצים</label>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5041).IsUpdating | [!Container(5041).IsUpdating + Integer.IsGreater(Container(5041).NumItems,1) + Integer.IsEqual(Container(5041).CurrentItem,1) + String.IsEqual(Container(5041).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5041).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5041))] | [!Integer.IsGreater(Container(5041).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5041),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>20</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>250</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>480</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>710</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>940</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1170</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1400</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1630</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>132</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.tab.live)) + String.IsEqual(Window(home).Property(povil.retry.5041),2) + !Container(5041).IsUpdating + !Integer.IsGreater(Container(5041).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 				</control>
 				<control type="list" id="5041">
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
@@ -1334,6 +1477,13 @@
 					<onfocus>SetProperty(povil.tab,live,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5042).NumItems,0)">5042</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5041).IsUpdating + Integer.IsGreater(Container(5041).NumItems,1) + Integer.IsEqual(Container(5041).CurrentItem,1) + String.IsEqual(Container(5041).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5041).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5041))">Conditional</animation>
+					<animation effect="slide" end="1610,0" time="0" condition="Integer.IsEqual(Container(5041).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1380,0" time="0" condition="Integer.IsEqual(Container(5041).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1150,0" time="0" condition="Integer.IsEqual(Container(5041).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="920,0" time="0" condition="Integer.IsEqual(Container(5041).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="690,0" time="0" condition="Integer.IsEqual(Container(5041).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="460,0" time="0" condition="Integer.IsEqual(Container(5041).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="230,0" time="0" condition="Integer.IsEqual(Container(5041).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_square"><param name="id" value="5041" /></include>
 					<content target="videos">$VAR[POVIL_Path_5041]</content>
 				</control>
@@ -1345,6 +1495,25 @@
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5042]</textcolor><label>רדיו</label>
 				</control>
+				<control type="group" description="loading">
+					<visible>Container(5042).IsUpdating | [!Container(5042).IsUpdating + Integer.IsGreater(Container(5042).NumItems,1) + Integer.IsEqual(Container(5042).CurrentItem,1) + String.IsEqual(Container(5042).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5042).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5042))] | [!Integer.IsGreater(Container(5042).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5042),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>20</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>250</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>480</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>710</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>940</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1170</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1400</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1630</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>132</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.deep.live)) + String.IsEqual(Window(home).Property(povil.retry.5042),2) + !Container(5042).IsUpdating + !Integer.IsGreater(Container(5042).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
+				</control>
 				<control type="list" id="5042">
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
@@ -1354,34 +1523,49 @@
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,live,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5042).IsUpdating + Integer.IsGreater(Container(5042).NumItems,1) + Integer.IsEqual(Container(5042).CurrentItem,1) + String.IsEqual(Container(5042).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5042).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5042))">Conditional</animation>
+					<animation effect="slide" end="1610,0" time="0" condition="Integer.IsEqual(Container(5042).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1380,0" time="0" condition="Integer.IsEqual(Container(5042).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1150,0" time="0" condition="Integer.IsEqual(Container(5042).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="920,0" time="0" condition="Integer.IsEqual(Container(5042).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="690,0" time="0" condition="Integer.IsEqual(Container(5042).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="460,0" time="0" condition="Integer.IsEqual(Container(5042).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="230,0" time="0" condition="Integer.IsEqual(Container(5042).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_square"><param name="id" value="5042" /></include>
 					<content target="videos">$VAR[POVIL_Path_5042]</content>
 				</control>
 			</control>
 		</control>
-		<control type="button" id="9640" description="touch: next row">
-			<left>0</left><top>960</top><width>1920</width><height>120</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5041) | Control.HasFocus(9640)] + [Integer.IsGreater(Container(5042).NumItems,0)]</visible><onup>5041</onup><ondown>5041</ondown><onleft>5041</onleft><onright>5041</onright>
-			<onclick condition="Integer.IsGreater(Container(5042).NumItems,0)">SetFocus(5042)</onclick>
-		</control>
-		<control type="button" id="9643" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5042) | Control.HasFocus(9643)]</visible><onup>5042</onup><ondown>5042</ondown><onleft>5042</onleft><onright>5042</onright>
-			<onclick condition="Integer.IsGreater(Container(5041).NumItems,0)">SetFocus(5041)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5041).NumItems,0)">SetFocus(9148)</onclick>
-		</control>
 		<control type="group" description="rows kids">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),kids)</visible>
-			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5052) | Control.HasFocus(9652) | Control.HasFocus(9653)]">Conditional</animation>
-			<animation effect="slide" end="0,-804" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5053) | Control.HasFocus(9655)]">Conditional</animation>
+			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5052)">Conditional</animation>
+			<animation effect="slide" end="0,-804" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5053)">Conditional</animation>
 			<control type="group" description="סרטים לכל המשפחה">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5052) | Control.HasFocus(9652) | Control.HasFocus(9653)] | [Control.HasFocus(5053) | Control.HasFocus(9655)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5052) | Control.HasFocus(5053)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5051]</textcolor><label>סרטים לכל המשפחה</label>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5051).IsUpdating | [!Container(5051).IsUpdating + Integer.IsGreater(Container(5051).NumItems,1) + Integer.IsEqual(Container(5051).CurrentItem,1) + String.IsEqual(Container(5051).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5051).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5051))] | [!Integer.IsGreater(Container(5051).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5051),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>52</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>278</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>504</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>730</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>956</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1182</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1408</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1634</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>179</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.tab.kids)) + String.IsEqual(Window(home).Property(povil.retry.5051),2) + !Container(5051).IsUpdating + !Integer.IsGreater(Container(5051).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 				</control>
 				<control type="list" id="5051">
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
@@ -1393,6 +1577,13 @@
 					<ondown condition="Integer.IsGreater(Container(5052).NumItems,0)">5052</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5052).NumItems,0) + Integer.IsGreater(Container(5053).NumItems,0)">5053</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5051).IsUpdating + Integer.IsGreater(Container(5051).NumItems,1) + Integer.IsEqual(Container(5051).CurrentItem,1) + String.IsEqual(Container(5051).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5051).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5051))">Conditional</animation>
+					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5051).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5051).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1130,0" time="0" condition="Integer.IsEqual(Container(5051).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="904,0" time="0" condition="Integer.IsEqual(Container(5051).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="678,0" time="0" condition="Integer.IsEqual(Container(5051).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="452,0" time="0" condition="Integer.IsEqual(Container(5051).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="226,0" time="0" condition="Integer.IsEqual(Container(5051).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5051" /></include>
 					<content target="videos">$VAR[POVIL_Path_5051]</content>
 				</control>
@@ -1406,11 +1597,30 @@
 			</control>
 			<control type="group" description="סרטי אנימציה">
 				<left>0</left><top>402</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5053) | Control.HasFocus(9655)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5053)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5052]</textcolor><label>סרטי אנימציה</label>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5052).IsUpdating | [!Container(5052).IsUpdating + Integer.IsGreater(Container(5052).NumItems,1) + Integer.IsEqual(Container(5052).CurrentItem,1) + String.IsEqual(Container(5052).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5052).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5052))] | [!Integer.IsGreater(Container(5052).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5052),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>52</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>278</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>504</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>730</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>956</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1182</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1408</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1634</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>179</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.deep.kids)) + String.IsEqual(Window(home).Property(povil.retry.5052),2) + !Container(5052).IsUpdating + !Integer.IsGreater(Container(5052).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 				</control>
 				<control type="list" id="5052">
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
@@ -1422,6 +1632,13 @@
 					<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5053).NumItems,0)">5053</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5052).IsUpdating + Integer.IsGreater(Container(5052).NumItems,1) + Integer.IsEqual(Container(5052).CurrentItem,1) + String.IsEqual(Container(5052).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5052).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5052))">Conditional</animation>
+					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5052).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5052).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1130,0" time="0" condition="Integer.IsEqual(Container(5052).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="904,0" time="0" condition="Integer.IsEqual(Container(5052).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="678,0" time="0" condition="Integer.IsEqual(Container(5052).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="452,0" time="0" condition="Integer.IsEqual(Container(5052).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="226,0" time="0" condition="Integer.IsEqual(Container(5052).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5052" /></include>
 					<content target="videos">$VAR[POVIL_Path_5052]</content>
 				</control>
@@ -1440,6 +1657,21 @@
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5053]</textcolor><label>קטנטנים</label>
 				</control>
+				<control type="group" description="loading">
+					<visible>Container(5053).IsUpdating | [!Container(5053).IsUpdating + Integer.IsGreater(Container(5053).NumItems,1) + Integer.IsEqual(Container(5053).CurrentItem,1) + String.IsEqual(Container(5053).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5053).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5053))] | [!Integer.IsGreater(Container(5053).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5053),2)]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
+				<control type="label" description="nothing here">
+					<left>90</left><top>131</top><width>1740</width><height>60</height>
+					<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
+					<label>אין כרגע מה להציג כאן</label>
+					<visible>!String.IsEmpty(Window(home).Property(povil.deep.kids)) + String.IsEqual(Window(home).Property(povil.retry.5053),2) + !Container(5053).IsUpdating + !Integer.IsGreater(Container(5053).NumItems,0)</visible>
+					<animation effect="fade" start="0" end="100" time="300">Visible</animation>
+				</control>
 				<control type="list" id="5053">
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
@@ -1450,6 +1682,9 @@
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5053).IsUpdating + Integer.IsGreater(Container(5053).NumItems,1) + Integer.IsEqual(Container(5053).CurrentItem,1) + String.IsEqual(Container(5053).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5053).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5053))">Conditional</animation>
+					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5053).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5053).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5053).NumItems,3)">Conditional</animation>
 					<include content="POVIL_Item_landscape"><param name="id" value="5053" /></include>
 					<content target="videos">$VAR[POVIL_Path_5053]</content>
 				</control>
@@ -1462,45 +1697,33 @@
 				</control>
 			</control>
 		</control>
-		<control type="button" id="9650" description="touch: next row">
-			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5051) | Control.HasFocus(9650)] + [Integer.IsGreater(Container(5052).NumItems,0) | Integer.IsGreater(Container(5053).NumItems,0)]</visible><onup>5051</onup><ondown>5051</ondown><onleft>5051</onleft><onright>5051</onright>
-			<onclick condition="Integer.IsGreater(Container(5052).NumItems,0)">SetFocus(5052)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5052).NumItems,0) + Integer.IsGreater(Container(5053).NumItems,0)">SetFocus(5053)</onclick>
-		</control>
-		<control type="button" id="9652" description="touch: next row">
-			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5052) | Control.HasFocus(9652) | Control.HasFocus(9653)] + [Integer.IsGreater(Container(5053).NumItems,0)]</visible><onup>5052</onup><ondown>5052</ondown><onleft>5052</onleft><onright>5052</onright>
-			<onclick condition="Integer.IsGreater(Container(5053).NumItems,0)">SetFocus(5053)</onclick>
-		</control>
-		<control type="button" id="9653" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5052) | Control.HasFocus(9652) | Control.HasFocus(9653)]</visible><onup>5052</onup><ondown>5052</ondown><onleft>5052</onleft><onright>5052</onright>
-			<onclick condition="Integer.IsGreater(Container(5051).NumItems,0)">SetFocus(5051)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5051).NumItems,0)">SetFocus(9160)</onclick>
-		</control>
-		<control type="button" id="9655" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5053) | Control.HasFocus(9655)]</visible><onup>5053</onup><ondown>5053</ondown><onleft>5053</onleft><onright>5053</onright>
-			<onclick condition="Integer.IsGreater(Container(5052).NumItems,0)">SetFocus(5052)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5052).NumItems,0) + Integer.IsGreater(Container(5051).NumItems,0)">SetFocus(5051)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5052).NumItems,0) + !Integer.IsGreater(Container(5051).NumItems,0)">SetFocus(9160)</onclick>
-		</control>
 		<control type="group" description="rows favourites">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),favourites)</visible>
-			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5062) | Control.HasFocus(9662) | Control.HasFocus(9663)]">Conditional</animation>
-			<animation effect="slide" end="0,-754" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5063) | Control.HasFocus(9664) | Control.HasFocus(9665)]">Conditional</animation>
-			<animation effect="slide" end="0,-1156" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5064) | Control.HasFocus(9666) | Control.HasFocus(9667)]">Conditional</animation>
-			<animation effect="slide" end="0,-1558" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5065) | Control.HasFocus(9669)]">Conditional</animation>
+			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5062)">Conditional</animation>
+			<animation effect="slide" end="0,-754" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5063)">Conditional</animation>
+			<animation effect="slide" end="0,-1156" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5064)">Conditional</animation>
+			<animation effect="slide" end="0,-1558" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5065)">Conditional</animation>
 			<control type="group" description="המועדפים שלי">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5062) | Control.HasFocus(9662) | Control.HasFocus(9663)] | [Control.HasFocus(5063) | Control.HasFocus(9664) | Control.HasFocus(9665)] | [Control.HasFocus(5064) | Control.HasFocus(9666) | Control.HasFocus(9667)] | [Control.HasFocus(5065) | Control.HasFocus(9669)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5062) | Control.HasFocus(5063) | Control.HasFocus(5064) | Control.HasFocus(5065)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5061]</textcolor><label>המועדפים שלי</label>
 					<visible>Integer.IsGreater(Container(5061).NumItems,0)</visible>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5061).IsUpdating | [!Container(5061).IsUpdating + Integer.IsGreater(Container(5061).NumItems,1) + Integer.IsEqual(Container(5061).CurrentItem,1) + String.IsEqual(Container(5061).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5061).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5061))]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>20</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>250</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>480</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>710</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>940</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1170</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1400</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1630</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 				</control>
 				<control type="list" id="5061">
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
@@ -1514,18 +1737,37 @@
 					<ondown condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5064).NumItems,0)">5064</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">5065</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5061).IsUpdating + Integer.IsGreater(Container(5061).NumItems,1) + Integer.IsEqual(Container(5061).CurrentItem,1) + String.IsEqual(Container(5061).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5061).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5061))">Conditional</animation>
+					<animation effect="slide" end="1610,0" time="0" condition="Integer.IsEqual(Container(5061).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1380,0" time="0" condition="Integer.IsEqual(Container(5061).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1150,0" time="0" condition="Integer.IsEqual(Container(5061).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="920,0" time="0" condition="Integer.IsEqual(Container(5061).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="690,0" time="0" condition="Integer.IsEqual(Container(5061).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="460,0" time="0" condition="Integer.IsEqual(Container(5061).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="230,0" time="0" condition="Integer.IsEqual(Container(5061).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_square"><param name="id" value="5061" /></include>
 					<content target="videos">$VAR[POVIL_Path_5061]</content>
 				</control>
 			</control>
 			<control type="group" description="סרטים שמורים">
 				<left>0</left><top>352</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5063) | Control.HasFocus(9664) | Control.HasFocus(9665)] | [Control.HasFocus(5064) | Control.HasFocus(9666) | Control.HasFocus(9667)] | [Control.HasFocus(5065) | Control.HasFocus(9669)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5063) | Control.HasFocus(5064) | Control.HasFocus(5065)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5062]</textcolor><label>סרטים שמורים</label>
 					<visible>Integer.IsGreater(Container(5062).NumItems,0)</visible>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5062).IsUpdating | [!Container(5062).IsUpdating + Integer.IsGreater(Container(5062).NumItems,1) + Integer.IsEqual(Container(5062).CurrentItem,1) + String.IsEqual(Container(5062).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5062).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5062))]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>52</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>278</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>504</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>730</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>956</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1182</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1408</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1634</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 				</control>
 				<control type="list" id="5062">
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
@@ -1539,6 +1781,13 @@
 					<ondown condition="!Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5064).NumItems,0)">5064</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">5065</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5062).IsUpdating + Integer.IsGreater(Container(5062).NumItems,1) + Integer.IsEqual(Container(5062).CurrentItem,1) + String.IsEqual(Container(5062).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5062).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5062))">Conditional</animation>
+					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5062).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5062).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1130,0" time="0" condition="Integer.IsEqual(Container(5062).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="904,0" time="0" condition="Integer.IsEqual(Container(5062).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="678,0" time="0" condition="Integer.IsEqual(Container(5062).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="452,0" time="0" condition="Integer.IsEqual(Container(5062).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="226,0" time="0" condition="Integer.IsEqual(Container(5062).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5062" /></include>
 					<content target="videos">$VAR[POVIL_Path_5062]</content>
 				</control>
@@ -1552,12 +1801,24 @@
 			</control>
 			<control type="group" description="סדרות שמורות">
 				<left>0</left><top>754</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5064) | Control.HasFocus(9666) | Control.HasFocus(9667)] | [Control.HasFocus(5065) | Control.HasFocus(9669)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5064) | Control.HasFocus(5065)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5063]</textcolor><label>סדרות שמורות</label>
 					<visible>Integer.IsGreater(Container(5063).NumItems,0)</visible>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5063).IsUpdating | [!Container(5063).IsUpdating + Integer.IsGreater(Container(5063).NumItems,1) + Integer.IsEqual(Container(5063).CurrentItem,1) + String.IsEqual(Container(5063).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5063).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5063))]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>52</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>278</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>504</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>730</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>956</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1182</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1408</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1634</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 				</control>
 				<control type="list" id="5063">
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
@@ -1571,6 +1832,13 @@
 					<ondown condition="Integer.IsGreater(Container(5064).NumItems,0)">5064</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">5065</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5063).IsUpdating + Integer.IsGreater(Container(5063).NumItems,1) + Integer.IsEqual(Container(5063).CurrentItem,1) + String.IsEqual(Container(5063).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5063).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5063))">Conditional</animation>
+					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5063).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5063).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1130,0" time="0" condition="Integer.IsEqual(Container(5063).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="904,0" time="0" condition="Integer.IsEqual(Container(5063).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="678,0" time="0" condition="Integer.IsEqual(Container(5063).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="452,0" time="0" condition="Integer.IsEqual(Container(5063).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="226,0" time="0" condition="Integer.IsEqual(Container(5063).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5063" /></include>
 					<content target="videos">$VAR[POVIL_Path_5063]</content>
 				</control>
@@ -1584,12 +1852,24 @@
 			</control>
 			<control type="group" description="הסרטים שלי (MDBList)">
 				<left>0</left><top>1156</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5065) | Control.HasFocus(9669)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5065)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5064]</textcolor><label>הסרטים שלי (MDBList)</label>
 					<visible>Integer.IsGreater(Container(5064).NumItems,0)</visible>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5064).IsUpdating | [!Container(5064).IsUpdating + Integer.IsGreater(Container(5064).NumItems,1) + Integer.IsEqual(Container(5064).CurrentItem,1) + String.IsEqual(Container(5064).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5064).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5064))]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>52</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>278</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>504</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>730</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>956</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1182</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1408</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1634</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 				</control>
 				<control type="list" id="5064">
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
@@ -1603,6 +1883,13 @@
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5065).NumItems,0)">5065</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5064).IsUpdating + Integer.IsGreater(Container(5064).NumItems,1) + Integer.IsEqual(Container(5064).CurrentItem,1) + String.IsEqual(Container(5064).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5064).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5064))">Conditional</animation>
+					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5064).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5064).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1130,0" time="0" condition="Integer.IsEqual(Container(5064).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="904,0" time="0" condition="Integer.IsEqual(Container(5064).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="678,0" time="0" condition="Integer.IsEqual(Container(5064).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="452,0" time="0" condition="Integer.IsEqual(Container(5064).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="226,0" time="0" condition="Integer.IsEqual(Container(5064).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5064" /></include>
 					<content target="videos">$VAR[POVIL_Path_5064]</content>
 				</control>
@@ -1622,6 +1909,18 @@
 					<textcolor>$VAR[POVIL_RowTitleColor_5065]</textcolor><label>הסדרות שלי (MDBList)</label>
 					<visible>Integer.IsGreater(Container(5065).NumItems,0)</visible>
 				</control>
+				<control type="group" description="loading">
+					<visible>Container(5065).IsUpdating | [!Container(5065).IsUpdating + Integer.IsGreater(Container(5065).NumItems,1) + Integer.IsEqual(Container(5065).CurrentItem,1) + String.IsEqual(Container(5065).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5065).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5065))]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>52</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>278</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>504</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>730</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>956</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1182</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1408</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1634</left><top>62</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
 				<control type="list" id="5065">
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
@@ -1634,6 +1933,13 @@
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5065).IsUpdating + Integer.IsGreater(Container(5065).NumItems,1) + Integer.IsEqual(Container(5065).CurrentItem,1) + String.IsEqual(Container(5065).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5065).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5065))">Conditional</animation>
+					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5065).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5065).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1130,0" time="0" condition="Integer.IsEqual(Container(5065).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="904,0" time="0" condition="Integer.IsEqual(Container(5065).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="678,0" time="0" condition="Integer.IsEqual(Container(5065).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="452,0" time="0" condition="Integer.IsEqual(Container(5065).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="226,0" time="0" condition="Integer.IsEqual(Container(5065).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5065" /></include>
 					<content target="videos">$VAR[POVIL_Path_5065]</content>
 				</control>
@@ -1646,74 +1952,30 @@
 				</control>
 			</control>
 		</control>
-		<control type="button" id="9660" description="touch: next row">
-			<left>0</left><top>960</top><width>1920</width><height>120</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5061) | Control.HasFocus(9660)] + [Integer.IsGreater(Container(5062).NumItems,0) | Integer.IsGreater(Container(5063).NumItems,0) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible><onup>5061</onup><ondown>5061</ondown><onleft>5061</onleft><onright>5061</onright>
-			<onclick condition="Integer.IsGreater(Container(5062).NumItems,0)">SetFocus(5062)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5063).NumItems,0)">SetFocus(5063)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5064).NumItems,0)">SetFocus(5064)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">SetFocus(5065)</onclick>
-		</control>
-		<control type="button" id="9662" description="touch: next row">
-			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5062) | Control.HasFocus(9662) | Control.HasFocus(9663)] + [Integer.IsGreater(Container(5063).NumItems,0) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible><onup>5062</onup><ondown>5062</ondown><onleft>5062</onleft><onright>5062</onright>
-			<onclick condition="Integer.IsGreater(Container(5063).NumItems,0)">SetFocus(5063)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5064).NumItems,0)">SetFocus(5064)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">SetFocus(5065)</onclick>
-		</control>
-		<control type="button" id="9663" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5062) | Control.HasFocus(9662) | Control.HasFocus(9663)]</visible><onup>5062</onup><ondown>5062</ondown><onleft>5062</onleft><onright>5062</onright>
-			<onclick condition="Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(5061)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(9172)</onclick>
-		</control>
-		<control type="button" id="9664" description="touch: next row">
-			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5063) | Control.HasFocus(9664) | Control.HasFocus(9665)] + [Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible><onup>5063</onup><ondown>5063</ondown><onleft>5063</onleft><onright>5063</onright>
-			<onclick condition="Integer.IsGreater(Container(5064).NumItems,0)">SetFocus(5064)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">SetFocus(5065)</onclick>
-		</control>
-		<control type="button" id="9665" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5063) | Control.HasFocus(9664) | Control.HasFocus(9665)]</visible><onup>5063</onup><ondown>5063</ondown><onleft>5063</onleft><onright>5063</onright>
-			<onclick condition="Integer.IsGreater(Container(5062).NumItems,0)">SetFocus(5062)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(5061)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(9172)</onclick>
-		</control>
-		<control type="button" id="9666" description="touch: next row">
-			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5064) | Control.HasFocus(9666) | Control.HasFocus(9667)] + [Integer.IsGreater(Container(5065).NumItems,0)]</visible><onup>5064</onup><ondown>5064</ondown><onleft>5064</onleft><onright>5064</onright>
-			<onclick condition="Integer.IsGreater(Container(5065).NumItems,0)">SetFocus(5065)</onclick>
-		</control>
-		<control type="button" id="9667" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5064) | Control.HasFocus(9666) | Control.HasFocus(9667)]</visible><onup>5064</onup><ondown>5064</ondown><onleft>5064</onleft><onright>5064</onright>
-			<onclick condition="Integer.IsGreater(Container(5063).NumItems,0)">SetFocus(5063)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5062).NumItems,0)">SetFocus(5062)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(5061)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(9172)</onclick>
-		</control>
-		<control type="button" id="9669" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5065) | Control.HasFocus(9669)]</visible><onup>5065</onup><ondown>5065</ondown><onleft>5065</onleft><onright>5065</onright>
-			<onclick condition="Integer.IsGreater(Container(5064).NumItems,0)">SetFocus(5064)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5063).NumItems,0)">SetFocus(5063)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5064).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5062).NumItems,0)">SetFocus(5062)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5064).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(5061)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5064).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(9172)</onclick>
-		</control>
 		<control type="group" description="rows search">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),search)</visible>
-			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5072) | Control.HasFocus(9673)]">Conditional</animation>
+			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5072)">Conditional</animation>
 			<control type="group" description="חיפושי סרטים אחרונים">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5072) | Control.HasFocus(9673)]">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5072)">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5071]</textcolor><label>חיפושי סרטים אחרונים</label>
 					<visible>Integer.IsGreater(Container(5071).NumItems,0)</visible>
+				</control>
+				<control type="group" description="loading">
+					<visible>Container(5071).IsUpdating | [!Container(5071).IsUpdating + Integer.IsGreater(Container(5071).NumItems,1) + Integer.IsEqual(Container(5071).CurrentItem,1) + String.IsEqual(Container(5071).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5071).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5071))]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>20</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>250</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>480</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>710</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>940</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1170</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1400</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1630</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 				</control>
 				<control type="list" id="5071">
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
@@ -1724,6 +1986,13 @@
 					<onfocus>SetProperty(povil.tab,search,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5072).NumItems,0)">5072</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5071).IsUpdating + Integer.IsGreater(Container(5071).NumItems,1) + Integer.IsEqual(Container(5071).CurrentItem,1) + String.IsEqual(Container(5071).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5071).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5071))">Conditional</animation>
+					<animation effect="slide" end="1610,0" time="0" condition="Integer.IsEqual(Container(5071).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1380,0" time="0" condition="Integer.IsEqual(Container(5071).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1150,0" time="0" condition="Integer.IsEqual(Container(5071).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="920,0" time="0" condition="Integer.IsEqual(Container(5071).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="690,0" time="0" condition="Integer.IsEqual(Container(5071).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="460,0" time="0" condition="Integer.IsEqual(Container(5071).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="230,0" time="0" condition="Integer.IsEqual(Container(5071).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_square"><param name="id" value="5071" /></include>
 					<content target="videos">$VAR[POVIL_Path_5071]</content>
 				</control>
@@ -1736,6 +2005,18 @@
 					<textcolor>$VAR[POVIL_RowTitleColor_5072]</textcolor><label>חיפושי סדרות אחרונים</label>
 					<visible>Integer.IsGreater(Container(5072).NumItems,0)</visible>
 				</control>
+				<control type="group" description="loading">
+					<visible>Container(5072).IsUpdating | [!Container(5072).IsUpdating + Integer.IsGreater(Container(5072).NumItems,1) + Integer.IsEqual(Container(5072).CurrentItem,1) + String.IsEqual(Container(5072).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5072).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5072))]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>20</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>250</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>480</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>710</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>940</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1170</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1400</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1630</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
 				<control type="list" id="5072">
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
@@ -1745,21 +2026,17 @@
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,search,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5072).IsUpdating + Integer.IsGreater(Container(5072).NumItems,1) + Integer.IsEqual(Container(5072).CurrentItem,1) + String.IsEqual(Container(5072).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5072).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5072))">Conditional</animation>
+					<animation effect="slide" end="1610,0" time="0" condition="Integer.IsEqual(Container(5072).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1380,0" time="0" condition="Integer.IsEqual(Container(5072).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1150,0" time="0" condition="Integer.IsEqual(Container(5072).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="920,0" time="0" condition="Integer.IsEqual(Container(5072).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="690,0" time="0" condition="Integer.IsEqual(Container(5072).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="460,0" time="0" condition="Integer.IsEqual(Container(5072).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="230,0" time="0" condition="Integer.IsEqual(Container(5072).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_square"><param name="id" value="5072" /></include>
 					<content target="videos">$VAR[POVIL_Path_5072]</content>
 				</control>
 			</control>
-		</control>
-		<control type="button" id="9670" description="touch: next row">
-			<left>0</left><top>960</top><width>1920</width><height>120</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5071) | Control.HasFocus(9670)] + [Integer.IsGreater(Container(5072).NumItems,0)]</visible><onup>5071</onup><ondown>5071</ondown><onleft>5071</onleft><onright>5071</onright>
-			<onclick condition="Integer.IsGreater(Container(5072).NumItems,0)">SetFocus(5072)</onclick>
-		</control>
-		<control type="button" id="9673" description="touch: previous row">
-			<left>0</left><top>612</top><width>1920</width><height>50</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5072) | Control.HasFocus(9673)]</visible><onup>5072</onup><ondown>5072</ondown><onleft>5072</onleft><onright>5072</onright>
-			<onclick condition="Integer.IsGreater(Container(5071).NumItems,0)">SetFocus(5071)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5071).NumItems,0)">SetFocus(9184)</onclick>
 		</control>
 		<control type="group" description="rows settings">
 			<left>0</left><top>618</top>
@@ -1771,6 +2048,18 @@
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
 					<textcolor>$VAR[POVIL_RowTitleColor_5081]</textcolor><label>קיצורי דרך</label>
 				</control>
+				<control type="group" description="loading">
+					<visible>Container(5081).IsUpdating | [!Integer.IsGreater(Container(5081).NumItems,0) + String.IsEmpty(Window(home).Property(povil.tab.settings))]</visible>
+					<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
+					<control type="image"><left>20</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>250</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>480</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>710</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>940</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1170</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1400</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+					<control type="image"><left>1630</left><top>62</top><width>200</width><height>200</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+				</control>
 				<control type="list" id="5081">
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
@@ -1779,6 +2068,13 @@
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,settings,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5081).IsUpdating + Integer.IsGreater(Container(5081).NumItems,1) + Integer.IsEqual(Container(5081).CurrentItem,1) + String.IsEqual(Container(5081).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5081).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5081))">Conditional</animation>
+					<animation effect="slide" end="1610,0" time="0" condition="Integer.IsEqual(Container(5081).NumItems,1)">Conditional</animation>
+					<animation effect="slide" end="1380,0" time="0" condition="Integer.IsEqual(Container(5081).NumItems,2)">Conditional</animation>
+					<animation effect="slide" end="1150,0" time="0" condition="Integer.IsEqual(Container(5081).NumItems,3)">Conditional</animation>
+					<animation effect="slide" end="920,0" time="0" condition="Integer.IsEqual(Container(5081).NumItems,4)">Conditional</animation>
+					<animation effect="slide" end="690,0" time="0" condition="Integer.IsEqual(Container(5081).NumItems,5)">Conditional</animation>
+					<animation effect="slide" end="460,0" time="0" condition="Integer.IsEqual(Container(5081).NumItems,6)">Conditional</animation>
+					<animation effect="slide" end="230,0" time="0" condition="Integer.IsEqual(Container(5081).NumItems,7)">Conditional</animation>
 					<include content="POVIL_Item_square"><param name="id" value="5081" /></include>
 					<content>
 						<item>
