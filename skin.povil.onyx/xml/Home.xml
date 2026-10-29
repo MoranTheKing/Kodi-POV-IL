@@ -56,6 +56,19 @@
 			<texture background="true">$VAR[POVIL_HeroFanart]</texture>
 			<aspectratio>scale</aspectratio><fadetime>420</fadetime>
 		</control>
+		<control type="image" description="ambient wash: the small copy is made">
+			<left>0</left><top>0</top><width>1</width><height>1</height>
+			<texture background="true" colordiffuse="01FFFFFF">$VAR[POVIL_HeroAmbient]</texture>
+			<visible>System.IdleTime(1)</visible>
+		</control>
+		<control type="image" description="ambient wash">
+			<left>-60</left><top>-60</top><width>2040</width><height>1200</height>
+			<texture background="true" colordiffuse="FF999999">$INFO[Window(home).Property(povil.blur)]</texture>
+			<aspectratio>scale</aspectratio><fadetime>600</fadetime>
+			<visible>!String.IsEmpty(Control.GetLabel(9803))</visible>
+			<animation effect="fade" time="300">Visible</animation><animation effect="fade" time="150">Hidden</animation>
+		</control>
+		<control type="label" id="9803"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_HeroAmbientFile]</label></control>
 		<control type="image" description="hero shade">
 			<left>520</left><top>0</top><width>1400</width><height>1080</height>
 			<texture>povil/grad_right.png</texture>
@@ -98,6 +111,7 @@
 				<label>סרטים</label>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.movies,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9010,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5011),2) + !Integer.IsGreater(Container(5011).NumItems,0)">ClearProperty(povil.retry.5011,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5012),2) + !Integer.IsGreater(Container(5012).NumItems,0)">ClearProperty(povil.retry.5012,home)</onfocus>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.main&amp;action=MovieList&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D",return)</onclick>
@@ -118,6 +132,7 @@
 				<label>סדרות</label>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.tv,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9011,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5021),2) + !Integer.IsGreater(Container(5021).NumItems,0)">ClearProperty(povil.retry.5021,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5022),2) + !Integer.IsGreater(Container(5022).NumItems,0)">ClearProperty(povil.retry.5022,home)</onfocus>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.main&amp;action=TVShowList&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA",return)</onclick>
@@ -139,6 +154,7 @@
 				<label>ישראלי</label>
 				<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.israeli,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9012,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5031),2) + !Integer.IsGreater(Container(5031).NumItems,0)">ClearProperty(povil.retry.5031,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5032),2) + !Integer.IsGreater(Container(5032).NumItems,0)">ClearProperty(povil.retry.5032,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5033),2) + !Integer.IsGreater(Container(5033).NumItems,0)">ClearProperty(povil.retry.5033,home)</onfocus>
@@ -161,6 +177,7 @@
 				<label>שידור חי</label>
 				<onfocus>SetProperty(povil.tab,live,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.live,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9013,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5041),2) + !Integer.IsGreater(Container(5041).NumItems,0)">ClearProperty(povil.retry.5041,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5042),2) + !Integer.IsGreater(Container(5042).NumItems,0)">ClearProperty(povil.retry.5042,home)</onfocus>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?iconimage=&amp;mode=1&amp;module&amp;moredata&amp;name=%5bB%5d%d7%a9%d7%99%d7%93%d7%95%d7%a8%d7%99%d7%9d%20%d7%97%d7%99%d7%99%d7%9d%5b%2fB%5d&amp;url",return)</onclick>
@@ -182,6 +199,7 @@
 				<label>ילדים</label>
 				<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.kids,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9014,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5051),2) + !Integer.IsGreater(Container(5051).NumItems,0)">ClearProperty(povil.retry.5051,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5052),2) + !Integer.IsGreater(Container(5052).NumItems,0)">ClearProperty(povil.retry.5052,home)</onfocus>
 				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5053),2) + !Integer.IsGreater(Container(5053).NumItems,0)">ClearProperty(povil.retry.5053,home)</onfocus>
@@ -204,6 +222,7 @@
 				<label>מועדפים</label>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.favourites,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9015,home)</onfocus>
 				<onclick>ActivateWindow(favouritesbrowser)</onclick>
 				<onleft>9016</onleft>
 				<onright>9014</onright>
@@ -223,6 +242,7 @@
 				<label>חיפוש</label>
 				<onfocus>SetProperty(povil.tab,search,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.search,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9016,home)</onfocus>
 				<onclick condition="String.IsEqual(Addon.SettingStr(service.subtitles.kodipovilai,search_provider),umbrella) + System.AddonIsEnabled(plugin.video.umbrella)">ActivateWindow(Videos,"plugin://plugin.video.umbrella/?action=tools_searchNavigator",return)</onclick>
 				<onclick condition="![String.IsEqual(Addon.SettingStr(service.subtitles.kodipovilai,search_provider),umbrella) + System.AddonIsEnabled(plugin.video.umbrella)]">ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.search&amp;name=%D7%97%D7%99%D7%A4%D7%95%D7%A9",return)</onclick>
 				<onleft>9017</onleft>
@@ -243,6 +263,7 @@
 				<label>הגדרות</label>
 				<onfocus>SetProperty(povil.tab,settings,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.settings,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9017,home)</onfocus>
 				<onclick>ActivateWindow(Settings)</onclick>
 				<onright>9016</onright>
 				<ondown>5081</ondown>
@@ -311,6 +332,7 @@
 				<label>Umbrella</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.umbrella/?action=movieNavigator",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9122,home)</onfocus>
 				<onup>9010</onup>
 				<ondown>5011</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),movies) + System.HasAddon(plugin.video.umbrella)</visible>
@@ -324,6 +346,7 @@
 				<label>כל הסרטים</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.main&amp;action=MovieList&amp;name=%D7%9B%D7%9C%20%D7%94%D7%A1%D7%A8%D7%98%D7%99%D7%9D",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9121,home)</onfocus>
 				<onup>9010</onup>
 				<ondown>5011</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
@@ -337,6 +360,7 @@
 				<label>מדע בדיוני</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_genres&amp;genre_id=878&amp;name=%D7%9E%D7%93%D7%A2%20%D7%91%D7%93%D7%99%D7%95%D7%A0%D7%99",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9120,home)</onfocus>
 				<onup>9010</onup>
 				<ondown>5011</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
@@ -350,6 +374,7 @@
 				<label>אימה</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_genres&amp;genre_id=27&amp;name=%D7%90%D7%99%D7%9E%D7%94",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9119,home)</onfocus>
 				<onup>9010</onup>
 				<ondown>5011</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
@@ -363,6 +388,7 @@
 				<label>מתח</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_genres&amp;genre_id=53&amp;name=%D7%9E%D7%AA%D7%97",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9118,home)</onfocus>
 				<onup>9010</onup>
 				<ondown>5011</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
@@ -376,6 +402,7 @@
 				<label>דרמה</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_genres&amp;genre_id=18&amp;name=%D7%93%D7%A8%D7%9E%D7%94",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9117,home)</onfocus>
 				<onup>9010</onup>
 				<ondown>5011</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
@@ -389,6 +416,7 @@
 				<label>קומדיה</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_genres&amp;genre_id=35&amp;name=%D7%A7%D7%95%D7%9E%D7%93%D7%99%D7%94",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9116,home)</onfocus>
 				<onup>9010</onup>
 				<ondown>5011</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
@@ -402,6 +430,7 @@
 				<label>אקשן</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_genres&amp;genre_id=28&amp;name=%D7%90%D7%A7%D7%A9%D7%9F",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9115,home)</onfocus>
 				<onup>9010</onup>
 				<ondown>5011</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
@@ -415,6 +444,7 @@
 				<label>בכורות</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_premieres&amp;name=%D7%91%D7%9B%D7%95%D7%A8%D7%95%D7%AA",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9114,home)</onfocus>
 				<onup>9010</onup>
 				<ondown>5011</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
@@ -428,6 +458,7 @@
 				<label>דיסני+</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_networks&amp;network_id=337&amp;name=%D7%93%D7%99%D7%A1%D7%A0%D7%99%2B",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9113,home)</onfocus>
 				<onup>9010</onup>
 				<ondown>5011</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
@@ -441,6 +472,7 @@
 				<label>נטפליקס</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_networks&amp;network_id=8&amp;name=%D7%A0%D7%98%D7%A4%D7%9C%D7%99%D7%A7%D7%A1",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9112,home)</onfocus>
 				<onup>9010</onup>
 				<ondown>5011</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
@@ -454,6 +486,7 @@
 				<label>Umbrella</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.umbrella/?action=tvNavigator",return)</onclick>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9134,home)</onfocus>
 				<onup>9011</onup>
 				<ondown>5021</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),tv) + System.HasAddon(plugin.video.umbrella)</visible>
@@ -467,6 +500,7 @@
 				<label>כל הסדרות</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.main&amp;action=TVShowList&amp;name=%D7%9B%D7%9C%20%D7%94%D7%A1%D7%93%D7%A8%D7%95%D7%AA",return)</onclick>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9133,home)</onfocus>
 				<onup>9011</onup>
 				<ondown>5021</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
@@ -480,6 +514,7 @@
 				<label>ריאליטי</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_tv_genres&amp;genre_id=10764&amp;name=%D7%A8%D7%99%D7%90%D7%9C%D7%99%D7%98%D7%99",return)</onclick>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9132,home)</onfocus>
 				<onup>9011</onup>
 				<ondown>5021</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
@@ -493,6 +528,7 @@
 				<label>מדע בדיוני</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_tv_genres&amp;genre_id=10765&amp;name=%D7%9E%D7%93%D7%A2%20%D7%91%D7%93%D7%99%D7%95%D7%A0%D7%99",return)</onclick>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9131,home)</onfocus>
 				<onup>9011</onup>
 				<ondown>5021</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
@@ -506,6 +542,7 @@
 				<label>מסתורין</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_tv_genres&amp;genre_id=9648&amp;name=%D7%9E%D7%A1%D7%AA%D7%95%D7%A8%D7%99%D7%9F",return)</onclick>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9130,home)</onfocus>
 				<onup>9011</onup>
 				<ondown>5021</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
@@ -519,6 +556,7 @@
 				<label>פשע</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_tv_genres&amp;genre_id=80&amp;name=%D7%A4%D7%A9%D7%A2",return)</onclick>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9129,home)</onfocus>
 				<onup>9011</onup>
 				<ondown>5021</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
@@ -532,6 +570,7 @@
 				<label>קומדיה</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_tv_genres&amp;genre_id=35&amp;name=%D7%A7%D7%95%D7%9E%D7%93%D7%99%D7%94",return)</onclick>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9128,home)</onfocus>
 				<onup>9011</onup>
 				<ondown>5021</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
@@ -545,6 +584,7 @@
 				<label>דרמה</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_tv_genres&amp;genre_id=18&amp;name=%D7%93%D7%A8%D7%9E%D7%94",return)</onclick>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9127,home)</onfocus>
 				<onup>9011</onup>
 				<ondown>5021</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
@@ -558,6 +598,7 @@
 				<label>ישראליות</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_tv_languages&amp;language=he&amp;name=%D7%99%D7%A9%D7%A8%D7%90%D7%9C%D7%99%D7%95%D7%AA",return)</onclick>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9126,home)</onfocus>
 				<onup>9011</onup>
 				<ondown>5021</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
@@ -571,6 +612,7 @@
 				<label>דיסני+</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_tv_networks&amp;network_id=2739&amp;name=%D7%93%D7%99%D7%A1%D7%A0%D7%99%2B",return)</onclick>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9125,home)</onfocus>
 				<onup>9011</onup>
 				<ondown>5021</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
@@ -584,6 +626,7 @@
 				<label>נטפליקס</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_tv_networks&amp;network_id=213&amp;name=%D7%A0%D7%98%D7%A4%D7%9C%D7%99%D7%A7%D7%A1",return)</onclick>
 				<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9124,home)</onfocus>
 				<onup>9011</onup>
 				<ondown>5021</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
@@ -597,6 +640,7 @@
 				<label>חיפוש</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=%5BB%5D%D7%97%D7%99%D7%A4%D7%95%D7%A9+%D7%AA%D7%9B%D7%A0%D7%99%D7%95%D7%AA%5B%2FB%5D&amp;url=&amp;mode=4&amp;iconimage=&amp;module=&amp;moredata=",return)</onclick>
 				<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9143,home)</onfocus>
 				<onup>9012</onup>
 				<ondown>5031</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),israeli)</visible>
@@ -610,6 +654,7 @@
 				<label>מוסיקה 24</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=%5BB%5D%D7%A2%D7%A8%D7%95%D7%A5+24+%D7%94%D7%97%D7%93%D7%A9%5B%2FB%5D&amp;url=https%253A%252F%252Fwww.mako.co.il%252Fmako-vod-index%253Ffilter%253Dprovider%2526vcmId%253D3377c13070733210VgnVCM2000002a0c10acRCRD&amp;mode=1&amp;iconimage=&amp;module=keshet&amp;moredata=",return)</onclick>
 				<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9142,home)</onfocus>
 				<onup>9012</onup>
 				<ondown>5031</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),israeli)</visible>
@@ -623,6 +668,7 @@
 				<label>ערוץ 9</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?iconimage=&amp;mode=-1&amp;module=9tv&amp;moredata&amp;name=%5bB%5d%d7%a2%d7%a8%d7%95%d7%a5%209%5b%2fB%5d&amp;url",return)</onclick>
 				<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9141,home)</onfocus>
 				<onup>9012</onup>
 				<ondown>5031</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),israeli)</visible>
@@ -636,6 +682,7 @@
 				<label>i24NEWS</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?iconimage=&amp;mode=-1&amp;module=i24news&amp;moredata&amp;name=%5bB%5di24news%5b%2fB%5d&amp;url",return)</onclick>
 				<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9140,home)</onfocus>
 				<onup>9012</onup>
 				<ondown>5031</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),israeli)</visible>
@@ -649,6 +696,7 @@
 				<label>עכשיו 14</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=%5BB%5D14+%D7%A2%D7%9B%D7%A9%D7%99%D7%95%5B%2FB%5D&amp;url=&amp;mode=-1&amp;iconimage=&amp;module=14tv&amp;moredata=",return)</onclick>
 				<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9139,home)</onfocus>
 				<onup>9012</onup>
 				<ondown>5031</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),israeli)</visible>
@@ -662,6 +710,7 @@
 				<label>רשת 13</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?iconimage=&amp;mode=-1&amp;module=reshet&amp;moredata&amp;name=%5bB%5d%d7%a8%d7%a9%d7%aa%2013%5b%2fB%5d&amp;url",return)</onclick>
 				<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9138,home)</onfocus>
 				<onup>9012</onup>
 				<ondown>5031</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),israeli)</visible>
@@ -675,6 +724,7 @@
 				<label>קשת 12</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?moredata=&amp;name=%D7%9E%D7%90%D7%A7%D7%95+VOD&amp;url=&amp;iconimage=&amp;module=keshet&amp;mode=0",return)</onclick>
 				<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9137,home)</onfocus>
 				<onup>9012</onup>
 				<ondown>5031</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),israeli)</visible>
@@ -688,6 +738,7 @@
 				<label>כאן 11</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?moredata=&amp;name=%D7%9B%D7%90%D7%9F+11&amp;url=&amp;iconimage=&amp;module=kan&amp;mode=0",return)</onclick>
 				<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9136,home)</onfocus>
 				<onup>9012</onup>
 				<ondown>5031</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),israeli)</visible>
@@ -701,6 +752,7 @@
 				<label>מדריך שידורים</label>
 				<onclick>ActivateWindow(TVChannels)</onclick>
 				<onfocus>SetProperty(povil.tab,live,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9153,home)</onfocus>
 				<onup>9013</onup>
 				<ondown>5041</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),live) + PVR.HasTVChannels</visible>
@@ -714,6 +766,7 @@
 				<label>100FM</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?moredata=&amp;name=%5BB%5D%D7%9E%D7%95%D7%96%D7%99%D7%A7%D7%94+-+100fm%5B%2FB%5D&amp;url=&amp;iconimage=&amp;module=100fm&amp;mode=0",return)</onclick>
 				<onfocus>SetProperty(povil.tab,live,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9152,home)</onfocus>
 				<onup>9013</onup>
 				<ondown>5041</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),live)</visible>
@@ -727,6 +780,7 @@
 				<label>Eco99</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?moredata=&amp;name=%5BB%5D%D7%9E%D7%95%D7%96%D7%99%D7%A7%D7%94+-+eco99fm%5B%2FB%5D&amp;url=&amp;iconimage=&amp;module=99fm&amp;mode=0",return)</onclick>
 				<onfocus>SetProperty(povil.tab,live,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9151,home)</onfocus>
 				<onup>9013</onup>
 				<ondown>5041</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),live)</visible>
@@ -740,6 +794,7 @@
 				<label>ספורט 1</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?iconimage=&amp;mode=0&amp;module=sport1&amp;moredata&amp;name=%5bB%5d%d7%9b%d7%9c%20%d7%94%d7%aa%d7%9b%d7%a0%d7%99%d7%95%d7%aa%5b%2fB%5d&amp;url",return)</onclick>
 				<onfocus>SetProperty(povil.tab,live,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9150,home)</onfocus>
 				<onup>9013</onup>
 				<ondown>5041</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),live)</visible>
@@ -753,6 +808,7 @@
 				<label>רדיו</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?moredata=&amp;name=%5BB%5D%D7%A8%D7%93%D7%99%D7%95%5B%2FB%5D&amp;url=&amp;iconimage=&amp;module=&amp;mode=3",return)</onclick>
 				<onfocus>SetProperty(povil.tab,live,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9149,home)</onfocus>
 				<onup>9013</onup>
 				<ondown>5041</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),live)</visible>
@@ -766,6 +822,7 @@
 				<label>ערוצים</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?iconimage=&amp;mode=1&amp;module&amp;moredata&amp;name=%5bB%5d%d7%a9%d7%99%d7%93%d7%95%d7%a8%d7%99%d7%9d%20%d7%97%d7%99%d7%99%d7%9d%5b%2fB%5d&amp;url",return)</onclick>
 				<onfocus>SetProperty(povil.tab,live,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9148,home)</onfocus>
 				<onup>9013</onup>
 				<ondown>5041</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),live)</visible>
@@ -779,6 +836,7 @@
 				<label>אנימה</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.otaku/",return)</onclick>
 				<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9165,home)</onfocus>
 				<onup>9014</onup>
 				<ondown>5051</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),kids) + System.HasAddon(plugin.video.otaku)</visible>
@@ -792,6 +850,7 @@
 				<label>משפחה</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_genres&amp;genre_id=10751&amp;name=%D7%9E%D7%A9%D7%A4%D7%97%D7%94",return)</onclick>
 				<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9164,home)</onfocus>
 				<onup>9014</onup>
 				<ondown>5051</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),kids)</visible>
@@ -805,6 +864,7 @@
 				<label>אנימציה</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_genres&amp;genre_id=16&amp;name=%D7%90%D7%A0%D7%99%D7%9E%D7%A6%D7%99%D7%94",return)</onclick>
 				<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9163,home)</onfocus>
 				<onup>9014</onup>
 				<ondown>5051</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),kids)</visible>
@@ -818,6 +878,7 @@
 				<label>ניקלודיאון</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?action=tmdb_tv_networks&amp;iconImage=&amp;list_name=%d7%a1%d7%93%d7%a8%d7%95%d7%aa%20Nickelodeon%20%d7%a8%d7%a9%d7%aa%d7%95%d7%aa&amp;mode=build_tvshow_list&amp;network_id=13",return)</onclick>
 				<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9162,home)</onfocus>
 				<onup>9014</onup>
 				<ondown>5051</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),kids)</visible>
@@ -831,6 +892,7 @@
 				<label>ילדים ונוער</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?iconimage=&amp;mode=1&amp;module=kan&amp;moredata=%25D7%259B%25D7%2590%25D7%259F%2b%25D7%2597%25D7%2599%25D7%25A0%25D7%2595%25D7%259B%25D7%2599%25D7%25AA%2b23__4453&amp;name=%5bB%5d%d7%99%d7%9c%d7%93%d7%99%d7%9d%20%d7%95%d7%a0%d7%95%d7%a2%d7%a8%5b%2fB%5d&amp;url=https%253A%252F%252Fwww.kankids.org.il%252Flobby-kids%252Fkids-teens%252F",return)</onclick>
 				<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9161,home)</onfocus>
 				<onup>9014</onup>
 				<ondown>5051</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),kids)</visible>
@@ -844,6 +906,7 @@
 				<label>קטנטנים</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?iconimage=&amp;mode=1&amp;module=kan&amp;moredata=%25D7%259B%25D7%2590%25D7%259F%2b%25D7%2597%25D7%2599%25D7%25A0%25D7%2595%25D7%259B%25D7%2599%25D7%25AA%2b23__4462&amp;name=%5bB%5d%d7%a7%d7%98%d7%a0%d7%98%d7%a0%d7%99%d7%9d%5b%2fB%5d&amp;url=https%253A%252F%252Fwww.kankids.org.il%252Flobby-kids%252Ftiny%252F",return)</onclick>
 				<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9160,home)</onfocus>
 				<onup>9014</onup>
 				<ondown>5051</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),kids)</visible>
@@ -857,6 +920,7 @@
 				<label>כל המועדפים</label>
 				<onclick>ActivateWindow(favouritesbrowser)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9177,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites)</visible>
@@ -870,6 +934,7 @@
 				<label>הרשימות שלי</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.my_content&amp;name=%D7%94%D7%A8%D7%A9%D7%99%D7%9E%D7%95%D7%AA%20%D7%A9%D7%9C%D7%99",return)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9176,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites)</visible>
@@ -883,6 +948,7 @@
 				<label>סדרות ב-MDBList</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=mdblist_my_tvshows&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%91-MDBList",return)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9175,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites) + [String.IsEqual(Window(home).Property(povil.svc.mdblist),1) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible>
@@ -896,6 +962,7 @@
 				<label>סרטים ב-MDBList</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=mdblist_my_movies&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%91-MDBList",return)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9174,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites) + [String.IsEqual(Window(home).Property(povil.svc.mdblist),1) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible>
@@ -909,6 +976,7 @@
 				<label>סדרות ב-Trakt</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=trakt_my_tvshows&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%91-Trakt",return)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9173,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites)</visible>
@@ -922,6 +990,7 @@
 				<label>סרטים ב-Trakt</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=trakt_my_movies&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%91-Trakt",return)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9172,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites)</visible>
@@ -935,6 +1004,7 @@
 				<label>YouTube</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.youtube/kodion/search/list/",return)</onclick>
 				<onfocus>SetProperty(povil.tab,search,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9187,home)</onfocus>
 				<onup>9016</onup>
 				<ondown>5071</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),search) + System.HasAddon(plugin.video.youtube)</visible>
@@ -948,6 +1018,7 @@
 				<label>תוכן ישראלי</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?name=%5BB%5D%D7%97%D7%99%D7%A4%D7%95%D7%A9+%D7%AA%D7%9B%D7%A0%D7%99%D7%95%D7%AA%5B%2FB%5D&amp;url=&amp;mode=4&amp;iconimage=&amp;module=&amp;moredata=",return)</onclick>
 				<onfocus>SetProperty(povil.tab,search,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9186,home)</onfocus>
 				<onup>9016</onup>
 				<ondown>5071</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),search)</visible>
@@ -961,6 +1032,7 @@
 				<label>חיפוש ב-Umbrella</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.umbrella/?action=tools_searchNavigator",return)</onclick>
 				<onfocus>SetProperty(povil.tab,search,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9185,home)</onfocus>
 				<onup>9016</onup>
 				<ondown>5071</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),search) + System.HasAddon(plugin.video.umbrella)</visible>
@@ -974,6 +1046,7 @@
 				<label>חיפוש ב-POV</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.search&amp;name=%D7%97%D7%99%D7%A4%D7%95%D7%A9%20%D7%91-POV",return)</onclick>
 				<onfocus>SetProperty(povil.tab,search,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9184,home)</onfocus>
 				<onup>9016</onup>
 				<ondown>5071</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),search)</visible>
@@ -982,11 +1055,11 @@
 		<control type="group" description="rows movies">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),movies)</visible>
-			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5012)">Conditional</animation>
-			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5013)">Conditional</animation>
+			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]]">Conditional</animation>
+			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5013) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5013)]]">Conditional</animation>
 			<control type="group" description="פופולריים עכשיו">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5012) | Control.HasFocus(5013)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]] | [Control.HasFocus(5013) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5013)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1018,6 +1091,7 @@
 					<onup condition="true">9112</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5011,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5012).NumItems,0)">5012</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5012).NumItems,0) + Integer.IsGreater(Container(5013).NumItems,0)">5013</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5011).IsUpdating + Integer.IsGreater(Container(5011).NumItems,1) + Integer.IsEqual(Container(5011).CurrentItem,1) + String.IsEqual(Container(5011).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5011).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5011))">Conditional</animation>
@@ -1041,7 +1115,7 @@
 			</control>
 			<control type="group" description="טרנדיים השבוע">
 				<left>0</left><top>402</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5013)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5013) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5013)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1070,6 +1144,7 @@
 					<onup condition="!Integer.IsGreater(Container(5011).NumItems,0)">9112</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5012,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5013).NumItems,0)">5013</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5012).IsUpdating + Integer.IsGreater(Container(5012).NumItems,1) + Integer.IsEqual(Container(5012).CurrentItem,1) + String.IsEqual(Container(5012).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5012).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5012))">Conditional</animation>
 					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5012).NumItems,1)">Conditional</animation>
@@ -1111,6 +1186,7 @@
 					<onup condition="!Integer.IsGreater(Container(5012).NumItems,0) + !Integer.IsGreater(Container(5011).NumItems,0)">9112</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5013,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5013).IsUpdating + Integer.IsGreater(Container(5013).NumItems,1) + Integer.IsEqual(Container(5013).CurrentItem,1) + String.IsEqual(Container(5013).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5013).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5013))">Conditional</animation>
 					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5013).NumItems,1)">Conditional</animation>
 					<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5013).NumItems,2)">Conditional</animation>
@@ -1130,11 +1206,11 @@
 		<control type="group" description="rows tv">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),tv)</visible>
-			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5022)">Conditional</animation>
-			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5023)">Conditional</animation>
+			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5022) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5022)]]">Conditional</animation>
+			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5023) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5023)]]">Conditional</animation>
 			<control type="group" description="טרנדיות עכשיו">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5022) | Control.HasFocus(5023)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5022) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5022)]] | [Control.HasFocus(5023) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5023)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1166,6 +1242,7 @@
 					<onup condition="true">9124</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5021,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5022).NumItems,0)">5022</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5022).NumItems,0) + Integer.IsGreater(Container(5023).NumItems,0)">5023</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5021).IsUpdating + Integer.IsGreater(Container(5021).NumItems,1) + Integer.IsEqual(Container(5021).CurrentItem,1) + String.IsEqual(Container(5021).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021))">Conditional</animation>
@@ -1189,7 +1266,7 @@
 			</control>
 			<control type="group" description="פופולריות">
 				<left>0</left><top>402</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5023)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5023) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5023)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1218,6 +1295,7 @@
 					<onup condition="!Integer.IsGreater(Container(5021).NumItems,0)">9124</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5022,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5023).NumItems,0)">5023</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5022).IsUpdating + Integer.IsGreater(Container(5022).NumItems,1) + Integer.IsEqual(Container(5022).CurrentItem,1) + String.IsEqual(Container(5022).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5022).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5022))">Conditional</animation>
 					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5022).NumItems,1)">Conditional</animation>
@@ -1259,6 +1337,7 @@
 					<onup condition="!Integer.IsGreater(Container(5022).NumItems,0) + !Integer.IsGreater(Container(5021).NumItems,0)">9124</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5023,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5023).IsUpdating + Integer.IsGreater(Container(5023).NumItems,1) + Integer.IsEqual(Container(5023).CurrentItem,1) + String.IsEqual(Container(5023).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023))">Conditional</animation>
 					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5023).NumItems,1)">Conditional</animation>
 					<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5023).NumItems,2)">Conditional</animation>
@@ -1278,11 +1357,11 @@
 		<control type="group" description="rows israeli">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),israeli)</visible>
-			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5032)">Conditional</animation>
-			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5033)">Conditional</animation>
+			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5032) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5032)]]">Conditional</animation>
+			<animation effect="slide" end="0,-764" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5033) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5033)]]">Conditional</animation>
 			<control type="group" description="קשת 12">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5032) | Control.HasFocus(5033)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5032) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5032)]] | [Control.HasFocus(5033) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5033)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1314,6 +1393,7 @@
 					<onup condition="true">9136</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5031,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5032).NumItems,0)">5032</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5032).NumItems,0) + Integer.IsGreater(Container(5033).NumItems,0)">5033</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5031).IsUpdating + Integer.IsGreater(Container(5031).NumItems,1) + Integer.IsEqual(Container(5031).CurrentItem,1) + String.IsEqual(Container(5031).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5031).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5031))">Conditional</animation>
@@ -1337,7 +1417,7 @@
 			</control>
 			<control type="group" description="רשת 13">
 				<left>0</left><top>402</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5033)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5033) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5033)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1366,6 +1446,7 @@
 					<onup condition="!Integer.IsGreater(Container(5031).NumItems,0)">9136</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5032,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5033).NumItems,0)">5033</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5032).IsUpdating + Integer.IsGreater(Container(5032).NumItems,1) + Integer.IsEqual(Container(5032).CurrentItem,1) + String.IsEqual(Container(5032).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5032).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5032))">Conditional</animation>
 					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5032).NumItems,1)">Conditional</animation>
@@ -1417,6 +1498,7 @@
 					<onup condition="!Integer.IsGreater(Container(5032).NumItems,0) + !Integer.IsGreater(Container(5031).NumItems,0)">9136</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5033,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5033).IsUpdating + Integer.IsGreater(Container(5033).NumItems,1) + Integer.IsEqual(Container(5033).CurrentItem,1) + String.IsEqual(Container(5033).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5033).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5033))">Conditional</animation>
 					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5033).NumItems,1)">Conditional</animation>
 					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5033).NumItems,2)">Conditional</animation>
@@ -1440,10 +1522,10 @@
 		<control type="group" description="rows live">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),live)</visible>
-			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5042)">Conditional</animation>
+			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5042) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5042)]]">Conditional</animation>
 			<control type="group" description="ערוצים">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5042)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5042) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5042)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1475,6 +1557,7 @@
 					<onup condition="true">9148</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,live,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5041,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5042).NumItems,0)">5042</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5041).IsUpdating + Integer.IsGreater(Container(5041).NumItems,1) + Integer.IsEqual(Container(5041).CurrentItem,1) + String.IsEqual(Container(5041).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5041).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5041))">Conditional</animation>
 					<animation effect="slide" end="1610,0" time="0" condition="Integer.IsEqual(Container(5041).NumItems,1)">Conditional</animation>
@@ -1522,6 +1605,7 @@
 					<onup condition="!Integer.IsGreater(Container(5041).NumItems,0)">9148</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,live,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5042,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5042).IsUpdating + Integer.IsGreater(Container(5042).NumItems,1) + Integer.IsEqual(Container(5042).CurrentItem,1) + String.IsEqual(Container(5042).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5042).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5042))">Conditional</animation>
 					<animation effect="slide" end="1610,0" time="0" condition="Integer.IsEqual(Container(5042).NumItems,1)">Conditional</animation>
 					<animation effect="slide" end="1380,0" time="0" condition="Integer.IsEqual(Container(5042).NumItems,2)">Conditional</animation>
@@ -1538,11 +1622,11 @@
 		<control type="group" description="rows kids">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),kids)</visible>
-			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5052)">Conditional</animation>
-			<animation effect="slide" end="0,-804" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5053)">Conditional</animation>
+			<animation effect="slide" end="0,-402" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5052) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5052)]]">Conditional</animation>
+			<animation effect="slide" end="0,-804" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5053) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5053)]]">Conditional</animation>
 			<control type="group" description="סרטים לכל המשפחה">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5052) | Control.HasFocus(5053)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5052) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5052)]] | [Control.HasFocus(5053) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5053)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1574,6 +1658,7 @@
 					<onup condition="true">9160</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5051,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5052).NumItems,0)">5052</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5052).NumItems,0) + Integer.IsGreater(Container(5053).NumItems,0)">5053</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5051).IsUpdating + Integer.IsGreater(Container(5051).NumItems,1) + Integer.IsEqual(Container(5051).CurrentItem,1) + String.IsEqual(Container(5051).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5051).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5051))">Conditional</animation>
@@ -1597,7 +1682,7 @@
 			</control>
 			<control type="group" description="סרטי אנימציה">
 				<left>0</left><top>402</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5053)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5053) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5053)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1630,6 +1715,7 @@
 					<onup condition="!Integer.IsGreater(Container(5051).NumItems,0)">9160</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5052,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5053).NumItems,0)">5053</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5052).IsUpdating + Integer.IsGreater(Container(5052).NumItems,1) + Integer.IsEqual(Container(5052).CurrentItem,1) + String.IsEqual(Container(5052).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5052).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5052))">Conditional</animation>
 					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5052).NumItems,1)">Conditional</animation>
@@ -1681,6 +1767,7 @@
 					<onup condition="!Integer.IsGreater(Container(5052).NumItems,0) + !Integer.IsGreater(Container(5051).NumItems,0)">9160</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5053,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5053).IsUpdating + Integer.IsGreater(Container(5053).NumItems,1) + Integer.IsEqual(Container(5053).CurrentItem,1) + String.IsEqual(Container(5053).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5053).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5053))">Conditional</animation>
 					<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5053).NumItems,1)">Conditional</animation>
 					<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5053).NumItems,2)">Conditional</animation>
@@ -1700,13 +1787,13 @@
 		<control type="group" description="rows favourites">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),favourites)</visible>
-			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5062)">Conditional</animation>
-			<animation effect="slide" end="0,-754" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5063)">Conditional</animation>
-			<animation effect="slide" end="0,-1156" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5064)">Conditional</animation>
-			<animation effect="slide" end="0,-1558" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5065)">Conditional</animation>
+			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5062) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5062)]]">Conditional</animation>
+			<animation effect="slide" end="0,-754" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5063) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5063)]]">Conditional</animation>
+			<animation effect="slide" end="0,-1156" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5064) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5064)]]">Conditional</animation>
+			<animation effect="slide" end="0,-1558" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5065) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5065)]]">Conditional</animation>
 			<control type="group" description="המועדפים שלי">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5062) | Control.HasFocus(5063) | Control.HasFocus(5064) | Control.HasFocus(5065)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5062) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5062)]] | [Control.HasFocus(5063) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5063)]] | [Control.HasFocus(5064) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5064)]] | [Control.HasFocus(5065) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5065)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1732,6 +1819,7 @@
 					<onup condition="true">9172</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5061,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5062).NumItems,0)">5062</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5063).NumItems,0)">5063</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5064).NumItems,0)">5064</ondown>
@@ -1750,7 +1838,7 @@
 			</control>
 			<control type="group" description="סרטים שמורים">
 				<left>0</left><top>352</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5063) | Control.HasFocus(5064) | Control.HasFocus(5065)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5063) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5063)]] | [Control.HasFocus(5064) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5064)]] | [Control.HasFocus(5065) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5065)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1777,6 +1865,7 @@
 					<onup condition="!Integer.IsGreater(Container(5061).NumItems,0)">9172</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5062,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5063).NumItems,0)">5063</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5064).NumItems,0)">5064</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">5065</ondown>
@@ -1801,7 +1890,7 @@
 			</control>
 			<control type="group" description="סדרות שמורות">
 				<left>0</left><top>754</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5064) | Control.HasFocus(5065)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5064) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5064)]] | [Control.HasFocus(5065) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5065)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1829,6 +1918,7 @@
 					<onup condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">9172</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5063,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5064).NumItems,0)">5064</ondown>
 					<ondown condition="!Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">5065</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5063).IsUpdating + Integer.IsGreater(Container(5063).NumItems,1) + Integer.IsEqual(Container(5063).CurrentItem,1) + String.IsEqual(Container(5063).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5063).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5063))">Conditional</animation>
@@ -1852,7 +1942,7 @@
 			</control>
 			<control type="group" description="הסרטים שלי (MDBList)">
 				<left>0</left><top>1156</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5065)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5065) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5065)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1881,6 +1971,7 @@
 					<onup condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">9172</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5064,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5065).NumItems,0)">5065</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5064).IsUpdating + Integer.IsGreater(Container(5064).NumItems,1) + Integer.IsEqual(Container(5064).CurrentItem,1) + String.IsEqual(Container(5064).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5064).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5064))">Conditional</animation>
 					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5064).NumItems,1)">Conditional</animation>
@@ -1932,6 +2023,7 @@
 					<onup condition="!Integer.IsGreater(Container(5064).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">9172</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5065,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5065).IsUpdating + Integer.IsGreater(Container(5065).NumItems,1) + Integer.IsEqual(Container(5065).CurrentItem,1) + String.IsEqual(Container(5065).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5065).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5065))">Conditional</animation>
 					<animation effect="slide" end="1582,0" time="0" condition="Integer.IsEqual(Container(5065).NumItems,1)">Conditional</animation>
 					<animation effect="slide" end="1356,0" time="0" condition="Integer.IsEqual(Container(5065).NumItems,2)">Conditional</animation>
@@ -1955,10 +2047,10 @@
 		<control type="group" description="rows search">
 			<left>0</left><top>618</top>
 			<visible>String.IsEqual(Window(home).Property(povil.tab),search)</visible>
-			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="Control.HasFocus(5072)">Conditional</animation>
+			<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]">Conditional</animation>
 			<control type="group" description="חיפושי סרטים אחרונים">
 				<left>0</left><top>0</top>
-				<animation effect="fade" start="100" end="0" time="220" condition="Control.HasFocus(5072)">Conditional</animation>
+				<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]">Conditional</animation>
 				<control type="label">
 					<left>90</left><top>0</top><width>1740</width><height>44</height>
 					<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -1984,6 +2076,7 @@
 					<onup condition="true">9184</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,search,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5071,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5072).NumItems,0)">5072</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5071).IsUpdating + Integer.IsGreater(Container(5071).NumItems,1) + Integer.IsEqual(Container(5071).CurrentItem,1) + String.IsEqual(Container(5071).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5071).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5071))">Conditional</animation>
 					<animation effect="slide" end="1610,0" time="0" condition="Integer.IsEqual(Container(5071).NumItems,1)">Conditional</animation>
@@ -2025,6 +2118,7 @@
 					<onup condition="!Integer.IsGreater(Container(5071).NumItems,0)">9184</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,search,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5072,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5072).IsUpdating + Integer.IsGreater(Container(5072).NumItems,1) + Integer.IsEqual(Container(5072).CurrentItem,1) + String.IsEqual(Container(5072).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5072).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5072))">Conditional</animation>
 					<animation effect="slide" end="1610,0" time="0" condition="Integer.IsEqual(Container(5072).NumItems,1)">Conditional</animation>
 					<animation effect="slide" end="1380,0" time="0" condition="Integer.IsEqual(Container(5072).NumItems,2)">Conditional</animation>
@@ -2067,6 +2161,7 @@
 					<onup condition="true">9017</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,settings,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,5081,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5081).IsUpdating + Integer.IsGreater(Container(5081).NumItems,1) + Integer.IsEqual(Container(5081).CurrentItem,1) + String.IsEqual(Container(5081).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5081).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5081))">Conditional</animation>
 					<animation effect="slide" end="1610,0" time="0" condition="Integer.IsEqual(Container(5081).NumItems,1)">Conditional</animation>
 					<animation effect="slide" end="1380,0" time="0" condition="Integer.IsEqual(Container(5081).NumItems,2)">Conditional</animation>
