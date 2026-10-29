@@ -1,3 +1,10 @@
+[B]Kodi POV IL - Onyx 1.0.3[/B]
+- A row that came back empty (a failed or cancelled request -- a phone switching tabs mid-load, a network blip) asks again by itself, twice at most; while a row loads, dim tiles stand in its place, and only a row still empty after its retries says so; choosing its tab again asks again (field report: the kids tab stayed empty)
+- A list shorter than a page (a show's two seasons, a short list) starts at the right margin, not the left
+- Phones: a vertical swipe on the home goes down or up a row (Onyx's own keymap, written on Android: a swipe only names its direction and Onyx moves the focus, so under any other skin it does nothing); the tap strips are gone
+- Idan Plus lists open full screen in the luxury view, right to left, a channel's programmes as posters
+- Favourites tab: the MDBList chips show as soon as the account is connected; the favourites row reads the favourites again when you come back from Kodi's favourites window (renamed or moved)
+
 [B]Kodi POV IL - Onyx 1.0.2[/B]
 - Down and up between rows skip every empty row (remote and phone taps): in the favourites tab, without an MDBList account both MDBList rows are empty, and Down from the saved shows landed on a hidden row
 

@@ -257,6 +257,10 @@ def _snapshot():
 		if win is not None:
 			try:
 				win.setProperty(_WIN_PROP, json.dumps(snap))
+				# one flag per service for skins (Onyx's favourites chips): a
+				# condition reads a plain property cheaply, never the JSON
+				for _svc, _on in new_svc.items():
+					win.setProperty('povil.svc.%s' % _svc, '1' if _on else '')
 			except Exception:
 				pass
 
@@ -277,6 +281,8 @@ def invalidate():
 	if win is not None:
 		try:
 			win.clearProperty(_WIN_PROP)
+			for _svc in ('trakt', 'tmdb', 'mdblist', 'real_debrid', 'premiumize', 'alldebrid', 'torbox'):
+				win.clearProperty('povil.svc.%s' % _svc)
 		except Exception:
 			pass
 

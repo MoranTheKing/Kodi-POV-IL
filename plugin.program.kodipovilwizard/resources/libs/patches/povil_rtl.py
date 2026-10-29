@@ -13,6 +13,10 @@ A list is reversed when:
   views (51, 55). Umbrella keeps its views per skin; for Onyx they start as
   51 (movies, TV shows, seasons) and 55 (episodes), as POV's do, and a view
   the user picks in Umbrella later is kept.
+* Idan Plus builds a content list full screen while Onyx is active: Idan has
+  one view setting for every skin, so Onyx's view 51 is set here after the
+  list, and a list of folders (a channel's programmes) is marked as TV shows,
+  so its pictures show as posters.
 An episode sort (POV's season lists) gives way to the add-on's order, which
 already is the episode order, so episode 1 ends up on the right. A name sort
 (Idan Plus with its A-Z setting) is done here, the way Kodi does it, and then
@@ -89,6 +93,8 @@ def _pov_view_key(content, query):
 
 
 def _view_for(content, addon, query):
+    if addon == 'idanplus':
+        return '51'           # set by endOfDirectory for Onyx, whatever Idan's setting says
     if addon == 'umbrella':
         import sqlite3
         con = sqlite3.connect(_umbrella_db(), timeout=2)
@@ -214,9 +220,22 @@ def _wrap(xbmcplugin, state):
             sorts = [(unsorted, (), {})] if unsorted is not None else []
         for method, args, kwargs in sorts:
             original['addSortMethod'](handle, method, *args, **kwargs)
+        idan_view = reverse and not state['flagged'] and state['addon'] == 'idanplus'
+        content = state['content']
+        if idan_view and all(folder for _url, _item, folder in items):
+            content = 'tvshows'                             # programmes: posters, not 16:9
+            original['setContent'](handle, content)
         if items:
             original['addDirectoryItems'](handle, items, len(items))
-        return original['endOfDirectory'](handle, succeeded, updateListing, cacheToDisc)
+        done = original['endOfDirectory'](handle, succeeded, updateListing, cacheToDisc)
+        if idan_view:
+            try:
+                # POV's own: waits until the list is on screen, then sets the view
+                import pov_view_mode
+                pov_view_mode.force_view('51', content)
+            except Exception:
+                pass
+        return done
 
     xbmcplugin.addDirectoryItem = addDirectoryItem
     xbmcplugin.addDirectoryItems = addDirectoryItems
@@ -239,6 +258,8 @@ def install(pov=False, umbrella=False):
         xbmcplugin._povil_rtl_state = state
     query = _query()
     addon = 'umbrella' if umbrella else ('pov' if pov else '')
+    if not addon and sys.argv and 'plugin.video.idanplus' in sys.argv[0]:
+        addon = 'idanplus'     # its hook (default.py) passes no flag
     flagged = FLAG in query
     onyx = xbmc.getSkinDir() == SKIN
     state.update(items=[], sorts=[], content='', query=query, addon=addon, flagged=flagged,
