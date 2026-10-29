@@ -1,3 +1,7 @@
+[B]Kodi POV IL - Onyx 1.0.4[/B]
+- Phones: a swipe that starts on the hero (outside every row) moves a row again: the touch took the focus away, and the move went to the first tab (field report: going down was nearly impossible). The home remembers its focused control (Window(home).Property(povil.focus)); a swipe gives the focus back first, and while nothing has the focus the rows and the hero stay where they were
+- Israeli and live tabs: an item with no backdrop of its own (Keshet's posters, a channel's or a station's logo) shows a soft wash of its picture's colours behind the hero: the picture shrunk by Kodi to 10 pixels (the Wizard's povil_blur / povil_blurfile), drawn once the screen has been still for two seconds, never under a dialog (field report: no background there, unlike movies and shows)
+
 [B]Kodi POV IL - Onyx 1.0.3[/B]
 - A row that came back empty (a failed or cancelled request -- a phone switching tabs mid-load, a network blip) asks again by itself, twice at most; while a row loads, dim tiles stand in its place, and only a row still empty after its retries says so; choosing its tab again asks again (field report: the kids tab stayed empty)
 - A list shorter than a page (a show's two seasons, a short list) starts at the right margin, not the left

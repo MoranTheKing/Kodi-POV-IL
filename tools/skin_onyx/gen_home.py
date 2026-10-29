@@ -222,8 +222,13 @@ def nav_chain(candidates, fallback=None):
 
 
 def row_focus(ti, ri):
-    """The row has the focus (one place to widen if a row gets companions)."""
-    return 'Control.HasFocus(%d)' % row_id(ti, ri)
+    """The row has the focus -- or nothing has it and the row had it last: on a
+    touch screen a touch outside every control (the hero) takes the focus away,
+    and the rows and the hero stay where they were (povil.focus, set by every
+    focusable control of the home)."""
+    rid = row_id(ti, ri)
+    return ('[Control.HasFocus(%d) | [String.IsEmpty(System.CurrentControlId) + '
+            'String.IsEqual(Window(home).Property(povil.focus),%d)]]' % (rid, rid))
 
 
 def row_id(ti, ri):
@@ -280,9 +285,20 @@ def gen_timers():
     x(1, '<timer>')
     x(2, '<name>povil_swipe</name>')
     x(2, '<start reset="true">!String.IsEmpty(Window(home).Property(povil.swipe))</start>')
+    # the finger touched the hero first: nothing has the focus, and Down would go
+    # to the window's default (the first tab) -- give it back to where it was
+    x(2, '<onstart condition="Window.IsActive(home) + String.IsEmpty(System.CurrentControlId) + !String.IsEmpty(Window(home).Property(povil.focus))">'
+         'SetFocus($INFO[Window(home).Property(povil.focus)])</onstart>')
     x(2, '<onstart condition="Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.swipe),down)">Action(Down)</onstart>')
     x(2, '<onstart condition="Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.swipe),up)">Action(Up)</onstart>')
     x(2, '<onstart>ClearProperty(povil.swipe,home)</onstart>')
+    x(2, '<stop>true</stop>')
+    x(1, '</timer>')
+    # The hero's soft wash takes the chosen item's picture once the screen is still (ambient())
+    x(1, '<timer>')
+    x(2, '<name>povil_blur</name>')
+    x(2, '<start reset="true">Window.IsActive(home) + !System.HasModalDialog + System.IdleTime(2) + !String.IsEqual(Control.GetLabel(9803),Window(home).Property(povil.blur))</start>')
+    x(2, '<onstart>SetProperty(povil.blur,$INFO[Control.GetLabel(9803)],home)</onstart>')
     x(2, '<stop>true</stop>')
     x(1, '</timer>')
     # The tabs need no timer: the focused tab button names itself (gen_home tabs),
@@ -428,6 +444,23 @@ def gen_includes():
             x(2, '<value condition="%s + ![String.Contains(Container(%d).ListItem.FolderPath,new_page=) | String.Contains(Container(%d).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(%d).ListItem.Art(%s))%s">$INFO[Container(%d).ListItem.Art(%s)]</value>'
               % (cond, cid, cid, cid, art, same, cid, art))
     x(1, '</variable>')
+    # No backdrop of its own (Keshet's posters, whose "fanart" is the poster again; a
+    # channel's or a station's logo): its picture, blurred, becomes a soft wash of its
+    # colours behind the hero (ambient() in backdrop()), never the picture enlarged
+    for name, art in (('POVIL_HeroAmbient', 'povil_blur'), ('POVIL_HeroAmbientFile', 'povil_blurfile')):
+        x(1, '<variable name="%s">' % name)
+        for cond, cid in sources:
+            if kinds[cid] != 'landscape':  # a landscape row always has its own backdrop
+                more = '![String.Contains(Container(%d).ListItem.FolderPath,new_page=) | String.Contains(Container(%d).ListItem.FolderPath,Page&amp;url=)]' % (cid, cid)
+                own = ''
+                if kinds[cid] == 'poster':
+                    own = (' + [String.IsEmpty(Container(%d).ListItem.Art(fanart)) | String.IsEqual(Container(%d).ListItem.Art(fanart),Container(%d).ListItem.Art(thumb))]'
+                           ' + String.IsEmpty(Container(%d).ListItem.Art(landscape))' % (cid, cid, cid, cid))
+                x(2, '<value condition="%s + %s%s">$INFO[Container(%d).ListItem.Art(%s)]</value>' % (cond, more, own, cid, art))
+            # the row on screen decides, also when it wants no wash: Kodi would go on
+            # to the tab's first row (the fallback below) and wash over Reshet's backdrop
+            x(2, '<value condition="%s"></value>' % cond)
+        x(1, '</variable>')
     # Only a logo that suits a Hebrew screen (POV's povil_logo art); else the title is written
     var('POVIL_HeroLogo', '$INFO[Container(%(c)d).ListItem.Art(povil_logo)]')
     x(1, '<variable name="POVIL_HeroTitle">')
@@ -732,6 +765,7 @@ def backdrop(x, d):
     x(d + 1, '<texture background="true">$VAR[POVIL_HeroFanart]</texture>')
     x(d + 1, '<aspectratio>scale</aspectratio><fadetime>420</fadetime>')
     x(d, '</control>')
+    ambient(x, d)
     for desc, l, t, w, h, tex in (('hero shade', 520, 0, 1400, 1080, 'povil/grad_right.png'),
                                   ('rows shade', 0, 330, 1920, 750, 'povil/grad_bottom.png'),
                                   ('top shade', 0, 0, 1920, 240, 'povil/grad_top.png'),
@@ -740,6 +774,36 @@ def backdrop(x, d):
         x(d + 1, '<left>%d</left><top>%d</top><width>%d</width><height>%d</height>' % (l, t, w, h))
         x(d + 1, '<texture>%s</texture>' % tex)
         x(d, '</control>')
+
+
+def ambient(x, d):
+    """A picture with no backdrop of its own (POVIL_HeroAmbient), as a soft wash of
+    its colours: povil_rtl gives every item of a home row the art povil_blur, the
+    item's picture that Kodi itself shrinks to 10 pixels wide (image://.../transform
+    ?width=10) -- drawn over the whole screen it is a smooth blur, in one layer.
+    Kodi shows a picture full size the first time it shrinks it (only the copy it
+    keeps is small) and hands every control showing the same address the same
+    picture, so an invisible pixel asks for povil_blur once the screen has been
+    still for a second, and the wash draws the kept file itself (povil_blurfile,
+    copied to Window(home).Property(povil.blur) by the timer povil_blur a second
+    later, never under a dialog): by then the small copy is kept, and fast
+    scrolling fetches nothing. A copy not kept yet (a slow network) leaves the
+    plain backdrop until the item is chosen again. Darkened by its colour so the
+    hero text stays clear; hidden at once on an item with a backdrop of its own."""
+    x(d, '<control type="image" description="ambient wash: the small copy is made">')
+    x(d + 1, '<left>0</left><top>0</top><width>1</width><height>1</height>')
+    x(d + 1, '<texture background="true" colordiffuse="01FFFFFF">$VAR[POVIL_HeroAmbient]</texture>')
+    x(d + 1, '<visible>System.IdleTime(1)</visible>')   # fast scrolling fetches nothing
+    x(d, '</control>')
+    x(d, '<control type="image" description="ambient wash">')
+    x(d + 1, '<left>-60</left><top>-60</top><width>2040</width><height>1200</height>')
+    x(d + 1, '<texture background="true" colordiffuse="FF999999">$INFO[Window(home).Property(povil.blur)]</texture>')
+    x(d + 1, '<aspectratio>scale</aspectratio><fadetime>600</fadetime>')
+    x(d + 1, '<visible>!String.IsEmpty(Control.GetLabel(9803))</visible>')
+    x(d + 1, '<animation effect="fade" time="300">Visible</animation><animation effect="fade" time="150">Hidden</animation>')
+    x(d, '</control>')
+    # Hidden label: the wash the hero wants now (the timer compares it)
+    x(d, '<control type="label" id="9803"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_HeroAmbientFile]</label></control>')
 
 
 def top_bar(x, d):
@@ -778,6 +842,7 @@ def top_bar(x, d):
         x(d + 2, '<label>%s</label>' % e(tab['label']))
         x(d + 2, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
         x(d + 2, '<onfocus>SetProperty(povil.tab.%s,1,home)</onfocus>' % tab['id'])
+        x(d + 2, '<onfocus>SetProperty(povil.focus,%d,home)</onfocus>' % tab_button(ti))
         # a row whose retries ran out (a box that started before its network) asks
         # again when its tab is chosen again
         for ri, row in enumerate(tab['rows']):
@@ -880,6 +945,7 @@ def chips(x, d):
             x(d + 2, '<label>%s</label>' % e(label))
             x(d + 2, '<onclick>%s</onclick>' % e(click))
             x(d + 2, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
+            x(d + 2, '<onfocus>SetProperty(povil.focus,%d,home)</onfocus>' % ids[ci])
             x(d + 2, '<onup>%d</onup>' % tab_button(ti))
             if down:
                 x(d + 2, '<ondown>%d</ondown>' % down)
@@ -1046,6 +1112,7 @@ def rows(x, d):
             # Focus decides the tab: Kodi's skin reload gives the focus back to the
             # control that had it, after the first tab's button took it
             x(d + 3, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
+            x(d + 3, '<onfocus>SetProperty(povil.focus,%d,home)</onfocus>' % rid)
             for cond, target in nav_chain(ids[ri + 1:]):
                 x(d + 3, '<ondown condition="%s">%d</ondown>' % (cond, target))
             if is_rtl(path):
