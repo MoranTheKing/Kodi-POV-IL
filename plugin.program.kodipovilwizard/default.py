@@ -20,10 +20,20 @@
 
 if __name__ == '__main__':
     import sys
-    from resources.libs.common import router
 
     _handle = int(sys.argv[1])
     _params = sys.argv[2][1:]
-    
-    dispatcher = router.Router()
-    dispatcher.dispatch(_handle, _params)
+
+    # The Onyx home's favourites row: straight to its module, not the menus
+    from urllib.parse import parse_qsl
+    _query = dict(parse_qsl(_params))
+    if _query.get('mode') == 'favourites_row':
+        from resources.libs import favourites_row
+        favourites_row.row(_handle)
+    elif _query.get('mode') == 'favourite_run':
+        from resources.libs import favourites_row
+        favourites_row.run(_handle, _query)
+    else:
+        from resources.libs.common import router
+        dispatcher = router.Router()
+        dispatcher.dispatch(_handle, _params)
