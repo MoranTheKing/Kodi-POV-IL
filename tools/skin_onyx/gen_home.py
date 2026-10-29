@@ -201,6 +201,19 @@ def tab_button(ti):
 
 
 
+def nav_chain(candidates, fallback=None):
+    """[(condition, target)] for the nearest row of `candidates` that has items
+    (an empty optional row is hidden: the focus must skip any number of them),
+    then `fallback` when none has."""
+    has = 'Integer.IsGreater(Container(%d).NumItems,0)'
+    chain = []
+    for k, target in enumerate(candidates):
+        chain.append((' + '.join(['!' + has % c for c in candidates[:k]] + [has % target]), target))
+    if fallback is not None:
+        chain.append((' + '.join('!' + has % c for c in candidates) or 'true', fallback))
+    return chain
+
+
 def strip_base(ti, ri):
     """The touch strips of a row: base (down a row) and base + 1 (up a row)."""
     assert ri < 5, 'five rows per tab at most: the next tab\'s strips start ten ids on'
@@ -882,19 +895,18 @@ def touch_strips(x, d, ti, tab, ids, offsets):
             top = ROWS_Y + offsets[ri + 1] - offsets[ri] - 10
             x(d, '<control type="button" id="%d" description="touch: next row">' % base)
             x(d + 1, '<left>0</left><top>%d</top><width>1920</width><height>%d</height>' % (top, 1080 - top))
-            x(d + 1, '<texturefocus /><texturenofocus /><visible>%s</visible>%s' % (shown, keys))
-            nxt = ids[ri + 1]
-            if ri + 2 < len(ids):
-                x(d + 1, '<onclick condition="Integer.IsGreater(Container(%d).NumItems,0)">SetFocus(%d)</onclick>' % (nxt, nxt))
-                x(d + 1, '<onclick condition="!Integer.IsGreater(Container(%d).NumItems,0)">SetFocus(%d)</onclick>' % (nxt, ids[ri + 2]))
-            else:
-                x(d + 1, '<onclick>SetFocus(%d)</onclick>' % nxt)
+            below = '[%s]' % ' | '.join('Integer.IsGreater(Container(%d).NumItems,0)' % i for i in ids[ri + 1:])
+            x(d + 1, '<texturefocus /><texturenofocus /><visible>%s + %s</visible>%s' % (shown, below, keys))
+            for cond, target in nav_chain(ids[ri + 1:]):
+                x(d + 1, '<onclick condition="%s">SetFocus(%d)</onclick>' % (cond, target))
             x(d, '</control>')
         if ri:
             x(d, '<control type="button" id="%d" description="touch: previous row">' % (base + 1))
             x(d + 1, '<left>0</left><top>%d</top><width>1920</width><height>50</height>' % (ROWS_Y - 6))
             x(d + 1, '<texturefocus /><texturenofocus /><visible>%s</visible>%s' % (shown, keys))
-            x(d + 1, '<onclick>SetFocus(%d)</onclick>' % ids[ri - 1])
+            top_up = chip_ids(ti, tab)[0] if tab['chips'] else tab_button(ti)
+            for cond, target in nav_chain(list(reversed(ids[:ri])), top_up):
+                x(d + 1, '<onclick condition="%s">SetFocus(%d)</onclick>' % (cond, target))
             x(d, '</control>')
 
 
@@ -940,19 +952,17 @@ def rows(x, d):
                 x(d + 3, '<left>%d</left><top>40</top><width>%d</width><height>%d</height>' % (MARGIN - PAD, 1920 - MARGIN + PAD, g['list_h']))
             x(d + 3, '<orientation>horizontal</orientation><preloaditems>2</preloaditems>')
             x(d + 3, '<scrolltime tween="cubic" easing="out">260</scrolltime>')
-            up = chip_ids(ti, tab)[0] if (ri == 0 and tab['chips']) else (ids[ri - 1] if ri else tab_button(ti))
-            x(d + 3, '<onup>%d</onup>' % up)
+            top_up = chip_ids(ti, tab)[0] if tab['chips'] else tab_button(ti)
+            for cond, target in nav_chain(list(reversed(ids[:ri])), top_up):
+                x(d + 3, '<onup condition="%s">%d</onup>' % (cond, target))
             # Kodi wraps a list with no action at its edge: the row's far end would
             # jump back to its start (and the start, on the right, to the far end)
             x(d + 3, '<onleft>noop</onleft><onright>noop</onright>')
             # Focus decides the tab: Kodi's skin reload gives the focus back to the
             # control that had it, after the first tab's button took it
             x(d + 3, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
-            for nxt in ids[ri + 1:]:
-                x(d + 3, '<ondown condition="Integer.IsGreater(Container(%d).NumItems,0)">%d</ondown>' % (nxt, nxt))
-                break
-            if ri + 2 < len(ids):
-                x(d + 3, '<ondown condition="!Integer.IsGreater(Container(%d).NumItems,0)">%d</ondown>' % (ids[ri + 1], ids[ri + 2]))
+            for cond, target in nav_chain(ids[ri + 1:]):
+                x(d + 3, '<ondown condition="%s">%d</ondown>' % (cond, target))
             if is_rtl(path):
                 x(d + 3, '<animation effect="fade" start="100" end="0" time="0" condition="%s">Conditional</animation>' % rtl_waiting(rid))
             x(d + 3, '<include content="POVIL_Item_%s"><param name="id" value="%d" /></include>' % (kind, rid))
