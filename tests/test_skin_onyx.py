@@ -83,6 +83,12 @@ class SkinPackageTests(unittest.TestCase):
 class GeneratedXmlTests(unittest.TestCase):
     """The generated files are what the generators write (nobody edited them by hand)."""
 
+    def test_conditions_group_with_brackets(self):
+        # Kodi groups a condition with [ ] only; "!(" splits it into broken parts
+        for name in ('Home.xml', 'Includes_POVIL_Home.xml', 'View_POVIL.xml', 'Timers.xml', 'DialogKeyboard.xml'):
+            with self.subTest(name):
+                self.assertNotIn('!(', (XML / name).read_text(encoding='utf-8'))
+
     def test_generators_reproduce_the_skin(self):
         tmp = Path(tempfile.mkdtemp(prefix='povil-onyx-'))
         try:
@@ -114,8 +120,15 @@ def _plugin_stub():
 
 
 class _Item:
-    def __init__(self):
+    def __init__(self, label=''):
         self.props = {}
+        self.label = label
+
+    def getLabel(self):
+        return self.label
+
+    def getProperty(self, key):
+        return self.props.get(key, '')
 
     def setProperty(self, key, value):
         self.props[key] = value
@@ -123,7 +136,8 @@ class _Item:
 
 class RtlPatchTests(unittest.TestCase):
     def _run(self, query, skin='skin.povil.onyx', window=10000, view='51', pov=True, umbrella=False, umbrella_db='',
-             sort=None, plugin=None, content='movies', keep_module=False, home=None):
+             sort=None, plugin=None, content='movies', keep_module=False, home=None, labels=('', '', ''),
+             pinned=None):
         if plugin is None:
             plugin, calls = _plugin_stub()
         else:
@@ -147,7 +161,9 @@ class RtlPatchTests(unittest.TestCase):
             import povil_rtl
             sys.argv = ['plugin://plugin.video.pov/', '1', query]
             povil_rtl.install(pov=pov and not umbrella, umbrella=umbrella)
-            items = [_Item(), _Item(), _Item()]
+            items = [_Item(label) for label in labels]
+            for index, where in (pinned or {}).items():
+                items[index].props['SpecialSort'] = where
             if sort is not None:
                 plugin.addSortMethod(1, sort)
             plugin.setContent(1, content)
@@ -169,6 +185,11 @@ class RtlPatchTests(unittest.TestCase):
         self.assertIn(('many', ['c', 'b', 'a']), calls)
         self.assertEqual(calls[-1], ('end',))
         self.assertTrue(all(i.props.get('povil_rtl') == '1' for i in items))
+
+    def test_a_pinned_next_page_keeps_its_end_in_a_name_sort(self):
+        calls, items = self._run('?mode=1&povil_rtl=1', sort=1, pov=False,
+                                 labels=('ג', 'Next page', 'א'), pinned={1: 'bottom'})
+        self.assertIn(('many', ['b', 'a', 'c']), calls, 'next page last, then reversed: far left')
 
     def test_full_screen_pov_list_in_an_onyx_horizontal_view(self):
         calls, _items = self._run('?mode=build_movie_list', window=10025, view='51')
@@ -241,7 +262,7 @@ class RtlPatchTests(unittest.TestCase):
     def test_season_episodes_start_on_episode_one(self):
         calls, items = self._run('?mode=build_episode_list', window=10025, view='55', sort=24, content='episodes')
         self.assertIn(('many', ['c', 'b', 'a']), calls)
-        self.assertEqual([c[1] for c in calls if c[0] == 'sort'], [40, 24], "the add-on's order first, episode sort on offer")
+        self.assertEqual([c[1] for c in calls if c[0] == 'sort'], [40], "the list's own order only: a saved sort cannot undo it")
         self.assertTrue(all(i.props.get('povil_rtl') == '1' for i in items))
 
     def test_episode_lists_follow_their_own_pov_view(self):
@@ -250,10 +271,18 @@ class RtlPatchTests(unittest.TestCase):
         self.assertNotIn(('many', ['c', 'b', 'a']), calls)
 
     def test_a_list_sorted_another_way_keeps_its_order(self):
-        calls, items = self._run('?mode=1&povil_rtl=1', sort=1, pov=False)
+        calls, items = self._run('?mode=1&povil_rtl=1', sort=3, pov=False)   # by date
         self.assertNotIn(('many', ['c', 'b', 'a']), calls)
         self.assertFalse(any(i.props for i in items))
-        self.assertIn(('sort', 1), calls)
+        self.assertIn(('sort', 3), calls)
+
+    def test_a_name_sorted_list_starts_with_alef_on_the_right(self):
+        # Idan Plus with its A-Z setting: the names sorted here, then reversed
+        calls, items = self._run('?mode=1&povil_rtl=1', sort=1, pov=False,
+                                 labels=('[B]פרק 10[/B]', 'בית', 'פרק 2'))
+        self.assertIn(('many', ['a', 'c', 'b']), calls, 'reversed: פרק 10, פרק 2, בית')
+        self.assertEqual([c[1] for c in calls if c[0] == 'sort'], [40], 'the reversed list only')
+        self.assertTrue(all(i.props.get('povil_rtl') == '1' for i in items))
 
     def test_other_requests_keep_their_order(self):
         for kwargs in ({'window': 10025, 'view': '50'}, {'window': 10000}, {'skin': 'skin.povil.nox', 'window': 10025}):

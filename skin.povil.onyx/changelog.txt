@@ -1,3 +1,17 @@
+[B]Kodi POV IL - Onyx 1.0.1[/B]
+- A season (or any list) opened again in the same session starts on its first item again, on the right; before, it opened on its far end
+- The favourites row follows Kodi's favourites at once when one is added or removed
+- Favourites tab: Kodi's favourites start on the right too (through the Wizard), and MDBList's own movies and shows have rows, and chips once those rows have items, as Trakt has chips
+- Rows and full-screen lists: the far end, "more" included, is fully on screen. Kodi counted a slot cut by the screen edge as visible, and the last items of a row landed in it; the next item now shows only as a dim picture at the edge
+- Pressing on past either end of a row no longer jumps to the other end, and reaching the far end no longer throws the row back to its start
+- The focused tile's gold frame is no longer cut at the screen edges
+- The home opens straight on the Movies tab, with no Settings tab first; also when switching to Onyx and after a skin reload
+- Israeli tab: Keshet 12 and Kan 11 as posters (their pictures are posters), Kan 11 with all its programs instead of its menu, from A on the right; a picture of another shape is shown whole over a dim fill of itself, and the backdrop no longer blows up a poster
+- Phones: a tap at the bottom of the screen goes down a row, a tap on the row's title goes back up; Onyx's hidden letter buttons no longer catch taps in the lists
+- The search tab follows the search engine chosen in MoranSubs (POV or Umbrella), at once; a "search engine" tile in the settings tab
+- Skin settings right to left; "Medium-Low" and the player headings in Hebrew word order
+- Kodi's ".." item (it came after "more" at a list's end) is switched off when the home loads -- the setting is Kodi's own, for every skin; whoever switches it back on in the skin settings keeps it, as a "back" tile
+
 [B]Kodi POV IL - Onyx 1.0.0[/B]
 - First version: a home with movies, TV shows, Israeli content, live TV, kids, favourites, search and settings
 - Everything right to left: rows start on the right, Hebrew logos with Hebrew posters

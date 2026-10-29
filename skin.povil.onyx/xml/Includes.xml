@@ -392,6 +392,28 @@
 		<font>size23</font>
 		<pulseonselect>false</pulseonselect>
 	</include>
+	<include name="POVIL_SkinSettingsButton" description="SkinSettingsButton, right to left: the name on the right, a switch on its left">
+		<height>81</height>
+		<width>1260</width>
+		<textoffsetx>20</textoffsetx>
+		<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+		<texturefocus border="5" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+		<align>right</align>
+		<aligny>center</aligny>
+		<font>size23</font>
+		<pulseonselect>false</pulseonselect>
+	</include>
+	<include name="POVIL_SkinSettingsValue" description="SkinSettingsButton, right to left: the value (label) on the left, the name (label2) on the right">
+		<height>81</height>
+		<width>1260</width>
+		<textoffsetx>20</textoffsetx>
+		<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+		<texturefocus border="5" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+		<align>left</align>
+		<aligny>center</aligny>
+		<font>size23</font>
+		<pulseonselect>false</pulseonselect>
+	</include>
 	<include name="DimBG">
 		<control type="image" description="Default BG">
 			<include>Dimensions_Fullscreen</include>
