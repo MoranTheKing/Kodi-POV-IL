@@ -497,7 +497,7 @@
 			<left>345</left><top>318</top><width>1230</width><height>66</height>
 			<orientation>horizontal</orientation><scrolltime tween="cubic" easing="out">200</scrolltime>
 			<ondown>100</ondown><onup>9010</onup>
-			<animation effect="fade" start="100" end="0" time="0" condition="!Container(9010).IsUpdating + Integer.IsGreater(Container(9010).NumItems,1) + Integer.IsEqual(Container(9010).CurrentItem,1) + String.IsEqual(Container(9010).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Window(home).Property(povil.rtl.9010),Container(9010).ListItemAbsolute(0).Label)">Conditional</animation>
+			<animation effect="fade" start="100" end="0" time="0" condition="!Container(9010).IsUpdating + Integer.IsGreater(Container(9010).NumItems,1) + Integer.IsEqual(Container(9010).CurrentItem,1) + String.IsEqual(Container(9010).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(9010).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.9010))">Conditional</animation>
 			<visible>!Window.IsVisible(numericinput)</visible>
 			<itemlayout width="306" height="66">
 				<control type="image"><left>0</left><top>6</top><width>294</width><height>54</height><texture border="24" colordiffuse="33FFFFFF">povil/pill48.png</texture></control>

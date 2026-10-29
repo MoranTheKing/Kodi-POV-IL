@@ -13,10 +13,14 @@ A list is reversed when:
   views (51, 55). Umbrella keeps its views per skin; for Onyx they start as
   51 (movies, TV shows, seasons) and 55 (episodes), as POV's do, and a view
   the user picks in Umbrella later is kept.
-A list the add-on sorts by anything but its own order (A-Z, say) keeps its
-order and is not marked; an episode sort (POV's season lists) gives way to
-the add-on's order, which already is the episode order, so episode 1 ends up
-on the right.
+An episode sort (POV's season lists) gives way to the add-on's order, which
+already is the episode order, so episode 1 ends up on the right. A name sort
+(Idan Plus with its A-Z setting) is done here, the way Kodi does it, and then
+reversed, so A (א) ends up on the right. A reversed list offers Kodi no sort
+but its own order: Kodi saves the sort a user picks per list and applies it
+again at every visit, and "by episode" put episode 1 back on the left
+(field report, 29 Oct 2026). A list sorted any other way keeps its order and
+is not marked.
 
 install() runs first thing in the add-on's entry script, on every request.
 It wraps xbmcplugin once per interpreter (Idan Plus, and POV with fast
@@ -24,6 +28,7 @@ navigation, reuse theirs) and decides again for each request, so lists
 served from the build's saved copies are reversed the same way and nothing
 changes for any other request or skin.
 """
+import re
 import sys
 
 FLAG = 'povil_rtl=1'
@@ -107,12 +112,38 @@ def _full_screen_view(content, addon, query):
     return _view_for(content, addon, query) in HORIZONTAL_VIEWS
 
 
+_FORMATTING = re.compile(r'\[/?(?:B|I|LIGHT|UPPERCASE|LOWERCASE|CAPITALIZE)\]|\[COLOR [^\]]*\]|\[/COLOR\]', re.I)
+
+
+def _name_key(listitem, ignore_the=False):
+    """Kodi's name sort: formatting ignored, case folded, numbers by value
+    (and a leading "The" ignored for SORT_METHOD_LABEL_IGNORE_THE)."""
+    try:
+        name = listitem.getLabel()
+    except Exception:
+        name = ''
+    name = _FORMATTING.sub('', name or '').strip().casefold()
+    if ignore_the and name.startswith('the '):
+        name = name[4:]
+    return [(0, int(part), '') if part.isdecimal() else (1, 0, part) for part in re.split(r'(\d+)', name) if part]
+
+
+def _pinned(listitem):
+    """Where the add-on pinned an item (SpecialSort: top / bottom), if anywhere."""
+    try:
+        return (listitem.getProperty('SpecialSort') or '').lower()
+    except Exception:
+        return ''
+
+
 def _wrap(xbmcplugin, state):
     original = {name: getattr(xbmcplugin, name) for name in
                 ('addDirectoryItem', 'addDirectoryItems', 'addSortMethod', 'endOfDirectory', 'setContent')}
     own_order = {getattr(xbmcplugin, n, None) for n in ('SORT_METHOD_UNSORTED', 'SORT_METHOD_NONE')} - {None}
     unsorted = getattr(xbmcplugin, 'SORT_METHOD_UNSORTED', None)
     episode_sort = getattr(xbmcplugin, 'SORT_METHOD_EPISODE', None)
+    by_name = {getattr(xbmcplugin, n, None) for n in ('SORT_METHOD_LABEL', 'SORT_METHOD_LABEL_IGNORE_THE')} - {None}
+    ignore_the = getattr(xbmcplugin, 'SORT_METHOD_LABEL_IGNORE_THE', None)
 
     def _keep(url, listitem, is_folder):
         state['items'].append((url, listitem, bool(is_folder)))
@@ -149,13 +180,25 @@ def _wrap(xbmcplugin, state):
         state.update(active=False, items=[], sorts=[])
         first = sorts[0][0] if sorts else None
         reverse = False
-        if succeeded and items and (first is None or first in own_order or first == episode_sort):
+        if succeeded and items and (first is None or first in own_order or first == episode_sort or first in by_name):
             reverse = state['flagged']
             if not reverse:
                 try:
                     reverse = _full_screen_view(state['content'], state['addon'], state['query'])
                 except Exception:
                     reverse = False
+        if reverse and first in by_name:
+            try:
+                # items the add-on pinned (a next page) keep their end
+                ends = {'top': [], 'bottom': []}
+                middle = []
+                for entry in items:
+                    ends.get(_pinned(entry[1]), middle).append(entry)
+                drop_the = first == ignore_the
+                middle = sorted(middle, key=lambda entry: _name_key(entry[1], drop_the))
+                items = ends['top'] + middle + ends['bottom']
+            except Exception:
+                reverse = False      # never lose a list over a name: the add-on's own order
         if reverse:
             items.reverse()
             for _url, listitem, _folder in items:
@@ -166,10 +209,9 @@ def _wrap(xbmcplugin, state):
                     listitem.setProperty('SpecialSort', '')
                 except Exception:
                     pass
-            if first == episode_sort and unsorted is not None:
-                # Kodi sorts by the first method: the add-on's own (reversed)
-                # order first; the episode sort stays on offer after it.
-                sorts.insert(0, (unsorted, (), {}))
+            # Only the list's own (reversed) order: a sort saved for this list
+            # (Kodi keeps the one a user picked) then has nothing to re-apply.
+            sorts = [(unsorted, (), {})] if unsorted is not None else []
         for method, args, kwargs in sorts:
             original['addSortMethod'](handle, method, *args, **kwargs)
         if items:

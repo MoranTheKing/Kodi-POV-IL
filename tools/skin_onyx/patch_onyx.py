@@ -103,6 +103,57 @@ EDITS = [
      '\t\t\t\t\t\t</control>\n\t\t\t\t\t\t<control type="label" description="Keyboard language"><left>0</left><top>312</top><width>330</width><height>72</height><font>size20</font><align>center</align><aligny>center</aligny><textcolor>povil_white</textcolor><label>$VAR[POVIL_KbLang]</label><visible>!Control.HasFocus(309)</visible></control>\n\t\t\t\t\t\t<control type="label" description="Keyboard language"><left>0</left><top>312</top><width>330</width><height>72</height><font>size20</font><align>center</align><aligny>center</aligny><textcolor>povil_ink</textcolor><label>$VAR[POVIL_KbLang]</label><visible>Control.HasFocus(309)</visible></control>\n\t\t\t\t\t</control>\n\t\t\t\t</control>\n\t\t\t</control>\n\t\t</control>\n\t\t<control type="list" id="9010"', 'description="Keyboard language"'),
     ('Includes_Variables.xml', '\t<variable name="FrameColor"',
      '\t<variable name="POVIL_KbLang" description="The keyboard layout button, in Hebrew">\n\t\t<value condition="String.Contains(Control.GetLabel(309),Hebrew)">מקלדת: עברית</value>\n\t\t<value condition="String.Contains(Control.GetLabel(309),English)">מקלדת: אנגלית</value>\n\t\t<value>$INFO[Control.GetLabel(309)]</value>\n\t</variable>\n\t<variable name="FrameColor"', 'name="POVIL_KbLang"'),
+    # The skin settings, right to left (skin_settings_rtl): the shared SkinSettingsButton
+    # stays as it is for add-on settings, where Kodi fills both labels itself.
+    ('Includes.xml', '	<include name="DimBG">',
+     '''	<include name="POVIL_SkinSettingsButton" description="SkinSettingsButton, right to left: the name on the right, a switch on its left">
+		<height>81</height>
+		<width>1260</width>
+		<textoffsetx>20</textoffsetx>
+		<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+		<texturefocus border="5" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+		<align>right</align>
+		<aligny>center</aligny>
+		<font>size23</font>
+		<pulseonselect>false</pulseonselect>
+	</include>
+	<include name="POVIL_SkinSettingsValue" description="SkinSettingsButton, right to left: the value (label) on the left, the name (label2) on the right">
+		<height>81</height>
+		<width>1260</width>
+		<textoffsetx>20</textoffsetx>
+		<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+		<texturefocus border="5" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+		<align>left</align>
+		<aligny>center</aligny>
+		<font>size23</font>
+		<pulseonselect>false</pulseonselect>
+	</include>
+	<include name="DimBG">''', 'name="POVIL_SkinSettingsButton"'),
+    # The suggestions' guard, inserted above before rtl_waiting put the container's
+    # label first (Kodi reads a Container(id) infolabel as text when it comes second)
+    ('DialogKeyboard.xml', '!String.IsEqual(Window(home).Property(povil.rtl.9010),Container(9010).ListItemAbsolute(0).Label)',
+     '!String.IsEqual(Container(9010).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.9010))'),
+    # Onyx's letter jump buttons are hidden but focusable, and 9002/9003 sit over
+    # the middle of the right-to-left views: a tap on a phone landed on them, and
+    # left/right then paged through letters. Off while views 51/55 are shown.
+    ('MyVideoNav.xml', '<control type="button" id="9001">',
+     '<control type="button" id="9001">\n\t\t\t<enable>!Control.IsVisible(51) + !Control.IsVisible(55)</enable>'),
+    ('MyVideoNav.xml', '<control type="button" id="9002">',
+     '<control type="button" id="9002">\n\t\t\t<enable>!Control.IsVisible(51) + !Control.IsVisible(55)</enable>'),
+    ('MyVideoNav.xml', '<control type="button" id="9003">',
+     '<control type="button" id="9003">\n\t\t\t<enable>!Control.IsVisible(51) + !Control.IsVisible(55)</enable>'),
+    # The parent folder switch: once the user sets it, the home stops turning ".." off
+    ('SkinSettings.xml', '<onclick>RunScript(special://skin/scripts/onyx_tools.py,parentdir)</onclick>',
+     '<onclick>Skin.SetBool(POVILParentDirChosen)</onclick>\n\t\t\t\t\t<onclick>RunScript(special://skin/scripts/onyx_tools.py,parentdir)</onclick>'),
+    # Two Kodi words glued in English order: "MediumLow" -> "Medium-Low" (בינוני-נמוך),
+    # "Music player" -> in Hebrew the player comes first (נגן מוזיקה)
+    ('SkinSettings.xml', '$LOCALIZE[392]$LOCALIZE[391]', '$LOCALIZE[392]-$LOCALIZE[391]'),
+    ('SkinSettings.xml', '$LOCALIZE[392]$LOCALIZE[393]', '$LOCALIZE[392]-$LOCALIZE[393]'),
+    ('SkinSettings.xml', '<label>$LOCALIZE[249] [LOWERCASE]$LOCALIZE[14200][/LOWERCASE]</label>', '<label>$VAR[POVIL_MusicPlayer]</label>'),
+    ('SkinSettings.xml', '<label>$LOCALIZE[157] [LOWERCASE]$LOCALIZE[14200][/LOWERCASE]</label>', '<label>$VAR[POVIL_VideoPlayer]</label>'),
+    ('Includes_Variables.xml', '\t<variable name="FrameColor"',
+     '\t<variable name="POVIL_MusicPlayer" description="Music player; Hebrew puts the player first">\n\t\t<value condition="String.StartsWith(System.Language,Hebrew)">$LOCALIZE[14200] $LOCALIZE[249]</value>\n\t\t<value>$LOCALIZE[249] [LOWERCASE]$LOCALIZE[14200][/LOWERCASE]</value>\n\t</variable>\n'
+     '\t<variable name="POVIL_VideoPlayer" description="Video player; Hebrew puts the player first">\n\t\t<value condition="String.StartsWith(System.Language,Hebrew)">$LOCALIZE[14200] $LOCALIZE[157]</value>\n\t\t<value>$LOCALIZE[157] [LOWERCASE]$LOCALIZE[14200][/LOWERCASE]</value>\n\t</variable>\n\t<variable name="FrameColor"', 'name="POVIL_MusicPlayer"'),
     # Choice lists (Wizard, POV, Kodi): the item text on the right
     ('Includes_DialogSelect.xml', '<control type="label" description="Main Label">',
      '<control type="label" description="Main Label"><align>right</align><posx>96</posx>', '<align>right</align><posx>96</posx>'),
@@ -167,6 +218,83 @@ def confirm_rtl(folder):
     return True
 
 
+def skin_settings_rtl(folder):
+    """The skin settings, mirrored: the categories on the right, every setting's
+    name on the right with its switch or value to its left, and the left and
+    right keys swapped. Kodi always draws a button's label2 on the right, so a
+    setting that shows a value swaps its two labels (the value in label, on the
+    left; the name in label2). Add-on settings keep the shared button: Kodi
+    fills those labels itself."""
+    import re
+    path = os.path.join(folder, 'SkinSettings.xml')
+    text = open(path, encoding='utf-8').read()
+    marker = '<!-- POVIL right to left -->'
+    if marker in text:
+        return False
+    hold = chr(0)
+    text = text.replace('<window>', '<window>' + NL + chr(9) + marker, 1)
+    # keys and alignment, everywhere in the window
+    text = text.replace('<onleft', hold + 'L').replace('</onleft>', hold + '/L')
+    text = text.replace('<onright', '<onleft').replace('</onright>', '</onleft>')
+    text = text.replace(hold + 'L', '<onright').replace(hold + '/L', '</onright>')
+    text = text.replace('<align>left</align>', hold)
+    text = text.replace('<align>right</align>', '<align>left</align>').replace(hold, '<align>right</align>')
+
+    def place(old, new, count=1):
+        nonlocal text
+        if text.count(old) != count:
+            raise SystemExit('patch_onyx: SkinSettings.xml anchor %r found %d times' % (old, text.count(old)))
+        text = text.replace(old, new)
+
+    tabs = NL + chr(9) * 3
+    place('<control type="image" description="Sidebar">' + tabs + '<left>0</left>',
+          '<control type="image" description="Sidebar">' + tabs + '<left>1449</left>')
+    place('<texture>img/Sidebar.png</texture>', '<texture flipx="true">img/Sidebar.png</texture>')
+    place('description="Left panel - categories">' + tabs + '<posx>40</posx>',
+          'description="Left panel - categories">' + tabs + '<posx>1490</posx>')
+    place('description="Right panel">' + tabs + '<posx>540</posx>', 'description="Right panel">' + tabs + '<posx>100</posx>')
+    place('<right>35</right>', '<left>35</left>', 2)                 # the scrollbars
+    place('<left>560</left>', '<left>60</left>')                     # the help line
+    place('<posx>1728</posx>', '<posx>132</posx>')                   # the reset warning icon
+
+    def labels(m):
+        block = m.group(0)
+        if '<align>' not in block:
+            block = block.replace('>', '><align>right</align>', 1)
+        # the transparency rows: their name on the right, the level on the left
+        if '<left>18</left>' in block and '<width>800</width>' in block:
+            block = block.replace('<left>18</left>', '<left>442</left>')
+        if '<left>450</left>' in block and '<width>790</width>' in block:
+            block = block.replace('<left>450</left>', '<left>20</left>')
+        return block
+    text = re.sub(r'<control type="(?:label|textbox)"[^>]*>.*?</control>', labels, text, flags=re.S)
+
+    def buttons(m):
+        block = m.group(0)
+        name = re.search(r'<label>(.*?)</label>', block, re.S)
+        value = re.search(r'<label2>(.*?)</label2>', block, re.S)
+        if name and value:
+            block = (block[:name.start()] + hold + 'N' + block[name.end():value.start()] + hold + 'V'
+                     + block[value.end():])
+            block = block.replace(hold + 'N', '<label>%s</label>' % value.group(1))
+            block = block.replace(hold + 'V', '<label2>%s</label2>' % name.group(1))
+            return block.replace('<include>SkinSettingsButton</include>', '<include>POVIL_SkinSettingsValue</include>')
+        return block.replace('<include>SkinSettingsButton</include>', '<include>POVIL_SkinSettingsButton</include>')
+    text = re.sub(r'<control type="button"[^>]*>.*?</control>', buttons, text, flags=re.S)
+
+    def radios(m):
+        block = m.group(0).replace('<include>SkinSettingsButton</include>', '<include>POVIL_SkinSettingsButton</include>')
+        if '<radioposx>' in block:
+            return re.sub(r'<radioposx>\d+</radioposx>', '<radioposx>20</radioposx>', block)
+        return block.replace('>', '><radioposx>20</radioposx>', 1)
+    text = re.sub(r'<control type="radiobutton"[^>]*>.*?</control>', radios, text, flags=re.S)
+    if 'SkinSettingsButton</include>' in text.replace('POVIL_SkinSettingsButton', ''):
+        raise SystemExit('patch_onyx: SkinSettings.xml has a SkinSettingsButton control of another kind')
+    with open(path, 'w', encoding='utf-8', newline=NL) as f:
+        f.write(text)
+    return True
+
+
 def main():
     folder = os.path.join(sys.argv[1], 'xml')
     applied = skipped = 0
@@ -188,6 +316,8 @@ def main():
     if power_menu(folder):
         applied += 1
     if confirm_rtl(folder):
+        applied += 1
+    if skin_settings_rtl(folder):
         applied += 1
     print('onyx edits: %d applied, %d already there' % (applied, skipped))
 

@@ -2007,7 +2007,8 @@ def _handle_search_provider(_params):
     search_provider.set_provider(picked)
     _statuses, reloaded = search_provider.apply_to_skins()
     name = search_provider.DISPLAY[picked]
-    if reloaded:
+    # Onyx reads the choice when the button is pressed: nothing to reload.
+    if reloaded or search_provider.active_skin_reads_live():
         # The skin reload already IS the feedback; a dialog on top of it would
         # land on a screen that is still rebuilding.
         try:
