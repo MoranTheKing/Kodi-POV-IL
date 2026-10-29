@@ -980,11 +980,11 @@
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>9112</onup>
+					<onup condition="true">9112</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5012).NumItems,0)">5012</ondown>
-					<ondown condition="!Integer.IsGreater(Container(5012).NumItems,0)">5013</ondown>
+					<ondown condition="!Integer.IsGreater(Container(5012).NumItems,0) + Integer.IsGreater(Container(5013).NumItems,0)">5013</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5011).IsUpdating + Integer.IsGreater(Container(5011).NumItems,1) + Integer.IsEqual(Container(5011).CurrentItem,1) + String.IsEqual(Container(5011).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5011).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5011))">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5011" /></include>
 					<content target="videos">$VAR[POVIL_Path_5011]</content>
@@ -1009,7 +1009,8 @@
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5011</onup>
+					<onup condition="Integer.IsGreater(Container(5011).NumItems,0)">5011</onup>
+					<onup condition="!Integer.IsGreater(Container(5011).NumItems,0)">9112</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5013).NumItems,0)">5013</ondown>
@@ -1037,7 +1038,9 @@
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5012</onup>
+					<onup condition="Integer.IsGreater(Container(5012).NumItems,0)">5012</onup>
+					<onup condition="!Integer.IsGreater(Container(5012).NumItems,0) + Integer.IsGreater(Container(5011).NumItems,0)">5011</onup>
+					<onup condition="!Integer.IsGreater(Container(5012).NumItems,0) + !Integer.IsGreater(Container(5011).NumItems,0)">9112</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5013).IsUpdating + Integer.IsGreater(Container(5013).NumItems,1) + Integer.IsEqual(Container(5013).CurrentItem,1) + String.IsEqual(Container(5013).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5013).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5013))">Conditional</animation>
@@ -1055,24 +1058,27 @@
 		</control>
 		<control type="button" id="9610" description="touch: next row">
 			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5011) | Control.HasFocus(9610)]</visible><onup>5011</onup><ondown>5011</ondown><onleft>5011</onleft><onright>5011</onright>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5011) | Control.HasFocus(9610)] + [Integer.IsGreater(Container(5012).NumItems,0) | Integer.IsGreater(Container(5013).NumItems,0)]</visible><onup>5011</onup><ondown>5011</ondown><onleft>5011</onleft><onright>5011</onright>
 			<onclick condition="Integer.IsGreater(Container(5012).NumItems,0)">SetFocus(5012)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5012).NumItems,0)">SetFocus(5013)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5012).NumItems,0) + Integer.IsGreater(Container(5013).NumItems,0)">SetFocus(5013)</onclick>
 		</control>
 		<control type="button" id="9612" description="touch: next row">
 			<left>0</left><top>970</top><width>1920</width><height>110</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5012) | Control.HasFocus(9612) | Control.HasFocus(9613)]</visible><onup>5012</onup><ondown>5012</ondown><onleft>5012</onleft><onright>5012</onright>
-			<onclick>SetFocus(5013)</onclick>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5012) | Control.HasFocus(9612) | Control.HasFocus(9613)] + [Integer.IsGreater(Container(5013).NumItems,0)]</visible><onup>5012</onup><ondown>5012</ondown><onleft>5012</onleft><onright>5012</onright>
+			<onclick condition="Integer.IsGreater(Container(5013).NumItems,0)">SetFocus(5013)</onclick>
 		</control>
 		<control type="button" id="9613" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5012) | Control.HasFocus(9612) | Control.HasFocus(9613)]</visible><onup>5012</onup><ondown>5012</ondown><onleft>5012</onleft><onright>5012</onright>
-			<onclick>SetFocus(5011)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5011).NumItems,0)">SetFocus(5011)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5011).NumItems,0)">SetFocus(9112)</onclick>
 		</control>
 		<control type="button" id="9615" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5013) | Control.HasFocus(9615)]</visible><onup>5013</onup><ondown>5013</ondown><onleft>5013</onleft><onright>5013</onright>
-			<onclick>SetFocus(5012)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5012).NumItems,0)">SetFocus(5012)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5012).NumItems,0) + Integer.IsGreater(Container(5011).NumItems,0)">SetFocus(5011)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5012).NumItems,0) + !Integer.IsGreater(Container(5011).NumItems,0)">SetFocus(9112)</onclick>
 		</control>
 		<control type="group" description="rows tv">
 			<left>0</left><top>618</top>
@@ -1091,11 +1097,11 @@
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>9124</onup>
+					<onup condition="true">9124</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5022).NumItems,0)">5022</ondown>
-					<ondown condition="!Integer.IsGreater(Container(5022).NumItems,0)">5023</ondown>
+					<ondown condition="!Integer.IsGreater(Container(5022).NumItems,0) + Integer.IsGreater(Container(5023).NumItems,0)">5023</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5021).IsUpdating + Integer.IsGreater(Container(5021).NumItems,1) + Integer.IsEqual(Container(5021).CurrentItem,1) + String.IsEqual(Container(5021).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021))">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5021" /></include>
 					<content target="videos">$VAR[POVIL_Path_5021]</content>
@@ -1120,7 +1126,8 @@
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5021</onup>
+					<onup condition="Integer.IsGreater(Container(5021).NumItems,0)">5021</onup>
+					<onup condition="!Integer.IsGreater(Container(5021).NumItems,0)">9124</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5023).NumItems,0)">5023</ondown>
@@ -1148,7 +1155,9 @@
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5022</onup>
+					<onup condition="Integer.IsGreater(Container(5022).NumItems,0)">5022</onup>
+					<onup condition="!Integer.IsGreater(Container(5022).NumItems,0) + Integer.IsGreater(Container(5021).NumItems,0)">5021</onup>
+					<onup condition="!Integer.IsGreater(Container(5022).NumItems,0) + !Integer.IsGreater(Container(5021).NumItems,0)">9124</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5023).IsUpdating + Integer.IsGreater(Container(5023).NumItems,1) + Integer.IsEqual(Container(5023).CurrentItem,1) + String.IsEqual(Container(5023).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023))">Conditional</animation>
@@ -1166,24 +1175,27 @@
 		</control>
 		<control type="button" id="9620" description="touch: next row">
 			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5021) | Control.HasFocus(9620)]</visible><onup>5021</onup><ondown>5021</ondown><onleft>5021</onleft><onright>5021</onright>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5021) | Control.HasFocus(9620)] + [Integer.IsGreater(Container(5022).NumItems,0) | Integer.IsGreater(Container(5023).NumItems,0)]</visible><onup>5021</onup><ondown>5021</ondown><onleft>5021</onleft><onright>5021</onright>
 			<onclick condition="Integer.IsGreater(Container(5022).NumItems,0)">SetFocus(5022)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5022).NumItems,0)">SetFocus(5023)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5022).NumItems,0) + Integer.IsGreater(Container(5023).NumItems,0)">SetFocus(5023)</onclick>
 		</control>
 		<control type="button" id="9622" description="touch: next row">
 			<left>0</left><top>970</top><width>1920</width><height>110</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5022) | Control.HasFocus(9622) | Control.HasFocus(9623)]</visible><onup>5022</onup><ondown>5022</ondown><onleft>5022</onleft><onright>5022</onright>
-			<onclick>SetFocus(5023)</onclick>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5022) | Control.HasFocus(9622) | Control.HasFocus(9623)] + [Integer.IsGreater(Container(5023).NumItems,0)]</visible><onup>5022</onup><ondown>5022</ondown><onleft>5022</onleft><onright>5022</onright>
+			<onclick condition="Integer.IsGreater(Container(5023).NumItems,0)">SetFocus(5023)</onclick>
 		</control>
 		<control type="button" id="9623" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5022) | Control.HasFocus(9622) | Control.HasFocus(9623)]</visible><onup>5022</onup><ondown>5022</ondown><onleft>5022</onleft><onright>5022</onright>
-			<onclick>SetFocus(5021)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5021).NumItems,0)">SetFocus(5021)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5021).NumItems,0)">SetFocus(9124)</onclick>
 		</control>
 		<control type="button" id="9625" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5023) | Control.HasFocus(9625)]</visible><onup>5023</onup><ondown>5023</ondown><onleft>5023</onleft><onright>5023</onright>
-			<onclick>SetFocus(5022)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5022).NumItems,0)">SetFocus(5022)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5022).NumItems,0) + Integer.IsGreater(Container(5021).NumItems,0)">SetFocus(5021)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5022).NumItems,0) + !Integer.IsGreater(Container(5021).NumItems,0)">SetFocus(9124)</onclick>
 		</control>
 		<control type="group" description="rows israeli">
 			<left>0</left><top>618</top>
@@ -1202,11 +1214,11 @@
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>9136</onup>
+					<onup condition="true">9136</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5032).NumItems,0)">5032</ondown>
-					<ondown condition="!Integer.IsGreater(Container(5032).NumItems,0)">5033</ondown>
+					<ondown condition="!Integer.IsGreater(Container(5032).NumItems,0) + Integer.IsGreater(Container(5033).NumItems,0)">5033</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5031).IsUpdating + Integer.IsGreater(Container(5031).NumItems,1) + Integer.IsEqual(Container(5031).CurrentItem,1) + String.IsEqual(Container(5031).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5031).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5031))">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5031" /></include>
 					<content target="videos">$VAR[POVIL_Path_5031]</content>
@@ -1231,7 +1243,8 @@
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5031</onup>
+					<onup condition="Integer.IsGreater(Container(5031).NumItems,0)">5031</onup>
+					<onup condition="!Integer.IsGreater(Container(5031).NumItems,0)">9136</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5033).NumItems,0)">5033</ondown>
@@ -1258,7 +1271,9 @@
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5032</onup>
+					<onup condition="Integer.IsGreater(Container(5032).NumItems,0)">5032</onup>
+					<onup condition="!Integer.IsGreater(Container(5032).NumItems,0) + Integer.IsGreater(Container(5031).NumItems,0)">5031</onup>
+					<onup condition="!Integer.IsGreater(Container(5032).NumItems,0) + !Integer.IsGreater(Container(5031).NumItems,0)">9136</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,israeli,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5033).IsUpdating + Integer.IsGreater(Container(5033).NumItems,1) + Integer.IsEqual(Container(5033).CurrentItem,1) + String.IsEqual(Container(5033).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5033).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5033))">Conditional</animation>
@@ -1276,24 +1291,27 @@
 		</control>
 		<control type="button" id="9630" description="touch: next row">
 			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5031) | Control.HasFocus(9630)]</visible><onup>5031</onup><ondown>5031</ondown><onleft>5031</onleft><onright>5031</onright>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5031) | Control.HasFocus(9630)] + [Integer.IsGreater(Container(5032).NumItems,0) | Integer.IsGreater(Container(5033).NumItems,0)]</visible><onup>5031</onup><ondown>5031</ondown><onleft>5031</onleft><onright>5031</onright>
 			<onclick condition="Integer.IsGreater(Container(5032).NumItems,0)">SetFocus(5032)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5032).NumItems,0)">SetFocus(5033)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5032).NumItems,0) + Integer.IsGreater(Container(5033).NumItems,0)">SetFocus(5033)</onclick>
 		</control>
 		<control type="button" id="9632" description="touch: next row">
 			<left>0</left><top>970</top><width>1920</width><height>110</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5032) | Control.HasFocus(9632) | Control.HasFocus(9633)]</visible><onup>5032</onup><ondown>5032</ondown><onleft>5032</onleft><onright>5032</onright>
-			<onclick>SetFocus(5033)</onclick>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5032) | Control.HasFocus(9632) | Control.HasFocus(9633)] + [Integer.IsGreater(Container(5033).NumItems,0)]</visible><onup>5032</onup><ondown>5032</ondown><onleft>5032</onleft><onright>5032</onright>
+			<onclick condition="Integer.IsGreater(Container(5033).NumItems,0)">SetFocus(5033)</onclick>
 		</control>
 		<control type="button" id="9633" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5032) | Control.HasFocus(9632) | Control.HasFocus(9633)]</visible><onup>5032</onup><ondown>5032</ondown><onleft>5032</onleft><onright>5032</onright>
-			<onclick>SetFocus(5031)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5031).NumItems,0)">SetFocus(5031)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5031).NumItems,0)">SetFocus(9136)</onclick>
 		</control>
 		<control type="button" id="9635" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5033) | Control.HasFocus(9635)]</visible><onup>5033</onup><ondown>5033</ondown><onleft>5033</onleft><onright>5033</onright>
-			<onclick>SetFocus(5032)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5032).NumItems,0)">SetFocus(5032)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5032).NumItems,0) + Integer.IsGreater(Container(5031).NumItems,0)">SetFocus(5031)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5032).NumItems,0) + !Integer.IsGreater(Container(5031).NumItems,0)">SetFocus(9136)</onclick>
 		</control>
 		<control type="group" description="rows live">
 			<left>0</left><top>618</top>
@@ -1311,7 +1329,7 @@
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>9148</onup>
+					<onup condition="true">9148</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,live,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5042).NumItems,0)">5042</ondown>
@@ -1331,7 +1349,8 @@
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5041</onup>
+					<onup condition="Integer.IsGreater(Container(5041).NumItems,0)">5041</onup>
+					<onup condition="!Integer.IsGreater(Container(5041).NumItems,0)">9148</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,live,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5042).IsUpdating + Integer.IsGreater(Container(5042).NumItems,1) + Integer.IsEqual(Container(5042).CurrentItem,1) + String.IsEqual(Container(5042).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5042).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5042))">Conditional</animation>
@@ -1342,13 +1361,14 @@
 		</control>
 		<control type="button" id="9640" description="touch: next row">
 			<left>0</left><top>960</top><width>1920</width><height>120</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5041) | Control.HasFocus(9640)]</visible><onup>5041</onup><ondown>5041</ondown><onleft>5041</onleft><onright>5041</onright>
-			<onclick>SetFocus(5042)</onclick>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5041) | Control.HasFocus(9640)] + [Integer.IsGreater(Container(5042).NumItems,0)]</visible><onup>5041</onup><ondown>5041</ondown><onleft>5041</onleft><onright>5041</onright>
+			<onclick condition="Integer.IsGreater(Container(5042).NumItems,0)">SetFocus(5042)</onclick>
 		</control>
 		<control type="button" id="9643" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5042) | Control.HasFocus(9643)]</visible><onup>5042</onup><ondown>5042</ondown><onleft>5042</onleft><onright>5042</onright>
-			<onclick>SetFocus(5041)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5041).NumItems,0)">SetFocus(5041)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5041).NumItems,0)">SetFocus(9148)</onclick>
 		</control>
 		<control type="group" description="rows kids">
 			<left>0</left><top>618</top>
@@ -1367,11 +1387,11 @@
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>9160</onup>
+					<onup condition="true">9160</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5052).NumItems,0)">5052</ondown>
-					<ondown condition="!Integer.IsGreater(Container(5052).NumItems,0)">5053</ondown>
+					<ondown condition="!Integer.IsGreater(Container(5052).NumItems,0) + Integer.IsGreater(Container(5053).NumItems,0)">5053</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5051).IsUpdating + Integer.IsGreater(Container(5051).NumItems,1) + Integer.IsEqual(Container(5051).CurrentItem,1) + String.IsEqual(Container(5051).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5051).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5051))">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5051" /></include>
 					<content target="videos">$VAR[POVIL_Path_5051]</content>
@@ -1396,7 +1416,8 @@
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5051</onup>
+					<onup condition="Integer.IsGreater(Container(5051).NumItems,0)">5051</onup>
+					<onup condition="!Integer.IsGreater(Container(5051).NumItems,0)">9160</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5053).NumItems,0)">5053</ondown>
@@ -1423,7 +1444,9 @@
 					<left>290</left><top>40</top><width>1570</width><height>300</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5052</onup>
+					<onup condition="Integer.IsGreater(Container(5052).NumItems,0)">5052</onup>
+					<onup condition="!Integer.IsGreater(Container(5052).NumItems,0) + Integer.IsGreater(Container(5051).NumItems,0)">5051</onup>
+					<onup condition="!Integer.IsGreater(Container(5052).NumItems,0) + !Integer.IsGreater(Container(5051).NumItems,0)">9160</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,kids,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5053).IsUpdating + Integer.IsGreater(Container(5053).NumItems,1) + Integer.IsEqual(Container(5053).CurrentItem,1) + String.IsEqual(Container(5053).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5053).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5053))">Conditional</animation>
@@ -1441,24 +1464,27 @@
 		</control>
 		<control type="button" id="9650" description="touch: next row">
 			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5051) | Control.HasFocus(9650)]</visible><onup>5051</onup><ondown>5051</ondown><onleft>5051</onleft><onright>5051</onright>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5051) | Control.HasFocus(9650)] + [Integer.IsGreater(Container(5052).NumItems,0) | Integer.IsGreater(Container(5053).NumItems,0)]</visible><onup>5051</onup><ondown>5051</ondown><onleft>5051</onleft><onright>5051</onright>
 			<onclick condition="Integer.IsGreater(Container(5052).NumItems,0)">SetFocus(5052)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5052).NumItems,0)">SetFocus(5053)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5052).NumItems,0) + Integer.IsGreater(Container(5053).NumItems,0)">SetFocus(5053)</onclick>
 		</control>
 		<control type="button" id="9652" description="touch: next row">
 			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5052) | Control.HasFocus(9652) | Control.HasFocus(9653)]</visible><onup>5052</onup><ondown>5052</ondown><onleft>5052</onleft><onright>5052</onright>
-			<onclick>SetFocus(5053)</onclick>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5052) | Control.HasFocus(9652) | Control.HasFocus(9653)] + [Integer.IsGreater(Container(5053).NumItems,0)]</visible><onup>5052</onup><ondown>5052</ondown><onleft>5052</onleft><onright>5052</onright>
+			<onclick condition="Integer.IsGreater(Container(5053).NumItems,0)">SetFocus(5053)</onclick>
 		</control>
 		<control type="button" id="9653" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5052) | Control.HasFocus(9652) | Control.HasFocus(9653)]</visible><onup>5052</onup><ondown>5052</ondown><onleft>5052</onleft><onright>5052</onright>
-			<onclick>SetFocus(5051)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5051).NumItems,0)">SetFocus(5051)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5051).NumItems,0)">SetFocus(9160)</onclick>
 		</control>
 		<control type="button" id="9655" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5053) | Control.HasFocus(9655)]</visible><onup>5053</onup><ondown>5053</ondown><onleft>5053</onleft><onright>5053</onright>
-			<onclick>SetFocus(5052)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5052).NumItems,0)">SetFocus(5052)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5052).NumItems,0) + Integer.IsGreater(Container(5051).NumItems,0)">SetFocus(5051)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5052).NumItems,0) + !Integer.IsGreater(Container(5051).NumItems,0)">SetFocus(9160)</onclick>
 		</control>
 		<control type="group" description="rows favourites">
 			<left>0</left><top>618</top>
@@ -1480,11 +1506,13 @@
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>9172</onup>
+					<onup condition="true">9172</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5062).NumItems,0)">5062</ondown>
-					<ondown condition="!Integer.IsGreater(Container(5062).NumItems,0)">5063</ondown>
+					<ondown condition="!Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5063).NumItems,0)">5063</ondown>
+					<ondown condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5064).NumItems,0)">5064</ondown>
+					<ondown condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">5065</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5061).IsUpdating + Integer.IsGreater(Container(5061).NumItems,1) + Integer.IsEqual(Container(5061).CurrentItem,1) + String.IsEqual(Container(5061).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5061).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5061))">Conditional</animation>
 					<include content="POVIL_Item_square"><param name="id" value="5061" /></include>
 					<content target="videos">$VAR[POVIL_Path_5061]</content>
@@ -1503,11 +1531,13 @@
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5061</onup>
+					<onup condition="Integer.IsGreater(Container(5061).NumItems,0)">5061</onup>
+					<onup condition="!Integer.IsGreater(Container(5061).NumItems,0)">9172</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5063).NumItems,0)">5063</ondown>
-					<ondown condition="!Integer.IsGreater(Container(5063).NumItems,0)">5064</ondown>
+					<ondown condition="!Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5064).NumItems,0)">5064</ondown>
+					<ondown condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">5065</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5062).IsUpdating + Integer.IsGreater(Container(5062).NumItems,1) + Integer.IsEqual(Container(5062).CurrentItem,1) + String.IsEqual(Container(5062).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5062).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5062))">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5062" /></include>
 					<content target="videos">$VAR[POVIL_Path_5062]</content>
@@ -1533,11 +1563,13 @@
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5062</onup>
+					<onup condition="Integer.IsGreater(Container(5062).NumItems,0)">5062</onup>
+					<onup condition="!Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5061).NumItems,0)">5061</onup>
+					<onup condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">9172</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5064).NumItems,0)">5064</ondown>
-					<ondown condition="!Integer.IsGreater(Container(5064).NumItems,0)">5065</ondown>
+					<ondown condition="!Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">5065</ondown>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5063).IsUpdating + Integer.IsGreater(Container(5063).NumItems,1) + Integer.IsEqual(Container(5063).CurrentItem,1) + String.IsEqual(Container(5063).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5063).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5063))">Conditional</animation>
 					<include content="POVIL_Item_poster"><param name="id" value="5063" /></include>
 					<content target="videos">$VAR[POVIL_Path_5063]</content>
@@ -1563,7 +1595,10 @@
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5063</onup>
+					<onup condition="Integer.IsGreater(Container(5063).NumItems,0)">5063</onup>
+					<onup condition="!Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5062).NumItems,0)">5062</onup>
+					<onup condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5061).NumItems,0)">5061</onup>
+					<onup condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">9172</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5065).NumItems,0)">5065</ondown>
@@ -1591,7 +1626,11 @@
 					<left>10</left><top>40</top><width>1850</width><height>340</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5064</onup>
+					<onup condition="Integer.IsGreater(Container(5064).NumItems,0)">5064</onup>
+					<onup condition="!Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5063).NumItems,0)">5063</onup>
+					<onup condition="!Integer.IsGreater(Container(5064).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5062).NumItems,0)">5062</onup>
+					<onup condition="!Integer.IsGreater(Container(5064).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5061).NumItems,0)">5061</onup>
+					<onup condition="!Integer.IsGreater(Container(5064).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">9172</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5065).IsUpdating + Integer.IsGreater(Container(5065).NumItems,1) + Integer.IsEqual(Container(5065).CurrentItem,1) + String.IsEqual(Container(5065).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5065).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5065))">Conditional</animation>
@@ -1609,46 +1648,59 @@
 		</control>
 		<control type="button" id="9660" description="touch: next row">
 			<left>0</left><top>960</top><width>1920</width><height>120</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5061) | Control.HasFocus(9660)]</visible><onup>5061</onup><ondown>5061</ondown><onleft>5061</onleft><onright>5061</onright>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5061) | Control.HasFocus(9660)] + [Integer.IsGreater(Container(5062).NumItems,0) | Integer.IsGreater(Container(5063).NumItems,0) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible><onup>5061</onup><ondown>5061</ondown><onleft>5061</onleft><onright>5061</onright>
 			<onclick condition="Integer.IsGreater(Container(5062).NumItems,0)">SetFocus(5062)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5062).NumItems,0)">SetFocus(5063)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5063).NumItems,0)">SetFocus(5063)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5064).NumItems,0)">SetFocus(5064)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">SetFocus(5065)</onclick>
 		</control>
 		<control type="button" id="9662" description="touch: next row">
 			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5062) | Control.HasFocus(9662) | Control.HasFocus(9663)]</visible><onup>5062</onup><ondown>5062</ondown><onleft>5062</onleft><onright>5062</onright>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5062) | Control.HasFocus(9662) | Control.HasFocus(9663)] + [Integer.IsGreater(Container(5063).NumItems,0) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible><onup>5062</onup><ondown>5062</ondown><onleft>5062</onleft><onright>5062</onright>
 			<onclick condition="Integer.IsGreater(Container(5063).NumItems,0)">SetFocus(5063)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5063).NumItems,0)">SetFocus(5064)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5064).NumItems,0)">SetFocus(5064)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">SetFocus(5065)</onclick>
 		</control>
 		<control type="button" id="9663" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5062) | Control.HasFocus(9662) | Control.HasFocus(9663)]</visible><onup>5062</onup><ondown>5062</ondown><onleft>5062</onleft><onright>5062</onright>
-			<onclick>SetFocus(5061)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(5061)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(9172)</onclick>
 		</control>
 		<control type="button" id="9664" description="touch: next row">
 			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5063) | Control.HasFocus(9664) | Control.HasFocus(9665)]</visible><onup>5063</onup><ondown>5063</ondown><onleft>5063</onleft><onright>5063</onright>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5063) | Control.HasFocus(9664) | Control.HasFocus(9665)] + [Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible><onup>5063</onup><ondown>5063</ondown><onleft>5063</onleft><onright>5063</onright>
 			<onclick condition="Integer.IsGreater(Container(5064).NumItems,0)">SetFocus(5064)</onclick>
-			<onclick condition="!Integer.IsGreater(Container(5064).NumItems,0)">SetFocus(5065)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5065).NumItems,0)">SetFocus(5065)</onclick>
 		</control>
 		<control type="button" id="9665" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5063) | Control.HasFocus(9664) | Control.HasFocus(9665)]</visible><onup>5063</onup><ondown>5063</ondown><onleft>5063</onleft><onright>5063</onright>
-			<onclick>SetFocus(5062)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5062).NumItems,0)">SetFocus(5062)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(5061)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(9172)</onclick>
 		</control>
 		<control type="button" id="9666" description="touch: next row">
 			<left>0</left><top>1010</top><width>1920</width><height>70</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5064) | Control.HasFocus(9666) | Control.HasFocus(9667)]</visible><onup>5064</onup><ondown>5064</ondown><onleft>5064</onleft><onright>5064</onright>
-			<onclick>SetFocus(5065)</onclick>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5064) | Control.HasFocus(9666) | Control.HasFocus(9667)] + [Integer.IsGreater(Container(5065).NumItems,0)]</visible><onup>5064</onup><ondown>5064</ondown><onleft>5064</onleft><onright>5064</onright>
+			<onclick condition="Integer.IsGreater(Container(5065).NumItems,0)">SetFocus(5065)</onclick>
 		</control>
 		<control type="button" id="9667" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5064) | Control.HasFocus(9666) | Control.HasFocus(9667)]</visible><onup>5064</onup><ondown>5064</ondown><onleft>5064</onleft><onright>5064</onright>
-			<onclick>SetFocus(5063)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5063).NumItems,0)">SetFocus(5063)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5062).NumItems,0)">SetFocus(5062)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(5061)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(9172)</onclick>
 		</control>
 		<control type="button" id="9669" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5065) | Control.HasFocus(9669)]</visible><onup>5065</onup><ondown>5065</ondown><onleft>5065</onleft><onright>5065</onright>
-			<onclick>SetFocus(5064)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5064).NumItems,0)">SetFocus(5064)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5064).NumItems,0) + Integer.IsGreater(Container(5063).NumItems,0)">SetFocus(5063)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5064).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + Integer.IsGreater(Container(5062).NumItems,0)">SetFocus(5062)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5064).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(5061)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5064).NumItems,0) + !Integer.IsGreater(Container(5063).NumItems,0) + !Integer.IsGreater(Container(5062).NumItems,0) + !Integer.IsGreater(Container(5061).NumItems,0)">SetFocus(9172)</onclick>
 		</control>
 		<control type="group" description="rows search">
 			<left>0</left><top>618</top>
@@ -1667,7 +1719,7 @@
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>9184</onup>
+					<onup condition="true">9184</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,search,home)</onfocus>
 					<ondown condition="Integer.IsGreater(Container(5072).NumItems,0)">5072</ondown>
@@ -1688,7 +1740,8 @@
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>5071</onup>
+					<onup condition="Integer.IsGreater(Container(5071).NumItems,0)">5071</onup>
+					<onup condition="!Integer.IsGreater(Container(5071).NumItems,0)">9184</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,search,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5072).IsUpdating + Integer.IsGreater(Container(5072).NumItems,1) + Integer.IsEqual(Container(5072).CurrentItem,1) + String.IsEqual(Container(5072).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5072).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5072))">Conditional</animation>
@@ -1699,13 +1752,14 @@
 		</control>
 		<control type="button" id="9670" description="touch: next row">
 			<left>0</left><top>960</top><width>1920</width><height>120</height>
-			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5071) | Control.HasFocus(9670)]</visible><onup>5071</onup><ondown>5071</ondown><onleft>5071</onleft><onright>5071</onright>
-			<onclick>SetFocus(5072)</onclick>
+			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5071) | Control.HasFocus(9670)] + [Integer.IsGreater(Container(5072).NumItems,0)]</visible><onup>5071</onup><ondown>5071</ondown><onleft>5071</onleft><onright>5071</onright>
+			<onclick condition="Integer.IsGreater(Container(5072).NumItems,0)">SetFocus(5072)</onclick>
 		</control>
 		<control type="button" id="9673" description="touch: previous row">
 			<left>0</left><top>612</top><width>1920</width><height>50</height>
 			<texturefocus /><texturenofocus /><visible>System.Platform.Android + [Control.HasFocus(5072) | Control.HasFocus(9673)]</visible><onup>5072</onup><ondown>5072</ondown><onleft>5072</onleft><onright>5072</onright>
-			<onclick>SetFocus(5071)</onclick>
+			<onclick condition="Integer.IsGreater(Container(5071).NumItems,0)">SetFocus(5071)</onclick>
+			<onclick condition="!Integer.IsGreater(Container(5071).NumItems,0)">SetFocus(9184)</onclick>
 		</control>
 		<control type="group" description="rows settings">
 			<left>0</left><top>618</top>
@@ -1721,7 +1775,7 @@
 					<left>-22</left><top>40</top><width>1882</width><height>290</height>
 					<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 					<scrolltime tween="cubic" easing="out">260</scrolltime>
-					<onup>9017</onup>
+					<onup condition="true">9017</onup>
 					<onleft>noop</onleft><onright>noop</onright>
 					<onfocus>SetProperty(povil.tab,settings,home)</onfocus>
 					<animation effect="fade" start="100" end="0" time="0" condition="!Container(5081).IsUpdating + Integer.IsGreater(Container(5081).NumItems,1) + Integer.IsEqual(Container(5081).CurrentItem,1) + String.IsEqual(Container(5081).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5081).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5081))">Conditional</animation>

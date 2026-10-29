@@ -83,6 +83,17 @@ class SkinPackageTests(unittest.TestCase):
 class GeneratedXmlTests(unittest.TestCase):
     """The generated files are what the generators write (nobody edited them by hand)."""
 
+    def test_down_and_up_skip_any_number_of_empty_rows(self):
+        # favourites: saved shows (5063), then MDBList movies and shows (5064, 5065),
+        # both empty without an MDBList account: Down must not land on a hidden row
+        home = ET.parse(XML / 'Home.xml').getroot()
+        lists = {c.get('id'): c for c in home.iter('control') if c.get('type') == 'list'}
+        downs = [(n.get('condition'), n.text) for n in lists['5063'].findall('ondown')]
+        self.assertEqual([t for _c, t in downs], ['5064', '5065'])
+        self.assertIn('!Integer.IsGreater(Container(5064).NumItems,0)', downs[1][0])
+        ups = [(n.get('condition'), n.text) for n in lists['5065'].findall('onup')]
+        self.assertEqual([t for _c, t in ups], ['5064', '5063', '5062', '5061', '9172'])
+
     def test_conditions_group_with_brackets(self):
         # Kodi groups a condition with [ ] only; "!(" splits it into broken parts
         for name in ('Home.xml', 'Includes_POVIL_Home.xml', 'View_POVIL.xml', 'Timers.xml', 'DialogKeyboard.xml'):
