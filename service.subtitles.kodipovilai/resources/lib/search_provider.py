@@ -208,6 +208,16 @@ def _active_skin():
         return ''
 
 
+# Skins whose search button asks Kodi for the provider at click time
+# (Addon.SettingStr in an onclick condition): a switch shows there at once,
+# with no file to rewrite and no reload.
+LIVE_SKINS = ('skin.povil.onyx',)
+
+
+def active_skin_reads_live():
+    return _active_skin() in LIVE_SKINS
+
+
 def _refresh_active_skin(af3_changed):
     """A skin only re-reads its XML on a reload, so the new search target does
     not appear until then. Reload ONLY when the user is actually on a skin we

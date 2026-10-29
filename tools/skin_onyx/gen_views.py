@@ -39,6 +39,7 @@ def hero_vars(x):
     x(1, '</variable>')
     x(1, '<variable name="POVIL_V_Title">')
     x(2, '<value condition="[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>')
+    x(2, '<value condition="ListItem.IsParentFolder">חזרה</value>')
     x(2, '<value condition="String.IsEqual(ListItem.DBType,episode) + Control.IsVisible(55)">$INFO[ListItem.Title]</value>')
     x(2, '<value condition="String.IsEqual(ListItem.DBType,episode)">$INFO[ListItem.TVShowTitle]</value>')
     x(2, '<value condition="!String.IsEmpty(ListItem.Title)">$INFO[ListItem.Title]</value>')
@@ -115,14 +116,22 @@ def view(x, vid, label, layout):
          '<textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label></control>' % (right - 860))
     # The row: right to left (reversed by the add-on), whole slots flush with the right margin
     g = H.GEOM['landscape' if layout == 'episodes' else 'poster']
-    end = 1920 - H.MARGIN + (g['step'] - g['w'])
-    slots = -(-end // g['step'])
+    left, width, _peek = H.rtl_slots(g)
     x(3, '<control type="list" id="%d">' % vid)
-    x(4, '<left>%d</left><top>640</top><width>%d</width><height>380</height>' % (end - slots * g['step'], slots * g['step']))
+    x(4, '<left>%d</left><top>640</top><width>%d</width><height>380</height>' % (left, width))
     x(4, '<viewtype label="%s">wrap</viewtype>' % label)
     x(4, '<orientation>horizontal</orientation><preloaditems>2</preloaditems>')
     x(4, '<scrolltime tween="cubic" easing="out">260</scrolltime>')
     x(4, '<onup condition="!Skin.HasSetting(ViewOptions_Hide)">9000</onup>')
+    x(4, '<onleft>noop</onleft><onright>noop</onright>')   # no wrap: the far end stays put
+    if layout != 'episodes':
+        for kind in ('landscape', 'square'):
+            k = H.GEOM[kind]
+            per_page = (width - k['step']) // k['step'] + 1
+            shift = (1920 - H.MARGIN) - (left + H.PAD + (per_page - 1) * k['step'] + k['w'])
+            if shift:
+                x(4, '<animation effect="slide" end="%d,0" time="0" condition="%s">Conditional</animation>'
+                  % (shift, H.VIEW_COND[kind]))
     x(4, '<ondown condition="!Skin.HasSetting(ViewOptions_Hide)">9000</ondown>')
     x(4, '<animation effect="fade" start="100" end="0" time="0" condition="%s">Conditional</animation>' % view_waiting(vid))
     if layout == 'episodes':
@@ -131,6 +140,7 @@ def view(x, vid, label, layout):
         for kind in ('poster', 'landscape', 'square'):
             x(4, '<include content="POVIL_ViewItem_%s"><param name="id" value="%d" /></include>' % (kind, vid))
     x(3, '</control>')
+    H.peek(x, 3, vid, 'landscape' if layout == 'episodes' else 'poster', 640)
     x(2, '</control>')
     x(1, '</include>')
 
@@ -141,7 +151,8 @@ def view_waiting(vid):
     return ('Control.IsVisible(%d) + !Container.IsUpdating + Integer.IsGreater(Container.NumItems,1)'
             ' + !Integer.IsGreater(Container.CurrentItem,1)'
             ' + [String.IsEqual(Container.ListItemAbsolute(0).Property(povil_rtl),1) | String.IsEqual(Container.ListItemAbsolute(1).Property(povil_rtl),1)]'
-            ' + !String.IsEqual(Window(home).Property(povil.rtl.view),Container.FolderPath)') % vid
+            ' + !String.IsEqual(Container.FolderPath,Window(home).Property(povil.rtl.view))'
+            ' + !String.IsEqual(Container.FolderPath,Window(home).Property(povil.rtl.view.prev))') % vid
 
 
 def gen():
@@ -163,6 +174,9 @@ def timers():
         x(1, '<timer>')
         x(2, '<name>povil_rtl_view_%d</name>' % vid)
         x(2, '<start reset="true">Window.IsActive(videos) + %s</start>' % view_waiting(vid))
+        # two lists remembered: Back from the next page (or a season) to a list
+        # whose far end was selected keeps that place
+        x(2, '<onstart>SetProperty(povil.rtl.view.prev,"$INFO[Window(home).Property(povil.rtl.view)]",home)</onstart>')
         x(2, '<onstart>SetProperty(povil.rtl.view,"$INFO[Container.FolderPath]",home)</onstart>')
         x(2, '<onstart>Control.Move(%d,-1)</onstart>' % vid)
         x(2, '<stop>true</stop>')
