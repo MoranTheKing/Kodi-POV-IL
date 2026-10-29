@@ -82,6 +82,14 @@
 		<value condition="String.Contains(Control.GetLabel(309),English)">מקלדת: אנגלית</value>
 		<value>$INFO[Control.GetLabel(309)]</value>
 	</variable>
+	<variable name="POVIL_MusicPlayer" description="Music player; Hebrew puts the player first">
+		<value condition="String.StartsWith(System.Language,Hebrew)">$LOCALIZE[14200] $LOCALIZE[249]</value>
+		<value>$LOCALIZE[249] [LOWERCASE]$LOCALIZE[14200][/LOWERCASE]</value>
+	</variable>
+	<variable name="POVIL_VideoPlayer" description="Video player; Hebrew puts the player first">
+		<value condition="String.StartsWith(System.Language,Hebrew)">$LOCALIZE[14200] $LOCALIZE[157]</value>
+		<value>$LOCALIZE[157] [LOWERCASE]$LOCALIZE[14200][/LOWERCASE]</value>
+	</variable>
 	<variable name="FrameColor" description="Selection outline color: grey by default, the focus color when the user turns on the tint option">
 		<value condition="Skin.HasSetting(TintFrame)">$VAR[FocusColor]</value>
 		<value>FFD6D6D6</value>

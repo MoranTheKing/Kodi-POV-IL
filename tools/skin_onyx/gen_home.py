@@ -24,6 +24,10 @@ NL = chr(10)
 # ---------------------------------------------------------------- paths
 POV = 'plugin://plugin.video.pov/'
 UMB = 'plugin://plugin.video.umbrella/'
+# MoranSubs' search engine choice ("מנוע החיפוש"; search_provider.py), read by
+# Kodi itself at click time: switching needs no skin rewrite or reload.
+SEARCH_IN_UMBRELLA = ('String.IsEqual(Addon.SettingStr(service.subtitles.kodipovilai,search_provider),umbrella)'
+                      ' + System.AddonIsEnabled(plugin.video.umbrella)')
 
 
 def pov_movies(action, **kw):
@@ -49,6 +53,8 @@ def plugin_run(path):
 
 
 WIZARD = 'plugin://plugin.program.kodipovilwizard/'
+# Kodi's own favourites list, off screen: only its count is read (the favourites row)
+FAV_COUNT = 9890
 MOVIE_GENRE = lambda gid: videos(pov_movies('tmdb_movies_genres', genre_id=gid))
 TV_GENRE = lambda gid: videos(pov_tv('tmdb_tv_genres', genre_id=gid))
 MOVIE_NET = lambda nid: videos(pov_movies('tmdb_movies_networks', network_id=nid))
@@ -56,6 +62,11 @@ TV_NET = lambda nid: videos(pov_tv('tmdb_tv_networks', network_id=nid))
 IDAN_KESHET_VOD = ('plugin://plugin.video.idanplus/?name=%5BB%5D%D7%9B%D7%9C+%D7%94%D7%AA%D7%9B%D7%A0%D7%99%D7%95%D7%AA'
                    '%5B%2FB%5D&url=https%253A%252F%252Fwww.mako.co.il%252Fmako-vod-index&mode=1&iconimage=mako.png'
                    '&module=keshet&moredata=')
+# Kan 11's "all programs" (its root menu is folders with one logo, and a sort switch)
+IDAN_KAN_VOD = ('plugin://plugin.video.idanplus/?name=%5BB%5D%D7%9B%D7%9C+%D7%94%D7%AA%D7%95%D7%9B%D7%A0%D7%99%D7%95%'
+                'D7%AA%5B%2FB%5D&url=https%253A%252F%252Fwww.kan.org.il%252Flobby%252Fkan11&mode=1&iconimage=https%25'
+                '3A%252F%252Fraw.githubusercontent.com%252FFishenzon%252Frepo%252Fmaster%252Fplugin.video.idanplus%25'
+                '2Fimages%252Fkan.jpg&module=kan&moredata=%25D7%259B%25D7%2590%25D7%259F%2B11__4444')
 IDAN_RESHET_VOD = ('plugin://plugin.video.idanplus/?iconimage=13.jpg&mode=0&module=reshet&moredata&name=%5bB%5d%d7%9b'
                    '%d7%9c%20%d7%94%d7%aa%d7%9b%d7%a0%d7%99%d7%95%d7%aa%5b%2fB%5d&url=https%253A%252F%252F13tv.co.il'
                    '%252Fallshows%252Fscreen%252F1170108%252F')
@@ -88,9 +99,11 @@ TABS = [
                 ('Umbrella', videos(UMB + '?action=tvNavigator'), 'System.HasAddon(plugin.video.umbrella)')]),
     dict(id='israeli', label='ישראלי', click=videos('plugin://plugin.video.idanplus/'),
          blurb='כאן, קשת, רשת ועוד: התוכניות והסדרות הישראליות.',
-         rows=[('קשת 12', IDAN_KESHET_VOD, 'landscape', False),
+         # each row in its pictures' shape: Keshet's are posters (420x600), Reshet's
+         # 16:9 (1280x720), Kan's posters 2:3 (239x360 / 1200x1800)
+         rows=[('קשת 12', IDAN_KESHET_VOD, 'poster', False),
                ('רשת 13', IDAN_RESHET_VOD, 'landscape', False),
-               ('כאן 11', IDAN['kan11'], 'landscape', False)],
+               ('כאן 11', IDAN_KAN_VOD, 'poster', False)],
          chips=[('כאן 11', videos(IDAN['kan11'])), ('קשת 12', videos(IDAN['keshet12'])),
                 ('רשת 13', videos(IDAN['reshet13'])), ('עכשיו 14', videos(IDAN['now14'])),
                 ('i24NEWS', videos(IDAN['i24'])), ('ערוץ 9', videos(IDAN['ch9'])),
@@ -114,14 +127,25 @@ TABS = [
                 ('אנימה', videos(IDAN['otaku']), 'System.HasAddon(plugin.video.otaku)')]),
     dict(id='favourites', label='מועדפים', click='ActivateWindow(favouritesbrowser)',
          blurb='הקיצורים והרשימות ששמרתם.',
-         rows=[('המועדפים שלי', 'favourites://', 'square', False),
+         # Kodi's favourites through the Wizard (favourites_row.py): last first, so the
+         # first favourite starts the row on the right, like every other row
+         # (r= the count of Kodi's own favourites list, FAV_COUNT: Kodi refreshes that
+         # one when a favourite is added or removed, and a new count reloads the row)
+         rows=[('המועדפים שלי', WIZARD + '?mode=favourites_row&r=$INFO[Container(%d).NumItems]' % FAV_COUNT, 'square', True),
                ('סרטים שמורים', pov_movies('favorites_movies'), 'poster', True),
-               ('סדרות שמורות', pov_tv('favorites_tvshows'), 'poster', True)],
+               ('סדרות שמורות', pov_tv('favorites_tvshows'), 'poster', True),
+               ('הסרטים שלי (MDBList)', pov_movies('mdblist_my_movies'), 'poster', True),
+               ('הסדרות שלי (MDBList)', pov_tv('mdblist_my_tvshows'), 'poster', True)],
+         # MDBList's chips once its rows have items (a connected account): no
+         # settings read on every frame
          chips=[('סרטים ב-Trakt', videos(pov_movies('trakt_my_movies'))),
                 ('סדרות ב-Trakt', videos(pov_tv('trakt_my_tvshows'))),
+                ('סרטים ב-MDBList', videos(pov_movies('mdblist_my_movies')), 'Integer.IsGreater(Container(5064).NumItems,0)'),
+                ('סדרות ב-MDBList', videos(pov_tv('mdblist_my_tvshows')), 'Integer.IsGreater(Container(5065).NumItems,0)'),
                 ('הרשימות שלי', videos(pov_mode('navigator.my_content'))),
                 ('כל המועדפים', 'ActivateWindow(favouritesbrowser)')]),
     dict(id='search', label='חיפוש', click=videos(pov_mode('navigator.search')),
+         click_alt=(SEARCH_IN_UMBRELLA, videos(UMB + '?action=tools_searchNavigator')),
          blurb='סרטים, סדרות, שחקנים ותוכן ישראלי. במקלדת יש כפתור חיפוש קולי.',
          rows=[('חיפושי סרטים אחרונים', pov_mode('search_history', action='movie'), 'square', True),
                ('חיפושי סדרות אחרונים', pov_mode('search_history', action='tvshow'), 'square', True)],
@@ -140,6 +164,8 @@ SETTINGS_ITEMS = [
     ('הוויזארד', '$INFO[System.AddonIcon(plugin.program.kodipovilwizard)]', videos(WIZARD), ''),
     ('החלפת סקין', '$INFO[System.AddonIcon(plugin.program.kodipovilwizard)]', plugin_run(WIZARD + '?mode=profile_skin'), ''),
     ('כתוביות', '$INFO[System.AddonIcon(service.subtitles.kodipovilai)]', 'Addon.OpenSettings(service.subtitles.kodipovilai)', 'System.HasAddon(service.subtitles.kodipovilai)'),
+    ('מנוע החיפוש', 'special://home/addons/plugin.video.pov/resources/skins/Default/media/search.png',
+     'RunScript(service.subtitles.kodipovilai,action=search_provider)', 'System.HasAddon(service.subtitles.kodipovilai)'),
     ('הגדרות POV', '$INFO[System.AddonIcon(plugin.video.pov)]', 'Addon.OpenSettings(plugin.video.pov)', 'System.HasAddon(plugin.video.pov)'),
     ('הגדרות Umbrella', '$INFO[System.AddonIcon(plugin.video.umbrella)]', 'Addon.OpenSettings(plugin.video.umbrella)', 'System.HasAddon(plugin.video.umbrella)'),
     ('הגדרות הסקין', 'DefaultAddonSkin.png', 'ActivateWindow(SkinSettings)', ''),
@@ -151,6 +177,10 @@ SETTINGS_ITEMS = [
 
 # ---------------------------------------------------------------- geometry
 MARGIN = 90
+# A list clips what it draws to its own rectangle: the focused tile's zoom and
+# gold glow reach 42 px past the tile. Every list starts PAD before its first
+# tile and every item draws its tile PAD in, so nothing is cut at the edges.
+PAD = 42
 ROWS_Y = 618
 TAB_W = 172
 GEOM = {
@@ -163,7 +193,30 @@ GOLD = 'povil_gold'
 
 
 def tab_cond(tab):
-    return 'String.IsEqual(Container(9000).ListItem.Property(id),%s)' % tab['id']
+    return 'String.IsEqual(Window(home).Property(povil.tab),%s)' % tab['id']
+
+
+def tab_button(ti):
+    return 9010 + ti
+
+
+
+def strip_base(ti, ri):
+    """The touch strips of a row: base (down a row) and base + 1 (up a row)."""
+    assert ri < 5, 'five rows per tab at most: the next tab\'s strips start ten ids on'
+    return 9600 + (ti + 1) * 10 + ri * 2
+
+
+def row_focus(ti, ri):
+    """A row has the focus, or one of its touch strips (a tap focuses the strip
+    first: the layout must not jump before the click moves on)."""
+    rid, n, base = row_id(ti, ri), len(TABS[ti]['rows']), strip_base(ti, ri)
+    parts = ['Control.HasFocus(%d)' % rid]
+    if ri + 1 < n:
+        parts.append('Control.HasFocus(%d)' % base)
+    if ri:
+        parts.append('Control.HasFocus(%d)' % (base + 1))
+    return parts[0] if len(parts) == 1 else '[%s]' % ' | '.join(parts)
 
 
 def row_id(ti, ri):
@@ -207,37 +260,24 @@ def rtl_waiting(cid, home=True):
     prop = 'Window(home).Property(povil.rtl.%s)' % (cid or 'view')
     return ('!%(c)s.IsUpdating + Integer.IsGreater(%(c)s.NumItems,1) + Integer.IsEqual(%(c)s.CurrentItem,1)'
             ' + String.IsEqual(%(c)s.ListItemAbsolute(0).Property(povil_rtl),1)'
-            ' + !String.IsEqual(%(p)s,%(c)s.ListItemAbsolute(0).Label)') % {'c': c, 'p': prop}
+            # the container's label FIRST: as the second argument Kodi reads
+            # Container(id).ListItemAbsolute(0).Label as plain text, the guard never
+            # matched, and a row's far end threw the user back to its start
+            ' + !String.IsEqual(%(c)s.ListItemAbsolute(0).Label,%(p)s)') % {'c': c, 'p': prop}
 
 
 def gen_timers():
     x = X()
     x(1, '<!-- POVIL RTL BEGIN: generated by tools/skin_onyx/gen_home.py -->')
-    tab_id = '$INFO[Container(9000).ListItem.Property(id)]'
-    # Start on the first tab (the rightmost) once per session, after the tabs list has its items
-    x(1, '<timer>')
-    x(2, '<name>povil_home_start</name>')
-    x(2, '<start reset="true">Window.IsVisible(home) + !Skin.HasSetting(POVILChild) + String.IsEmpty(Window(home).Property(povil.home.ready)) + Integer.IsGreater(Container(9000).NumItems,0)</start>')
-    x(2, '<onstart>SetProperty(povil.home.ready,1,home)</onstart>')
-    x(2, '<onstart>SetFocus(9000,%d)</onstart>' % (len(TABS) - 1))
-    x(2, '<stop>true</stop>')
-    x(1, '</timer>')
-    x(1, '<timer>')
-    x(2, '<name>povil_tabs</name>')
-    # Never in a kids profile: the Wizard's kids home replaces this one (its rows would load unseen)
-    x(2, '<start reset="true">Window.IsVisible(home) + !Skin.HasSetting(POVILChild) + !String.IsEmpty(Container(9000).ListItem.Property(id)) + '
-         '!String.IsEqual(Window(home).Property(povil.tab.last),Container(9000).ListItem.Property(id))</start>')
-    x(2, '<onstart>SetProperty(povil.tab.%s,1,home)</onstart>' % tab_id)
-    x(2, '<onstart>SetProperty(povil.tab.last,%s,home)</onstart>' % tab_id)
-    x(2, '<stop>true</stop>')
-    x(1, '</timer>')
+    # The tabs need no timer: the focused tab button names itself (gen_home tabs),
+    # the window's default control is the first tab.
     # One per tab: a condition cannot name a property through $INFO
     for tab in TABS:
         if len(tab['rows']) < 2:
             continue
         x(1, '<timer>')
         x(2, '<name>povil_deep_%s</name>' % tab['id'])
-        x(2, '<start reset="true">Window.IsActive(home) + %s + !Control.HasFocus(9000) + !Skin.HasSetting(POVILChild) + '
+        x(2, '<start reset="true">Window.IsActive(home) + %s + !ControlGroup(9000).HasFocus() + !Skin.HasSetting(POVILChild) + '
              'String.IsEmpty(Window(home).Property(povil.deep.%s))</start>' % (tab_cond(tab), tab['id']))
         x(2, '<onstart>SetProperty(povil.deep.%s,1,home)</onstart>' % tab['id'])
         x(2, '<stop>true</stop>')
@@ -320,7 +360,7 @@ def gen_includes():
     kinds = {}
     for ti, tab in enumerate(TABS):
         for ri, row in enumerate(tab['rows']):
-            sources.append(('Control.HasFocus(%d)' % row_id(ti, ri), row_id(ti, ri)))
+            sources.append((row_focus(ti, ri), row_id(ti, ri)))
             kinds[row_id(ti, ri)] = row[2]
     for ti, tab in enumerate(TABS):
         if tab['rows']:
@@ -343,9 +383,14 @@ def gen_includes():
     for cond, cid in sources:
         if kinds[cid] == 'square':
             continue  # channel logos and icons: the ambient backdrop, never a stretched logo
-        for art in ('fanart', 'landscape', 'thumb'):
-            x(2, '<value condition="%s + ![String.Contains(Container(%d).ListItem.FolderPath,new_page=) | String.Contains(Container(%d).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(%d).ListItem.Art(%s))">$INFO[Container(%d).ListItem.Art(%s)]</value>'
-              % (cond, cid, cid, cid, art, cid, art))
+        # A poster row's thumb is its poster, and a "fanart" that is the thumb again
+        # (Idan Plus: Keshet's 420x600 posters) would fill the screen ~250% enlarged:
+        # the ambient backdrop then
+        poster_row = kinds[cid] == 'poster'
+        for art in (('fanart', 'landscape') if poster_row else ('fanart', 'landscape', 'thumb')):
+            same = (' + !String.IsEqual(Container(%d).ListItem.Art(%s),Container(%d).ListItem.Art(thumb))' % (cid, art, cid)) if poster_row else ''
+            x(2, '<value condition="%s + ![String.Contains(Container(%d).ListItem.FolderPath,new_page=) | String.Contains(Container(%d).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(%d).ListItem.Art(%s))%s">$INFO[Container(%d).ListItem.Art(%s)]</value>'
+              % (cond, cid, cid, cid, art, same, cid, art))
     x(1, '</variable>')
     # Only a logo that suits a Hebrew screen (POV's povil_logo art); else the title is written
     var('POVIL_HeroLogo', '$INFO[Container(%(c)d).ListItem.Art(povil_logo)]')
@@ -431,9 +476,14 @@ def gen_includes():
         for ri, _ in enumerate(tab['rows']):
             rid = row_id(ti, ri)
             x(1, '<variable name="POVIL_RowTitleColor_%d">' % rid)
-            x(2, '<value condition="Control.HasFocus(%d)">povil_white</value>' % rid)
+            x(2, '<value condition="%s">povil_white</value>' % row_focus(ti, ri))
             x(2, '<value>povil_dim</value>')
             x(1, '</variable>')
+    for tab in TABS:
+        x(1, '<variable name="POVIL_TabColor_%s">' % tab['id'])
+        x(2, '<value condition="%s">povil_white</value>' % tab_cond(tab))
+        x(2, '<value>povil_faint</value>')
+        x(1, '</variable>')
     item_layouts(x)
     x(0, '</includes>')
     return x.text()
@@ -470,10 +520,10 @@ def item_layout(x, name, kind, cond=None, title='POVIL_ItemTitle', subtitle='POV
             cattr = (' condition="%s"' % cond) if cond else ''
             x(3, '<%s width="%d" height="%d"%s>' % (tag, step, g['list_h'], cattr))
             x(4, '<control type="group">')
-            x(5, '<left>0</left><top>0</top>')
+            x(5, '<left>%d</left><top>0</top>' % PAD)
             if focused:
                 x(5, '<animation effect="zoom" start="100" end="%d" center="%d,%d" time="240" tween="cubic" easing="out" condition="Control.HasFocus($PARAM[id])">Conditional</animation>'
-                  % (106 if kind == 'poster' else 105, w // 2, top + h // 2))
+                  % (106 if kind == 'poster' else 105, PAD + w // 2, top + h // 2))
             # drop shadow
             x(5, '<control type="image">')
             x(6, '<left>-30</left><top>%d</top><width>%d</width><height>%d</height>' % (top - 22, w + 60, h + 60))
@@ -506,14 +556,18 @@ def item_layout(x, name, kind, cond=None, title='POVIL_ItemTitle', subtitle='POV
                 x(6, '<left>16</left><top>%d</top><width>%d</width><height>%d</height>' % (top, w - 32, h))
                 x(6, '<font>povil_small</font><align>center</align><aligny>center</aligny><wrapmultiline>true</wrapmultiline>')
                 x(6, '<textcolor>povil_dim</textcolor><label>$INFO[ListItem.Label]</label>')
-                x(6, '<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>')
+                x(6, '<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>')
                 x(5, '</control>')
-                x(5, '<control type="image">')
-                x(6, '<left>0</left><top>%d</top><width>%d</width><height>%d</height>' % (top, w, h))
-                x(6, '<texture background="true" diffuse="%s">$VAR[%s]</texture>' % (mask, art))
-                x(6, '<aspectratio scalediffuse="false">scale</aspectratio>')
-                x(6, '<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>')
-                x(5, '</control>')
+                # The picture whole (keep) over a dim fill of itself (scale): a poster in a
+                # 16:9 tile, or a 16:9 picture in a poster tile, is never cropped to its
+                # middle; a picture of the tile's own shape covers the fill exactly.
+                for diffuse, ratio in (('4DFFFFFF', 'scale'), ('FFFFFFFF', 'keep')):
+                    x(5, '<control type="image">')
+                    x(6, '<left>0</left><top>%d</top><width>%d</width><height>%d</height>' % (top, w, h))
+                    x(6, '<texture background="true" diffuse="%s" colordiffuse="%s">$VAR[%s]</texture>' % (mask, diffuse, art))
+                    x(6, '<aspectratio scalediffuse="false">%s</aspectratio>' % ratio)
+                    x(6, '<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>')
+                    x(5, '</control>')
                 # POV's next-page item: "more", the arrow pointing on to the left
                 x(5, '<control type="group"><left>0</left><top>%d</top><visible>[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>' % top)
                 x(6, '<control type="image"><left>0</left><top>0</top><width>%d</width><height>%d</height>'
@@ -522,6 +576,16 @@ def item_layout(x, name, kind, cond=None, title='POVIL_ItemTitle', subtitle='POV
                      '<texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>' % (w // 2 - 32, h // 2 - 56))
                 x(6, '<control type="label"><left>0</left><top>%d</top><width>%d</width><height>44</height><font>povil_row</font>'
                      '<textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>' % (h // 2 + 14, w))
+                x(5, '</control>')
+                # Kodi's parent folder item (".."): "back", the arrow pointing to the right,
+                # where the list began
+                x(5, '<control type="group"><left>0</left><top>%d</top><visible>ListItem.IsParentFolder</visible>' % top)
+                x(6, '<control type="image"><left>0</left><top>0</top><width>%d</width><height>%d</height>'
+                     '<texture border="30" colordiffuse="%s">povil/rounded_fill.png</texture></control>' % (w, h, '33FFFFFF' if focused else '14FFFFFF'))
+                x(6, '<control type="image"><left>%d</left><top>%d</top><width>64</width><height>64</height>'
+                     '<texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>' % (w // 2 - 32, h // 2 - 56))
+                x(6, '<control type="label"><left>0</left><top>%d</top><width>%d</width><height>44</height><font>povil_row</font>'
+                     '<textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>' % (h // 2 + 14, w))
                 x(5, '</control>')
             # gold ring
             if focused:
@@ -569,6 +633,14 @@ def gen_home():
     x(0, '<!-- Generated by tools/skin_onyx/gen_home.py. Do not edit by hand. -->')
     x(0, '<window>')
     x(1, '<defaultcontrol>9000</defaultcontrol>')
+    # Kodi's ".." item would sit after "more" at a list's far end: off, unless the user
+    # chose it in the skin settings (POVILParentDirChosen; Onyx's own toggle script)
+    x(1, '<onload condition="System.GetBool(filelists.showparentdiritems) + !Skin.HasSetting(POVILParentDirChosen)'
+         ' + !Skin.HasSetting(POVILParentDirOff)">RunScript(special://skin/scripts/onyx_tools.py,parentdir)</onload>')
+    x(1, '<onload condition="!Skin.HasSetting(POVILParentDirOff)">Skin.SetBool(POVILParentDirOff)</onload>')
+    # The first tab's content from the first frame (its button names the tab once focused)
+    x(1, '<onload condition="String.IsEmpty(Window(home).Property(povil.tab))">SetProperty(povil.tab,%s,home)</onload>' % TABS[0]['id'])
+    x(1, '<onload condition="String.IsEmpty(Window(home).Property(povil.tab.%s))">SetProperty(povil.tab.%s,1,home)</onload>' % (TABS[0]['id'], TABS[0]['id']))
     x(1, '<backgroundcolor>FF000000</backgroundcolor>')
     x(1, '<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/profile_bootstrap.py)</onload>')
     # Onyx's one-time defaults (used by its other windows)
@@ -584,6 +656,9 @@ def gen_home():
         for ri, row in enumerate(tab['rows']):
             if is_rtl(row[1]):
                 x(1, '<onload>ClearProperty(povil.rtl.%d,home)</onload>' % row_id(ti, ri))
+    # The views' guard: a season opened again from the home starts on its first item
+    x(1, '<onload>ClearProperty(povil.rtl.view,home)</onload>')
+    x(1, '<onload>ClearProperty(povil.rtl.view.prev,home)</onload>')
     x(1, '<controls>')
     backdrop(x, 2)
     top_bar(x, 2)
@@ -627,44 +702,49 @@ def top_bar(x, d):
     x(d + 1, '<font>povil_small</font><textcolor>povil_faint</textcolor><aligny>center</aligny>')
     x(d + 1, '<label>$INFO[System.Date(DDDD)]$INFO[System.Date(d MMMM),  •  ]</label>')
     x(d, '</control>')
-    # Tabs: a static list in reverse order, so the first tab is the rightmost
-    n = len(TABS)
-    width = n * TAB_W
-    x(d, '<control type="list" id="9000" description="tabs">')
-    x(d + 1, '<left>%d</left><top>34</top><width>%d</width><height>72</height>' % (1920 - MARGIN - width, width))
-    x(d + 1, '<orientation>horizontal</orientation><scrolltime>0</scrolltime>')
-    for ti, tab in enumerate(TABS):
-        target = chip_ids(ti, tab)[0] if tab['chips'] else (row_id(ti, 0) if tab['rows'] else 9000)
-        x(d + 1, '<ondown condition="%s">%d</ondown>' % (tab_cond(tab), target))
-    x(d + 1, '<itemlayout width="%d" height="72">' % TAB_W)
-    x(d + 2, '<control type="label">')
-    x(d + 3, '<left>0</left><top>0</top><width>%d</width><height>60</height>' % TAB_W)
-    x(d + 3, '<font>povil_menu</font><align>center</align><aligny>center</aligny>')
-    x(d + 3, '<textcolor>povil_faint</textcolor><label>$INFO[ListItem.Label]</label>')
-    x(d + 2, '</control>')
-    x(d + 1, '</itemlayout>')
-    x(d + 1, '<focusedlayout width="%d" height="72">' % TAB_W)
-    x(d + 2, '<control type="label">')
-    x(d + 3, '<left>0</left><top>0</top><width>%d</width><height>60</height>' % TAB_W)
-    x(d + 3, '<font>povil_menu</font><align>center</align><aligny>center</aligny>')
-    x(d + 3, '<textcolor>povil_white</textcolor><label>$INFO[ListItem.Label]</label>')
-    x(d + 2, '</control>')
-    x(d + 2, '<control type="image">')
-    x(d + 3, '<left>%d</left><top>60</top><width>44</width><height>4</height>' % ((TAB_W - 44) // 2))
-    x(d + 3, '<texture colordiffuse="%s">povil/underline.png</texture>' % GOLD)
-    x(d + 3, '<animation effect="zoom" start="40,100" end="100,100" center="auto" time="220" tween="cubic" easing="out">Focus</animation>')
-    x(d + 2, '</control>')
-    x(d + 1, '</focusedlayout>')
-    x(d + 1, '<content>')
-    for tab in reversed(TABS):
-        x(d + 2, '<item>')
-        x(d + 3, '<label>%s</label>' % e(tab['label']))
-        x(d + 3, '<onclick>%s</onclick>' % e(named(tab['click'], tab['label'])))
-        x(d + 3, '<property name="id">%s</property>' % tab['id'])
-        x(d + 2, '</item>')
-    x(d + 1, '</content>')
+    x(d, '<control type="list" id="%d" description="Kodi favourites, counted for the favourites row">' % FAV_COUNT)
+    x(d + 1, '<left>-4000</left><top>0</top><width>20</width><height>20</height>')
+    x(d + 1, '<itemlayout width="20" height="20" /><focusedlayout width="20" height="20" />')
+    x(d + 1, '<content>favourites://</content>')
     x(d, '</control>')
-
+    # Tabs: one button per tab, the first tab on the right. The window's default
+    # control is the first tab's button, so the home opens on it at once -- also
+    # under a dialog (the skin-change confirmation) and after a skin reload.
+    # A focused tab names itself in Window(home).Property(povil.tab).
+    n = len(TABS)
+    x(d, '<control type="group" id="9000" description="tabs">')
+    x(d + 1, '<left>%d</left><top>34</top><width>%d</width><height>72</height>' % (1920 - MARGIN - n * TAB_W, n * TAB_W))
+    x(d + 1, '<defaultcontrol>%d</defaultcontrol>' % tab_button(0))
+    for ti, tab in enumerate(TABS):
+        left = (n - 1 - ti) * TAB_W
+        target = chip_ids(ti, tab)[0] if tab['chips'] else (row_id(ti, 0) if tab['rows'] else tab_button(ti))
+        x(d + 1, '<control type="button" id="%d" description="tab %s">' % (tab_button(ti), tab['id']))
+        x(d + 2, '<left>%d</left><top>0</top><width>%d</width><height>60</height>' % (left, TAB_W))
+        x(d + 2, '<texturefocus /><texturenofocus />')
+        x(d + 2, '<font>povil_menu</font><align>center</align><aligny>center</aligny>')
+        x(d + 2, '<textcolor>$VAR[POVIL_TabColor_%s]</textcolor><focusedcolor>povil_white</focusedcolor>' % tab['id'])
+        x(d + 2, '<label>%s</label>' % e(tab['label']))
+        x(d + 2, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
+        x(d + 2, '<onfocus>SetProperty(povil.tab.%s,1,home)</onfocus>' % tab['id'])
+        if tab.get('click_alt'):
+            cond, action = tab['click_alt']
+            x(d + 2, '<onclick condition="%s">%s</onclick>' % (e(cond), e(named(action, tab['label']))))
+            x(d + 2, '<onclick condition="![%s]">%s</onclick>' % (e(cond), e(named(tab['click'], tab['label']))))
+        else:
+            x(d + 2, '<onclick>%s</onclick>' % e(named(tab['click'], tab['label'])))
+        if ti + 1 < n:
+            x(d + 2, '<onleft>%d</onleft>' % tab_button(ti + 1))
+        if ti:
+            x(d + 2, '<onright>%d</onright>' % tab_button(ti - 1))
+        x(d + 2, '<ondown>%d</ondown>' % target)
+        x(d + 1, '</control>')
+        x(d + 1, '<control type="image">')
+        x(d + 2, '<left>%d</left><top>60</top><width>44</width><height>4</height>' % (left + (TAB_W - 44) // 2))
+        x(d + 2, '<texture colordiffuse="%s">povil/underline.png</texture>' % GOLD)
+        x(d + 2, '<visible>%s</visible>' % tab_cond(tab))
+        x(d + 2, '<animation effect="zoom" start="40,100" end="100,100" center="auto" time="220" tween="cubic" easing="out">Visible</animation>')
+        x(d + 1, '</control>')
+    x(d, '</control>')
 
 def hero(x, d):
     right = 1920 - MARGIN
@@ -717,6 +797,8 @@ def hero(x, d):
 
 
 def chips(x, d):
+    for tab in TABS:
+        assert not tab['chips'] or len(tab['chips'][0]) < 3, 'a tab\'s first chip must always show: %s' % tab['id']
     x(d, '<control type="grouplist" id="9100" description="chips">')
     x(d + 1, '<left>%d</left><top>538</top><width>%d</width><height>50</height>' % (MARGIN, 1920 - 2 * MARGIN))
     x(d + 1, '<orientation>horizontal</orientation><align>right</align><itemgap>14</itemgap>')
@@ -738,11 +820,82 @@ def chips(x, d):
             x(d + 2, '<texturefocus border="24" colordiffuse="%s">povil/pill48.png</texturefocus>' % GOLD)
             x(d + 2, '<label>%s</label>' % e(label))
             x(d + 2, '<onclick>%s</onclick>' % e(click))
+            x(d + 2, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
+            x(d + 2, '<onup>%d</onup>' % tab_button(ti))
             if down:
                 x(d + 2, '<ondown>%d</ondown>' % down)
             x(d + 2, '<visible>%s</visible>' % vis)
             x(d + 1, '</control>')
     x(d, '</control>')
+
+
+def rtl_slots(g):
+    """A right-to-left row: whole item slots only, the last one flush with the
+    right margin. Kodi counts every slot inside a list as visible, so a slot cut
+    by the screen edge would hold the row's far end ("עוד" included) half off
+    screen. Returns the list's left and width (PAD wider on each side), and the
+    left of the tile before the first one (the peek)."""
+    gap = g['step'] - g['w']
+    end = 1920 - MARGIN + gap
+    slots = end // g['step']
+    left = end - slots * g['step']
+    # PAD on the left (the far end's frame); on the right the list ends where the
+    # next slot would start, so an item past the first never shows a sliver.
+    # Still `slots` items per page for Kodi (PAD < step).
+    return left - PAD, slots * g['step'] + PAD, left - g['step']
+
+
+def peek(x, d, cid, kind, top):
+    """The item past a right-to-left row's left end, dimmed at the screen edge:
+    a picture only (ListItemPosition(-1)), it never takes the focus."""
+    g = GEOM[kind]
+    left = rtl_slots(g)[2]
+    if left + g['w'] <= 0:
+        return
+    item = 'Container(%d).ListItemPosition(-1)' % cid
+    art = ('thumb', 'poster') if kind == 'poster' else ('thumb', 'fanart')
+    x(d, '<control type="group" description="peek">')
+    x(d + 1, '<left>%d</left><top>%d</top>' % (left, top + 22))
+    x(d + 1, '<visible>!String.IsEmpty(%s.Label) + !Container(%d).IsUpdating</visible>' % (item, cid))
+    x(d + 1, '<control type="image"><left>0</left><top>0</top><width>%d</width><height>%d</height>'
+             '<texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>' % (g['w'], g['h']))
+    mask = 'povil/mask_poster.png' if kind == 'poster' else ('povil/mask_square.png' if kind == 'square' else 'povil/mask_landscape.png')
+    for key in art:
+        x(d + 1, '<control type="image"><left>0</left><top>0</top><width>%d</width><height>%d</height>'
+                 '<texture background="true" diffuse="%s" colordiffuse="66FFFFFF">$INFO[%s.Art(%s)]</texture>'
+                 '<aspectratio scalediffuse="false">scale</aspectratio></control>' % (g['w'], g['h'], mask, item, key))
+    x(d, '</control>')
+
+
+def touch_strips(x, d, ti, tab, ids, offsets):
+    """Phones: a vertical swipe over a horizontal row moves nothing in Kodi, so
+    the rows below could not be reached by touch. A tap on the strip where the
+    next row shows at the bottom of the screen goes down a row; a tap on the
+    focused row's title goes back up. Transparent, Android only, and never on
+    the remote's path (nothing navigates to them)."""
+    for ri, rid in enumerate(ids):
+        base = strip_base(ti, ri)
+        shown = 'System.Platform.Android + %s' % row_focus(ti, ri)
+        # an air mouse can park the focus on a strip: the remote's keys bring it home
+        keys = ''.join('<on%s>%d</on%s>' % (k, rid, k) for k in ('up', 'down', 'left', 'right'))
+        if ri + 1 < len(ids):
+            top = ROWS_Y + offsets[ri + 1] - offsets[ri] - 10
+            x(d, '<control type="button" id="%d" description="touch: next row">' % base)
+            x(d + 1, '<left>0</left><top>%d</top><width>1920</width><height>%d</height>' % (top, 1080 - top))
+            x(d + 1, '<texturefocus /><texturenofocus /><visible>%s</visible>%s' % (shown, keys))
+            nxt = ids[ri + 1]
+            if ri + 2 < len(ids):
+                x(d + 1, '<onclick condition="Integer.IsGreater(Container(%d).NumItems,0)">SetFocus(%d)</onclick>' % (nxt, nxt))
+                x(d + 1, '<onclick condition="!Integer.IsGreater(Container(%d).NumItems,0)">SetFocus(%d)</onclick>' % (nxt, ids[ri + 2]))
+            else:
+                x(d + 1, '<onclick>SetFocus(%d)</onclick>' % nxt)
+            x(d, '</control>')
+        if ri:
+            x(d, '<control type="button" id="%d" description="touch: previous row">' % (base + 1))
+            x(d + 1, '<left>0</left><top>%d</top><width>1920</width><height>50</height>' % (ROWS_Y - 6))
+            x(d + 1, '<texturefocus /><texturenofocus /><visible>%s</visible>%s' % (shown, keys))
+            x(d + 1, '<onclick>SetFocus(%d)</onclick>' % ids[ri - 1])
+            x(d, '</control>')
 
 
 def rows(x, d):
@@ -759,15 +912,15 @@ def rows(x, d):
         x(d + 1, '<visible>%s</visible>' % tab_cond(tab))
         # Slide the rows up so the focused row sits where the first one was
         for ri in range(1, len(ids)):
-            x(d + 1, '<animation effect="slide" end="0,-%d" time="320" tween="cubic" easing="out" condition="Control.HasFocus(%d)">Conditional</animation>'
-              % (offsets[ri], ids[ri]))
+            x(d + 1, '<animation effect="slide" end="0,-%d" time="320" tween="cubic" easing="out" condition="%s">Conditional</animation>'
+              % (offsets[ri], row_focus(ti, ri)))
         for ri, (title, path, kind, optional) in enumerate(tab['rows']):
             g = GEOM[kind]
             rid = ids[ri]
             x(d + 1, '<control type="group" description="%s">' % e(title))
             x(d + 2, '<left>0</left><top>%d</top>' % offsets[ri])
             # Rows above the focused one fade out (they would cover the hero)
-            hide = ' | '.join('Control.HasFocus(%d)' % i for i in ids[ri + 1:])
+            hide = ' | '.join(row_focus(ti, j) for j in range(ri + 1, len(ids)))
             if hide:
                 x(d + 2, '<animation effect="fade" start="100" end="0" time="220" condition="%s">Conditional</animation>' % hide)
             x(d + 2, '<control type="label">')
@@ -781,17 +934,20 @@ def rows(x, d):
             x(d + 2, '<control type="list" id="%d">' % rid)
             gap = g['step'] - g['w']
             if is_rtl(path):
-                # Whole item slots, the last one flush with the right margin; the far
-                # left slot is cut by the screen edge (a peek at the next items).
-                end = 1920 - MARGIN + gap
-                slots = -(-end // g['step'])
-                x(d + 3, '<left>%d</left><top>40</top><width>%d</width><height>%d</height>' % (end - slots * g['step'], slots * g['step'], g['list_h']))
+                left, width, _peek = rtl_slots(g)
+                x(d + 3, '<left>%d</left><top>40</top><width>%d</width><height>%d</height>' % (left, width, g['list_h']))
             else:
-                x(d + 3, '<left>%d</left><top>40</top><width>%d</width><height>%d</height>' % (MARGIN, 1920 - MARGIN, g['list_h']))
+                x(d + 3, '<left>%d</left><top>40</top><width>%d</width><height>%d</height>' % (MARGIN - PAD, 1920 - MARGIN + PAD, g['list_h']))
             x(d + 3, '<orientation>horizontal</orientation><preloaditems>2</preloaditems>')
             x(d + 3, '<scrolltime tween="cubic" easing="out">260</scrolltime>')
-            up = chip_ids(ti, tab)[0] if (ri == 0 and tab['chips']) else (ids[ri - 1] if ri else 9000)
+            up = chip_ids(ti, tab)[0] if (ri == 0 and tab['chips']) else (ids[ri - 1] if ri else tab_button(ti))
             x(d + 3, '<onup>%d</onup>' % up)
+            # Kodi wraps a list with no action at its edge: the row's far end would
+            # jump back to its start (and the start, on the right, to the far end)
+            x(d + 3, '<onleft>noop</onleft><onright>noop</onright>')
+            # Focus decides the tab: Kodi's skin reload gives the focus back to the
+            # control that had it, after the first tab's button took it
+            x(d + 3, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
             for nxt in ids[ri + 1:]:
                 x(d + 3, '<ondown condition="Integer.IsGreater(Container(%d).NumItems,0)">%d</ondown>' % (nxt, nxt))
                 break
@@ -815,8 +971,11 @@ def rows(x, d):
             else:
                 x(d + 3, '<content target="videos">$VAR[POVIL_Path_%d]</content>' % rid)
             x(d + 2, '</control>')
+            if is_rtl(path):
+                peek(x, d + 2, rid, kind, 40)
             x(d + 1, '</control>')
         x(d, '</control>')
+        touch_strips(x, d, ti, tab, ids, offsets)
 
 
 def main():
