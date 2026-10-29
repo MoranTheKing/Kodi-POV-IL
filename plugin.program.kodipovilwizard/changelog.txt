@@ -1,3 +1,6 @@
+0.4.88
+- Onyx: each item of a home row (the 200 nearest its start) carries its picture shrunk by Kodi to 10 pixels (art povil_blur, image://.../transform?width=10) and where Kodi keeps that copy (povil_blurfile, Kodi's own CRC name): Onyx draws it as a soft wash behind items with no backdrop of their own.
+
 0.4.87
 - Onyx: Idan Plus lists built full screen are turned right to left like POV's and Umbrella's, and shown in Onyx's view 51 once on screen (POV's force_view; Idan has one view setting for every skin); a list of folders (a channel's programmes) is marked as TV shows, so its pictures show as posters. Rows on the home are unchanged.
 - The visibility manager also flags each service on the home window (povil.svc.trakt, .mdblist, ...) when it reads the accounts: Onyx shows the MDBList chips from that flag, without reading settings on every frame.
