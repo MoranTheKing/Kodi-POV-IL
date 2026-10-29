@@ -32,6 +32,10 @@ image     -> picks an image for a skin string (shelf images, backgrounds). Store
 folder    -> same for a folder of pictures (the custom slideshow).
 changelog -> loads changelog.txt for the Skin Settings > Changelog page
 parentdir -> toggles Kodi's own "Show parent folder items" (the ".." entry) setting.
+touchkeymap -> phones: writes special://profile/keymaps/kodipovil_onyx_touch.xml: a vertical
+             swipe on the home sets Window(home).Property(povil.swipe) (Kodi gives a skin no
+             swipe of its own); Onyx's timer povil_swipe turns it into Down/Up. Any other skin
+             ignores the property, so the keymap may stay when the skin changes.
 
 Kept compatible with Kodi 21 and 22: only stable xbmc/xbmcgui/xbmcvfs calls are used.
 """
@@ -706,8 +710,46 @@ def toggle_parentdir():
     xbmc.executeJSONRPC(json.dumps(put))
 
 
+TOUCH_KEYMAP = "special://profile/keymaps/kodipovil_onyx_touch.xml"
+TOUCH_KEYMAP_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<!-- Kodi POV IL - Onyx: on a touch screen a swipe up goes down a row of the home, a swipe
+     down goes back up. A swipe only names itself in a home property; the Onyx skin's timer
+     povil_swipe moves the focus, and any other skin ignores the property. Written by the
+     Onyx skin (scripts/onyx_tools.py touchkeymap). -->
+<keymap>
+  <home>
+    <touch>
+      <swipe direction="up">SetProperty(povil.swipe,down,home)</swipe>
+      <swipe direction="down">SetProperty(povil.swipe,up,home)</swipe>
+    </touch>
+  </home>
+</keymap>
+"""
+
+
+def touch_keymap():
+    path = xbmcvfs.translatePath(TOUCH_KEYMAP)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            if fh.read() == TOUCH_KEYMAP_XML:
+                return
+    except OSError:
+        pass
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(TOUCH_KEYMAP_XML)
+    except OSError as exc:
+        log("touch keymap not written: %s" % exc)
+        return
+    xbmc.executebuiltin("Action(reloadkeymaps)")
+
+
 def main():
     args = sys.argv[1:]
+    if args and args[0].strip() == "touchkeymap":
+        touch_keymap()
+        return
     if args and args[0].strip() == "color":
         pick_color()
         return
