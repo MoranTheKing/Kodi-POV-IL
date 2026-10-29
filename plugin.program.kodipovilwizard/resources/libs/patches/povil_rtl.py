@@ -26,6 +26,16 @@ again at every visit, and "by episode" put episode 1 back on the left
 (field report, 29 Oct 2026). A list sorted any other way keeps its order and
 is not marked.
 
+Each item of a home row (the 200 nearest its start) also gets the art
+povil_blur: its picture as Kodi itself shrinks it to 10 pixels wide
+(image://<picture>/transform?width=10),
+and povil_blurfile: where Kodi keeps that small copy (special://thumbnails/,
+named by CTextureCache::GetCacheFile). Onyx draws the small copy over the
+whole screen, a soft wash of the picture's colours, behind an item with no
+backdrop of its own (Keshet's posters, a channel's logo) -- a skin cannot
+build either address itself. Kodi shows a picture full size the first time it
+shrinks it, so Onyx asks for povil_blur out of sight and draws the kept file.
+
 install() runs first thing in the add-on's entry script, on every request.
 It wraps xbmcplugin once per interpreter (Idan Plus, and POV with fast
 navigation, reuse theirs) and decides again for each request, so lists
@@ -41,6 +51,7 @@ HORIZONTAL_VIEWS = ('51', '55')
 MEDIA = ('movies', 'tvshows', 'seasons', 'episodes')
 UMBRELLA_VIEWS = {'movies': '51', 'tvshows': '51', 'seasons': '51', 'episodes': '55'}
 SEEDED = 'povil.umbrella_views_seeded'
+BLUR_ITEMS = 200
 
 
 def _query():
@@ -142,6 +153,32 @@ def _pinned(listitem):
         return ''
 
 
+_BIT_REVERSED = bytes(int('{:08b}'.format(i)[::-1], 2) for i in range(256))
+
+
+def _kodi_cache_file(url):
+    """Kodi's name for the copy it keeps of url: CRC-32/MPEG-2 (no final xor) of the
+    lower-case address -- zlib's reflected CRC over bit-reversed bytes, reversed."""
+    import zlib
+    crc = ~zlib.crc32(url.lower().encode('utf-8').translate(_BIT_REVERSED)) & 0xFFFFFFFF
+    name = '{:08x}'.format(int('{:032b}'.format(crc)[::-1], 2))
+    return 'special://thumbnails/%s/%s.jpg' % (name[0], name)
+
+
+def _blur(listitem):
+    """povil_blur / povil_blurfile: the item's picture shrunk by Kodi (see above)."""
+    url = ''
+    for art in ('thumb', 'poster', 'icon'):
+        url = listitem.getArt(art)
+        if url:
+            break
+    if not url or url.startswith('image://'):
+        return
+    from urllib.parse import quote
+    small = 'image://%s/transform?width=10' % quote(url, safe='')
+    listitem.setArt({'povil_blur': small, 'povil_blurfile': _kodi_cache_file(small)})
+
+
 def _wrap(xbmcplugin, state):
     original = {name: getattr(xbmcplugin, name) for name in
                 ('addDirectoryItem', 'addDirectoryItems', 'addSortMethod', 'endOfDirectory', 'setContent')}
@@ -207,12 +244,17 @@ def _wrap(xbmcplugin, state):
                 reverse = False      # never lose a list over a name: the add-on's own order
         if reverse:
             items.reverse()
-            for _url, listitem, _folder in items:
+            # the shrunk picture for the 200 items nearest the row's start (now its
+            # end): a row of 663 (Keshet) costs a few milliseconds, not dozens
+            blur_from = len(items) - BLUR_ITEMS if state['flagged'] else len(items)
+            for index, (_url, listitem, _folder) in enumerate(items):
                 try:
                     listitem.setProperty('povil_rtl', '1')
                     # Kodi would move a pinned item (Umbrella's next page:
                     # SpecialSort=bottom) back to the end, the row's first place
                     listitem.setProperty('SpecialSort', '')
+                    if index >= blur_from:
+                        _blur(listitem)
                 except Exception:
                     pass
             # Only the list's own (reversed) order: a sort saved for this list

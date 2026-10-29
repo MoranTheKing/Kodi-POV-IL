@@ -364,9 +364,16 @@
 	<timer>
 		<name>povil_swipe</name>
 		<start reset="true">!String.IsEmpty(Window(home).Property(povil.swipe))</start>
+		<onstart condition="Window.IsActive(home) + String.IsEmpty(System.CurrentControlId) + !String.IsEmpty(Window(home).Property(povil.focus))">SetFocus($INFO[Window(home).Property(povil.focus)])</onstart>
 		<onstart condition="Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.swipe),down)">Action(Down)</onstart>
 		<onstart condition="Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.swipe),up)">Action(Up)</onstart>
 		<onstart>ClearProperty(povil.swipe,home)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_blur</name>
+		<start reset="true">Window.IsActive(home) + !System.HasModalDialog + System.IdleTime(2) + !String.IsEqual(Control.GetLabel(9803),Window(home).Property(povil.blur))</start>
+		<onstart>SetProperty(povil.blur,$INFO[Control.GetLabel(9803)],home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>

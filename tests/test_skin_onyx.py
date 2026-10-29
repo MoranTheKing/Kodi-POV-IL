@@ -109,9 +109,48 @@ class GeneratedXmlTests(unittest.TestCase):
         timers = ET.parse(XML / 'Timers.xml').getroot()
         timer = next(t for t in timers.iter('timer') if t.findtext('name') == 'povil_swipe')
         acts = [(a.get('condition') or '', a.text) for a in timer.findall('onstart')]
-        self.assertEqual([t for _c, t in acts], ['Action(Down)', 'Action(Up)', 'ClearProperty(povil.swipe,home)'])
-        self.assertIn('Window.IsActive(home)', acts[0][0])
+        self.assertEqual([t for _c, t in acts], ['SetFocus($INFO[Window(home).Property(povil.focus)])', 'Action(Down)',
+                                                 'Action(Up)', 'ClearProperty(povil.swipe,home)'])
+        # a finger on the hero took the focus away: it goes back where it was first,
+        # else Down would land on the window's default, the first tab
+        self.assertIn('String.IsEmpty(System.CurrentControlId)', acts[0][0])
         self.assertIn('Window.IsActive(home)', acts[1][0])
+        self.assertIn('Window.IsActive(home)', acts[2][0])
+
+    def test_a_touch_outside_the_rows_leaves_them_where_they_were(self):
+        home = ET.parse(XML / 'Home.xml').getroot()
+        controls = {c.get('id'): c for c in home.iter('control') if c.get('id')}
+        for cid in ('9010', '5031', '5032', '9112'):
+            with self.subTest(cid):
+                self.assertIn('SetProperty(povil.focus,%s,home)' % cid, [n.text for n in controls[cid].findall('onfocus')])
+        text = (XML / 'Home.xml').read_text(encoding='utf-8')
+        self.assertIn('[Control.HasFocus(5032) | [String.IsEmpty(System.CurrentControlId) + '
+                      'String.IsEqual(Window(home).Property(povil.focus),5032)]]', text)
+
+    def test_a_picture_without_a_backdrop_becomes_a_soft_wash(self):
+        home = ET.parse(XML / 'Home.xml').getroot()
+        images = {c.get('description'): c for c in home.iter('control') if c.get('type') == 'image'}
+        self.assertEqual(images['ambient wash: the small copy is made'].findtext('texture'), '$VAR[POVIL_HeroAmbient]')
+        self.assertEqual(images['ambient wash'].findtext('texture'), '$INFO[Window(home).Property(povil.blur)]')
+        timers = ET.parse(XML / 'Timers.xml').getroot()
+        timer = next(t for t in timers.iter('timer') if t.findtext('name') == 'povil_blur')
+        self.assertIn('System.IdleTime(2)', timer.findtext('start'))
+        self.assertEqual(images['ambient wash: the small copy is made'].findtext('visible'), 'System.IdleTime(1)')
+        self.assertEqual(timer.findtext('onstart'), 'SetProperty(povil.blur,$INFO[Control.GetLabel(9803)],home)')
+        includes = (XML / 'Includes_POVIL_Home.xml').read_text(encoding='utf-8')
+        self.assertIn('!System.HasModalDialog', timer.findtext('start'), 'a dialog over the home reads no 9803')
+        root = ET.fromstring('<r>%s</r>' % includes.split('<includes>', 1)[1].rsplit('</includes>', 1)[0])
+        for name, art in (('POVIL_HeroAmbient', 'povil_blur'), ('POVIL_HeroAmbientFile', 'povil_blurfile')):
+            values = [(v.get('condition') or '', v.text or '') for v in root.find("variable[@name='%s']" % name)]
+            self.assertTrue(any('ListItem.Art(%s)' % art in t for _c, t in values))
+            self.assertFalse(any('Container(5032)' in t for _c, t in values), 'a landscape row has a backdrop of its own')
+            # every focused row ends the variable -- with nothing when it wants no wash --
+            # before the tabs' fallbacks (Reshet focused must not wash in Keshet's colours)
+            stops = [i for i, (c, t) in enumerate(values) if not t and 'Control.HasFocus(' in c]
+            fallback = next(i for i, (c, _t) in enumerate(values) if c.startswith('String.IsEqual(Window(home).Property(povil.tab),'))
+            for rid in (5031, 5032, 5033, 5041, 5042, 5011):
+                with self.subTest(name=name, row=rid):
+                    self.assertTrue(any('Control.HasFocus(%d)' % rid in values[i][0] and i < fallback for i in stops))
 
     def test_rows_retry_and_say_empty_only_when_the_retries_are_spent(self):
         home = ET.parse(XML / 'Home.xml').getroot()
@@ -168,6 +207,7 @@ def _plugin_stub():
 class _Item:
     def __init__(self, label=''):
         self.props = {}
+        self.art = {}
         self.label = label
 
     def getLabel(self):
@@ -179,11 +219,17 @@ class _Item:
     def setProperty(self, key, value):
         self.props[key] = value
 
+    def getArt(self, key):
+        return self.art.get(key, '')
+
+    def setArt(self, values):
+        self.art.update(values)
+
 
 class RtlPatchTests(unittest.TestCase):
     def _run(self, query, skin='skin.povil.onyx', window=10000, view='51', pov=True, umbrella=False, umbrella_db='',
              sort=None, plugin=None, content='movies', keep_module=False, home=None, labels=('', '', ''),
-             pinned=None, argv0='plugin://plugin.video.pov/', builtins=None):
+             pinned=None, argv0='plugin://plugin.video.pov/', builtins=None, thumbs=None):
         if plugin is None:
             plugin, calls = _plugin_stub()
         else:
@@ -211,6 +257,8 @@ class RtlPatchTests(unittest.TestCase):
             items = [_Item(label) for label in labels]
             for index, where in (pinned or {}).items():
                 items[index].props['SpecialSort'] = where
+            for index, thumb in (thumbs or {}).items():
+                items[index].art['thumb'] = thumb
             if sort is not None:
                 plugin.addSortMethod(1, sort)
             plugin.setContent(1, content)
@@ -232,6 +280,28 @@ class RtlPatchTests(unittest.TestCase):
         self.assertIn(('many', ['c', 'b', 'a']), calls)
         self.assertEqual(calls[-1], ('end',))
         self.assertTrue(all(i.props.get('povil_rtl') == '1' for i in items))
+
+    def test_home_row_items_carry_their_picture_shrunk_by_kodi(self):
+        thumb = 'https://raw.githubusercontent.com/Fishenzon/repo/master/plugin.video.idanplus/images/kan.jpg'
+        _calls, items = self._run('?mode=1&povil_rtl=1', pov=False, thumbs={0: thumb},
+                                  argv0='plugin://plugin.video.idanplus/')
+        small = ('image://https%3A%2F%2Fraw.githubusercontent.com%2FFishenzon%2Frepo%2Fmaster%2Fplugin.video.idanplus'
+                 '%2Fimages%2Fkan.jpg/transform?width=10')
+        self.assertEqual(items[0].art['povil_blur'], small)
+        self.assertTrue(items[0].art['povil_blurfile'].startswith('special://thumbnails/'))
+        self.assertNotIn('povil_blur', items[1].art, 'no picture, nothing to shrink')
+        sys.path.insert(0, str(PATCHES))
+        try:
+            import povil_rtl
+            # names Kodi itself gave these addresses in the QA Kodi's texture database
+            self.assertEqual(povil_rtl._kodi_cache_file(
+                'image://https%3A%2F%2Fraw.githubusercontent.com%2FFishenzon%2Frepo%2Fmaster%2Fplugin.video.idanplus'
+                '%2Fimages%2Fkan.jpg%7Cverifypeer%3Dfalse/transform?width=10'), 'special://thumbnails/5/53019bca.jpg')
+            self.assertEqual(povil_rtl._kodi_cache_file(thumb), 'special://thumbnails/8/8593df64.jpg')
+        finally:
+            sys.path.remove(str(PATCHES))
+        _calls, items = self._run('?mode=build_movie_list', window=10025, view='51', thumbs={0: thumb})
+        self.assertNotIn('povil_blur', items[0].art, 'full screen lists draw their own backdrop')
 
     def test_a_pinned_next_page_keeps_its_end_in_a_name_sort(self):
         calls, items = self._run('?mode=1&povil_rtl=1', sort=1, pov=False,
