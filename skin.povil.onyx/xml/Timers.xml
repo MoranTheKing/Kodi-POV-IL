@@ -374,6 +374,7 @@
 		<name>povil_blur</name>
 		<start reset="true">Window.IsActive(home) + !System.HasModalDialog + System.IdleTime(2) + !String.IsEqual(Control.GetLabel(9803),Window(home).Property(povil.blur))</start>
 		<onstart>SetProperty(povil.blur,$INFO[Control.GetLabel(9803)],home)</onstart>
+		<onstart>SetProperty(povil.blurpng,$INFO[Control.GetLabel(9804)],home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
