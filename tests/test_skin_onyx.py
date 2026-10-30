@@ -184,6 +184,24 @@ class GeneratedXmlTests(unittest.TestCase):
         self.assertTrue(all(c.get('id') for c in children))
         self.assertIn('7024', [c.get('id') for c in children])
 
+    def test_the_users_own_live_tv_has_a_chip_and_a_row(self):
+        # field report: IPTV set up under Nox "disappeared" in Onyx
+        home = ET.parse(XML / 'Home.xml').getroot()
+        buttons = {c.findtext('label'): c for c in home.iter('control') if c.get('type') == 'button'}
+        chip = buttons['IPTV שלי']
+        self.assertEqual(chip.findtext('onclick'), 'ActivateWindow(TVChannels)')
+        self.assertIn('+ [PVR.HasTVChannels | System.HasAddon(pvr.iptvsimple)]', chip.findtext('visible'))
+        self.assertEqual(buttons['מדריך שידורים'].findtext('onclick'), 'ActivateWindow(TVGuide)')
+        includes = (XML / 'Includes_POVIL_Home.xml').read_text(encoding='utf-8')
+        # asked again once Kodi has its channels (IPTV Simple loads them after the start)
+        self.assertIn('plugin://plugin.program.kodipovilwizard/?mode=pvr_row&amp;p=$INFO[Window(home).Property(povil.pvr)]&amp;povil_rtl=1', includes)
+        timers = ET.parse(XML / 'Timers.xml').getroot()
+        timer = next(t for t in timers.iter('timer') if t.findtext('name') == 'povil_pvr')
+        self.assertEqual(timer.findtext('onstart'), 'SetProperty(povil.pvr,1,home)')
+        default = (ROOT / 'plugin.program.kodipovilwizard' / 'default.py').read_text(encoding='utf-8')
+        self.assertIn("_query.get('mode') == 'pvr_row'", default)
+        self.assertIn("_query.get('mode') == 'pvr_play'", default)
+
     def test_conditions_group_with_brackets(self):
         # Kodi groups a condition with [ ] only; "!(" splits it into broken parts
         for name in ('Home.xml', 'Includes_POVIL_Home.xml', 'View_POVIL.xml', 'Timers.xml', 'DialogKeyboard.xml'):
@@ -310,6 +328,8 @@ class RtlPatchTests(unittest.TestCase):
         self.assertEqual(items[0].art['povil_blurpng'], '', 'a JPEG is never kept as .png')
         self.assertEqual(items[2].art['povil_blurpng'], items[2].art['povil_blurfile'][:-4] + '.png')
         self.assertNotIn('povil_blur', items[1].art, 'no picture, nothing to shrink')
+        _calls, items = self._run('?mode=1&povil_rtl=1', pov=False, thumbs={0: 'DefaultFolder.png'})
+        self.assertNotIn('povil_blur', items[0].art, "a skin's own icon name is nothing to shrink")
         sys.path.insert(0, str(PATCHES))
         try:
             import povil_rtl

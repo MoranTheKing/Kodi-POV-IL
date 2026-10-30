@@ -167,15 +167,15 @@ def _kodi_cache_file(url, ext='.jpg'):
     return 'special://thumbnails/%s/%s%s' % (name[0], name, ext)
 
 
-def _blur(listitem):
+def blur_art(listitem):
     """povil_blur / povil_blurfile / povil_blurpng: the item's picture shrunk by Kodi (see above)."""
     url = ''
     for art in ('thumb', 'poster', 'icon'):
         url = listitem.getArt(art)
         if url:
             break
-    if not url or url.startswith('image://'):
-        return
+    if not url or url.startswith('image://') or ('/' not in url and '\\' not in url):
+        return      # a skin's own icon name (DefaultFolder.png): nothing Kodi could shrink
     from urllib.parse import quote
     small = 'image://%s/transform?width=10' % quote(url, safe='')
     base = _kodi_cache_file(small, '')
@@ -258,7 +258,7 @@ def _wrap(xbmcplugin, state):
                     # SpecialSort=bottom) back to the end, the row's first place
                     listitem.setProperty('SpecialSort', '')
                     if index >= blur_from:
-                        _blur(listitem)
+                        blur_art(listitem)
                 except Exception:
                     pass
             # Only the list's own (reversed) order: a sort saved for this list
