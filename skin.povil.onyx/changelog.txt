@@ -1,3 +1,7 @@
+[B]Kodi POV IL - Onyx 1.0.6[/B]
+- Live tab: the user's own live TV (IPTV Simple and the like, Kodi's PVR) has a chip "IPTV שלי" (Kodi's channels window) and a row of its channels, right to left with their logos' soft wash (the Wizard's pvr_row) -- both hidden without live TV (field report: IPTV set up under Nox "disappeared" in Onyx). "מדריך שידורים" opens Kodi's TV guide
+- Favourites row: the soft wash of each favourite's picture too
+
 [B]Kodi POV IL - Onyx 1.0.5[/B]
 - Player: left / right walk the whole button row again, to the subtitles and back (field report: they only seeked 10 seconds). Kodi links a grouplist's buttons by id, and the gaps between the groups had none, so the chain ended there and the key fell through to the video; the gaps have ids now, and the row wraps round at its ends
 - The soft wash also for pictures Kodi keeps as .png (channel and station logos with transparency: 15 of 49 channels, 16 of 35 stations): a picture that is not a JPEG tries both copies (field report: some items had no background)
