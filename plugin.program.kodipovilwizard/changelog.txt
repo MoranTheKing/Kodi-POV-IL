@@ -1,3 +1,6 @@
+0.4.91
+- pvr_row: a tap plays a channel only once Kodi still knows it (PVR.GetChannelDetails): Kodi 21 crashes on Player.Open for a channel id while it has no live TV (checked in the QA Kodi) -- a row shown before the live TV went away.
+
 0.4.90
 - Onyx: pvr_row.py -- the user's own TV channels (Kodi's PVR, JSON-RPC PVR.GetChannels "alltv", hidden ones left out, the first 200) as a right-to-left home row; a tap plays the channel (mode=pvr_play, Player.Open by channel id). Nothing in a kids profile or without live TV.
 - povil_rtl's blur helper is public (blur_art); the favourites row gives each favourite the Onyx soft wash too.
