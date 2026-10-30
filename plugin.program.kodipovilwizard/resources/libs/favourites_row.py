@@ -50,6 +50,15 @@ def _child():
         return True
 
 
+def _blur(item):
+    """The Onyx soft wash of the favourite's picture (povil_rtl.blur_art)."""
+    try:
+        from resources.libs.patches import povil_rtl
+        povil_rtl.blur_art(item)
+    except Exception:
+        pass
+
+
 def row(handle):
     items = []
     if not _child():
@@ -59,6 +68,7 @@ def row(handle):
             item = xbmcgui.ListItem(name, offscreen=True)
             if thumb:
                 item.setArt({'thumb': thumb, 'icon': thumb})
+                _blur(item)
             item.setProperty('povil_rtl', '1')
             item.setProperty('IsPlayable', 'false')
             url = '%s?mode=favourite_run&i=%d&n=%s' % (BASE, index, quote(name))

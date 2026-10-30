@@ -371,6 +371,12 @@
 		<stop>true</stop>
 	</timer>
 	<timer>
+		<name>povil_pvr</name>
+		<start reset="true">PVR.HasTVChannels + String.IsEmpty(Window(home).Property(povil.pvr))</start>
+		<onstart>SetProperty(povil.pvr,1,home)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
 		<name>povil_blur</name>
 		<start reset="true">Window.IsActive(home) + !System.HasModalDialog + System.IdleTime(2) + !String.IsEqual(Control.GetLabel(9803),Window(home).Property(povil.blur))</start>
 		<onstart>SetProperty(povil.blur,$INFO[Control.GetLabel(9803)],home)</onstart>
@@ -578,6 +584,13 @@
 		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),live) + !Container(5042).IsUpdating + Integer.IsGreater(Container(5042).NumItems,1) + Integer.IsEqual(Container(5042).CurrentItem,1) + String.IsEqual(Container(5042).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5042).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5042))</start>
 		<onstart>SetProperty(povil.rtl.5042,$ESCINFO[Container(5042).ListItemAbsolute(0).Label],home)</onstart>
 		<onstart>Control.Move(5042,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_rtl_5043</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),live) + !Container(5043).IsUpdating + Integer.IsGreater(Container(5043).NumItems,1) + Integer.IsEqual(Container(5043).CurrentItem,1) + String.IsEqual(Container(5043).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5043).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5043))</start>
+		<onstart>SetProperty(povil.rtl.5043,$ESCINFO[Container(5043).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5043,-1)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
