@@ -51,12 +51,17 @@ class PvrRowTests(unittest.TestCase):
         self.calls, self.rpcs = [], []
         self.child = False
         self.reply = {'result': CHANNELS}
+        self.details = {'result': {'channeldetails': {'channelid': 12, 'label': 'Channel Two'}}}
         calls, rpcs = self.calls, self.rpcs
 
         def rpc(text):
             request = json.loads(text)
             rpcs.append((request['method'], request['params']))
-            return json.dumps(self.reply if request['method'] == 'PVR.GetChannels' else {'result': 'OK'})
+            if request['method'] == 'PVR.GetChannels':
+                return json.dumps(self.reply)
+            if request['method'] == 'PVR.GetChannelDetails':
+                return json.dumps(self.details)
+            return json.dumps({'result': 'OK'})
         fake = {
             'xbmc': types.SimpleNamespace(executeJSONRPC=rpc),
             'xbmcgui': types.SimpleNamespace(ListItem=_Item),
@@ -110,7 +115,14 @@ class PvrRowTests(unittest.TestCase):
     def test_a_tap_plays_the_channel(self):
         self.mod.play(5, {'id': '12'})
         self.assertIn(('resolved', False), self.calls)
+        self.assertEqual(self.rpcs[-2], ('PVR.GetChannelDetails', {'channelid': 12}))
         self.assertEqual(self.rpcs[-1], ('Player.Open', {'item': {'channelid': 12}}))
+        # Kodi 21 crashes on Player.Open for a channel id while it has no live TV
+        self.rpcs.clear()
+        self.details = {'error': {'code': -32100, 'message': 'Failed to execute method.'}}
+        self.mod.play(-1, {'id': '12'})
+        self.assertEqual([m for m, _p in self.rpcs], ['PVR.GetChannelDetails'])
+        self.details = {'result': {'channeldetails': {'channelid': 12}}}
         self.rpcs.clear()
         self.mod.play(-1, {'id': 'x'})
         self.assertEqual(self.rpcs, [])
