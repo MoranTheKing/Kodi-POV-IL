@@ -6,6 +6,8 @@ favourites -- read from special://profile/favourites.xml, the file Kodi keeps
 them in -- last first, each marked povil_rtl=1, so the skin starts the row on
 the first favourite, on the right.
 
+Each favourite carries the Onyx soft wash of its picture (povil_rtl.blur_art).
+
 A tap runs the favourite's own command (mode=favourite_run). The row may be
 older than the file, so the favourite at that place must still carry the
 same name; otherwise the first favourite of that name runs, and with none

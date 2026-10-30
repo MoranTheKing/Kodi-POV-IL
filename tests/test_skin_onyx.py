@@ -202,6 +202,34 @@ class GeneratedXmlTests(unittest.TestCase):
         self.assertIn("_query.get('mode') == 'pvr_row'", default)
         self.assertIn("_query.get('mode') == 'pvr_play'", default)
 
+    def test_israeli_shows_get_the_details_the_wizard_fetches(self):
+        # field report: no summary on Keshet 12, no backdrop on Keshet 12 / Kan 11 like Reshet's
+        includes = (XML / 'Includes_POVIL_Home.xml').read_text(encoding='utf-8')
+        root = ET.fromstring('<r>%s</r>' % includes.split('<includes>', 1)[1].rsplit('</includes>', 1)[0])
+        def values(name):
+            return [(v.get('condition') or '', v.text or '') for v in root.find("variable[@name='%s']" % name)]
+        key = values('POVIL_HeroDetailsKey')
+        wanted = {c.split('Container(')[1][:4] for c, t in key if t}
+        self.assertEqual(wanted, {'5031', '5033'}, 'Keshet and Kan rows only')
+        match = 'String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for))'
+        for name, field in (('POVIL_HeroFanart', 'fanart'), ('POVIL_HeroPlot', 'plot'), ('POVIL_HeroLogo', 'logo')):
+            with self.subTest(name):
+                first = values(name)[0]
+                self.assertIn(match, first[0])
+                self.assertEqual(first[1], '$INFO[Window(home).Property(povil.details.%s)]' % field)
+        for name in ('POVIL_HeroAmbient', 'POVIL_HeroAmbientFile', 'POVIL_HeroAmbientPng'):
+            first = values(name)[0]
+            self.assertIn(match, first[0])
+            self.assertEqual(first[1], '', 'a fetched picture is a real backdrop: no wash')
+        timers = ET.parse(XML / 'Timers.xml').getroot()
+        timer = next(t for t in timers.iter('timer') if t.findtext('name') == 'povil_details')
+        self.assertEqual([n.text for n in timer.findall('onstart')],
+                         ['SetProperty(povil.details.key,$ESCINFO[Control.GetLabel(9805)],home)',
+                          'RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=hero_details)'])
+        self.assertIn('System.IdleTime(1)', timer.findtext('start'))
+        default = (ROOT / 'plugin.program.kodipovilwizard' / 'default.py').read_text(encoding='utf-8')
+        self.assertIn("_query.get('mode') == 'hero_details'", default)
+
     def test_conditions_group_with_brackets(self):
         # Kodi groups a condition with [ ] only; "!(" splits it into broken parts
         for name in ('Home.xml', 'Includes_POVIL_Home.xml', 'View_POVIL.xml', 'Timers.xml', 'DialogKeyboard.xml'):
