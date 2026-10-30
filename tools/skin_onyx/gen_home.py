@@ -299,6 +299,7 @@ def gen_timers():
     x(2, '<name>povil_blur</name>')
     x(2, '<start reset="true">Window.IsActive(home) + !System.HasModalDialog + System.IdleTime(2) + !String.IsEqual(Control.GetLabel(9803),Window(home).Property(povil.blur))</start>')
     x(2, '<onstart>SetProperty(povil.blur,$INFO[Control.GetLabel(9803)],home)</onstart>')
+    x(2, '<onstart>SetProperty(povil.blurpng,$INFO[Control.GetLabel(9804)],home)</onstart>')
     x(2, '<stop>true</stop>')
     x(1, '</timer>')
     # The tabs need no timer: the focused tab button names itself (gen_home tabs),
@@ -447,7 +448,8 @@ def gen_includes():
     # No backdrop of its own (Keshet's posters, whose "fanart" is the poster again; a
     # channel's or a station's logo): its picture, blurred, becomes a soft wash of its
     # colours behind the hero (ambient() in backdrop()), never the picture enlarged
-    for name, art in (('POVIL_HeroAmbient', 'povil_blur'), ('POVIL_HeroAmbientFile', 'povil_blurfile')):
+    for name, art in (('POVIL_HeroAmbient', 'povil_blur'), ('POVIL_HeroAmbientFile', 'povil_blurfile'),
+                      ('POVIL_HeroAmbientPng', 'povil_blurpng')):
         x(1, '<variable name="%s">' % name)
         for cond, cid in sources:
             if kinds[cid] != 'landscape':  # a landscape row always has its own backdrop
@@ -784,7 +786,7 @@ def ambient(x, d):
     Kodi shows a picture full size the first time it shrinks it (only the copy it
     keeps is small) and hands every control showing the same address the same
     picture, so an invisible pixel asks for povil_blur once the screen has been
-    still for a second, and the wash draws the kept file itself (povil_blurfile,
+    still for a second, and the wash draws the kept file itself (povil_blurfile / povil_blurpng,
     copied to Window(home).Property(povil.blur) by the timer povil_blur a second
     later, never under a dialog): by then the small copy is kept, and fast
     scrolling fetches nothing. A copy not kept yet (a slow network) leaves the
@@ -795,15 +797,20 @@ def ambient(x, d):
     x(d + 1, '<texture background="true" colordiffuse="01FFFFFF">$VAR[POVIL_HeroAmbient]</texture>')
     x(d + 1, '<visible>System.IdleTime(1)</visible>')   # fast scrolling fetches nothing
     x(d, '</control>')
-    x(d, '<control type="image" description="ambient wash">')
-    x(d + 1, '<left>-60</left><top>-60</top><width>2040</width><height>1200</height>')
-    x(d + 1, '<texture background="true" colordiffuse="FF999999">$INFO[Window(home).Property(povil.blur)]</texture>')
-    x(d + 1, '<aspectratio>scale</aspectratio><fadetime>600</fadetime>')
-    x(d + 1, '<visible>!String.IsEmpty(Control.GetLabel(9803))</visible>')
-    x(d + 1, '<animation effect="fade" time="300">Visible</animation><animation effect="fade" time="150">Hidden</animation>')
-    x(d, '</control>')
+    # Kodi keeps a picture with transparency (a channel's logo) as .png, any other
+    # as .jpg: a picture that is not a JPEG tries both (povil_blurpng), and the
+    # one Kodi did not keep draws nothing
+    for desc, prop in (('jpg', 'povil.blur'), ('png', 'povil.blurpng')):
+        x(d, '<control type="image" description="ambient wash %s">' % desc)
+        x(d + 1, '<left>-60</left><top>-60</top><width>2040</width><height>1200</height>')
+        x(d + 1, '<texture background="true" colordiffuse="FF999999">$INFO[Window(home).Property(%s)]</texture>' % prop)
+        x(d + 1, '<aspectratio>scale</aspectratio><fadetime>600</fadetime>')
+        x(d + 1, '<visible>!String.IsEmpty(Control.GetLabel(9803)) + !String.IsEmpty(Window(home).Property(%s))</visible>' % prop)
+        x(d + 1, '<animation effect="fade" time="300">Visible</animation><animation effect="fade" time="150">Hidden</animation>')
+        x(d, '</control>')
     # Hidden label: the wash the hero wants now (the timer compares it)
     x(d, '<control type="label" id="9803"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_HeroAmbientFile]</label></control>')
+    x(d, '<control type="label" id="9804"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_HeroAmbientPng]</label></control>')
 
 
 def top_bar(x, d):
