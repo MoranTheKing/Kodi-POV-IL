@@ -61,14 +61,22 @@
 			<texture background="true" colordiffuse="01FFFFFF">$VAR[POVIL_HeroAmbient]</texture>
 			<visible>System.IdleTime(1)</visible>
 		</control>
-		<control type="image" description="ambient wash">
+		<control type="image" description="ambient wash jpg">
 			<left>-60</left><top>-60</top><width>2040</width><height>1200</height>
 			<texture background="true" colordiffuse="FF999999">$INFO[Window(home).Property(povil.blur)]</texture>
 			<aspectratio>scale</aspectratio><fadetime>600</fadetime>
-			<visible>!String.IsEmpty(Control.GetLabel(9803))</visible>
+			<visible>!String.IsEmpty(Control.GetLabel(9803)) + !String.IsEmpty(Window(home).Property(povil.blur))</visible>
+			<animation effect="fade" time="300">Visible</animation><animation effect="fade" time="150">Hidden</animation>
+		</control>
+		<control type="image" description="ambient wash png">
+			<left>-60</left><top>-60</top><width>2040</width><height>1200</height>
+			<texture background="true" colordiffuse="FF999999">$INFO[Window(home).Property(povil.blurpng)]</texture>
+			<aspectratio>scale</aspectratio><fadetime>600</fadetime>
+			<visible>!String.IsEmpty(Control.GetLabel(9803)) + !String.IsEmpty(Window(home).Property(povil.blurpng))</visible>
 			<animation effect="fade" time="300">Visible</animation><animation effect="fade" time="150">Hidden</animation>
 		</control>
 		<control type="label" id="9803"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_HeroAmbientFile]</label></control>
+		<control type="label" id="9804"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_HeroAmbientPng]</label></control>
 		<control type="image" description="hero shade">
 			<left>520</left><top>0</top><width>1400</width><height>1080</height>
 			<texture>povil/grad_right.png</texture>
