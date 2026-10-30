@@ -24,7 +24,7 @@ if __name__ == '__main__':
     _handle = int(sys.argv[1])
     _params = sys.argv[2][1:]
 
-    # The Onyx home's favourites row: straight to its module, not the menus
+    # The Onyx home's favourites and live TV rows: straight to their modules, not the menus
     from urllib.parse import parse_qsl
     _query = dict(parse_qsl(_params))
     if _query.get('mode') == 'favourites_row':
@@ -33,6 +33,12 @@ if __name__ == '__main__':
     elif _query.get('mode') == 'favourite_run':
         from resources.libs import favourites_row
         favourites_row.run(_handle, _query)
+    elif _query.get('mode') == 'pvr_row':
+        from resources.libs import pvr_row
+        pvr_row.row(_handle)
+    elif _query.get('mode') == 'pvr_play':
+        from resources.libs import pvr_row
+        pvr_row.play(_handle, _query)
     else:
         from resources.libs.common import router
         dispatcher = router.Router()

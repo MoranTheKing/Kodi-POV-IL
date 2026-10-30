@@ -1,3 +1,7 @@
+0.4.90
+- Onyx: pvr_row.py -- the user's own TV channels (Kodi's PVR, JSON-RPC PVR.GetChannels "alltv", hidden ones left out, the first 200) as a right-to-left home row; a tap plays the channel (mode=pvr_play, Player.Open by channel id). Nothing in a kids profile or without live TV.
+- povil_rtl's blur helper is public (blur_art); the favourites row gives each favourite the Onyx soft wash too.
+
 0.4.89
 - Onyx: a home-row item whose picture is not a JPEG also gets povil_blurpng, the .png name of Kodi's kept small copy (a logo with transparency is kept as .png).
 

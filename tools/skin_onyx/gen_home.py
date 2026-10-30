@@ -114,12 +114,19 @@ TABS = [
                 ('מוסיקה 24', videos(IDAN['music24'])), ('חיפוש', videos(IDAN['idan_search']))]),
     dict(id='live', label='שידור חי', click=videos(IDAN['idan_live']),
          blurb='ערוצי הטלוויזיה והרדיו בשידור חי.',
+         # the user's own live TV (IPTV Simple and the like, Kodi's PVR): a chip and a
+         # row of its channels (the Wizard's pvr_row), both hidden without one
          rows=[('ערוצים', IDAN['idan_live'], 'square', False),
-               ('רדיו', IDAN['radio'], 'square', False)],
-         chips=[('ערוצים', videos(IDAN['idan_live'])), ('רדיו', videos(IDAN['radio'])),
+               ('רדיו', IDAN['radio'], 'square', False),
+               # (p= set once Kodi has its channels: IPTV Simple loads its list after
+               # the start, and a row asked before then would stay empty)
+               ('ערוצי ה-IPTV שלי', WIZARD + '?mode=pvr_row&p=$INFO[Window(home).Property(povil.pvr)]', 'square', True)],
+         chips=[('ערוצים', videos(IDAN['idan_live'])),
+                ('IPTV שלי', 'ActivateWindow(TVChannels)', '[PVR.HasTVChannels | System.HasAddon(pvr.iptvsimple)]'),
+                ('רדיו', videos(IDAN['radio'])),
                 ('ספורט 1', videos(IDAN['sport1'])), ('Eco99', videos(IDAN['eco99'])),
                 ('100FM', videos(IDAN['fm100'])),
-                ('מדריך שידורים', 'ActivateWindow(TVChannels)', 'PVR.HasTVChannels')]),
+                ('מדריך שידורים', 'ActivateWindow(TVGuide)', 'PVR.HasTVChannels')]),
     dict(id='kids', label='ילדים', click=MOVIE_GENRE(10751),
          blurb='סרטים, סדרות ותוכניות לכל המשפחה.',
          rows=[('סרטים לכל המשפחה', pov_movies('tmdb_movies_genres', genre_id=10751), 'poster', False),
@@ -292,6 +299,14 @@ def gen_timers():
     x(2, '<onstart condition="Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.swipe),down)">Action(Down)</onstart>')
     x(2, '<onstart condition="Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.swipe),up)">Action(Up)</onstart>')
     x(2, '<onstart>ClearProperty(povil.swipe,home)</onstart>')
+    x(2, '<stop>true</stop>')
+    x(1, '</timer>')
+    # Kodi's live TV has its channels (IPTV Simple loads them after the start):
+    # the live tab's own-channels row asks again (its p=)
+    x(1, '<timer>')
+    x(2, '<name>povil_pvr</name>')
+    x(2, '<start reset="true">PVR.HasTVChannels + String.IsEmpty(Window(home).Property(povil.pvr))</start>')
+    x(2, '<onstart>SetProperty(povil.pvr,1,home)</onstart>')
     x(2, '<stop>true</stop>')
     x(1, '</timer>')
     # The hero's soft wash takes the chosen item's picture once the screen is still (ambient())
