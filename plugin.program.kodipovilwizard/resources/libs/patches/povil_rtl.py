@@ -30,7 +30,9 @@ Each item of a home row (the 200 nearest its start) also gets the art
 povil_blur: its picture as Kodi itself shrinks it to 10 pixels wide
 (image://<picture>/transform?width=10),
 and povil_blurfile: where Kodi keeps that small copy (special://thumbnails/,
-named by CTextureCache::GetCacheFile). Onyx draws the small copy over the
+named by CTextureCache::GetCacheFile), as .jpg. Kodi keeps a picture with
+transparency (a channel's logo) as .png instead: a picture that is not a JPEG
+also gets povil_blurpng, and Onyx tries both. Onyx draws the small copy over the
 whole screen, a soft wash of the picture's colours, behind an item with no
 backdrop of its own (Keshet's posters, a channel's logo) -- a skin cannot
 build either address itself. Kodi shows a picture full size the first time it
@@ -156,17 +158,17 @@ def _pinned(listitem):
 _BIT_REVERSED = bytes(int('{:08b}'.format(i)[::-1], 2) for i in range(256))
 
 
-def _kodi_cache_file(url):
+def _kodi_cache_file(url, ext='.jpg'):
     """Kodi's name for the copy it keeps of url: CRC-32/MPEG-2 (no final xor) of the
     lower-case address -- zlib's reflected CRC over bit-reversed bytes, reversed."""
     import zlib
     crc = ~zlib.crc32(url.lower().encode('utf-8').translate(_BIT_REVERSED)) & 0xFFFFFFFF
     name = '{:08x}'.format(int('{:032b}'.format(crc)[::-1], 2))
-    return 'special://thumbnails/%s/%s.jpg' % (name[0], name)
+    return 'special://thumbnails/%s/%s%s' % (name[0], name, ext)
 
 
 def _blur(listitem):
-    """povil_blur / povil_blurfile: the item's picture shrunk by Kodi (see above)."""
+    """povil_blur / povil_blurfile / povil_blurpng: the item's picture shrunk by Kodi (see above)."""
     url = ''
     for art in ('thumb', 'poster', 'icon'):
         url = listitem.getArt(art)
@@ -176,7 +178,9 @@ def _blur(listitem):
         return
     from urllib.parse import quote
     small = 'image://%s/transform?width=10' % quote(url, safe='')
-    listitem.setArt({'povil_blur': small, 'povil_blurfile': _kodi_cache_file(small)})
+    base = _kodi_cache_file(small, '')
+    jpeg = url.lower().split('|')[0].split('?')[0].endswith(('.jpg', '.jpeg'))
+    listitem.setArt({'povil_blur': small, 'povil_blurfile': base + '.jpg', 'povil_blurpng': '' if jpeg else base + '.png'})
 
 
 def _wrap(xbmcplugin, state):
