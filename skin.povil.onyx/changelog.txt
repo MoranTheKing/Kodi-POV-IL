@@ -1,3 +1,6 @@
+[B]Kodi POV IL - Onyx 1.0.7[/B]
+- Israeli tab (field report: no summary on Keshet 12, no backdrop on Keshet 12 and Kan 11 like Reshet 13's): once the screen is still on a Keshet or Kan show, the Wizard fetches what Idan Plus leaves out (hero_details) and the hero shows it -- Keshet's summary, its 1920x1080 picture and its Hebrew title logo; Kan's 1920x1080 picture. Label 9805 (POVIL_HeroDetailsKey) names the show, timer povil_details asks; the soft wash gives way to a fetched picture
+
 [B]Kodi POV IL - Onyx 1.0.6[/B]
 - Live tab: the user's own live TV (IPTV Simple and the like, Kodi's PVR) has a chip "IPTV שלי" (Kodi's channels window) and a row of its channels, right to left with their logos' soft wash (the Wizard's pvr_row) -- both hidden without live TV (field report: IPTV set up under Nox "disappeared" in Onyx). "מדריך שידורים" opens Kodi's TV guide
 - Favourites row: the soft wash of each favourite's picture too
