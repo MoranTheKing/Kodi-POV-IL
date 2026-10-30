@@ -131,16 +131,21 @@ class GeneratedXmlTests(unittest.TestCase):
         home = ET.parse(XML / 'Home.xml').getroot()
         images = {c.get('description'): c for c in home.iter('control') if c.get('type') == 'image'}
         self.assertEqual(images['ambient wash: the small copy is made'].findtext('texture'), '$VAR[POVIL_HeroAmbient]')
-        self.assertEqual(images['ambient wash'].findtext('texture'), '$INFO[Window(home).Property(povil.blur)]')
+        self.assertEqual(images['ambient wash jpg'].findtext('texture'), '$INFO[Window(home).Property(povil.blur)]')
+        # Kodi keeps a picture with transparency (channel logos) as .png
+        self.assertEqual(images['ambient wash png'].findtext('texture'), '$INFO[Window(home).Property(povil.blurpng)]')
         timers = ET.parse(XML / 'Timers.xml').getroot()
         timer = next(t for t in timers.iter('timer') if t.findtext('name') == 'povil_blur')
         self.assertIn('System.IdleTime(2)', timer.findtext('start'))
         self.assertEqual(images['ambient wash: the small copy is made'].findtext('visible'), 'System.IdleTime(1)')
-        self.assertEqual(timer.findtext('onstart'), 'SetProperty(povil.blur,$INFO[Control.GetLabel(9803)],home)')
+        self.assertEqual([n.text for n in timer.findall('onstart')],
+                         ['SetProperty(povil.blur,$INFO[Control.GetLabel(9803)],home)',
+                          'SetProperty(povil.blurpng,$INFO[Control.GetLabel(9804)],home)'])
         includes = (XML / 'Includes_POVIL_Home.xml').read_text(encoding='utf-8')
         self.assertIn('!System.HasModalDialog', timer.findtext('start'), 'a dialog over the home reads no 9803')
         root = ET.fromstring('<r>%s</r>' % includes.split('<includes>', 1)[1].rsplit('</includes>', 1)[0])
-        for name, art in (('POVIL_HeroAmbient', 'povil_blur'), ('POVIL_HeroAmbientFile', 'povil_blurfile')):
+        for name, art in (('POVIL_HeroAmbient', 'povil_blur'), ('POVIL_HeroAmbientFile', 'povil_blurfile'),
+                          ('POVIL_HeroAmbientPng', 'povil_blurpng')):
             values = [(v.get('condition') or '', v.text or '') for v in root.find("variable[@name='%s']" % name)]
             self.assertTrue(any('ListItem.Art(%s)' % art in t for _c, t in values))
             self.assertFalse(any('Container(5032)' in t for _c, t in values), 'a landscape row has a backdrop of its own')
@@ -167,6 +172,17 @@ class GeneratedXmlTests(unittest.TestCase):
                             for c in empty), 'the placeholder stays up while it retries')
         self.assertTrue(any(c.startswith('!String.IsEmpty(') and '+ String.IsEqual(Window(home).Property(povil.retry.5011),2)' in c
                             for c in empty), '"nothing here" only once the retries are spent')
+
+    def test_the_player_buttons_reach_each_other(self):
+        # Kodi links a grouplist's items by id: a gap without one ended the chain, and
+        # left / right fell through to the video and seeked (field report: "only 10 seconds")
+        osd = ET.parse(XML / 'VideoOSD.xml').getroot()
+        row = next(c for c in osd.iter('control') if c.get('id') == '7000')
+        self.assertEqual((row.findtext('onleft'), row.findtext('onright')), ('7000', '7000'))
+        children = [c for c in row if c.tag == 'control']
+        self.assertTrue(children)
+        self.assertTrue(all(c.get('id') for c in children))
+        self.assertIn('7024', [c.get('id') for c in children])
 
     def test_conditions_group_with_brackets(self):
         # Kodi groups a condition with [ ] only; "!(" splits it into broken parts
@@ -283,12 +299,16 @@ class RtlPatchTests(unittest.TestCase):
 
     def test_home_row_items_carry_their_picture_shrunk_by_kodi(self):
         thumb = 'https://raw.githubusercontent.com/Fishenzon/repo/master/plugin.video.idanplus/images/kan.jpg'
-        _calls, items = self._run('?mode=1&povil_rtl=1', pov=False, thumbs={0: thumb},
+        logo = 'https://raw.githubusercontent.com/Fishenzon/repo/master/plugin.video.idanplus/images/88fm.png'
+        _calls, items = self._run('?mode=1&povil_rtl=1', pov=False, thumbs={0: thumb, 2: logo},
                                   argv0='plugin://plugin.video.idanplus/')
         small = ('image://https%3A%2F%2Fraw.githubusercontent.com%2FFishenzon%2Frepo%2Fmaster%2Fplugin.video.idanplus'
                  '%2Fimages%2Fkan.jpg/transform?width=10')
         self.assertEqual(items[0].art['povil_blur'], small)
         self.assertTrue(items[0].art['povil_blurfile'].startswith('special://thumbnails/'))
+        self.assertTrue(items[0].art['povil_blurfile'].endswith('.jpg'))
+        self.assertEqual(items[0].art['povil_blurpng'], '', 'a JPEG is never kept as .png')
+        self.assertEqual(items[2].art['povil_blurpng'], items[2].art['povil_blurfile'][:-4] + '.png')
         self.assertNotIn('povil_blur', items[1].art, 'no picture, nothing to shrink')
         sys.path.insert(0, str(PATCHES))
         try:

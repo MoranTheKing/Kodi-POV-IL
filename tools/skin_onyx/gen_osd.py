@@ -95,9 +95,15 @@ def gen():
     # Buttons
     x(3, '<control type="grouplist" id="7000"><left>%d</left><top>924</top><width>%d</width><height>96</height>' % (H.MARGIN, w))
     x(4, '<orientation>horizontal</orientation><align>center</align><itemgap>20</itemgap>')
+    # The ends wrap round: an action no button takes falls through to the video
+    # underneath, where left / right seek (field report: "it only skips 10 seconds")
+    x(4, '<onleft>7000</onleft><onright>7000</onright>')
+    gaps = iter(range(7090, 7100))
     for b in BUTTONS:
         if b is None:
-            x(4, '<control type="image"><width>56</width><height>96</height><texture></texture></control>')
+            # Kodi links a grouplist's items by their ids and passes over one that
+            # cannot take the focus -- a gap without an id ended the chain there
+            x(4, '<control type="image" id="%d"><width>56</width><height>96</height><texture></texture></control>' % next(gaps))
             continue
         bid, icon, name, clicks, vis = b
         kind = 'togglebutton' if icon == 'pause' else 'button'

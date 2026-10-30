@@ -1,3 +1,6 @@
+0.4.89
+- Onyx: a home-row item whose picture is not a JPEG also gets povil_blurpng, the .png name of Kodi's kept small copy (a logo with transparency is kept as .png).
+
 0.4.88
 - Onyx: each item of a home row (the 200 nearest its start) carries its picture shrunk by Kodi to 10 pixels (art povil_blur, image://.../transform?width=10) and where Kodi keeps that copy (povil_blurfile, Kodi's own CRC name): Onyx draws it as a soft wash behind items with no backdrop of their own.
 
