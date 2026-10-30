@@ -9,8 +9,11 @@ thousands) and lists them last first, each marked povil_rtl=1, so the skin
 starts the row on the first channel, on the right. Each carries what is on
 now as its plot, and the Onyx soft wash of its logo (povil_rtl.blur_art).
 
-A tap plays the channel (mode=pvr_play: Player.Open by channel id). No live
-TV, or a kids profile: an empty row, which Onyx hides.
+A tap plays the channel (mode=pvr_play: Player.Open by channel id), once Kodi
+still knows it (PVR.GetChannelDetails): Kodi 21 crashes on Player.Open for a
+channel id while it has no live TV (checked in the QA Kodi) -- a row shown
+before the live TV went away. No live TV, or a kids profile: an empty row,
+which Onyx hides.
 
 default.py hands both modes here before the Wizard's router: a home row
 should not pay for the Wizard's menus.
@@ -105,4 +108,6 @@ def play(handle, params):
         channel_id = int(params.get('id', ''))
     except ValueError:
         return
+    if not _rpc('PVR.GetChannelDetails', {'channelid': channel_id}):
+        return      # no live TV now: Player.Open would bring Kodi down (see above)
     _rpc('Player.Open', {'item': {'channelid': channel_id}})
