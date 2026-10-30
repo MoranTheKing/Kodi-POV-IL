@@ -309,6 +309,16 @@ def gen_timers():
     x(2, '<onstart>SetProperty(povil.pvr,1,home)</onstart>')
     x(2, '<stop>true</stop>')
     x(1, '</timer>')
+    # The Wizard fetches what the hero lacks for the Israeli show on screen
+    # (hero_details.py) once the screen is still; $ESCINFO: the path holds commas
+    x(1, '<timer>')
+    x(2, '<name>povil_details</name>')
+    x(2, '<start reset="true">Window.IsActive(home) + !System.HasModalDialog + System.IdleTime(1) + !String.IsEmpty(Control.GetLabel(9805)) + '
+         '!String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.key))</start>')
+    x(2, '<onstart>SetProperty(povil.details.key,$ESCINFO[Control.GetLabel(9805)],home)</onstart>')
+    x(2, '<onstart>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=hero_details)</onstart>')
+    x(2, '<stop>true</stop>')
+    x(1, '</timer>')
     # The hero's soft wash takes the chosen item's picture once the screen is still (ambient())
     x(1, '<timer>')
     x(2, '<name>povil_blur</name>')
@@ -446,11 +456,32 @@ def gen_includes():
 
     tab_titles = [(tab_cond(t), t['label']) for t in TABS]
     tab_blurbs = [(tab_cond(t), t['blurb']) for t in TABS]
+    more_page = '![String.Contains(Container(%d).ListItem.FolderPath,new_page=) | String.Contains(Container(%d).ListItem.FolderPath,Page&amp;url=)]'
+
+    # What the Wizard fetched for the Israeli show on screen (hero_details.py): Keshet
+    # 12's summary, picture and logo, Kan 11's picture -- Idan Plus lists them with the
+    # name as the plot and the poster as the backdrop. Label 9805 names the item that
+    # wants them (POVIL_HeroDetailsKey), timer povil_details asks for them.
+    detail_rows = {row_id(ti, ri) for ti, tab in enumerate(TABS) for ri, row in enumerate(tab['rows'])
+                   if row[1] in (IDAN_KESHET_VOD, IDAN_KAN_VOD)}
+    details = 'String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for))'
+
+    def detail(field):
+        x(2, '<value condition="%s + !String.IsEmpty(Window(home).Property(povil.details.%s))">$INFO[Window(home).Property(povil.details.%s)]</value>'
+          % (details, field, field))
+
+    x(1, '<variable name="POVIL_HeroDetailsKey">')
+    for cond, cid in sources:
+        if cid in detail_rows:
+            x(2, '<value condition="%s + %s">$INFO[Container(%d).ListItem.FolderPath]</value>' % (cond, more_page % (cid, cid), cid))
+        x(2, '<value condition="%s"></value>' % cond)
+    x(1, '</variable>')
     # Backdrop: fanart, else a landscape / thumb (Israeli VOD), else nothing (the ambient base shows).
     x(1, '<variable name="POVIL_HeroFanart">')
+    detail('fanart')
     for cond, cid in sources:
         if kinds[cid] == 'square':
-            continue  # channel logos and icons: the ambient backdrop, never a stretched logo
+            continue  # channel logos and icons: the ambient wash, never a stretched logo
         # A poster row's thumb is its poster, and a "fanart" that is the thumb again
         # (Idan Plus: Keshet's 420x600 posters) would fill the screen ~250% enlarged:
         # the ambient backdrop then
@@ -466,9 +497,11 @@ def gen_includes():
     for name, art in (('POVIL_HeroAmbient', 'povil_blur'), ('POVIL_HeroAmbientFile', 'povil_blurfile'),
                       ('POVIL_HeroAmbientPng', 'povil_blurpng')):
         x(1, '<variable name="%s">' % name)
+        # a picture the Wizard fetched (hero_details) is a real backdrop: no wash then
+        x(2, '<value condition="%s + !String.IsEmpty(Window(home).Property(povil.details.fanart))"></value>' % details)
         for cond, cid in sources:
             if kinds[cid] != 'landscape':  # a landscape row always has its own backdrop
-                more = '![String.Contains(Container(%d).ListItem.FolderPath,new_page=) | String.Contains(Container(%d).ListItem.FolderPath,Page&amp;url=)]' % (cid, cid)
+                more = more_page % (cid, cid)
                 own = ''
                 if kinds[cid] == 'poster':
                     own = (' + [String.IsEmpty(Container(%d).ListItem.Art(fanart)) | String.IsEqual(Container(%d).ListItem.Art(fanart),Container(%d).ListItem.Art(thumb))]'
@@ -478,8 +511,13 @@ def gen_includes():
             # to the tab's first row (the fallback below) and wash over Reshet's backdrop
             x(2, '<value condition="%s"></value>' % cond)
         x(1, '</variable>')
-    # Only a logo that suits a Hebrew screen (POV's povil_logo art); else the title is written
-    var('POVIL_HeroLogo', '$INFO[Container(%(c)d).ListItem.Art(povil_logo)]')
+    # Only a logo that suits a Hebrew screen (POV's povil_logo art, Keshet's own Hebrew
+    # title logo); else the title is written
+    x(1, '<variable name="POVIL_HeroLogo">')
+    detail('logo')
+    for cond, cid in sources:
+        x(2, '<value condition="%s">$INFO[Container(%d).ListItem.Art(povil_logo)]</value>' % (cond, cid))
+    x(1, '</variable>')
     x(1, '<variable name="POVIL_HeroTitle">')
     for cond, cid in sources:
         x(2, '<value condition="%s + [String.Contains(Container(%d).ListItem.FolderPath,new_page=) | String.Contains(Container(%d).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>' % (cond, cid, cid))
@@ -506,6 +544,7 @@ def gen_includes():
         x(2, '<value condition="%s + Integer.IsGreater(Container(%d).ListItem.Rating,0)">$INFO[Container(%d).ListItem.Rating]</value>' % (cond, cid, cid))
     x(1, '</variable>')
     x(1, '<variable name="POVIL_HeroPlot">')
+    detail('plot')
     for cond, cid in sources:
         x(2, '<value condition="%s + !String.IsEmpty(Container(%d).ListItem.Plot) + !String.IsEqual(Container(%d).ListItem.Plot,Container(%d).ListItem.Label)">$INFO[Container(%d).ListItem.Plot]</value>' % (cond, cid, cid, cid, cid))
         x(2, '<value condition="%s + !String.IsEmpty(Container(%d).ListItem.PlotOutline)">$INFO[Container(%d).ListItem.PlotOutline]</value>' % (cond, cid, cid))
@@ -910,6 +949,8 @@ def hero(x, d):
     x(d + 1, '</control>')
     # Hidden label: tells the title whether a logo exists
     x(d + 1, '<control type="label" id="9800"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_HeroLogo]</label></control>')
+    # Hidden label: the Israeli show the hero wants details for (timer povil_details)
+    x(d + 1, '<control type="label" id="9805"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_HeroDetailsKey]</label></control>')
     x(d + 1, '<control type="label" description="episode">')
     x(d + 2, '<left>%d</left><top>322</top><width>1100</width><height>34</height>' % (right - 1100))
     x(d + 2, '<font>povil_meta_bold</font><textcolor>%s</textcolor><align>right</align><aligny>center</aligny>' % GOLD)
