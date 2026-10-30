@@ -1,3 +1,7 @@
+[B]Kodi POV IL - Onyx 1.0.5[/B]
+- Player: left / right walk the whole button row again, to the subtitles and back (field report: they only seeked 10 seconds). Kodi links a grouplist's buttons by id, and the gaps between the groups had none, so the chain ended there and the key fell through to the video; the gaps have ids now, and the row wraps round at its ends
+- The soft wash also for pictures Kodi keeps as .png (channel and station logos with transparency: 15 of 49 channels, 16 of 35 stations): a picture that is not a JPEG tries both copies (field report: some items had no background)
+
 [B]Kodi POV IL - Onyx 1.0.4[/B]
 - Phones: a swipe that starts on the hero (outside every row) moves a row again: the touch took the focus away, and the move went to the first tab (field report: going down was nearly impossible). The home remembers its focused control (Window(home).Property(povil.focus)); a swipe gives the focus back first, and while nothing has the focus the rows and the hero stay where they were
 - Israeli and live tabs: an item with no backdrop of its own (Keshet's posters, a channel's or a station's logo) shows a soft wash of its picture's colours behind the hero: the picture shrunk by Kodi to 10 pixels (the Wizard's povil_blur / povil_blurfile), drawn once the screen has been still for two seconds, never under a dialog (field report: no background there, unlike movies and shows)

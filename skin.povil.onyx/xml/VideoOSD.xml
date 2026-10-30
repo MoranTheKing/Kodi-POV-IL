@@ -26,6 +26,7 @@
 			</control>
 			<control type="grouplist" id="7000"><left>90</left><top>924</top><width>1740</width><height>96</height>
 				<orientation>horizontal</orientation><align>center</align><itemgap>20</itemgap>
+				<onleft>7000</onleft><onright>7000</onright>
 				<control type="button" id="7010">
 					<width>84</width><height>84</height><top>6</top>
 					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/stop.png</texturenofocus>
@@ -47,7 +48,7 @@
 					<label></label>
 					<onclick>ActivateWindow(OSDVideoSettings)</onclick>
 				</control>
-				<control type="image"><width>56</width><height>96</height><texture></texture></control>
+				<control type="image" id="7090"><width>56</width><height>96</height><texture></texture></control>
 				<control type="button" id="7002">
 					<width>84</width><height>84</height><top>6</top>
 					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/skipback.png</texturenofocus>
@@ -76,7 +77,7 @@
 					<onclick>Seek(30)</onclick>
 					<visible>Player.SeekEnabled</visible>
 				</control>
-				<control type="image"><width>56</width><height>96</height><texture></texture></control>
+				<control type="image" id="7091"><width>56</width><height>96</height><texture></texture></control>
 				<control type="button" id="7020">
 					<width>84</width><height>84</height><top>6</top>
 					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/episodes.png</texturenofocus>
