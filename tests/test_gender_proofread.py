@@ -146,11 +146,12 @@ class Wiring(unittest.TestCase):
         self.assertLess(src.index('_proofed = _proofread_gender(_proof_blocks)', run),
                         src.index("progressive_cb('done'", run))
         self.assertIn("'merged_text': final", src[run:run + 900])
-        call = src[src.index('def _proofread_gender'):src.index('    final = srt.stitch_blocks(out_blocks)')]
+        wrap = src[src.index('    def _proofread_gender(blocks):'):src.index('    final = srt.stitch_blocks(out_blocks)')]
+        self.assertIn('_proofread_stopper(_progressive_source_id, _translation_cancelled)', wrap)
+        call = src[src.index('def _run_gender_proofread'):src.index('def _title_cast')]
         # the usage figure counts it only when the model IS the translator's
         self.assertIn('count_usage=(proof_model == model)', call)
         self.assertIn('except gemini.GeminiError:', call)
-        self.assertIn('_translation_cancelled()', call)
         self.assertIn('gender_proofread.note_exhausted(proof_model, kodi_utils)', call)
         self.assertNotIn('gemini_quota.note_exhausted', call)
         gem = (LIB / 'gemini.py').read_text(encoding='utf-8').replace('\r\n', '\n')
@@ -158,6 +159,33 @@ class Wiring(unittest.TestCase):
                       '            gemini_quota.note_request(model)', gem)
         settings = (LIB.parent / 'settings.xml').read_text(encoding='utf-8')
         self.assertIn('<setting id="gender_proofread" type="boolean" label="32556" help="32557">', settings)
+        # marked when a model answered; the pool upload says it is proofread
+        self.assertIn("        if _gp_report.get('model'):\n"
+                      "            # proofread: opening it again spends no request\n"
+                      "            _gp_mark(translated)", src)
+        self.assertIn("proofread=bool(_gp_report.get('model')))", src)
+
+    def test_opened_translations_get_it_once_and_never_a_translation(self):
+        src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        res = src[src.index('def resolve('):]
+        # the two cache hits and the pool reuse go through it
+        self.assertEqual(res.count('_opened = _open_with_proofread('), 3)
+        self.assertEqual(res.count('if _opened or _proofread_only:'), 2)
+        # proofread_later's job never translates
+        self.assertIn('    if _proofread_only:\n'
+                      '        return None     # nothing cached to proofread; it never translates\n\n'
+                      '    # No hit: settle on the early-source-id slot', res)
+        self.assertIn("        if _proofread_only:\n            payload['proofread_only'] = True", res)
+        # its job is quiet, and nothing corrected is no failure
+        self.assertIn("    if _proofread_only:\n        set_quiet(True)", res)
+        bg = (LIB.parents[1] / 'default.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        self.assertIn("    if not _resolved and not (translate._decode_link(link) or {}).get(\n"
+                      "            'proofread_only'):", bg)
+        # what launches it after a pick shown without a live preview
+        for rel, needle in (('default.py', 'translate.proofread_later(link, _timing_selection)'),
+                            ('resources/lib/subs_chooser.py', '_t.proofread_later(link, timing_selection)'),
+                            ('resources/lib/autosub_service.py', 'translate.proofread_later(chosen_link, selection)')):
+            self.assertIn(needle, (LIB.parents[1] / rel).read_text(encoding='utf-8'), rel)
 
 
 if __name__ == '__main__':
