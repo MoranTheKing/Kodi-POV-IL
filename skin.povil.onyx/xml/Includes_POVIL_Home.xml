@@ -8,10 +8,10 @@
 		<value condition="[Control.HasFocus(5021) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5021)]]"></value>
 		<value condition="[Control.HasFocus(5022) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5022)]]"></value>
 		<value condition="[Control.HasFocus(5023) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5023)]]"></value>
-		<value condition="[Control.HasFocus(5031) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5031)]] + ![String.Contains(Container(5031).ListItem.FolderPath,new_page=) | String.Contains(Container(5031).ListItem.FolderPath,Page&amp;url=)]">$INFO[Container(5031).ListItem.FolderPath]</value>
+		<value condition="[Control.HasFocus(5031) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5031)]] + ![String.Contains(Container(5031).ListItem.FolderPath,new_page=) | String.Contains(Container(5031).ListItem.FolderPath,Page&amp;url=)] + String.IsEqual(Container(5031).ListItem.Art(fanart),Container(5031).ListItem.Art(thumb))">$INFO[Container(5031).ListItem.FolderPath]</value>
 		<value condition="[Control.HasFocus(5031) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5031)]]"></value>
 		<value condition="[Control.HasFocus(5032) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5032)]]"></value>
-		<value condition="[Control.HasFocus(5033) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5033)]] + ![String.Contains(Container(5033).ListItem.FolderPath,new_page=) | String.Contains(Container(5033).ListItem.FolderPath,Page&amp;url=)]">$INFO[Container(5033).ListItem.FolderPath]</value>
+		<value condition="[Control.HasFocus(5033) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5033)]] + ![String.Contains(Container(5033).ListItem.FolderPath,new_page=) | String.Contains(Container(5033).ListItem.FolderPath,Page&amp;url=)] + String.IsEqual(Container(5033).ListItem.Art(fanart),Container(5033).ListItem.Art(thumb))">$INFO[Container(5033).ListItem.FolderPath]</value>
 		<value condition="[Control.HasFocus(5033) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5033)]]"></value>
 		<value condition="[Control.HasFocus(5041) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5041)]]"></value>
 		<value condition="[Control.HasFocus(5042) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5042)]]"></value>
@@ -29,7 +29,43 @@
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv)"></value>
-		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli) + ![String.Contains(Container(5031).ListItem.FolderPath,new_page=) | String.Contains(Container(5031).ListItem.FolderPath,Page&amp;url=)]">$INFO[Container(5031).ListItem.FolderPath]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli) + ![String.Contains(Container(5031).ListItem.FolderPath,new_page=) | String.Contains(Container(5031).ListItem.FolderPath,Page&amp;url=)] + String.IsEqual(Container(5031).ListItem.Art(fanart),Container(5031).ListItem.Art(thumb))">$INFO[Container(5031).ListItem.FolderPath]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),live)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),kids)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
+	</variable>
+	<variable name="POVIL_HeroDetailsNear">
+		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]]"></value>
+		<value condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]]"></value>
+		<value condition="[Control.HasFocus(5013) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5013)]]"></value>
+		<value condition="[Control.HasFocus(5021) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5021)]]"></value>
+		<value condition="[Control.HasFocus(5022) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5022)]]"></value>
+		<value condition="[Control.HasFocus(5023) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5023)]]"></value>
+		<value condition="[Control.HasFocus(5031) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5031)]]">$INFO[Container(5031).ListItem(-2).FolderPath] $INFO[Container(5031).ListItem(-1).FolderPath] $INFO[Container(5031).ListItem(1).FolderPath] $INFO[Container(5031).ListItem(2).FolderPath]</value>
+		<value condition="[Control.HasFocus(5031) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5031)]]"></value>
+		<value condition="[Control.HasFocus(5032) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5032)]]"></value>
+		<value condition="[Control.HasFocus(5033) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5033)]]">$INFO[Container(5033).ListItem(-2).FolderPath] $INFO[Container(5033).ListItem(-1).FolderPath] $INFO[Container(5033).ListItem(1).FolderPath] $INFO[Container(5033).ListItem(2).FolderPath]</value>
+		<value condition="[Control.HasFocus(5033) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5033)]]"></value>
+		<value condition="[Control.HasFocus(5041) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5041)]]"></value>
+		<value condition="[Control.HasFocus(5042) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5042)]]"></value>
+		<value condition="[Control.HasFocus(5043) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5043)]]"></value>
+		<value condition="[Control.HasFocus(5051) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5051)]]"></value>
+		<value condition="[Control.HasFocus(5052) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5052)]]"></value>
+		<value condition="[Control.HasFocus(5053) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5053)]]"></value>
+		<value condition="[Control.HasFocus(5061) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5061)]]"></value>
+		<value condition="[Control.HasFocus(5062) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5062)]]"></value>
+		<value condition="[Control.HasFocus(5063) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5063)]]"></value>
+		<value condition="[Control.HasFocus(5064) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5064)]]"></value>
+		<value condition="[Control.HasFocus(5065) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5065)]]"></value>
+		<value condition="[Control.HasFocus(5071) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5071)]]"></value>
+		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]"></value>
+		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli)">$INFO[Container(5031).ListItem(-2).FolderPath] $INFO[Container(5031).ListItem(-1).FolderPath] $INFO[Container(5031).ListItem(1).FolderPath] $INFO[Container(5031).ListItem(2).FolderPath]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),live)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),kids)"></value>
@@ -38,7 +74,11 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
 	</variable>
 	<variable name="POVIL_HeroFanart">
-		<value condition="String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))">$INFO[Window(home).Property(povil.details.fanart)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))">$INFO[Window(home).Property(povil.details.fanart)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.1.for)) + !String.IsEmpty(Window(home).Property(povil.details.1.fanart))">$INFO[Window(home).Property(povil.details.1.fanart)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.2.for)) + !String.IsEmpty(Window(home).Property(povil.details.2.fanart))">$INFO[Window(home).Property(povil.details.2.fanart)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.3.for)) + !String.IsEmpty(Window(home).Property(povil.details.3.fanart))">$INFO[Window(home).Property(povil.details.3.fanart)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.4.for)) + !String.IsEmpty(Window(home).Property(povil.details.4.fanart))">$INFO[Window(home).Property(povil.details.4.fanart)]</value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5011).ListItem.Art(fanart)) + !String.IsEqual(Container(5011).ListItem.Art(fanart),Container(5011).ListItem.Art(thumb))">$INFO[Container(5011).ListItem.Art(fanart)]</value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5011).ListItem.Art(landscape)) + !String.IsEqual(Container(5011).ListItem.Art(landscape),Container(5011).ListItem.Art(thumb))">$INFO[Container(5011).ListItem.Art(landscape)]</value>
 		<value condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]] + ![String.Contains(Container(5012).ListItem.FolderPath,new_page=) | String.Contains(Container(5012).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5012).ListItem.Art(fanart))">$INFO[Container(5012).ListItem.Art(fanart)]</value>
@@ -87,7 +127,11 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),kids) + ![String.Contains(Container(5051).ListItem.FolderPath,new_page=) | String.Contains(Container(5051).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5051).ListItem.Art(landscape)) + !String.IsEqual(Container(5051).ListItem.Art(landscape),Container(5051).ListItem.Art(thumb))">$INFO[Container(5051).ListItem.Art(landscape)]</value>
 	</variable>
 	<variable name="POVIL_HeroAmbient">
-		<value condition="String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.1.for)) + !String.IsEmpty(Window(home).Property(povil.details.1.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.2.for)) + !String.IsEmpty(Window(home).Property(povil.details.2.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.3.for)) + !String.IsEmpty(Window(home).Property(povil.details.3.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.4.for)) + !String.IsEmpty(Window(home).Property(povil.details.4.fanart))"></value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5011).ListItem.Art(fanart)) | String.IsEqual(Container(5011).ListItem.Art(fanart),Container(5011).ListItem.Art(thumb))] + String.IsEmpty(Container(5011).ListItem.Art(landscape))">$INFO[Container(5011).ListItem.Art(povil_blur)]</value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]]"></value>
 		<value condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]]"></value>
@@ -146,7 +190,11 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
 	</variable>
 	<variable name="POVIL_HeroAmbientFile">
-		<value condition="String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.1.for)) + !String.IsEmpty(Window(home).Property(povil.details.1.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.2.for)) + !String.IsEmpty(Window(home).Property(povil.details.2.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.3.for)) + !String.IsEmpty(Window(home).Property(povil.details.3.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.4.for)) + !String.IsEmpty(Window(home).Property(povil.details.4.fanart))"></value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5011).ListItem.Art(fanart)) | String.IsEqual(Container(5011).ListItem.Art(fanart),Container(5011).ListItem.Art(thumb))] + String.IsEmpty(Container(5011).ListItem.Art(landscape))">$INFO[Container(5011).ListItem.Art(povil_blurfile)]</value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]]"></value>
 		<value condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]]"></value>
@@ -205,7 +253,11 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
 	</variable>
 	<variable name="POVIL_HeroAmbientPng">
-		<value condition="String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.1.for)) + !String.IsEmpty(Window(home).Property(povil.details.1.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.2.for)) + !String.IsEmpty(Window(home).Property(povil.details.2.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.3.for)) + !String.IsEmpty(Window(home).Property(povil.details.3.fanart))"></value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.4.for)) + !String.IsEmpty(Window(home).Property(povil.details.4.fanart))"></value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5011).ListItem.Art(fanart)) | String.IsEqual(Container(5011).ListItem.Art(fanart),Container(5011).ListItem.Art(thumb))] + String.IsEmpty(Container(5011).ListItem.Art(landscape))">$INFO[Container(5011).ListItem.Art(povil_blurpng)]</value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]]"></value>
 		<value condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]]"></value>
@@ -264,7 +316,11 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
 	</variable>
 	<variable name="POVIL_HeroLogo">
-		<value condition="String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.logo))">$INFO[Window(home).Property(povil.details.logo)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.logo))">$INFO[Window(home).Property(povil.details.logo)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.1.for)) + !String.IsEmpty(Window(home).Property(povil.details.1.logo))">$INFO[Window(home).Property(povil.details.1.logo)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.2.for)) + !String.IsEmpty(Window(home).Property(povil.details.2.logo))">$INFO[Window(home).Property(povil.details.2.logo)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.3.for)) + !String.IsEmpty(Window(home).Property(povil.details.3.logo))">$INFO[Window(home).Property(povil.details.3.logo)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.4.for)) + !String.IsEmpty(Window(home).Property(povil.details.4.logo))">$INFO[Window(home).Property(povil.details.4.logo)]</value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]]">$INFO[Container(5011).ListItem.Art(povil_logo)]</value>
 		<value condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]]">$INFO[Container(5012).ListItem.Art(povil_logo)]</value>
 		<value condition="[Control.HasFocus(5013) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5013)]]">$INFO[Container(5013).ListItem.Art(povil_logo)]</value>
@@ -562,7 +618,11 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + Integer.IsGreater(Container(5081).ListItem.Rating,0)">$INFO[Container(5081).ListItem.Rating]</value>
 	</variable>
 	<variable name="POVIL_HeroPlot">
-		<value condition="String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.plot))">$INFO[Window(home).Property(povil.details.plot)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.plot))">$INFO[Window(home).Property(povil.details.plot)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.1.for)) + !String.IsEmpty(Window(home).Property(povil.details.1.plot))">$INFO[Window(home).Property(povil.details.1.plot)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.2.for)) + !String.IsEmpty(Window(home).Property(povil.details.2.plot))">$INFO[Window(home).Property(povil.details.2.plot)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.3.for)) + !String.IsEmpty(Window(home).Property(povil.details.3.plot))">$INFO[Window(home).Property(povil.details.3.plot)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.4.for)) + !String.IsEmpty(Window(home).Property(povil.details.4.plot))">$INFO[Window(home).Property(povil.details.4.plot)]</value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + !String.IsEmpty(Container(5011).ListItem.Plot) + !String.IsEqual(Container(5011).ListItem.Plot,Container(5011).ListItem.Label)">$INFO[Container(5011).ListItem.Plot]</value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + !String.IsEmpty(Container(5011).ListItem.PlotOutline)">$INFO[Container(5011).ListItem.PlotOutline]</value>
 		<value condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]] + !String.IsEmpty(Container(5012).ListItem.Plot) + !String.IsEqual(Container(5012).ListItem.Plot,Container(5012).ListItem.Label)">$INFO[Container(5012).ListItem.Plot]</value>

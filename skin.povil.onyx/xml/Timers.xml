@@ -379,8 +379,16 @@
 	<timer>
 		<name>povil_details</name>
 		<start reset="true">Window.IsActive(home) + !System.HasModalDialog + System.IdleTime(1) + !String.IsEmpty(Control.GetLabel(9805)) + !String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.key))</start>
+		<onstart>SetProperty(povil.details.near,$ESCINFO[Control.GetLabel(9806)],home)</onstart>
 		<onstart>SetProperty(povil.details.key,$ESCINFO[Control.GetLabel(9805)],home)</onstart>
 		<onstart>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=hero_details)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_details_warm</name>
+		<start reset="true">Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.tab),israeli) + String.IsEmpty(Window(home).Property(povil.details.warm))</start>
+		<onstart>SetProperty(povil.details.warm,1,home)</onstart>
+		<onstart>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=hero_warm)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
