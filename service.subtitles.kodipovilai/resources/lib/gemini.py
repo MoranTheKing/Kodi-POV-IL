@@ -453,8 +453,11 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
 def generate(api_key, model, prompt, temperature=0.2,
              max_output_tokens=16384, top_p=None,
              thinking_budget=None, thinking_level=None,
-             timeout=REQUEST_TIMEOUT):
+             timeout=REQUEST_TIMEOUT, count_usage=True):
     """One-shot text generation. Returns the model's text response.
+
+    count_usage=False leaves the daily-usage counter alone: it holds ONE
+    model, the translator's, and a call to another model would restart it.
 
     Raises QuotaExceeded on 429, InvalidKey on 400/403, GeminiError
     on anything else."""
@@ -541,10 +544,11 @@ def generate(api_key, model, prompt, temperature=0.2,
     # bug here can never break translation. We only count successful
     # responses (i.e. after all the error branches above), and the
     # tracker itself decides which models to actually record.
-    try:
-        from . import gemini_quota
-        gemini_quota.note_request(model)
-    except Exception:
-        pass
+    if count_usage:
+        try:
+            from . import gemini_quota
+            gemini_quota.note_request(model)
+        except Exception:
+            pass
 
     return text

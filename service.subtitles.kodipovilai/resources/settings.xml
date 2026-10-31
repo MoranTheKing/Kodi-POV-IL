@@ -200,6 +200,11 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <setting id="gender_proofread" type="boolean" label="32556" help="32557"> <!-- gender proofread by a stronger model -->
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
         <setting id="subs_notifications" type="boolean" label="32542" help="32543"> <!-- Show subtitle/translation notifications -->
           <level>0</level>
           <default>true</default>
