@@ -80,7 +80,9 @@ class StandalonePackage(unittest.TestCase):
         names = {r.as_posix() for r in shipped()}
         for required in ('addon.xml', 'default.py', 'service.py', 'resources/settings.xml',
                          'resources/lib/translate.py', 'resources/lib/subs_engine_bridge.py',
-                         'resources/lib/gender_guard.py', 'resources/lib/srt_wire.py'):
+                         'resources/lib/gender_guard.py', 'resources/lib/srt_wire.py',
+                         # imported inside a try: the guard above cannot see it missing
+                         'resources/lib/gender_proofread.py'):
             self.assertIn(required, names)
 
     def test_left_out_modules_are_reached_only_inside_try(self):
