@@ -2546,11 +2546,29 @@ def _inline_reasoning(body, source_clean, strong_only=False):
     said = [p for p in said if p not in source_clean]
     if said and (not strong_only or len(said) > 1 or _ANSWER_LABEL_RE.search(plain)):
         return True
+    if _redraft_arrow(plain) and not _SOURCE_ARROW_RE.search(source_clean):
+        return True
     return bool(_DRAFTS_RE.search(plain)) and '/' not in source_clean
 
 
+_MID_ARROW_RE = re.compile(r'\s(?:-+>|=>|→)\s*')
+_HE_WORDS_RE = re.compile('[א-ת]+')
+
+
+def _redraft_arrow(plain):
+    """An arrow mid-line to Hebrew the cue already says before it -- the line
+    drafted again after a note ("?ולמה שאעשה זאת / ?[Lama she-e'ese zot?] ->
+    ולמה שאעשה זאת", QA 31 Oct 2026). An arrow to new words is dialogue."""
+    for m in _MID_ARROW_RE.finditer(plain):
+        after = ' '.join(_HE_WORDS_RE.findall(plain[m.end():].split('\n')[0]))
+        before = ' '.join(_HE_WORDS_RE.findall(plain[:m.start()]))
+        if len(after.split()) >= 2 and ' %s ' % after in ' %s ' % before:
+            return True
+    return False
+
+
 _QUOTED_LINE_RE = re.compile('^["“”״](.+)["“”״]([.!?,…]*)$')
-_LINE_LEAD_PUNCT_RE = re.compile('^([.,!?…]+)(?=[א-ת]|\\s*(?:-+>|=>|→))')
+_LINE_LEAD_PUNCT_RE = re.compile('^([.,!?…]+)(?=[א-ת]|\\s*(?:-+>|=>|→|[\\[(]))')
 _OPEN_QUOTE_END_RE = re.compile('(?:^|\\s)["“”״\']\\s*$')
 _SENTENCE_END = tuple('.!?…')
 
