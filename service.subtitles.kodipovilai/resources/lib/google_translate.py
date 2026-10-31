@@ -27,7 +27,7 @@ _TIMESTAMP_RE = re.compile(
     r'(\d{2}):\s?(\d{2}):\s?(\d{2}),\s?(\d{3})')
 
 
-def _translate_chunk(text, src_lang):
+def _translate_chunk(text, src_lang, timeout=30):
     q = urllib.parse.urlencode({
         'client': 'gtx',
         'sl': src_lang or 'auto',
@@ -37,7 +37,7 @@ def _translate_chunk(text, src_lang):
     })
     req = urllib.request.Request(_ENDPOINT + '?' + q,
                                  headers={'User-Agent': _UA})
-    raw = urllib.request.urlopen(req, timeout=30).read().decode('utf-8')
+    raw = urllib.request.urlopen(req, timeout=timeout).read().decode('utf-8')
     data = json.loads(raw)
     # data[0] is a list of [translated_segment, source_segment, ...] pairs.
     return ''.join(seg[0] for seg in (data[0] or []) if seg and seg[0])
@@ -60,7 +60,7 @@ def _chunk_srt(text, limit=3000):
     return chunks
 
 
-def translate_lines(lines, src_lang='auto'):
+def translate_lines(lines, src_lang='auto', timeout=30):
     """Translate plain text lines (no SRT scaffolding) to Hebrew.
 
     One request per line, deliberately: the caller reassembles the cue by
@@ -78,7 +78,7 @@ def translate_lines(lines, src_lang='auto'):
             if not line.strip():
                 out.append(line)
                 continue
-            heb = _translate_chunk(line, src_lang)
+            heb = _translate_chunk(line, src_lang, timeout)
             if not heb or not heb.strip():
                 return None
             out.append(heb.strip())
