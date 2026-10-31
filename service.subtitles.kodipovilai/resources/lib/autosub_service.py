@@ -577,6 +577,13 @@ def autosub_on_play():
         # manual pick that happened during delivery.
         if not _autosub_owns_player():
             return
+        # A pooled AI translation, or the one it just made: its gender
+        # proofread in a job of its own (proofread_later picks what qualifies;
+        # `selection` is the applied candidate's claim).
+        try:
+            translate.proofread_later(chosen_link, selection)
+        except Exception:
+            pass
         # DarkSubs-style final status in the top overlay (full subtitle name,
         # + cache note when it came straight from the Cached_subs folder),
         # instead of a success toast.

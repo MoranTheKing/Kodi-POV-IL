@@ -732,19 +732,33 @@ def _sync_hebrew_delivery(info, path, source_release='', embedded_timing=False,
         return path
 
 
+def _pool_local_id(source_hash):
+    """The file-name-safe id of a pooled variant's local copy: its source hash,
+    or for any other key ("<hash>_ar", the Arabic-gender tier) 'h' and a hash
+    of it. '' for none."""
+    import hashlib as _hpool
+    import re as _re_pool
+    raw = (source_hash or '').strip().lower()
+    if not raw:
+        return ''
+    if _re_pool.match(r'^[a-f0-9]{8,64}$', raw):
+        return raw
+    return 'h' + _hpool.sha1(raw.encode('utf-8')).hexdigest()[:16]
+
+
 def _pool_source_text(info, source_hash, cache_only=False):
     """Read a pool SRT from the local immutable cache, fetching it only once.
 
     The hash-named source is never passed through RTL rendering in place. A
     repeat pick therefore costs zero `/sub` Worker requests and can rebuild the
     display copy under newer client-side RTL rules without changing pool bytes.
+    "<hash>_ar" variants are kept too (they used to be fetched on every pick):
+    their gender proofread is kept in that copy (_pool_gp_base).
     Returns ``(text, stable_id)`` or ``('', '')``.
     """
     import hashlib as _hpool
-    import re as _re_pool
     raw_hash = (source_hash or '').strip().lower()
-    safe_hash = (
-        raw_hash if _re_pool.match(r'^[a-f0-9]{8,64}$', raw_hash) else '')
+    safe_hash = _pool_local_id(raw_hash)
     if safe_hash:
         source_path = os.path.join(
             kodi_utils.cache_dir(),
@@ -2946,6 +2960,459 @@ def _current_playback_ms():
     return None
 
 
+# ---- gender proofread -------------------------------------------------
+# One request to a stronger model corrects a translation's gender and number
+# (gender_proofread.py). 0.3.58 ran it after a fresh translation only; since
+# 0.3.59 an older translation gets it the first time it is opened from the
+# list -- a cached one, a pooled one -- and the pool takes the corrected file
+# (proofread=1: the worker replaces the pooled variant of the same source).
+
+def _gp_marker(path):
+    """Next to a translation: its proofread ran (a model answered), so
+    opening it again spends no request."""
+    return path + '.gp'
+
+
+def _gp_done(path):
+    return bool(path) and os.path.isfile(_gp_marker(path))
+
+
+def _gp_mark(path):
+    try:
+        with open(_gp_marker(path), 'w', encoding='utf-8') as f:
+            f.write('1')
+    except OSError:
+        pass
+
+
+# An attempt in progress, or one no model answered: no new one for a while
+# (two opens in its minutes would spend two requests; an overloaded model is
+# not asked again at every open).
+_GP_RETRY_SECS = 6 * 3600
+
+
+def _gp_try_marker(path):
+    return path + '.gp.try'
+
+
+def _gp_trying(path):
+    try:
+        return time.time() - os.path.getmtime(_gp_try_marker(path)) < _GP_RETRY_SECS
+    except OSError:
+        return False
+
+
+def _gp_try_mark(path, on):
+    try:
+        if on:
+            with open(_gp_try_marker(path), 'w', encoding='utf-8') as f:
+                f.write('1')
+        else:
+            os.remove(_gp_try_marker(path))
+    except OSError:
+        pass
+
+
+def _gp_models_left():
+    """Whether a proofread model still has quota today."""
+    try:
+        from . import gender_proofread
+        return any(not gender_proofread.exhausted_today(m, kodi_utils)
+                   for m in gender_proofread.MODELS)
+    except Exception:
+        return False
+
+
+def _proofread_due(path, source_text, progressive_cb, marker=None):
+    """Whether an opened translation gets the proofread now: from the list
+    (a live preview to swap in), the setting on, a key, not proofread before
+    (`marker`, else `path`), AI-made (not Google, not a Hebrew source passed
+    through) and a model with quota left. `source_text` None: all of it but
+    the source (before looking for one)."""
+    try:
+        return bool(
+            progressive_cb is not None
+            and kodi_utils.get_bool('gender_proofread', True)
+            and (kodi_utils.get_setting('api_key', '') or '').strip()
+            and os.path.isfile(path) and not _gp_done(marker or path)
+            and not _gp_trying(marker or path)
+            and not _is_google_translated(path)
+            and (source_text is None
+                 or (source_text
+                     and not _is_mostly_hebrew(source_text, min_ratio=0.60)))
+            and _gp_models_left())
+    except Exception:
+        return False
+
+
+def _proofread_stopper(source_id, cancelled):
+    """stopped() for a proofread: Kodi exits, the job is obsolete, or the
+    viewer moved on to another subtitle."""
+    def stopped():
+        try:
+            import xbmc
+            import xbmcgui
+            if xbmc.Monitor().abortRequested() or cancelled():
+                return True
+            win = xbmcgui.Window(10000)
+            return (win.getProperty('ai_subs.live_translate_active') != '1'
+                    or win.getProperty('ai_subs.live_translate_source') != source_id)
+        except Exception:
+            return True
+    return stopped
+
+
+def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
+    """(blocks with gender_proofread's corrections applied, report). The
+    blocks come back as they are when no model answers. `src_text` is the
+    prepared source the blocks were translated from; `model` the translator's
+    (the usage counter holds that one only). Never raises."""
+    report = {}
+    try:
+        from . import gender_proofread
+        # no new model after this: a viewer waits for the swap
+        _deadline = time.monotonic() + gender_proofread.TOTAL_BUDGET
+
+        def _request(proof_model, prompt_text):
+            if (gender_proofread.exhausted_today(proof_model, kodi_utils)
+                    or time.monotonic() > _deadline):
+                raise gender_proofread.Skip(proof_model)
+            for attempt in range(2):
+                if stopped():
+                    raise RuntimeError('proofread cancelled')
+                if attempt and time.monotonic() > _deadline:
+                    raise gender_proofread.Skip(proof_model)
+                try:
+                    # The usage counter is the translator's and holds one
+                    # model: counted only when this IS that model.
+                    return gemini.generate(
+                        api_key=api_key, model=proof_model, prompt=prompt_text,
+                        temperature=1.0, max_output_tokens=65535,
+                        thinking_level='medium',
+                        timeout=(10, gender_proofread.REQUEST_TIMEOUT),
+                        count_usage=(proof_model == model))
+                except gemini.InvalidKey:
+                    raise           # the same key for every model
+                except gemini.QuotaExceeded:
+                    gender_proofread.note_exhausted(proof_model, kodi_utils)
+                    raise gender_proofread.Skip(proof_model)
+                except (gemini.OverloadError, gemini.RateLimited) as e:
+                    if attempt:
+                        raise gender_proofread.Skip(proof_model)
+                    # a stop skips the proofread, never the translation
+                    _until = time.monotonic() + max(
+                        5, min(getattr(e, 'retry_after', 0) or 20, 60))
+                    while time.monotonic() < _until and not stopped():
+                        time.sleep(0.5)
+                except gemini.GeminiError:
+                    # cut off, blocked, a retired model id, a timeout:
+                    # this model cannot answer, the next may
+                    raise gender_proofread.Skip(proof_model)
+            raise gender_proofread.Skip(proof_model)
+
+        sources = srt.aligned_source_texts(srt.parse_blocks(src_text), blocks)
+        texts = [srt.block_text_only(b) or '' for b in blocks]
+        people = [(c.get('character') or c.get('name'), c.get('gender'))
+                  for c in (cast or []) if isinstance(c, dict)
+                  and (c.get('character') or c.get('name'))
+                  and c.get('gender') in ('female', 'male')]
+        new_texts, report = gender_proofread.proofread(
+            sources, texts, _request, cast=people, cancelled=stopped)
+        if report.get('applied'):
+            out = []
+            for block, old, new in zip(blocks, texts, new_texts):
+                lines = block.split('\n')
+                out.append('\n'.join(lines[:2] + [new]) if new != old else block)
+            blocks = out
+        kodi_utils.log(
+            'gender proofread: {0} -- {1} proposed, {2} applied, {3} refused'
+            '{4}'.format(report.get('model') or 'no model answered (tried {0})'.format(
+                             ', '.join(report.get('tried') or []) or 'none'),
+                         report.get('proposed', 0), report.get('applied', 0),
+                         report.get('refused', 0),
+                         (' -- ' + report['error']) if report.get('error') else ''),
+            level='INFO')
+    except Exception as e:
+        kodi_utils.log('gender proofread skipped: {0}'.format(e), level='WARNING')
+    return blocks, report
+
+
+def _title_cast(info, imdb_id, season, episode):
+    """(cast, title, year) for the translation prompt and the gender
+    proofread."""
+    # Cast metadata, cached per title -- and per EPISODE: an episode's guest
+    # stars are its own, and a per-show cache lent the first translated
+    # episode's guests to every later one (their roles missing from the
+    # prompt). With no IMDb id the player's TMDB id is used (POV and Umbrella
+    # set the show's), where there used to be no cast at all.
+    _cast_tmdb = '' if imdb_id else (info.get('tmdb_id') or '').strip()
+    if not _cast_tmdb.isdigit():
+        _cast_tmdb = ''
+    if (_cast_tmdb and info.get('is_episode')
+            and str(info.get('dbid') or '').strip() not in ('', '-1', '0')):
+        _cast_tmdb = ''     # a library episode's own id, not its show's
+    _cast_media = 'tv' if info.get('is_episode') else 'movie'
+    meta_key = imdb_id or ('tmdb{0}_{1}'.format(_cast_media, _cast_tmdb)
+                           if _cast_tmdb else '')
+    if meta_key and info.get('is_episode') and season and episode:
+        meta_key = '{0}_S{1}E{2}'.format(meta_key, season, episode)
+    meta_path = cache.metadata_path(meta_key) if meta_key else None
+    cast = None
+    title = info.get('title') or ''
+    year = info.get('year') or ''
+    # Bumped cap (Oct 2026 -- minor characters were missing from
+    # top-12). A cached cast with fewer than this many entries is
+    # stale; treat as a cache miss so we re-fetch and store the
+    # expanded list.
+    MIN_CAST_FOR_CACHE = 20
+    if meta_path:
+        cached_meta = cache.load_json(meta_path)
+        if cached_meta:
+            cached_cast = cached_meta.get('cast') or []
+            if len(cached_cast) >= MIN_CAST_FOR_CACHE:
+                cast = cached_cast
+                title = cached_meta.get('title') or title
+                year = cached_meta.get('year') or year
+            else:
+                kodi_utils.log(
+                    'Cached cast has only {0} entries -- refetching '
+                    'for expanded coverage'.format(len(cached_cast)),
+                    level='DEBUG')
+    if cast is None:
+        try:
+            cast = tmdb_helper.fetch_cast(
+                imdb_id=imdb_id or None, tmdb_id=_cast_tmdb or None,
+                media_type=_cast_media,
+                season=season, episode=episode,
+            )
+            t2, y2 = tmdb_helper.title_and_year(
+                imdb_id=imdb_id or None, tmdb_id=_cast_tmdb or None,
+                media_type=_cast_media)
+            title = title or t2
+            year = year or y2
+            if meta_path:
+                cache.save_json(meta_path, {
+                    'cast': cast, 'title': title, 'year': year,
+                })
+        except Exception as e:
+            kodi_utils.log('TMDB lookup failed: {0}'.format(e),
+                           level='WARNING')
+            cast = []
+    return cast, title, year
+
+
+def _proofread_opened(path, source_text, source_id, release, progressive_cb,
+                      deliver, cancelled, info, share=None, shown_already=False,
+                      mark_path=None):
+    """An older AI translation opened from the list, proofread once.
+
+    `path` is the Hebrew file, corrected in place; `deliver(path)` returns the
+    file to show (repairs and timing applied); `share(text)` hands the
+    proofread file to the pool. The Hebrew goes on screen at once, through the
+    same phases a fresh translation uses, and the corrected file replaces it
+    with 'done'. `shown_already`: it is on screen (proofread_later), so 'done'
+    swaps only a corrected file. `mark_path`: where the marker goes, when not
+    next to `path`. Returns the delivered path; None when nothing changed on
+    a file shown already."""
+    if not source_text:
+        # no source: the model could not tell who speaks to whom
+        return None if shown_already else deliver(path)
+    # on screen already: read for the id only, nothing delivered twice
+    delivered = path if shown_already else deliver(path)
+    try:
+        with open(delivered, 'r', encoding='utf-8', errors='replace') as f:
+            shown = f.read()
+    except Exception:
+        shown = ''
+    if not shown:
+        return None if shown_already else delivered
+    marker = mark_path or path
+    _gp_try_mark(marker, True)
+    stopped = _proofread_stopper(source_id, cancelled)
+    # first_ready also tells the job which translation it carries (a job with
+    # no id adopts the first one it is sent); chunk_ready puts it on screen.
+    first = (('first_ready', {'fallback_text': shown}),)
+    if not shown_already:
+        first += (('chunk_ready', {'completed': 1, 'total': 1,
+                                   'merged_text': shown}),)
+    for phase, payload in first:
+        try:
+            payload.update({'source_id': source_id, 'release': release})
+            progressive_cb(phase, payload)
+        except Exception as e:
+            kodi_utils.log('progressive_cb {0} (before the gender proofread of '
+                           'an opened translation) raised: {1}'.format(phase, e),
+                           level='WARNING')
+    try:
+        model = kodi_utils.get_setting('model', 'gemini-3.5-flash-lite') \
+            or 'gemini-3.5-flash-lite'
+        imdb_id = (info.get('imdb_id') or '').strip()
+        cast = _title_cast(info, imdb_id, info.get('season') or '',
+                           info.get('episode') or '')[0]
+        blocks = srt.parse_blocks(cache.load_text(path) or '')
+        proofed, report = _run_gender_proofread(
+            blocks, source_text, kodi_utils.get_setting('api_key', '') or '',
+            model, cast, stopped)
+        final = None
+        if proofed != blocks:
+            final = srt.stitch_blocks(proofed)
+            cache.save_text(path, final)
+            delivered = deliver(path)
+            kodi_utils.notify('AI: תוקנו זכר/נקבה ב-{0} שורות'.format(
+                report.get('applied', 0)), time_ms=4000)
+        if report.get('model') or stopped():
+            # answered, or the viewer moved on: no pause before the next open
+            _gp_try_mark(marker, False)
+        if report.get('model'):
+            _gp_mark(marker)
+            if share is not None:
+                share(final if final is not None else (cache.load_text(path) or ''))
+    except Exception as e:
+        final = None
+        kodi_utils.log('gender proofread of an opened translation failed: '
+                       '{0}'.format(e), level='WARNING')
+    if shown_already and final is None:
+        # nothing to swap: the file on screen stays
+        try:
+            progressive_cb('done', {'success': False, 'source_id': source_id,
+                                    'release': release})
+        except Exception:
+            pass
+        return None
+    try:
+        progressive_cb('done', {'success': True, 'source_id': source_id,
+                                'release': release, 'path': delivered})
+    except Exception as e:
+        kodi_utils.log('progressive_cb done (after the gender proofread of an '
+                       'opened translation) raised: ' + str(e), level='WARNING')
+    return delivered
+
+
+def _pool_gp_base(source_hash):
+    """A pooled variant's immutable local copy (_pool_source_text): the file
+    its proofread corrects and its marker hangs on."""
+    sid = _pool_local_id(source_hash)
+    if not sid:
+        return ''
+    return os.path.join(kodi_utils.cache_dir(), 'pool_{0}.source.srt'.format(sid))
+
+
+def proofread_later(link, selection):
+    """A pooled translation picked from the list, or one the automatic
+    translation on play applied, is shown with no live preview to swap a
+    corrected file into. Its gender proofread then runs in a job of its own
+    (bg_translate_picker, the link marked proofread_only: it proofreads and
+    swaps, it never translates). Fired only when one is likely due; the job
+    checks again. Never raises."""
+    try:
+        payload = _decode_link(link or '') or {}
+        kind = payload.get('type')
+        if kind not in ('pool', 'engine_ai', 'ai') or payload.get('proofread_only'):
+            return
+        if kind == 'pool' and (payload.get('pool_kind') or 'ai') == 'ktuvit':
+            return
+        if not (kodi_utils.get_bool('gender_proofread', True)
+                and (kodi_utils.get_setting('api_key', '') or '').strip()
+                and _gp_models_left()):
+            return
+        source_id = ''
+        if kind == 'pool':
+            base = _pool_gp_base(payload.get('hash'))
+            if not base or _gp_done(base) or _gp_trying(base) or _gp_nosrc(base):
+                return
+            source_id = _pool_job_id(base)
+        import base64
+        import xbmc
+
+        def b64(s):
+            return base64.b64encode(s.encode('utf-8')).decode('ascii')
+        sel = {k: (selection or {}).get(k, '')
+               for k in ('token', 'link_hash', 'stream_hash')}
+        xbmc.executebuiltin(
+            'RunScript(service.subtitles.kodipovilai,'
+            'action=bg_translate_picker,link_b64={0},source_id_b64={1},'
+            'selection_b64={2})'.format(
+                b64(_encode_link(dict(payload, proofread_only=True))),
+                b64(source_id), b64(json.dumps(sel, separators=(',', ':')))))
+    except Exception as e:
+        kodi_utils.log('proofread_later failed: {0}'.format(e), level='DEBUG')
+
+
+_GP_NOSRC_SECS = 7 * 86400
+
+
+def _gp_nosrc(gp_base):
+    """A pooled variant whose source subtitle was not in the list lately."""
+    try:
+        return time.time() - os.path.getmtime(gp_base + '.gp.nosrc') < _GP_NOSRC_SECS
+    except OSError:
+        return False
+
+
+def _pool_job_id(gp_base):
+    """The live-translation id of a pooled variant's proofread job."""
+    return 'pool_' + os.path.basename(gp_base)[len('pool_'):-len('.source.srt')]
+
+
+def _pool_variant_proofread(info, pool_hash, network=True):
+    """Whether the pool's variant `pool_hash` is proofread (gp). Uses the
+    lookup the list already made; asks the Worker only with `network`."""
+    if pool is None or not pool_hash:
+        return False
+    try:
+        variants = pool.lookup_cached(info)
+        if variants is None and network:
+            variants = pool.lookup(info)
+        return any(isinstance(v, dict) and v.get('hash') == pool_hash
+                   and v.get('gp') for v in variants or [])
+    except Exception:
+        return False
+
+
+def _pool_proofread_text(info, pool_hash):
+    """The pool's copy of `pool_hash` when someone already proofread it,
+    else ''."""
+    if _pool_variant_proofread(info, pool_hash):
+        try:
+            return pool.fetch(info, pool_hash) or ''
+        except Exception:
+            pass
+    return ''
+
+
+def _pool_pick_source(info, pool_hash, release):
+    """The subtitle a pooled translation was translated FROM, found in the
+    engine's cached search (the list the viewer just picked from): the same
+    release name, then the same content hash the pool keys it by. The
+    prepared text; '' when it is not there, None when the look failed."""
+    base = pool_hash[:-3] if (pool_hash or '').endswith('_ar') else (pool_hash or '')
+    if not base or not release:
+        return ''
+    try:
+        from . import subs_engine_bridge
+        tried = 0
+        for c in subs_engine_bridge.search(info, modal_progress=False,
+                                           cache_only=True) or []:
+            p = _decode_link(c.get('link') or '') or {}
+            if p.get('type') != 'engine' or p.get('filename') != release:
+                continue
+            tried += 1
+            if tried > 2:
+                break
+            path = subs_engine_bridge.download(p, for_delivery=False)
+            if not path or not os.path.isfile(path):
+                continue
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                prepared = _prepare_source(f.read())
+            if _content_hash(prepared) == base:
+                return prepared
+    except Exception as e:
+        kodi_utils.log('pool pick: source lookup failed: {0}'.format(e),
+                       level='DEBUG')
+        return None
+    return ''
+
+
 def resolve(link, info, progress_cb=None, progressive_cb=None,
             extract_progress_cb=None, selection=None, fallback_link='',
             fallback_links=None):
@@ -3057,6 +3524,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
 
     kind = payload.get('type')
     kodi_utils.log('resolve: kind={0}'.format(kind), level='INFO')
+    # proofread_later's job: a translation already on screen gets its gender
+    # proofread and a corrected file swapped in -- never a translation.
+    _proofread_only = bool(payload.get('proofread_only'))
+    if _proofread_only:
+        set_quiet(True)     # its own process: the status toasts are not its
 
     imdb_id = (info.get('imdb_id') or '').strip()
     season  = info.get('season') or ''
@@ -3081,33 +3553,113 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # exact shared Hebrew SRT (by source hash) and hand it to Kodi.
         if pool is None:
             return None
-        text, sid = _pool_source_text(info, payload.get('hash'))
+        _phash = payload.get('hash') or ''
+        _pkind = payload.get('pool_kind') or 'ai'
+        _gp_base = _pool_gp_base(_phash) if _pkind != 'ktuvit' else ''
+        # Proofread in the pool since this copy was fetched (another viewer's
+        # proofread replaced it): the kept copy is stale, fetched again -- and
+        # replaced only once the new one is in hand.
+        _refreshed = False
+        if (_gp_base and os.path.isfile(_gp_base) and not _gp_done(_gp_base)
+                and _pool_variant_proofread(info, _phash, network=_proofread_only)):
+            _fresh = pool.fetch(info, _phash) or ''
+            if _fresh:
+                try:
+                    cache.save_text(_gp_base, _fresh)
+                    _gp_mark(_gp_base)
+                    _refreshed = True
+                except Exception:
+                    pass
+        _had_copy = bool(_gp_base) and os.path.isfile(_gp_base)
+        text, sid = _pool_source_text(info, _phash)
         if not text:
             _status('AI: לא נמצאה כתובית במאגר', time_ms=4000)
             return None
+        if (_gp_base and not _had_copy and not _gp_done(_gp_base)
+                and _pool_variant_proofread(info, _phash, network=False)):
+            _gp_mark(_gp_base)      # fetched just now, and proofread already
+        _praw = os.path.join(kodi_utils.cache_dir(),
+                             'pool_{0}.source.srt'.format(sid))
         out = os.path.join(kodi_utils.cache_dir(), 'pool_{0}.he.srt'.format(sid))
-        try:
+        # Old Ktuvit pool rows were stored after the vendored engine had
+        # physically moved trailing punctuation. Repair them locally on
+        # this fetched copy only. New logical rows carry a private format
+        # tag in source_lang; AI rows were never owned by that engine.
+        _psrc = payload.get('source_lang') or ''
+        _legacy_ktuvit = (
+            _pkind == 'ktuvit'
+            and _psrc != pool.KTUVIT_LOGICAL_SOURCE_TAG)
+
+        def _pool_deliver(raw_path):
+            with open(raw_path, 'r', encoding='utf-8', errors='replace') as f:
+                shown = f.read()
             with open(out, 'w', encoding='utf-8') as f:
-                f.write(text)
-            # Old Ktuvit pool rows were stored after the vendored engine had
-            # physically moved trailing punctuation. Repair them locally on
-            # this fetched copy only. New logical rows carry a private format
-            # tag in source_lang; AI rows were never owned by that engine.
-            _pkind = payload.get('pool_kind') or 'ai'
-            _psrc = payload.get('source_lang') or ''
-            _legacy_ktuvit = (
-                _pkind == 'ktuvit'
-                and _psrc != pool.KTUVIT_LOGICAL_SOURCE_TAG)
+                f.write(shown)
             _reapply_rtl_fix_in_place(
                 out, legacy_engine=(True if _legacy_ktuvit else 'auto'),
                 ai_output=srt.may_carry_arabic_leak(pool_kind=_pkind))
             # SubSync S2: pool variants carry the release of their SOURCE sub;
             # if that doesn't match the playing release, verify/fix timing
             # against a release-matched oracle. Fail-open.
-            out = _sync_hebrew_delivery(
+            return _sync_hebrew_delivery(
                 info, out, source_release=payload.get('release') or '',
                 selection=_timing_selection, fallback_link=fallback_link,
                 fallback_links=fallback_links)
+
+        try:
+            if _proofread_only and _refreshed and os.path.isfile(_praw):
+                # someone else's proofread came in for the copy on screen
+                out = _pool_deliver(_praw)
+                try:
+                    progressive_cb('done', {
+                        'success': True, 'source_id': _pool_job_id(_gp_base),
+                        'release': payload.get('release') or '', 'path': out})
+                except Exception:
+                    pass
+                return out
+            if _proofread_only:
+                # The gender proofread needs the subtitle it was translated
+                # from: the engine's cached search has it when it carries the
+                # same release and hashes the same.
+                if not (_gp_base and os.path.isfile(_praw)
+                        and _proofread_due(_praw, None, progressive_cb,
+                                           marker=_gp_base)):
+                    return None
+                _psource = _pool_pick_source(info, _phash,
+                                             payload.get('release') or '')
+                if _psource is None:
+                    return None     # the look failed: try again another time
+                if not _proofread_due(_praw, _psource, progressive_cb,
+                                      marker=_gp_base):
+                    if _psource == '':
+                        # looked, and it is not in the list: a week's pause
+                        kodi_utils.log('gender proofread: no source subtitle for '
+                                       'this pooled translation', level='INFO')
+                        try:
+                            with open(_gp_base + '.gp.nosrc', 'w', encoding='utf-8') as f:
+                                f.write('1')
+                        except OSError:
+                            pass
+                    return None
+                _pshare = None
+                if pool.share_enabled():
+                    def _pshare(text_):
+                        if _pool_quality_ok(_psource, text_):
+                            pool.contribute_once(
+                                info, _phash, _psrc or 'en', text_,
+                                marker_path=_gp_marker(_gp_base),
+                                release_override=payload.get('release') or None,
+                                kind=('ai_emb' if _pkind == 'ai_emb' else 'ai'),
+                                proofread=True)
+                return _proofread_opened(
+                    _praw, _psource, _pool_job_id(_gp_base),
+                    payload.get('release') or '', progressive_cb, _pool_deliver,
+                    _translation_cancelled, info, share=_pshare,
+                    shown_already=True, mark_path=_gp_base)
+            if not os.path.isfile(_praw):
+                with open(_praw, 'w', encoding='utf-8') as f:
+                    f.write(text)
+            out = _pool_deliver(_praw)
             _status('כתוביות מהמאגר הקהילתי', time_ms=4000)
             return out
         except OSError:
@@ -3369,8 +3921,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                            .format(e), level='ERROR')
             eng_path = None
         if not eng_path or not os.path.isfile(eng_path):
-            kodi_utils.notify('AI: לא ניתן היה להוריד את כתובית המקור',
-                              time_ms=4000)
+            if not _proofread_only:
+                kodi_utils.notify('AI: לא ניתן היה להוריד את כתובית המקור',
+                                  time_ms=4000)
             return None
         _status('AI: מוריד אנגלית ומתרגם לעברית...', time_ms=3000)
         payload = {'type': 'ai',
@@ -3381,6 +3934,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                    # upload carry it instead of a generic Title.Year.
                    'release': payload.get('filename') or '',
                    'force_ai': True}  # user explicitly asked to translate
+        if _proofread_only:
+            payload['proofread_only'] = True
         kind = 'ai'
         # fall through to the AI logic below
 
@@ -3514,6 +4069,76 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # still prevents duplicates.
         return (base_hash + '_ar') if _ar_on else base_hash
 
+    def _open_with_proofread(path, source_text, source_id, base_hash,
+                             pooled_hash=None):
+        """A cached or pooled translation opened from the list: the gender
+        proofread, once (see _proofread_opened). None when none is due --
+        the caller then delivers as before."""
+
+        def held_hash():
+            # The pool keys this translation under its source hash, "_ar" for
+            # the Arabic-gender tier; the one it holds is the one to replace.
+            if pooled_hash or not base_hash:
+                return pooled_hash
+            found = _pool_key(base_hash)
+            try:
+                if pool is not None and (pool.use_enabled() or pool.share_enabled()):
+                    held = set(v.get('hash') for v in pool.lookup(info) or []
+                               if isinstance(v, dict))
+                    tiers = (base_hash + '_ar', base_hash) if _ar_on else (base_hash,)
+                    found = next((h for h in tiers if h in held), found)
+            except Exception:
+                pass
+            return found
+
+        def share_to(pool_hash):
+            def share(text):
+                if _pool_quality_ok(source_text, text):
+                    pool.contribute_once(
+                        info, pool_hash, source_lang, text,
+                        marker_path=_gp_marker(path),
+                        release_override=_release_override, kind=_pool_kind,
+                        proofread=True)
+            return share
+
+        # Proofread here before, its pool upload never went through (the
+        # worker answered 502): offered again, with no new request.
+        if (_gp_done(path) and source_text and pool is not None
+                and pool.share_enabled()
+                and not pool.was_contributed(_gp_marker(path))):
+            pool_hash = held_hash()
+            if pool_hash:
+                share_to(pool_hash)(cache.load_text(path) or '')
+            return None
+        if not _proofread_due(path, source_text, progressive_cb):
+            return None
+        if pooled_hash and _pool_variant_proofread(info, pooled_hash):
+            _gp_mark(path)      # just fetched, and proofread already
+            return None
+        pool_hash = held_hash()
+        # Someone proofread this source already: theirs, no request.
+        if pool is not None and pool_hash and pool.use_enabled():
+            text = _pool_proofread_text(info, pool_hash)
+            if text and _pool_quality_ok(source_text, text):
+                try:
+                    cache.save_text(path, text)
+                    _reapply_rtl_fix_in_place(path, source=source_text,
+                                              source_lang=source_lang)
+                    _gp_mark(path)
+                    kodi_utils.log('gender proofread: the pool holds this '
+                                   'translation proofread -- taken', level='INFO')
+                    return _deliver(path)
+                except Exception as e:
+                    kodi_utils.log('pool proofread copy save failed: '
+                                   '{0}'.format(e), level='WARNING')
+        share = None
+        if pool is not None and pool_hash and pool.share_enabled():
+            share = share_to(pool_hash)
+        return _proofread_opened(path, source_text, source_id, _src_release,
+                                 progressive_cb, _deliver,
+                                 _translation_cancelled, info, share=share,
+                                 shown_already=_proofread_only)
+
     # Respect the user's preferred subtitle language: if they've chosen a
     # specific non-Hebrew language (e.g. English) DON'T force an AI Hebrew
     # translation -- hand back the SOURCE subtitle untranslated so they get
@@ -3522,6 +4147,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # extra gate only; it can't re-enable translation that auto_translate /
     # force_ai_when_auto_translate_off already disabled.
     if not payload.get('force_ai') and not kodi_utils.hebrew_subtitle_wanted():
+        if _proofread_only:
+            return None
         kodi_utils.log(
             'resolve: preferred subtitle language is not Hebrew; returning '
             'the source subtitle untranslated', level='INFO')
@@ -3588,9 +4215,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         elif os.path.isfile(translated):
             kodi_utils.log('Cache hit (early): ' + translated,
                            level='INFO')
-            kodi_utils.notify(
-                'AI: כתוביות מ-cache (תרגום קודם)',
-                time_ms=4000)
+            if not _proofread_only:
+                kodi_utils.notify(
+                    'AI: כתוביות מ-cache (תרגום קודם)',
+                    time_ms=4000)
             try:
                 now = time.time()
                 os.utime(translated, (now, now))
@@ -3600,6 +4228,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 translated, source_lang=source_lang,
                 source=(_prepared_source_reader(local_source)
                         if local_source else None))
+            # Proofread once; its pool upload stands in for the backfill.
+            _early_src = (_prepared_source_reader(local_source)()
+                          if progressive_cb is not None and local_source
+                          and os.path.isfile(local_source) else '')
+            _opened = _open_with_proofread(
+                translated, _early_src, early_source_id,
+                _content_hash(_early_src) if _early_src else '')
+            if _opened or _proofread_only:
+                return _opened
             # Backfill: share this previously-translated file to the pool the
             # first time it's re-watched after pool_share is on. Runs on a
             # daemon thread (reads the source to compute the content hash), so
@@ -3624,10 +4261,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     if not src_text:
         if _replacing_google and os.path.isfile(_replacing_google):
             return _deliver(_replacing_google)
-        kodi_utils.notify(
-            'מקור הכתוביות לא נמצא — בחר שוב',
-            time_ms=5000,
-        )
+        if not _proofread_only:
+            kodi_utils.notify(
+                'מקור הכתוביות לא נמצא — בחר שוב',
+                time_ms=5000,
+            )
         return None
 
     # Phase 3: learn SDH-ness from the RAW source text (BEFORE _prepare_source
@@ -3686,9 +4324,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             kodi_utils.log(
                 'Cache hit (content): ' + translated_by_content,
                 level='INFO')
-            kodi_utils.notify(
-                'AI: כתוביות מ-cache (זהה לתרגום קיים)',
-                time_ms=4000)
+            if not _proofread_only:
+                kodi_utils.notify(
+                    'AI: כתוביות מ-cache (זהה לתרגום קיים)',
+                    time_ms=4000)
             try:
                 now = time.time()
                 os.utime(translated_by_content, (now, now))
@@ -3696,6 +4335,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 pass
             _reapply_rtl_fix_in_place(translated_by_content, source=src_text,
                                       source_lang=source_lang)
+            _opened = _open_with_proofread(
+                translated_by_content, src_text,
+                early_source_id or content_id, content_id)
+            if _opened or _proofread_only:
+                return _opened
             # Backfill: we already have the content hash here, so share the
             # cached file directly (contribute_once = marker + server dedup).
             if (pool is not None and pool.share_enabled()
@@ -3722,6 +4366,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             'pool backfill (content) failed: {0}'.format(e),
                             level='DEBUG')
             return _deliver(translated_by_content)
+
+    if _proofread_only:
+        return None     # nothing cached to proofread; it never translates
 
     # No hit: settle on the early-source-id slot as the canonical
     # cache path for this translation; falls back to content_id
@@ -3762,6 +4409,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                           source_lang=source_lang)
                 kodi_utils.notify(
                     'AI: כתוביות מהמאגר הקהילתי (לא נדרש תרגום)', time_ms=4000)
+                _opened = _open_with_proofread(
+                    translated, src_text, early_source_id or content_id,
+                    content_id,
+                    pooled_hash=(content_id + '_ar') if _pooled_ar else content_id)
+                if _opened:
+                    return _opened
                 return _deliver(translated)
             except Exception as e:
                 kodi_utils.log('pool reuse save failed: {0}'.format(e),
@@ -3886,64 +4539,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # going silent between 'Starting translation' and the dispatch summary, never
     # reaching the executor. These pin WHICH pre-dispatch step hangs.
     kodi_utils.log('translate step: resolving cast metadata', level='INFO')
-    # Cast metadata, cached per title -- and per EPISODE: an episode's guest
-    # stars are its own, and a per-show cache lent the first translated
-    # episode's guests to every later one (their roles missing from the
-    # prompt). With no IMDb id the player's TMDB id is used (POV and Umbrella
-    # set the show's), where there used to be no cast at all.
-    _cast_tmdb = '' if imdb_id else (info.get('tmdb_id') or '').strip()
-    if not _cast_tmdb.isdigit():
-        _cast_tmdb = ''
-    if (_cast_tmdb and info.get('is_episode')
-            and str(info.get('dbid') or '').strip() not in ('', '-1', '0')):
-        _cast_tmdb = ''     # a library episode's own id, not its show's
-    _cast_media = 'tv' if info.get('is_episode') else 'movie'
-    meta_key = imdb_id or ('tmdb{0}_{1}'.format(_cast_media, _cast_tmdb)
-                           if _cast_tmdb else '')
-    if meta_key and info.get('is_episode') and season and episode:
-        meta_key = '{0}_S{1}E{2}'.format(meta_key, season, episode)
-    meta_path = cache.metadata_path(meta_key) if meta_key else None
-    cast = None
-    title = info.get('title') or ''
-    year = info.get('year') or ''
-    # Bumped cap (Oct 2026 -- minor characters were missing from
-    # top-12). A cached cast with fewer than this many entries is
-    # stale; treat as a cache miss so we re-fetch and store the
-    # expanded list.
-    MIN_CAST_FOR_CACHE = 20
-    if meta_path:
-        cached_meta = cache.load_json(meta_path)
-        if cached_meta:
-            cached_cast = cached_meta.get('cast') or []
-            if len(cached_cast) >= MIN_CAST_FOR_CACHE:
-                cast = cached_cast
-                title = cached_meta.get('title') or title
-                year = cached_meta.get('year') or year
-            else:
-                kodi_utils.log(
-                    'Cached cast has only {0} entries -- refetching '
-                    'for expanded coverage'.format(len(cached_cast)),
-                    level='DEBUG')
-    if cast is None:
-        try:
-            cast = tmdb_helper.fetch_cast(
-                imdb_id=imdb_id or None, tmdb_id=_cast_tmdb or None,
-                media_type=_cast_media,
-                season=season, episode=episode,
-            )
-            t2, y2 = tmdb_helper.title_and_year(
-                imdb_id=imdb_id or None, tmdb_id=_cast_tmdb or None,
-                media_type=_cast_media)
-            title = title or t2
-            year = year or y2
-            if meta_path:
-                cache.save_json(meta_path, {
-                    'cast': cast, 'title': title, 'year': year,
-                })
-        except Exception as e:
-            kodi_utils.log('TMDB lookup failed: {0}'.format(e),
-                           level='WARNING')
-            cast = []
+    cast, title, year = _title_cast(info, imdb_id, season, episode)
 
     kodi_utils.log('translate step: cast ready ({0} members); building '
                    'prompt'.format(len(cast or [])), level='INFO')
@@ -5751,89 +6347,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         kodi_utils.log('English residual repair skipped; existing translation retained',
                        level='WARNING')
 
+    # The gender proofread's report, for the marker and the pool upload below.
+    _gp_report = {}
+
     def _proofread_gender(blocks):
         """The blocks with gender_proofread's corrections applied; the blocks
         as they are when no model answers. Never raises."""
-        try:
-            from . import gender_proofread
-            # no new model after this: a viewer waits for the swap
-            _deadline = time.monotonic() + gender_proofread.TOTAL_BUDGET
-
-            def _stopped():
-                try:
-                    import xbmc
-                    import xbmcgui
-                    if xbmc.Monitor().abortRequested() or _translation_cancelled():
-                        return True
-                    _win = xbmcgui.Window(10000)
-                    return (_win.getProperty('ai_subs.live_translate_active') != '1'
-                            or _win.getProperty('ai_subs.live_translate_source')
-                            != _progressive_source_id)
-                except Exception:
-                    return True
-
-            def _request(proof_model, prompt_text):
-                if (gender_proofread.exhausted_today(proof_model, kodi_utils)
-                        or time.monotonic() > _deadline):
-                    raise gender_proofread.Skip(proof_model)
-                for attempt in range(2):
-                    if _stopped():
-                        raise RuntimeError('proofread cancelled')
-                    if attempt and time.monotonic() > _deadline:
-                        raise gender_proofread.Skip(proof_model)
-                    try:
-                        # The usage counter is the translator's and holds one
-                        # model: counted only when this IS that model.
-                        return gemini.generate(
-                            api_key=api_key, model=proof_model, prompt=prompt_text,
-                            temperature=1.0, max_output_tokens=65535,
-                            thinking_level='medium',
-                            timeout=(10, gender_proofread.REQUEST_TIMEOUT),
-                            count_usage=(proof_model == model))
-                    except gemini.InvalidKey:
-                        raise           # the same key for every model
-                    except gemini.QuotaExceeded:
-                        gender_proofread.note_exhausted(proof_model, kodi_utils)
-                        raise gender_proofread.Skip(proof_model)
-                    except (gemini.OverloadError, gemini.RateLimited) as e:
-                        if attempt:
-                            raise gender_proofread.Skip(proof_model)
-                        # a stop skips the proofread, never the translation
-                        _until = time.monotonic() + max(
-                            5, min(getattr(e, 'retry_after', 0) or 20, 60))
-                        while time.monotonic() < _until and not _stopped():
-                            time.sleep(0.5)
-                    except gemini.GeminiError:
-                        # cut off, blocked, a retired model id, a timeout:
-                        # this model cannot answer, the next may
-                        raise gender_proofread.Skip(proof_model)
-                raise gender_proofread.Skip(proof_model)
-
-            sources = srt.aligned_source_texts(srt.parse_blocks(src_text), blocks)
-            texts = [srt.block_text_only(b) or '' for b in blocks]
-            people = [(c.get('character') or c.get('name'), c.get('gender'))
-                      for c in (cast or []) if isinstance(c, dict)
-                      and (c.get('character') or c.get('name'))
-                      and c.get('gender') in ('female', 'male')]
-            new_texts, report = gender_proofread.proofread(
-                sources, texts, _request, cast=people, cancelled=_stopped)
-            if report.get('applied'):
-                out = []
-                for block, old, new in zip(blocks, texts, new_texts):
-                    lines = block.split('\n')
-                    out.append('\n'.join(lines[:2] + [new]) if new != old else block)
-                blocks = out
-            kodi_utils.log(
-                'gender proofread: {0} -- {1} proposed, {2} applied, {3} refused'
-                '{4}'.format(report.get('model') or 'no model answered (tried {0})'.format(
-                                 ', '.join(report.get('tried') or []) or 'none'),
-                             report.get('proposed', 0), report.get('applied', 0),
-                             report.get('refused', 0),
-                             (' -- ' + report['error']) if report.get('error') else ''),
-                level='INFO')
-        except Exception as e:
-            kodi_utils.log('gender proofread skipped: {0}'.format(e), level='WARNING')
-        return blocks
+        proofed, report = _run_gender_proofread(
+            blocks, src_text, api_key, model, cast,
+            _proofread_stopper(_progressive_source_id, _translation_cancelled))
+        _gp_report.update(report or {})
+        return proofed
 
     final = srt.stitch_blocks(out_blocks)
     # Timing backstop. restore_block_timings above pairs positionally and so
@@ -6044,6 +6568,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     kodi_utils.log(
                         'content-hash duplicate save failed: {0}'.format(e),
                         level='DEBUG')
+        if _gp_report.get('model'):
+            # proofread: opening it again spends no request
+            _gp_mark(translated)
+            if early_source_id and content_id and content_id != early_source_id:
+                _gp_slot = cache.translated_path(
+                    imdb_id, season, episode, source_lang,
+                    source_id=content_id, tier=_tier)
+                if os.path.isfile(_gp_slot):
+                    _gp_mark(_gp_slot)
     # The Google file this run replaces can sit in another slot (the gender
     # reference tier came out differently this time). AI owns the title now:
     # a lookup of that slot must not serve the Google text or spend another
@@ -6079,7 +6612,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                      marker_path=_pool_marker(translated,
                                                               _pool_kind),
                                      release_override=_release_override,
-                                     kind=_pool_kind)
+                                     kind=_pool_kind,
+                                     proofread=bool(_gp_report.get('model')))
             except Exception as e:
                 kodi_utils.log('pool contribute dispatch failed: {0}'.format(e),
                                level='DEBUG')
