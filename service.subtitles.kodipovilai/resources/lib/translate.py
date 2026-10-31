@@ -2966,10 +2966,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         'chunk_ready'  payload={'completed','total','merged_text',
                                 'source_id'}
         'done'         payload={'success', 'source_id'}
-    Quality is unchanged: the final canonical Hebrew bytes written
-    via cache.save_text() are byte-identical to today's output for
-    the same source SRT; only the timing of delivery differs.
-    A callback exception NEVER aborts the translation."""
+    The final canonical Hebrew bytes written via cache.save_text() are
+    the same as without a callback for the same source SRT, apart from
+    one step that runs only with it: the gender proofread by a stronger
+    model (gender_proofread), which takes minutes a caller waiting for
+    the return value should not wait. A callback exception NEVER aborts
+    the translation."""
     # Bind every later timing result to the selection that STARTED this
     # resolve. Downloads and AI translation can take minutes; taking this
     # snapshot only inside SubSync would let an older result label, queue or
@@ -5749,6 +5751,90 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         kodi_utils.log('English residual repair skipped; existing translation retained',
                        level='WARNING')
 
+    def _proofread_gender(blocks):
+        """The blocks with gender_proofread's corrections applied; the blocks
+        as they are when no model answers. Never raises."""
+        try:
+            from . import gender_proofread
+            # no new model after this: a viewer waits for the swap
+            _deadline = time.monotonic() + gender_proofread.TOTAL_BUDGET
+
+            def _stopped():
+                try:
+                    import xbmc
+                    import xbmcgui
+                    if xbmc.Monitor().abortRequested() or _translation_cancelled():
+                        return True
+                    _win = xbmcgui.Window(10000)
+                    return (_win.getProperty('ai_subs.live_translate_active') != '1'
+                            or _win.getProperty('ai_subs.live_translate_source')
+                            != _progressive_source_id)
+                except Exception:
+                    return True
+
+            def _request(proof_model, prompt_text):
+                if (gender_proofread.exhausted_today(proof_model, kodi_utils)
+                        or time.monotonic() > _deadline):
+                    raise gender_proofread.Skip(proof_model)
+                for attempt in range(2):
+                    if _stopped():
+                        raise RuntimeError('proofread cancelled')
+                    if attempt and time.monotonic() > _deadline:
+                        raise gender_proofread.Skip(proof_model)
+                    try:
+                        # The usage counter is the translator's and holds one
+                        # model: counted only when this IS that model.
+                        return gemini.generate(
+                            api_key=api_key, model=proof_model, prompt=prompt_text,
+                            temperature=1.0, max_output_tokens=65535,
+                            thinking_level='medium',
+                            timeout=(10, gender_proofread.REQUEST_TIMEOUT),
+                            count_usage=(proof_model == model))
+                    except gemini.InvalidKey:
+                        raise           # the same key for every model
+                    except gemini.QuotaExceeded:
+                        gender_proofread.note_exhausted(proof_model, kodi_utils)
+                        raise gender_proofread.Skip(proof_model)
+                    except (gemini.OverloadError, gemini.RateLimited) as e:
+                        if attempt:
+                            raise gender_proofread.Skip(proof_model)
+                        # a stop skips the proofread, never the translation
+                        _until = time.monotonic() + max(
+                            5, min(getattr(e, 'retry_after', 0) or 20, 60))
+                        while time.monotonic() < _until and not _stopped():
+                            time.sleep(0.5)
+                    except gemini.GeminiError:
+                        # cut off, blocked, a retired model id, a timeout:
+                        # this model cannot answer, the next may
+                        raise gender_proofread.Skip(proof_model)
+                raise gender_proofread.Skip(proof_model)
+
+            sources = srt.aligned_source_texts(srt.parse_blocks(src_text), blocks)
+            texts = [srt.block_text_only(b) or '' for b in blocks]
+            people = [(c.get('character') or c.get('name'), c.get('gender'))
+                      for c in (cast or []) if isinstance(c, dict)
+                      and (c.get('character') or c.get('name'))
+                      and c.get('gender') in ('female', 'male')]
+            new_texts, report = gender_proofread.proofread(
+                sources, texts, _request, cast=people, cancelled=_stopped)
+            if report.get('applied'):
+                out = []
+                for block, old, new in zip(blocks, texts, new_texts):
+                    lines = block.split('\n')
+                    out.append('\n'.join(lines[:2] + [new]) if new != old else block)
+                blocks = out
+            kodi_utils.log(
+                'gender proofread: {0} -- {1} proposed, {2} applied, {3} refused'
+                '{4}'.format(report.get('model') or 'no model answered (tried {0})'.format(
+                                 ', '.join(report.get('tried') or []) or 'none'),
+                             report.get('proposed', 0), report.get('applied', 0),
+                             report.get('refused', 0),
+                             (' -- ' + report['error']) if report.get('error') else ''),
+                level='INFO')
+        except Exception as e:
+            kodi_utils.log('gender proofread skipped: {0}'.format(e), level='WARNING')
+        return blocks
+
     final = srt.stitch_blocks(out_blocks)
     # Timing backstop. restore_block_timings above pairs positionally and so
     # cannot act when a chunk legitimately came back with a different entry
@@ -5929,6 +6015,35 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             kodi_utils.log(
                 'content-hash duplicate save failed: {0}'.format(e),
                 level='DEBUG')
+    # Gender and number, proofread by a stronger model in ONE request over the
+    # whole title (gender_proofread) -- on the live path only: the viewer has
+    # the Hebrew on screen meanwhile (sent again here, with every repair
+    # above), while a caller that waits for resolve() would wait minutes. It
+    # runs on the file already saved, so a stop or a crash in those minutes
+    # keeps this translation; what it corrects is saved over it and goes out
+    # with 'done' below, and to the pool.
+    if progressive_cb is not None and kodi_utils.get_bool('gender_proofread', True):
+        try:
+            progressive_cb('chunk_ready', {
+                'completed': 1, 'total': 1, 'merged_text': final,
+                'source_id': _progressive_source_id, 'release': _src_release})
+        except Exception as e:
+            kodi_utils.log('progressive_cb chunk_ready (before the gender '
+                           'proofread) raised: ' + str(e), level='WARNING')
+        _proof_blocks = srt.parse_blocks(final)
+        _proofed = _proofread_gender(_proof_blocks)
+        if _proofed != _proof_blocks:
+            final = srt.stitch_blocks(_proofed)
+            cache.save_text(translated, final)
+            if early_source_id and content_id and content_id != early_source_id:
+                try:
+                    cache.save_text(cache.translated_path(
+                        imdb_id, season, episode, source_lang,
+                        source_id=content_id, tier=_tier), final)
+                except Exception as e:
+                    kodi_utils.log(
+                        'content-hash duplicate save failed: {0}'.format(e),
+                        level='DEBUG')
     # The Google file this run replaces can sit in another slot (the gender
     # reference tier came out differently this time). AI owns the title now:
     # a lookup of that slot must not serve the Google text or spend another
