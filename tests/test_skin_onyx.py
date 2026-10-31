@@ -1,4 +1,5 @@
 """skin.povil.onyx: the package, the generated XML, and the Wizard pieces it relies on."""
+import json
 import os
 import re
 import shutil
@@ -211,12 +212,19 @@ class GeneratedXmlTests(unittest.TestCase):
         key = values('POVIL_HeroDetailsKey')
         wanted = {c.split('Container(')[1][:4] for c, t in key if t}
         self.assertEqual(wanted, {'5031', '5033'}, 'Keshet and Kan rows only')
+        # an item that already carries its details (povil_rtl) asks for nothing
+        self.assertTrue(all('String.IsEqual(Container(%s).ListItem.Art(fanart),Container(%s).ListItem.Art(thumb))' % ((c.split('Container(')[1][:4],) * 2) in c
+                            for c, t in key if t))
+        near = [t for c, t in values('POVIL_HeroDetailsNear') if t]
+        self.assertIn('$INFO[Container(5031).ListItem(-2).FolderPath] $INFO[Container(5031).ListItem(-1).FolderPath] '
+                      '$INFO[Container(5031).ListItem(1).FolderPath] $INFO[Container(5031).ListItem(2).FolderPath]', near)
         match = 'String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for))'
         for name, field in (('POVIL_HeroFanart', 'fanart'), ('POVIL_HeroPlot', 'plot'), ('POVIL_HeroLogo', 'logo')):
             with self.subTest(name):
-                first = values(name)[0]
-                self.assertIn(match, first[0])
-                self.assertEqual(first[1], '$INFO[Window(home).Property(povil.details.%s)]' % field)
+                first = values(name)[:5]
+                self.assertIn(match, first[0][0])
+                self.assertEqual([t for _c, t in first], ['$INFO[Window(home).Property(povil.details.%s%s)]' % (slot, field)
+                                                          for slot in ('', '1.', '2.', '3.', '4.')])
         for name in ('POVIL_HeroAmbient', 'POVIL_HeroAmbientFile', 'POVIL_HeroAmbientPng'):
             first = values(name)[0]
             self.assertIn(match, first[0])
@@ -224,8 +232,12 @@ class GeneratedXmlTests(unittest.TestCase):
         timers = ET.parse(XML / 'Timers.xml').getroot()
         timer = next(t for t in timers.iter('timer') if t.findtext('name') == 'povil_details')
         self.assertEqual([n.text for n in timer.findall('onstart')],
-                         ['SetProperty(povil.details.key,$ESCINFO[Control.GetLabel(9805)],home)',
+                         ['SetProperty(povil.details.near,$ESCINFO[Control.GetLabel(9806)],home)',
+                          'SetProperty(povil.details.key,$ESCINFO[Control.GetLabel(9805)],home)',
                           'RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=hero_details)'])
+        warm = next(t for t in timers.iter('timer') if t.findtext('name') == 'povil_details_warm')
+        self.assertIn('String.IsEqual(Window(home).Property(povil.tab),israeli)', warm.findtext('start'))
+        self.assertIn('RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=hero_warm)', [n.text for n in warm.findall('onstart')])
         self.assertIn('System.IdleTime(1)', timer.findtext('start'))
         default = (ROOT / 'plugin.program.kodipovilwizard' / 'default.py').read_text(encoding='utf-8')
         self.assertIn("_query.get('mode') == 'hero_details'", default)
@@ -370,6 +382,36 @@ class RtlPatchTests(unittest.TestCase):
             sys.path.remove(str(PATCHES))
         _calls, items = self._run('?mode=build_movie_list', window=10025, view='51', thumbs={0: thumb})
         self.assertNotIn('povil_blur', items[0].art, 'full screen lists draw their own backdrop')
+
+    def test_idan_rows_carry_the_details_fetched_before(self):
+        tmp = Path(tempfile.mkdtemp(prefix='povil-enrich-'))
+        try:
+            keshet = 'plugin://plugin.video.idanplus/?name=x&url=https%253A%252F%252Fwww.mako.co.il%252Fa&mode=2&module=keshet'
+            kan = 'plugin://plugin.video.idanplus/?name=y&url=https%253A%252F%252Fwww.kan.org.il%252Fcontent%252Fkan%252Fkan-11%252Fp-11486%252F&mode=7&module=kan'
+            (tmp / 'index.json').write_text(json.dumps({keshet: {'plot': 'P', 'fanart': 'F', 'logo': 'L'}}), encoding='utf-8')
+            (tmp / 'kan_wide.json').write_text(json.dumps({'ts': 0, 'ok': True, 'wide': {'11486': 'K'}}), encoding='utf-8')
+            sys.modules['xbmcvfs'] = types.SimpleNamespace(translatePath=lambda _p: str(tmp) + '/')
+            sys.path.insert(0, str(PATCHES))
+            sys.modules.pop('povil_rtl', None)
+            import povil_rtl
+
+            class Tagged(_Item):
+                def __init__(self, label=''):
+                    super().__init__(label)
+                    self.plot = ''
+
+                def getVideoInfoTag(self):
+                    return types.SimpleNamespace(setPlot=lambda p: setattr(self, 'plot', p))
+            items = [(keshet, Tagged(), True), (kan, Tagged(), True), ('plugin://plugin.video.idanplus/?module=reshet', Tagged(), True)]
+            povil_rtl._enrich(items)
+            self.assertEqual((items[0][1].art, items[0][1].plot), ({'fanart': 'F', 'povil_logo': 'L'}, 'P'))
+            self.assertEqual(items[1][1].art, {'fanart': 'K'})
+            self.assertEqual(items[2][1].art, {})
+        finally:
+            sys.path.remove(str(PATCHES))
+            sys.modules.pop('xbmcvfs', None)
+            sys.modules.pop('povil_rtl', None)
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def test_a_pinned_next_page_keeps_its_end_in_a_name_sort(self):
         calls, items = self._run('?mode=1&povil_rtl=1', sort=1, pov=False,

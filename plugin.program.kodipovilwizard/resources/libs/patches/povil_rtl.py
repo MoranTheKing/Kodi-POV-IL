@@ -38,6 +38,11 @@ backdrop of its own (Keshet's posters, a channel's logo) -- a skin cannot
 build either address itself. Kodi shows a picture full size the first time it
 shrinks it, so Onyx asks for povil_blur out of sight and draws the kept file.
 
+An Idan Plus home row also gets what the Wizard fetched before for the
+Onyx hero (hero_details.py): Keshet's summary, picture and title logo
+(index.json, by folder path) and Kan's picture (kan_wide.json, by programme
+id) go on the items themselves, so the hero shows them at once.
+
 install() runs first thing in the add-on's entry script, on every request.
 It wraps xbmcplugin once per interpreter (Idan Plus, and POV with fast
 navigation, reuse theirs) and decides again for each request, so lists
@@ -53,6 +58,9 @@ HORIZONTAL_VIEWS = ('51', '55')
 MEDIA = ('movies', 'tvshows', 'seasons', 'episodes')
 UMBRELLA_VIEWS = {'movies': '51', 'tvshows': '51', 'seasons': '51', 'episodes': '55'}
 SEEDED = 'povil.umbrella_views_seeded'
+DETAILS = 'special://profile/addon_data/plugin.program.kodipovilwizard/hero_details/'
+KAN_ITEM = re.compile(r'[?&]module=kan(?:&|$)')
+KAN_ID = re.compile(r'/p-(\d+)/')
 BLUR_ITEMS = 200
 
 
@@ -183,6 +191,47 @@ def blur_art(listitem):
     listitem.setArt({'povil_blur': small, 'povil_blurfile': base + '.jpg', 'povil_blurpng': '' if jpeg else base + '.png'})
 
 
+def _enrich(items):
+    """The details hero_details.py fetched before, on Idan Plus's own items (see above)."""
+    import json
+    import os
+    from urllib.parse import unquote_plus
+    import xbmcvfs
+    folder = xbmcvfs.translatePath(DETAILS)
+
+    def load(name):
+        try:
+            with open(os.path.join(folder, name), encoding='utf-8') as fh:
+                return json.load(fh) or {}
+        except (OSError, ValueError):
+            return {}
+    urls = [entry[0] or '' for entry in items]
+    # each file only for a row that has its kind of items (Keshet's index is ~0.5 MB)
+    index = load('index.json') if any('module=keshet' in url for url in urls) else {}
+    kan = (load('kan_wide.json').get('wide') or {}) if any(KAN_ITEM.search(url) for url in urls) else {}
+    if not index and not kan:
+        return
+    for url, listitem, _folder in items:
+        details = index.get(url)
+        if not details and kan and url and KAN_ITEM.search(url):
+            match = KAN_ID.search(unquote_plus(unquote_plus(url)))
+            details = {'fanart': kan.get(match.group(1), '')} if match else None
+        if not details:
+            continue
+        try:
+            art = {}
+            if details.get('fanart'):
+                art['fanart'] = details['fanart']
+            if details.get('logo'):
+                art['povil_logo'] = details['logo']
+            if art:
+                listitem.setArt(art)
+            if details.get('plot'):
+                listitem.getVideoInfoTag().setPlot(details['plot'])
+        except Exception:
+            pass
+
+
 def _wrap(xbmcplugin, state):
     original = {name: getattr(xbmcplugin, name) for name in
                 ('addDirectoryItem', 'addDirectoryItems', 'addSortMethod', 'endOfDirectory', 'setContent')}
@@ -267,6 +316,11 @@ def _wrap(xbmcplugin, state):
         for method, args, kwargs in sorts:
             original['addSortMethod'](handle, method, *args, **kwargs)
         idan_view = reverse and not state['flagged'] and state['addon'] == 'idanplus'
+        if reverse and state['flagged'] and state['addon'] == 'idanplus':
+            try:
+                _enrich(items)
+            except Exception:
+                pass
         content = state['content']
         if idan_view and all(folder for _url, _item, folder in items):
             content = 'tvshows'                             # programmes: posters, not 16:9

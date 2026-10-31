@@ -141,6 +141,37 @@ class HeroDetailsTests(unittest.TestCase):
                      if p.name != 'kan_wide.json' and 'kan' not in p.name]
         self.assertTrue(all(not k['ok'] for k in kan_shows), 'a show met while the list was down: again in an hour, not a week')
 
+    def test_the_neighbours_are_ready_for_a_step_and_keshet_is_kept_for_the_rows(self):
+        key = idan('keshet', 'https://www.mako.co.il/mako-vod-keshet/a')
+        near = [idan('keshet', 'https://www.mako.co.il/mako-vod-keshet/n%d' % i) for i in range(5)]
+        self.props['povil.details.key'] = key
+        self.props['povil.details.near'] = ' '.join(near[:4] + [key])
+        self.mod.run()
+        self.assertEqual(self.props['povil.details.for'], key)
+        for slot in (1, 2, 3, 4):
+            self.assertEqual(self.props['povil.details.%d.for' % slot], near[slot - 1])
+            self.assertEqual(self.props['povil.details.%d.plot' % slot], 'The summary')
+        self.assertEqual(len(self.fetched), 5, 'the item and its four neighbours, nothing more')
+        index = json.loads((self.tmp / 'index.json').read_text(encoding='utf-8'))
+        self.assertEqual(index[key]['fanart'], 'https://img.mako.co.il/wide_x5_re.jpg')
+        self.assertEqual(len(index), 5)
+        self.assertEqual([p.name for p in self.tmp.iterdir() if p.name.endswith('.tmp')], [])
+        # an entry lost to another run's write comes back on the next visit, with no fetch
+        del index[key]
+        (self.tmp / 'index.json').write_text(json.dumps(index), encoding='utf-8')
+        self.props['povil.details.near'] = ''
+        self.mod._index = None      # a new run: every RunPlugin is an interpreter of its own
+        self.mod.run()
+        self.assertIn(key, json.loads((self.tmp / 'index.json').read_text(encoding='utf-8')))
+        self.assertEqual(len(self.fetched), 5)
+
+    def test_kan_is_read_ahead_when_the_israeli_tab_opens(self):
+        self.mod.warm()
+        self.assertEqual(sum(1 for u in self.fetched if 'mobapi' in u), 1)
+        kept = json.loads((self.tmp / 'kan_wide.json').read_text(encoding='utf-8'))
+        self.assertEqual(kept['wide']['11486'], 'https://mobapi.kan.org.il/media/a/wide.jpg?width=1280')
+        self.assertFalse((self.tmp / 'kan_wide.lock').exists())
+
     def test_anything_else_fetches_nothing(self):
         for key in ('plugin://plugin.video.pov/?mode=x', idan('reshet', 'https://13tv.co.il/x'), idan('keshet', 'http://evil/x'),
                     idan('keshet', 'https://evil.example/mako.co.il')):

@@ -1,3 +1,6 @@
+0.4.93
+- hero_details: Keshet's details kept in index.json (folder path -> details) and Kan's list in kan_wide.json are read by povil_rtl when Idan Plus lists a home row: Keshet shows fetched once and every Kan show carry their summary / picture / logo themselves. The item's two neighbours on each side are fetched with it (povil.details.near -> povil.details.1. ... .4.). mode=hero_warm reads Kan's list when the Israeli tab opens; one read at a time (kan_wide.lock), 25 s a page (~880 KB each: the 8 s of 0.4.92 left a phone's Kan without pictures). Kan's picture is 1920x1080 asked 1280 wide (0.4.92's note said 1920x1080).
+
 0.4.92
 - Onyx: hero_details.py (mode=hero_details) -- for the Israeli show on the Onyx hero: Keshet 12's summary, 1920x1080 picture and title logo from its mako page (__NEXT_DATA__ data.hero), Kan 11's 1920x1080 picture from Kan's programme list (image_base). Kept a week per show (a failure or a page without its data an hour), Kan's list a day (a failure an hour), in addon_data/hero_details, files unwritten for 30 days pruned; Keshet pages from mako only. A slow answer never overwrites the details of an item the skin moved on to. Idan Plus quotes its url= twice: unquoted again.
 
