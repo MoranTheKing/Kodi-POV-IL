@@ -448,6 +448,21 @@ def _pool_has_hash(body, source_hash):
         return False
 
 
+def _pool_has_proofread(body, source_hash):
+    """Whether the pool's variant of this source is already proofread (gp).
+    A proofread upload replaces a pooled variant that is not (the worker's
+    gpUpgrade), so the plain dedup skip must not swallow it. Best-effort:
+    any error returns False so we just upload."""
+    if not source_hash:
+        return False
+    try:
+        data = _lookup_raw(_lookup_params_from_body(body))   # request-cached
+        return any(v.get('hash') == source_hash and v.get('gp')
+                   for v in data.get('variants') or [])
+    except Exception:
+        return False
+
+
 def _pool_has_ktuvit_release(body):
     """True when this exact Ktuvit release name is already represented.
 
@@ -542,9 +557,15 @@ def _post(body, marker_path=None):
         # the embedded label would never appear. The per-file '.emb.shared' marker
         # still makes this one-shot, and the Worker dedups by hash -- so no
         # duplicate row is created, only the kind is upgraded.
-        if (body.get('kind') != 'ai_emb'
-                and (_pool_has_hash(
-                        body, (body.get('source_hash') or '').strip())
+        _sh = (body.get('source_hash') or '').strip()
+        if body.get('proofread'):
+            # a proofread file: skipped only when the pool's is proofread too
+            if _pool_has_proofread(body, _sh):
+                if marker_path:
+                    mark_contributed(marker_path)
+                return
+        elif (body.get('kind') != 'ai_emb'
+                and (_pool_has_hash(body, _sh)
                      or _pool_has_ktuvit_release(body))):
             if marker_path:
                 mark_contributed(marker_path)
@@ -553,7 +574,8 @@ def _post(body, marker_path=None):
         # so a new variant would only be 429'd (toomany). Skip the wasted upload
         # (non-ai_emb, mirroring the dedup skip). No marker: a freed slot or a
         # less-covered re-watch can still contribute later.
-        if body.get('kind') != 'ai_emb' and _pool_at_capacity(body):
+        if (body.get('kind') != 'ai_emb' and _pool_at_capacity(body)
+                and not (body.get('proofread') and _pool_has_hash(body, _sh))):
             return
     except Exception:
         pass
@@ -614,7 +636,7 @@ def _post(body, marker_path=None):
 
 
 def _build_body(info, source_hash, source_lang, srt_text,
-                kind='ai', release_override=None):
+                kind='ai', release_override=None, proofread=False):
     """Assemble the /contribute JSON body, or None if there's no usable id.
 
     `kind` is 'ai' for a machine translation or 'ktuvit' for a human Hebrew
@@ -637,7 +659,7 @@ def _build_body(info, source_hash, source_lang, srt_text,
         rel = '' if _is_token_like(release_override) else release_override
     else:
         rel = _release_from(info)  # already filters token-like names
-    return {
+    body = {
         'tmdb_id': p['tmdb'], 'imdb_id': p['imdb'], 'type': p['type'],
         'season': p['season'], 'episode': p['episode'], 'lang': 'he',
         'release': rel,
@@ -648,10 +670,15 @@ def _build_body(info, source_hash, source_lang, srt_text,
         'year': str(info.get('year') or ''),
         'srt': srt_text,
     }
+    if proofread:
+        # gender-proofread (gender_proofread.py): replaces the pooled variant
+        # of the same source when that one is not
+        body['proofread'] = 1
+    return body
 
 
 def contribute(info, source_hash, source_lang, srt_text, marker_path=None,
-               kind='ai', release_override=None):
+               kind='ai', release_override=None, proofread=False):
     """Fire-and-forget: share a fresh Hebrew translation. Runs on a daemon
     thread so it never delays handing the subtitle back to the player. If
     marker_path is given, the thread writes a ".shared" marker there once the
@@ -659,7 +686,8 @@ def contribute(info, source_hash, source_lang, srt_text, marker_path=None,
     if _urlreq is None or not srt_text:
         return
     body = _build_body(info, source_hash, source_lang, srt_text,
-                       kind=kind, release_override=release_override)
+                       kind=kind, release_override=release_override,
+                       proofread=proofread)
     if body is None:
         return
     try:
@@ -1001,7 +1029,7 @@ def share_cache(progress_cb=None, should_cancel=None):
 
 
 def contribute_once(info, source_hash, source_lang, srt_text, marker_path=None,
-                    kind='ai', release_override=None):
+                    kind='ai', release_override=None, proofread=False):
     """contribute(), but skip the upload if this file was already shared (per
     the local marker). The marker is written by the POST thread ONLY after a
     successful upload, so a transient failure retries on the next watch rather
@@ -1012,7 +1040,7 @@ def contribute_once(info, source_hash, source_lang, srt_text, marker_path=None,
         return
     contribute(info, source_hash, source_lang, srt_text,
                marker_path=marker_path, kind=kind,
-               release_override=release_override)
+               release_override=release_override, proofread=proofread)
 
 
 def contribute_ktuvit(info, srt_text, release='', marker_path=None,
