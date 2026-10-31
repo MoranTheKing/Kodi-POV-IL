@@ -438,7 +438,113 @@ def _source_id_for_ai(payload):
     return ''
 
 
-def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
+# Field report (Oct 2026, update 756): translations cached or pooled before the
+# leak check knew every shape still carry the model's working in some cues
+# ("... Let's use: ...", drafts side by side). Each read repairs them; this is
+# what one read may spend on Google (only for a cue with no Hebrew answer of
+# its own) before the rest keep their source line.
+_LEAK_RESCUE_BUDGET = 6.0
+_LEAK_RESCUE_TIMEOUT = 4
+
+
+def _rescue_reasoning_leaks(text, source=None, source_lang='auto'):
+    """(text, n): `text` with each cue that carries the model's working
+    replaced by the model's own Hebrew answer in it -- the line its working
+    settled on, else the draft it opened with (it knew the speaker's gender;
+    Google does not: measured in the QA Kodi, Google wrote "אתה מוכן" for a
+    mother asking her daughter) -- when it is a whole answer for the cue's
+    source line (srt.leaked_cue_answer). A cue with none gets Google's Hebrew
+    for its source line, and without that the source line itself; a cue with
+    neither an answer nor a source line is left for a later read. The cue
+    keeps its position tag and italics. Every other cue is left as it is;
+    n = cues replaced. `source` is the prepared source text, or a callable
+    returning it: it is read only for a file that does carry the working.
+    Never raises."""
+    try:
+        if not srt.may_carry_reasoning(text):
+            return text, 0
+        blocks = srt.parse_blocks(text or '')
+        if not srt.generated_editorial_leak_indices([], blocks):
+            return text, 0
+        if callable(source):
+            source = source()
+        src_blocks = srt.parse_blocks(source) if source else []
+        sources = srt.aligned_source_texts(src_blocks, blocks)
+        # A cue with no source line to tell dialogue from working (no source
+        # file, or its start time is not in it) counts only on a strong sign:
+        # one English phrase alone may be a kept title or a quote.
+        strong = set(srt.generated_editorial_leak_indices([], blocks, strong_only=True))
+        bad = [i for i in srt.generated_editorial_leak_indices(src_blocks, blocks)
+               if sources[i] or i in strong]
+        if not bad:
+            return text, 0
+        deadline = time.monotonic() + _LEAK_RESCUE_BUDGET
+        how = {'model': 0, 'google': 0, 'source': 0}
+        for i in bad:
+            lines = blocks[i].split('\n')
+            if len(lines) < 3 or not srt._TIMECODE_RE.match(lines[1].strip()):
+                continue
+            body = srt.block_text_only(blocks[i]) or ''
+            line = srt.strip_leaked_speaker_prefix(sources[i] or '').strip()
+            answer = srt.leaked_cue_answer(body, line)
+            kind = 'model'
+            if not answer and line:
+                heb = _google_lines(line.split('\n'), source_lang, deadline)
+                if heb and srt._HEB_RE.search(''.join(heb)):
+                    answer, kind = '\n'.join(heb), 'google'
+            if not answer and line:
+                answer, kind = line, 'source'
+            if answer:
+                blocks[i] = '\n'.join(lines[:2] + [srt.restyle_like(body, answer)])
+                how[kind] += 1
+        kodi_utils.log('{0} cue(s) carried the model\'s working -- replaced: '
+                       '{1} by its own answer, {2} by Google, {3} by the '
+                       'source line'.format(len(bad), how['model'],
+                                            how['google'], how['source']),
+                       level='WARNING')
+        n = sum(how.values())
+        return (srt.stitch_blocks(blocks), n) if n else (text, 0)
+    except Exception as e:
+        kodi_utils.log('reasoning-leak repair skipped ({0})'.format(e),
+                       level='WARNING')
+        return text, 0
+
+
+def _google_lines(lines, source_lang, deadline):
+    """Google's Hebrew for `lines`, one request a line, none started after
+    `deadline` and none waiting past it; None when any line has no answer."""
+    from . import google_translate
+    out = []
+    for line in lines:
+        left = deadline - time.monotonic()
+        if left < 0.5:
+            return None
+        try:
+            heb = google_translate.translate_lines(
+                [line], source_lang or 'auto',
+                timeout=min(_LEAK_RESCUE_TIMEOUT, left))
+        except Exception:
+            heb = None
+        if not heb:
+            return None
+        out.extend(heb)
+    return out
+
+
+def _prepared_source_reader(local_source):
+    """A callable returning the prepared text of the source subtitle at
+    `local_source` ('' when it cannot be read), for a lazy `source`."""
+    def read():
+        try:
+            with open(local_source, 'r', encoding='utf-8', errors='replace') as f:
+                return _prepare_source(f.read())
+        except Exception:
+            return ''
+    return read
+
+
+def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None,
+                              source=None, source_lang='auto'):
     """Repair a cached translation in place: RTL punctuation AND cue timings.
     Catches up files that were cached before the current version's fixes were
     wired in. Idempotent: if the file is already clean, no write happens.
@@ -472,7 +578,13 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
     # there comes from the row's pool_kind rather than from a sidecar.
     if ai_output is None:
         ai_output = srt.may_carry_arabic_leak(path)
-    body = srt.strip_leaked_arabic(content) if ai_output else content
+    body = content
+    if ai_output:
+        # Same provenance gate: only our model writes its working into a cue.
+        # `source` / `source_lang` are what the caller has, for a cue with no
+        # Hebrew answer of its own (Google, then the source line itself).
+        body, _leaks = _rescue_reasoning_leaks(body, source, source_lang)
+        body = srt.strip_leaked_arabic(body)
     # Same provenance gate as the Arabic strip, for the same reason: dropping a
     # cue's leading non-Hebrew lines is only ever right for OUR model's output.
     # A human subtitle that deliberately shows an original line above its
@@ -1605,6 +1717,12 @@ def _pool_quality_ok(src_text, final):
         # broken translation does. Mixed Hebrew+English lines count as
         # translated because they contain Hebrew.
         if srt.untranslated_line_ratio(final) > 0.30:
+            return False
+        # The model's working in a cue (field report, update 756): every user
+        # who reuses the file would see it.
+        if srt.generated_editorial_leak_indices(
+                srt.parse_blocks(src_text) if src_text else [],
+                srt.parse_blocks(final)):
             return False
         return True
     except Exception:
@@ -3476,7 +3594,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 os.utime(translated, (now, now))
             except OSError:
                 pass
-            _reapply_rtl_fix_in_place(translated)
+            _reapply_rtl_fix_in_place(
+                translated, source_lang=source_lang,
+                source=(_prepared_source_reader(local_source)
+                        if local_source else None))
             # Backfill: share this previously-translated file to the pool the
             # first time it's re-watched after pool_share is on. Runs on a
             # daemon thread (reads the source to compute the content hash), so
@@ -3571,7 +3692,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 os.utime(translated_by_content, (now, now))
             except OSError:
                 pass
-            _reapply_rtl_fix_in_place(translated_by_content)
+            _reapply_rtl_fix_in_place(translated_by_content, source=src_text,
+                                      source_lang=source_lang)
             # Backfill: we already have the content hash here, so share the
             # cached file directly (contribute_once = marker + server dedup).
             if (pool is not None and pool.share_enabled()
@@ -3634,7 +3756,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             try:
                 cache.save_text(translated, pooled)
                 _clear_google_marker(translated)
-                _reapply_rtl_fix_in_place(translated)
+                _reapply_rtl_fix_in_place(translated, source=src_text,
+                                          source_lang=source_lang)
                 kodi_utils.notify(
                     'AI: כתוביות מהמאגר הקהילתי (לא נדרש תרגום)', time_ms=4000)
                 return _deliver(translated)
