@@ -20,7 +20,9 @@ This packages the SAME tree the build ships, minus what only the build uses:
   * default.py: the build-only actions are cut out by syntax tree.
   * changelog.txt: build-only bullets dropped (legacy rules).
   * pool.py: inherited byte for byte from a shipped zip with the same pool.py
-    logic (the legacy rule; refuses otherwise).
+    logic (the legacy rule; refuses otherwise) -- or, with --carry-pool-key
+    after a deliberate logic change, only its credential block, copied and
+    proved byte for byte (legacy.carry_pool_key_block, as CI does).
 The legacy safety checks run on the result (no build payload, no build
 actions in default.py, no host names in the changelog), and every .py must
 compile. Outputs dist/service.subtitles.kodipovilai-<version>.zip and
@@ -224,7 +226,7 @@ def compile_all(addon_dst: Path) -> None:
         raise SystemExit("standalone build aborted -- Python compile errors:\n  " + "\n  ".join(failures))
 
 
-def build(pool_from: Path) -> Path:
+def build(pool_from: Path, carry_key: bool = False) -> Path:
     DIST.mkdir(exist_ok=True)
     ver = version()
     out = DIST / f"{ADDON_ID}-{ver}.zip"
@@ -232,7 +234,11 @@ def build(pool_from: Path) -> Path:
         addon_dst = Path(tmp) / ADDON_ID
         stage(addon_dst)
         normalize(addon_dst)
-        if not legacy.inherit_pool_credential(addon_dst, pool_from):
+        # pool.py's logic changed on purpose: its credential block alone comes
+        # across (byte for byte, proved), as CI does for the build
+        ok = (legacy.carry_pool_key_block(addon_dst, pool_from) if carry_key
+              else legacy.inherit_pool_credential(addon_dst, pool_from))
+        if not ok:
             raise SystemExit("no usable --pool-from zip: %s" % pool_from)
         compile_all(addon_dst)
         # Zip and check outside dist/, so a rejected package never replaces
@@ -249,8 +255,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--pool-from", type=Path, required=True,
                         help="a shipped MoranSubs zip with the same pool.py logic")
+    parser.add_argument("--carry-pool-key", action="store_true",
+                        help="pool.py's logic changed: copy only the credential "
+                             "block from --pool-from")
     args = parser.parse_args()
-    out = build(args.pool_from)
+    out = build(args.pool_from, carry_key=args.carry_pool_key)
     print(f"{out.relative_to(ROOT)} {out.stat().st_size} bytes (+ {ADDON_ID}-latest.zip)")
 
 
