@@ -523,6 +523,8 @@ def _show_pyxbmct():
                     if kodi_utils.apply_subtitle_file(
                             path, selection=timing_selection):
                         self.close()
+                        # a pooled AI translation: its gender proofread
+                        _t.proofread_later(link, timing_selection)
                     elif not _still_current():
                         self.close()
                     else:
@@ -674,6 +676,8 @@ def _deliver_pick(c, info, close_cb):
             if kodi_utils.apply_subtitle_file(
                     path, selection=timing_selection):
                 close_cb()
+                # a pooled AI translation: its gender proofread
+                _t.proofread_later(link, timing_selection)
             elif not _still_current():
                 close_cb()
             else:
