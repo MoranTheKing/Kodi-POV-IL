@@ -130,6 +130,17 @@ class Detection(unittest.TestCase):
                                     'Wait, thanks for coming.'), [0])
         self.assertEqual(self.leaks('רגע, תודה שבאת. Wait, ', 'Wait, thanks for coming.'), [])
 
+    def test_a_line_drafted_again_after_an_arrow(self):
+        text = "?ולמה שאעשה זאת\n?[Lama she-e'ese zot?] -> ולמה שאעשה זאת"
+        self.assertEqual(self.leaks(text, 'And why would I do that?'), [0])
+        self.assertTrue(srt.may_carry_reasoning(block(1, 1, 2, text)))
+        # the question mark 'reverse' moved to the front comes back at the end
+        self.assertEqual(srt.leaked_cue_answer(text, 'And why would I do that?'), 'ולמה שאעשה זאת?')
+        # an arrow to new words, or one the source has, is dialogue
+        for kept, source in (('הפונקציה היא x -> y והכול תקין.', 'Wait.'),
+                             ('לך שמאלה -> לך שמאלה', 'Go left -> go left')):
+            self.assertEqual(self.leaks(kept, source), [], kept)
+
     def test_the_pre_check_sees_what_the_scan_sees(self):
         for body in ('-> 10:30:00 בבוקר', 'אוהבת אותך <3\n-> אוהבת אותך'):
             text = block(1, 1, 2, body)

@@ -60,8 +60,8 @@ legacy = _legacy()
 # import of it is guarded and it only feeds the build's POV badge.
 STANDALONE_LIB_FILES = (
     {name for name in legacy.STANDALONE_LIB_FILES if (SRC / "resources" / "lib" / name).is_file()}
-    | {"gender_guard.py", "he_person_gender.py", "script_residual.py",
-       "sdh_pool.py", "sdh_registry.py", "srt_wire.py"}
+    | {"gender_guard.py", "gender_proofread.py", "he_person_gender.py",
+       "script_residual.py", "sdh_pool.py", "sdh_registry.py", "srt_wire.py"}
 )
 
 # default.py actions only the build has, and the helpers only they use.
