@@ -42,6 +42,9 @@ if __name__ == '__main__':
     elif _query.get('mode') == 'hero_details':
         from resources.libs import hero_details
         hero_details.run()
+    elif _query.get('mode') == 'hero_warm':
+        from resources.libs import hero_details
+        hero_details.warm()
     else:
         from resources.libs.common import router
         dispatcher = router.Router()
