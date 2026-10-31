@@ -354,15 +354,33 @@ def fix_rtl_punctuation(text, mode=None, legacy_engine=False):
     return '\n'.join(out_lines) + trailing_nl
 
 
+# A dialogue dash with or without its space ("-להתראות.", as the model writes
+# it, also before a quote or an ellipsis): the bare one was taken for part of
+# the sentence, and only the period moved -- ".-להתראות", the dash beside the
+# period on screen (field report, update 756).
+_DIALOGUE_DASH = (r'-(?:\s+|(?=[' + _HEB_LETTER
+                  + r'<"\'\u05f4\u201c\u201d]|\.\.|\u2026))')
 # Match a Hebrew text line that has punctuation at the END (the
 # "normal" Hebrew sentence shape). Used by the reverse-mode fix to
 # move that punct to the START of the line.
 _TRAILING_PUNCT_RE = re.compile(
-    r'^(?P<dash>-\s+)?'
+    r'^(?P<dash>' + _DIALOGUE_DASH + r')?'
     r'(?P<open_tags>(?:<[a-zA-Z!][^>]*>)*)'
+    # ... or inside the line's opening tag ("<i>-להתראות.</i>")
+    r'(?P<dash2>' + _DIALOGUE_DASH + r')?'
     r'(?P<rest>(?=[^\n]*[' + _HEB_LETTER + r'])[^\n]*?[^'
     + _TRAILING_PUNCT_CHARS + r'\s])'
     r'(?P<trailing>[' + _TRAILING_PUNCT_CHARS + r']+)'
+    r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
+)
+# That ".-להתראות" as cached and pooled files still carry it (field report,
+# update 756): the sentence mark in front, the bare dash after it.
+_DISPLACED_BARE_DASH_RE = re.compile(
+    r'^(?P<open_tags>(?:<[a-zA-Z!][^>]*>)*)'
+    r'(?P<leading>[' + _TRAILING_PUNCT_CHARS + r']+)-'
+    r'(?P<inner_tags>(?:<[a-zA-Z!][^>]*>)*)'
+    r'(?P<rest>(?:["\'\u05f4\u201c\u201d]|\.\.+|\u2026)?['
+    + _HEB_LETTER + r'][^\n]*?)'
     r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
 )
 _REVERSE_DASHED_LEADING_PUNCT_RE = re.compile(
@@ -415,6 +433,12 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
         stripped = stripped[:-1]
     if not stripped:
         return line
+    displaced = _DISPLACED_BARE_DASH_RE.match(stripped)
+    if displaced:
+        # the mark goes inside the tag, as this fix puts it for "-<i>X.</i>"
+        return (displaced.group('open_tags') + displaced.group('inner_tags')
+                + displaced.group('leading') + displaced.group('rest')
+                + displaced.group('close_tags') + ' -')
     dashed_leading = _REVERSE_DASHED_LEADING_PUNCT_RE.match(stripped)
     if dashed_leading:
         open_tags = dashed_leading.group('open_tags') or ''
@@ -446,7 +470,7 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
         if stripped != line.strip():
             return stripped
         return line
-    dash       = m.group('dash')       or ''
+    dash       = m.group('dash') or m.group('dash2') or ''
     open_tags  = m.group('open_tags')  or ''
     rest       = m.group('rest')       or ''
     trailing   = m.group('trailing')
@@ -630,7 +654,14 @@ def _wrap_rtl_base_line(line, cue_hebrew=False, legacy_engine=False):
     # punct) so tag-wrapped cues match too; a genuine trailing interruption dash
     # ("שלום -", no leading punct) fails the match and is left untouched.
     st = s.strip()
-    if st.endswith(' -') and _LEADING_PUNCT_RE.match(st[:-2].rstrip()):
+    displaced = _DISPLACED_BARE_DASH_RE.match(st)
+    if displaced:
+        # ".-להתראות" from the old 'reverse' fix: the dash goes back in front
+        # and the sentence mark to the end.
+        s = (displaced.group('open_tags') + '-' + displaced.group('inner_tags')
+             + displaced.group('rest') + displaced.group('leading')
+             + displaced.group('close_tags'))
+    elif st.endswith(' -') and _LEADING_PUNCT_RE.match(st[:-2].rstrip()):
         s = '- ' + st[:-2].rstrip()
     # The vendored engine used lstrip('-') and appended a BARE dash, producing
     # "? sentence-" (no separating space). Only undo it when the remaining line
@@ -2445,6 +2476,30 @@ _REASONING_FRAGMENT_RE = re.compile(
     r"\b(?:feminine|masculine)\s+(?:addressee|speaker|form|verb|plural)\b|"
     r"\b(?:speaking|talking)\s+to\b[^()\r\n]{0,80}\b(?:female|male)\b",
     re.I)
+# Field report (Oct 2026, update 756): the working also reached the screen in
+# the middle of a line, with no brackets -- 'תודה שבאשת. / ... wait, "Thanks
+# for coming." Let's check Spanish ref: ... (masc. singular) ... Let's use:
+# ...', and 'X. / Y. / Z. Let's use: X.'. A Hebrew cue carries neither English
+# deliberation on how to translate it nor drafts side by side; the source
+# check still lets dialogue that says the same through.
+_REASONING_INLINE_RE = re.compile(
+    r"\blet['’]?s\s+(?:use|check|see|look|fix|correct|verify|do|try|keep|"
+    r"say|write|translate|pick|choose|rephrase|go\s+with|stick\s+with)\b|"
+    r"\bwait\s*[:,]|"
+    r"\b(?:masc|fem)\.|\b(?:masculine|feminine|singular|plural|addressee)\b|"
+    r"\bgender[- ]neutral\b|\bif\s+(?:female|male|plural|singular)\b|"
+    r"\b(?:spanish|arabic|french|german|hebrew|english|italian|portuguese|"
+    r"russian|turkish|greek|dutch|polish|romanian)(?:\s+ref(?:erence)?)?\s*:|"
+    r"\bref(?:erence)?\s*:|\bin\s+hebrew\b|"
+    r"\bdepending\s+on\s+(?:the\s+)?context\b|\bwho['’]?s\s+speaking\b",
+    re.I)
+# Drafts side by side: Hebrew, a spaced slash, Hebrew ("ו/או" has no spaces).
+_DRAFTS_RE = re.compile(
+    '[א-ת][.!?,…"\'״]*\\s+/\\s+[-"\'״]?[א-ת]')
+# Where a leaked line's working begins once it is known to be a leak: an arrow
+# to the next draft, or English prose (two Latin words in a row).
+_DRAFT_CUT_RE = re.compile(
+    r"\s(?:-+>|=>|→)|\b[A-Za-z]+['’]?[A-Za-z]*,?\s+[A-Za-z]+\b")
 # Leading punctuation the RTL fix moves around; a '-' that opens an arrow
 # stays. A bare '>' / '>>' is a caption speaker marker, never an arrow here.
 _REASONING_LEAD_RE = re.compile('^(?:[\\s.,!?:;"\'\u05f4\u2013\u2014]|-(?!-*>))+')
@@ -2460,6 +2515,240 @@ def _reasoning_line(line, source_has_arrow=False):
     # A sign or caption arrow the source has anywhere ("Exit ->") may open
     # the Hebrew line once the word order turns around.
     return bool(m) and not (source_has_arrow and _SOURCE_ARROW_RE.match(m.group(0)))
+
+
+def _plain(text):
+    return _MARKUP_RE.sub('', ''.join(c for c in text if c not in _INVISIBLE_BIDI))
+
+
+def _phrase(text):
+    return re.sub(r'\s+', ' ', text.replace('’', "'")).strip().lower()
+
+
+# Where the model states the line it settled on: "Let's use: ...", "Hebrew:",
+# "in Hebrew: ..." -- and, for the answer only, an arrow to the next draft.
+_ANSWER_LABEL_RE = re.compile(
+    r"let['’]?s\s+(?:use|do|go\s+with|stick\s+with|say|write|keep|translate|"
+    r"pick|choose)\b[^:\n]{0,40}:|\b(?:in\s+)?hebrew\s*:", re.I)
+_ANSWER_MARK_RE = re.compile(_ANSWER_LABEL_RE.pattern + r"|-+>|=>|→", re.I)
+
+
+def _inline_reasoning(body, source_clean, strong_only=False):
+    """English deliberation, or drafts side by side, anywhere in a Hebrew cue.
+    A phrase the aligned source says too (source_clean: lowercased) is
+    dialogue -- each phrase on its own: "Wait," in the source does not let a
+    "Let's use:" through. strong_only (no source to compare with): one phrase
+    alone ("Singular Value", a quoted "Let's check") is not enough; it takes
+    a stated answer ("Let's use:") or two different phrases."""
+    plain = _plain(body)
+    source_clean = _phrase(source_clean)
+    said = set(_phrase(m.group(0)) for m in _REASONING_INLINE_RE.finditer(plain))
+    said = [p for p in said if p not in source_clean]
+    if said and (not strong_only or len(said) > 1 or _ANSWER_LABEL_RE.search(plain)):
+        return True
+    return bool(_DRAFTS_RE.search(plain)) and '/' not in source_clean
+
+
+_QUOTED_LINE_RE = re.compile('^["“”״](.+)["“”״]([.!?,…]*)$')
+_LINE_LEAD_PUNCT_RE = re.compile('^([.,!?…]+)(?=[א-ת]|\\s*(?:-+>|=>|→))')
+_OPEN_QUOTE_END_RE = re.compile('(?:^|\\s)["“”״\']\\s*$')
+_SENTENCE_END = tuple('.!?…')
+
+
+def _first_of_drafts(line):
+    """(line, how): the first of drafts side by side in `line` -- how is ''
+    (none), 'sentence' (whole sentences, or a slash closing the line) or
+    'word' (a word or phrase swapped mid-sentence: "הקיתארה / הנבל הנהדרת",
+    no draft of the whole line to take)."""
+    stripped = line.rstrip()
+    if stripped.endswith(' /') and _HEB_RE.search(stripped):
+        return stripped[:-2].rstrip(), 'sentence'
+    m = _DRAFTS_RE.search(line)
+    if not m:
+        return line, ''
+    first = line[:m.start() + m.group(0).index('/')].rstrip()
+    return first, ('sentence' if first.rstrip('"\'״').endswith(_SENTENCE_END) else 'word')
+
+
+def _reasoning_note(text):
+    """Whether `text` is one bracketed note of working: "(Drella is female)"."""
+    return bool(_EDITORIAL_FRAGMENT_RE.fullmatch(text.strip())
+                and (_EDITORIAL_ACTION_RE.search(text) or _REASONING_FRAGMENT_RE.search(text)
+                     or _REASONING_INLINE_RE.search(text)))
+
+
+def _cut_working(line):
+    """`line` up to where working begins in it: an English phrase, an arrow,
+    English prose or a bracketed note (and the bracket left dangling)."""
+    cut = line
+    for pattern in (_REASONING_INLINE_RE, _DRAFT_CUT_RE):
+        m = pattern.search(cut)
+        if m:
+            cut = cut[:m.start()]
+    for m in _EDITORIAL_FRAGMENT_RE.finditer(cut):
+        if (_EDITORIAL_ACTION_RE.search(m.group(0))
+                or _REASONING_FRAGMENT_RE.search(m.group(0))):
+            cut = cut[:m.start()]
+            break
+    return cut.rstrip().rstrip('([*').rstrip()
+
+
+# A dialogue line: a dash in front (not an arrow, not a dash alone) or, as
+# 'reverse' writes it, after the line.
+_SPEAKER_LINE_RE = re.compile(r'^\s*-(?!-*>)\s*\S|\S\s+-\s*$')
+# "PERRY: ..." / "- Narrator: ..." in a source line: a name, not words said.
+_SOURCE_NAME_RE = re.compile(r"(?m)^(\s*(?:-\s*)?)[A-Z][A-Za-z0-9 .'\-]{0,30}:\s+")
+
+
+def _speakers(text):
+    return sum(1 for l in text.split('\n') if _SPEAKER_LINE_RE.search(l))
+
+
+def _cue_speakers(lines):
+    """Dialogue lines a leaked cue had before its working: its lines up to
+    the first working line, or through the first line stating an answer."""
+    head = []
+    for line in lines:
+        if _reasoning_line(line):
+            break
+        head.append(line)
+        if _ANSWER_MARK_RE.search(line):
+            break
+    return _speakers('\n'.join(head))
+
+
+def _complete_answer(answer, source='', speakers=0):
+    """Whether `answer` can stand for the whole cue: Hebrew, no quote or
+    bracket left open (a piece cut out of a note: "אין לך)", 'הוא כתב "'),
+    and as many dialogue lines as the cue's source line -- or, without one,
+    as the cue had before its working (`speakers`) -- and, with the source
+    line, not a fragment of it (under 40% of its words, names left out)."""
+    if not answer or not _HEB_RE.search(answer):
+        return False
+    if answer.count('(') != answer.count(')') or answer.count('[') != answer.count(']'):
+        return False
+    # a quote opened and cut off at once; one that opens or closes a
+    # quotation spanning cues ('יקבל מענה."') is fine
+    if _OPEN_QUOTE_END_RE.search(answer):
+        return False
+    if not source:
+        return speakers < 2 or _speakers(answer) == speakers
+    source = _SOURCE_NAME_RE.sub(r'\1', _plain(source))
+    if _speakers(source) > 1 and _speakers(answer) != _speakers(source):
+        return False
+    words = len(_LATIN_ECHO_WORD_RE.findall(source))
+    return words < 4 or len(answer.split()) >= 0.4 * words
+
+
+def reasoning_final_answer(body, source=''):
+    """The line a leaked cue's working settled on: the Hebrew after its last
+    "Let's use:" / "Hebrew:" / arrow -- not one inside a bracketed note
+    ("(Emily is female -> אין לך)" is working, not the answer), unless the
+    note closes right after it ("(..., let's keep it accurate:)") -- cut where
+    a note starts on its line. '' when there is none, or when it is not a
+    whole answer (_complete_answer; `source`: the cue's source line)."""
+    plain = '\n'.join(_plain(l) for l in body.split('\n'))
+    spans = [(m.start(), m.end()) for m in _EDITORIAL_FRAGMENT_RE.finditer(plain)]
+    starts = []
+    for m in _ANSWER_MARK_RE.finditer(plain):
+        inside = [s for s in spans if s[0] < m.start() < s[1]]
+        if not inside:
+            starts.append(m.end())
+        elif plain[m.end():inside[0][1]].strip() in (')', ']'):
+            starts.append(inside[0][1])
+    # A note that ends its line, with the corrected line after it:
+    # "ע/ עוררת ...? (Wait, Drella is speaking to Lorelai, ...)\n?האם לא רצית ..."
+    # -- not when both are dialogue lines: that is the next speaker.
+    for a, b in spans:
+        line_end = plain.find('\n', b)
+        if (line_end > 0 and not plain[b:line_end].strip(' .*')
+                and _reasoning_note(plain[a:b])
+                and not (_SPEAKER_LINE_RE.search(plain[plain.rfind('\n', 0, a) + 1:line_end])
+                         and _SPEAKER_LINE_RE.search(plain[line_end + 1:].split('\n')[0]))):
+            starts.append(line_end)
+    if not starts:
+        return ''
+    start = max(starts)
+    line_start = plain.rfind('\n', 0, start) + 1
+    lead = _LINE_LEAD_PUNCT_RE.match(plain[line_start:].strip())
+    keep = []
+    for i, line in enumerate(plain[start:].split('\n')):
+        line = line.strip().strip('*').strip()
+        cut = _cut_working(line)
+        working = cut != line
+        cut, how = _first_of_drafts(cut)
+        if how == 'word':
+            return ''
+        m = _QUOTED_LINE_RE.match(cut.strip())
+        if m:
+            cut = m.group(1) + ('' if m.group(1).endswith(tuple('.!?,…')) else m.group(2))
+        if not _HEB_RE.search(cut):
+            if keep:
+                break
+            continue
+        if i == 0 and lead and not cut.endswith(tuple('.!?,…')):
+            # the RTL fix moved this line's end mark to its start
+            cut += lead.group(1)
+        keep.append(cut.strip())
+        if working or how:
+            break
+    answer = '\n'.join(keep)
+    speakers = 0 if source else _cue_speakers(plain.split('\n'))
+    return answer if _complete_answer(answer, source, speakers) else ''
+
+
+def reasoning_free_draft(body, source=''):
+    """The Hebrew a leaked cue opened with, before the model's working began:
+    the first of drafts side by side (and the next speaker's line after it),
+    nothing from a working line or an English note on. '' when no Hebrew
+    comes before the working, the drafts differ by a word mid-sentence, or it
+    is not a whole answer (_complete_answer)."""
+    keep = []
+    lines = [_plain(raw).strip() for raw in body.split('\n')]
+    for k, plain in enumerate(lines):
+        if _reasoning_line(plain):
+            break
+        cut = _cut_working(plain)
+        working = cut != plain
+        # only a note ends this speaker's line; the next speaker's follows
+        note_only = (working and _reasoning_note(plain[len(cut):].strip().rstrip(' .*'))
+                     and _SPEAKER_LINE_RE.search(plain) and k + 1 < len(lines)
+                     and _SPEAKER_LINE_RE.search(lines[k + 1])
+                     and not _reasoning_line(lines[k + 1]))
+        cut, how = _first_of_drafts(cut)
+        if how == 'word':
+            return ''
+        if not _HEB_RE.search(cut):
+            break
+        if how and plain.endswith(' -') and not cut.endswith('-'):
+            cut += ' -'     # the dialogue dash 'reverse' put after the last draft
+        keep.append(cut.strip())
+        if (working and not note_only) or plain.endswith(' /'):
+            break       # the working, or the other draft, goes on from here
+    draft = '\n'.join(keep)
+    speakers = 0 if source else _cue_speakers(lines)
+    return draft if _complete_answer(draft, source, speakers) else ''
+
+
+def leaked_cue_answer(body, source=''):
+    """The model's own Hebrew in a leaked cue: the line its working settled
+    on, else the draft it opened with; '' when it wrote no whole Hebrew
+    answer. `source`: the cue's source line, when there is one."""
+    return reasoning_final_answer(body, source) or reasoning_free_draft(body, source)
+
+
+_AN_TAG_RE = re.compile(r'^\s*(\{\\an\d\})')
+
+
+def restyle_like(body, text):
+    """`text` with the position tag and whole-cue italics `body` had."""
+    m = _AN_TAG_RE.match(body)
+    rest = body[m.end():].strip() if m else body.strip()
+    if rest.startswith('<i>') and rest.endswith('</i>') and rest.count('<i>') == 1:
+        text = '<i>' + text + '</i>'
+    return (m.group(1) if m else '') + text
+
+
 _LATIN_ECHO_WORD_RE = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)?")
 _LATIN_ECHO_FINITE_VERBS = frozenset((
     'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
@@ -2505,7 +2794,7 @@ _HE_NEGATION_RE = re.compile(
     r')(?![א-ת])')
 
 
-def generated_editorial_leak_indices(src_blocks, out_blocks):
+def generated_editorial_leak_indices(src_blocks, out_blocks, strong_only=False):
     """Indices of generated SRT blocks containing model self-edit prose.
 
     This is a rejection detector, not a text eraser. The caller retries the
@@ -2518,28 +2807,23 @@ def generated_editorial_leak_indices(src_blocks, out_blocks):
       * the aligned source cue did not itself contain such editorial text.
 
     The last condition preserves literal dialogue about fixing translations,
-    source stage directions and examples. Fully fail-open: uncertainty returns
-    no indices and the existing translation path remains in control.
+    source stage directions and examples. English deliberation and drafts
+    side by side count anywhere in the cue, brackets or not. Fully fail-open:
+    uncertainty returns no indices and the existing translation path remains
+    in control. With no source at all (a cached file whose source is gone)
+    every cue is judged as if its source said nothing; strong_only then asks
+    more than one English phrase of the inline check (_inline_reasoning).
     """
     try:
-        if not src_blocks or not out_blocks:
+        if not out_blocks:
             return []
-        sources = {}
-        for block in src_blocks:
-            start = _block_start(block)
-            if start is not None:
-                sources.setdefault(start, []).append(block_text_only(block) or '')
-        seen = {}
+        sources = aligned_source_texts(src_blocks, out_blocks)
         bad = []
         for index, block in enumerate(out_blocks):
             body = block_text_only(block) or ''
             if not _HEB_RE.search(body):
                 continue
-            start = _block_start(block)
-            occurrence = seen.get(start, 0)
-            seen[start] = occurrence + 1
-            candidates = sources.get(start, ())
-            source = candidates[occurrence] if occurrence < len(candidates) else ''
+            source = sources[index]
             source_clean = re.sub(r'\s+', ' ', source).strip().lower()
             source_is_editorial = bool(_EDITORIAL_ACTION_RE.search(source_clean))
             leaked = False
@@ -2562,11 +2846,70 @@ def generated_editorial_leak_indices(src_blocks, out_blocks):
             if not leaked and not any(_reasoning_line(l) for l in source.split('\n')):
                 arrow = bool(_SOURCE_ARROW_RE.search(source))
                 leaked = any(_reasoning_line(l, arrow) for l in body.split('\n'))
+            if not leaked:
+                leaked = _inline_reasoning(body, source_clean, strong_only)
             if leaked:
                 bad.append(index)
         return bad
     except Exception:
         return []
+
+
+# Everything generated_editorial_leak_indices looks for, in one pattern: a
+# file with none of it anywhere has no leaked cue. (An arrow, but not the
+# one in every timecode line, which may_carry_reasoning leaves out.)
+_ANY_REASONING_RE = re.compile('|'.join(p.pattern for p in (
+    _REASONING_INLINE_RE, _REASONING_FRAGMENT_RE, _EDITORIAL_ACTION_RE,
+    _DRAFTS_RE, _SOURCE_ARROW_RE))
+    + r"|let['’]?s\s+(?:check|see|look|fix|correct|verify)\b"
+    + r"|(?:hebrew|arabic|english|translation|note|check|correction)\s*:", re.I)
+
+
+_LATIN_PAIR_RE = re.compile('[A-Za-z]{2}')
+
+
+def may_carry_reasoning(text):
+    """False only when no cue of `text` can be a leak, so a clean cached file
+    skips the per-cue scan. Every sign of one has two Latin letters, an arrow
+    or a slash, so only the lines with one are searched -- cleaned as the
+    scan cleans them, with the lines on either side (drafts side by side can
+    break at the slash)."""
+    try:
+        lines = (text or '').splitlines()
+        for i, line in enumerate(lines):
+            if not ('/' in line or '>' in line or '→' in line
+                    or _LATIN_PAIR_RE.search(line)):
+                continue
+            if _TIMECODE_RE.match(line.strip()):
+                continue
+            # each line cleaned on its own, as the scan does ("<3" must not
+            # swallow the next line's arrow)
+            window = '\n'.join(_plain(l) for l in lines[max(0, i - 1):i + 2]
+                               if not _TIMECODE_RE.match(l.strip()))
+            if _ANY_REASONING_RE.search(window):
+                return True
+        return False
+    except Exception:
+        return True
+
+
+def aligned_source_texts(src_blocks, out_blocks):
+    """The text of the source cue each output block was translated from
+    (matched by start time, then by order), '' where there is none."""
+    sources = {}
+    for block in src_blocks or ():
+        start = _block_start(block)
+        if start is not None:
+            sources.setdefault(start, []).append(block_text_only(block) or '')
+    seen = {}
+    texts = []
+    for block in out_blocks:
+        start = _block_start(block)
+        occurrence = seen.get(start, 0)
+        seen[start] = occurrence + 1
+        candidates = sources.get(start, ())
+        texts.append(candidates[occurrence] if occurrence < len(candidates) else '')
+    return texts
 
 
 def generated_source_echo_indices(src_blocks, out_blocks):
