@@ -521,6 +521,8 @@ def _handle_download(handle, params):
                       level='WARNING')
             delivered = False
         if delivered:
+            # a pooled AI translation: its gender proofread in the background
+            translate.proofread_later(link, _timing_selection)
             return  # endOfDirectory already called inside the helper
         if not _timing_selection_current():
             xbmcplugin.endOfDirectory(handle)
@@ -538,6 +540,8 @@ def _handle_download(handle, params):
                 before=registration_before)
         if added is False or not registration_confirmed:
             kodi_utils.abandon_subtitle_selection(_timing_selection)
+        else:
+            translate.proofread_later(link, _timing_selection)
         return
     kodi_utils.abandon_subtitle_selection(_timing_selection)
     xbmcplugin.endOfDirectory(handle)
@@ -1522,8 +1526,11 @@ def _handle_bg_translate_picker(params):
     # The picker/chooser already closed, so a failed background job would
     # otherwise be SILENT -- the user explicitly picked this sub and must know it
     # didn't land (and to try another). resolve() returns a path only on success;
-    # a falsy result means extraction/translation deferred or failed.
-    if not _resolved:
+    # a falsy result means extraction/translation deferred or failed. Not for a
+    # gender-proofread job (translate.proofread_later): its subtitle is on
+    # screen already, and None only means nothing was corrected.
+    if not _resolved and not (translate._decode_link(link) or {}).get(
+            'proofread_only'):
         try:
             # An extraction that STOPPED PART-WAY is not a failure -- it banked
             # its progress and the next pick continues from there, and it has
