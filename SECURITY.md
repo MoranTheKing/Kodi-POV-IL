@@ -1,39 +1,36 @@
-# Security Policy
+<div dir="rtl">
 
-This repository is maintained by MoranTheKing.
+# דיווח על בעיית אבטחה
 
-Only trusted maintainers should have write access. Do not add external collaborators unless they are expected to publish build files, APK files, or GitHub Pages content.
+מצאתם בעיית אבטחה ב־Kodi POV IL, ב־MoranSubs או בשרת המאגר הקהילתי? תודה שאתם בודקים.
 
-## Required GitHub Settings
+**אל תפתחו issue ציבורי עם הפרטים.** דווחו בפרטיות:
 
-Enable these settings in GitHub to prevent accidental or unauthorized changes:
+1. היכנסו ללשונית [Security](https://github.com/MoranTheKing/Kodi-POV-IL/security) של הריפו.
+2. לחצו על **Report a vulnerability** ותארו את הבעיה, איך משחזרים אותה ומה ההשפעה שלה.
 
-1. Settings -> Collaborators and teams:
-   Keep only trusted maintainers with write/admin access.
+אם הכפתור לא מופיע, פתחו issue שכותרתו "Security contact" בלי שום פרט על הבעיה, ואחזור אליכם כדי להמשיך בפרטיות.
 
-2. Settings -> Branches -> Add branch protection rule for `main`:
-   Enable "Require a pull request before merging".
-   Enable "Require review from Code Owners".
-   Enable "Do not allow bypassing the above settings".
-   Disable force pushes.
-   Disable deletions.
+## מה בתחום
 
-3. Settings -> Branches -> Add branch protection rule for `gh-pages`:
-   Disable force pushes.
-   Disable deletions.
-   Allow direct pushes only from trusted maintainers.
+- התוסף MoranSubs ‏(`service.subtitles.kodipovilai`) והתקשורת שלו עם שרת המאגר הקהילתי.
+- הוויזארד ‏(`plugin.program.kodipovilwizard`) ועדכוני הבילד.
+- הסקינים של הבילד, NOX ו־Onyx.
+- עמודי ההתקנה וההורדה, וקובצי ההתקנה שבגרסאות.
 
-4. Settings -> Pages:
-   Use `Deploy from a branch`, branch `gh-pages`, folder `/`.
+תיקונים יוצאים בגרסה האחרונה בלבד, דרך העדכון האוטומטי של הבילד. בעיות בתוספים של צדדים שלישיים (POV, ‏Umbrella, עידן+, FENtastic ו־Arctic Fuse 3) יש לדווח ליוצרים שלהם.
 
-5. Settings -> Actions -> General:
-   Use "Allow MoranTheKing, and select non-MoranTheKing, actions and reusable workflows" if you want strict workflow control.
+## לפני ששולחים
 
-## APK Signing
+- אל תשלחו מפתחות, טוקנים או סיסמאות אמיתיים, לא שלכם ולא של אחרים.
+- אל תבדקו את שרת המאגר בעומס, ואל תעלו אליו קבצים שאינם כתוביות.
 
-Do not publish unsigned APK files.
+</div>
 
-A working Kodi Android APK requires the Kodi Android project build output and an Android signing key. If an existing APK is modified, it must be re-signed, and Android treats a different signing key as a different app identity. Users upgrading an already-installed APK generally need the same signing key that signed the previous APK.
+---
 
-Signing keys must not be committed to this repository. Store signing keys in GitHub Actions secrets or keep them offline.
-
+**English:** please report security issues privately through the repository's
+[Security](https://github.com/MoranTheKing/Kodi-POV-IL/security) tab
+(*Report a vulnerability*), not in a public issue. If that option is not
+available, open an issue titled "Security contact" with no details and you
+will be contacted.

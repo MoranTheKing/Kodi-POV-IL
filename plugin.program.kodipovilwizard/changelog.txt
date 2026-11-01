@@ -1,3 +1,7 @@
+0.4.94
+- Umbrella 6.7.99: the child-profile content-rating hook (umbrella_profile_metadata) finds the line it follows in its new form too -- 6.7.99 writes setMpaa(meta_get('mpaa') or '') -- so Umbrella can move from 6.7.98 to 6.7.99 (before this, 4 of Umbrella's 5 hooks fitted 6.7.99; this one did not).
+- Onyx: povil_rtl reads a Kan item's id with or without a trailing slash, as hero_details does.
+
 0.4.93
 - hero_details: Keshet's details kept in index.json (folder path -> details) and Kan's list in kan_wide.json are read by povil_rtl when Idan Plus lists a home row: Keshet shows fetched once and every Kan show carry their summary / picture / logo themselves. The item's two neighbours on each side are fetched with it (povil.details.near -> povil.details.1. ... .4.). mode=hero_warm reads Kan's list when the Israeli tab opens; one read at a time (kan_wide.lock), 25 s a page (~880 KB each: the 8 s of 0.4.92 left a phone's Kan without pictures). Kan's picture is 1920x1080 asked 1280 wide (0.4.92's note said 1920x1080).
 

@@ -108,7 +108,7 @@
 - [פרופילים ובקרת הורים](PROFILES.md)
 - [מה נשמר בעדכון ובמעבר בין גרסאות](userdata/README.md)
 - [התקנות ושחרור גרסאות (APK, Windows, webOS)](APK_RELEASE.md)
-- [אבטחת הריפו](SECURITY.md)
+- [דיווח על בעיית אבטחה](SECURITY.md)
 - [הערות טכניות והיסטוריית הבילד](docs/DEVELOPMENT.md), למפתחים
 
 ---
