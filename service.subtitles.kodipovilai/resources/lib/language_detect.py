@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Best-effort language detection for SRT files we find on disk.
 # Used when filename hints (foo.en.srt etc.) aren't available.
 #

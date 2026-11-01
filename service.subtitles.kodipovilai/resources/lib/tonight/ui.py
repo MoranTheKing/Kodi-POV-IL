@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Integrated RunScript action. Standard dialogs: arrows + OK + Back in every skin.
 
 No service loop, credential reads, preference export or playback before explicit selection.

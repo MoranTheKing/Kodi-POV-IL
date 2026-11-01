@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Self-healing patch of DarkSubs's sub_window.py so the subtitle
 # picker's per-row height is tall enough for long release names
 # to display without getting clipped mid-wrap.

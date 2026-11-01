@@ -1,0 +1,42 @@
+Kodi POV IL
+Copyright (C) 2026 MoranTheKing, except as stated below.
+https://github.com/MoranTheKing/Kodi-POV-IL
+
+This repository holds several works under different licenses.
+
+1. Add-ons. Every add-on folder, and every add-on package (.zip) anywhere in
+   this repository - including those under dist/, addons/, repo/, wizard/
+   and wizard-new/ - carries the license of the add-on it contains, as its
+   LICENSE file or its addon.xml states:
+
+   - MoranSubs (service.subtitles.kodipovilai): GNU General Public License
+     version 3 or later, with additional terms under its section 7 that
+     require preserving the attribution "MoranSubs by MoranTheKing", marking
+     modified versions, and not using the names MoranSubs or Kodi POV IL for
+     them. See service.subtitles.kodipovilai/LICENSE.txt. Versions up to and
+     including 0.3.61 were published under the MIT License.
+   - The Wizard (plugin.program.kodipovilwizard): GNU General Public License
+     version 3, as the OpenWizard project it is based on.
+   - The skins (skin.povil.nox, skin.povil.onyx, skin.fentastic,
+     skin.estuary): Creative Commons Attribution-ShareAlike 4.0 and GNU
+     General Public License version 2, as the skins they are based on.
+   - Add-ons by other authors (among them plugin.program.autocompletion,
+     script.module.autocompletion, script.fentastic.helper,
+     plugin.program.orderfavourites-hebrew, the repository.* folders and the
+     third-party packages under dist/): the licenses of their authors.
+
+2. Code from other projects. A file copied from another project (for example
+   the test fixtures taken from POV or Umbrella) keeps the license its header
+   or its project names.
+
+3. Everything else. Unless stated otherwise in 1 or 2, the material in this
+   repository - including the build's configuration (userdata/), tools/,
+   tests/, .github/, pool/, the documentation, the install and download
+   pages, and the build's images - is the work of MoranTheKing, all rights
+   reserved. Except as GitHub's Terms of Service allow (viewing and forking
+   on GitHub), it may not be copied, modified, redistributed, or used to
+   make another build or service, in whole or in part, without written
+   permission from MoranTheKing.
+
+Kodi is a trademark of the XBMC Foundation. Names of other add-ons and skins
+belong to their respective authors.

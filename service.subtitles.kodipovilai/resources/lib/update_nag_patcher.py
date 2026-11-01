@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Quiet pinned add-on offers and the optional Kodi 21.2 upgrade reminder.
 #
 # Umbrella and Account Manager Lite each check their own upstream repo at

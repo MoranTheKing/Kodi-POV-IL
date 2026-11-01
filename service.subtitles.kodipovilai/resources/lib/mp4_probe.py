@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Bounded MP4 timed-text reference for subtitle timing checks.
 
 Reads only the movie index, never the video/audio payload. Unsupported sample
