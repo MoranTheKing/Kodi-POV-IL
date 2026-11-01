@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Read the gender of the SPEAKER and the ADDRESSEE from Hebrew text.
 
 Why this exists. Measured in a real Kodi on Gemini 3.5 Flash-Lite: with a

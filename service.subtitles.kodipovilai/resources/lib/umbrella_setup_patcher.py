@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Two independent, self-healing fixes for the opt-in Umbrella pilot.
 #
 # 1) EXTERNAL PROVIDER (settings only).

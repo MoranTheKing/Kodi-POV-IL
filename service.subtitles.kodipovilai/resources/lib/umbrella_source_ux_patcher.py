@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Two small repairs to Umbrella's source-selection flow.
 #
 # 1. PREWARM -- the Hebrew match badge on the FIRST entry, not the second.

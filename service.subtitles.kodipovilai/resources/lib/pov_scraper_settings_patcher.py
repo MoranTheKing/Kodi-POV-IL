@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # One-time tune of plugin.video.pov's scraper settings for the build.
 #
 # The build owner WANTS pre-release (CAM/SCR/TELE) and 3D results included by

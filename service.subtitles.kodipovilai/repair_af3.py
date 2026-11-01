@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Bounded, non-network repair after Kodi updates Arctic Fuse 3 in this session.
 
 Kodi replaces the whole skin folder on an update. The build's Hebrew font

@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Which add-on the home SEARCH button searches: POV or Umbrella.
 #
 # The build is POV-centric and its search has always been POV's. Umbrella

@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Self-healing patch of DarkSubs's custom subtitle-picker dialog XML
 # so long release names don't get cut off mid-line. Many DarkSubs
 # builds put the release name in a `<control type="label">` with

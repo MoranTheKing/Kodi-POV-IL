@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """One-call repair of Hebrew subtitle lines that picked up another alphabet.
 
 Measured in Kodi on the free Flash-Lite model: most episodes come back with
