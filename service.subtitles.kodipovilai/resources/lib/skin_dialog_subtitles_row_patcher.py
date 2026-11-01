@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Self-healing patch of the ACTIVE skin's DialogSubtitles.xml row
 # layout so long release names in the subtitle picker don't get
 # clipped mid-wrap.

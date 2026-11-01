@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # One-shot first-launch dialog for Arctic Fuse 3.
 #
 # When a user switches to skin.arctic.fuse.3 for the first time

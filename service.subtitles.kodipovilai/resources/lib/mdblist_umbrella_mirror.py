@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # One MDBList authorisation for both add-ons.
 #
 # Connecting MDBList used to mean doing it twice: once here (an API key,

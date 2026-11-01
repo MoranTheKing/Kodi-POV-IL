@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Umbrella's MDBList watched-history sync loses episodes permanently.
 #
 # THE REPORT: POV shows the right progress. In Umbrella, "פרקים בהמשך צפייה"

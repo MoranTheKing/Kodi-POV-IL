@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # SubSync Phase S1 -- the ONE structured release-name scorer.
 #
 # Replaces the three divergent difflib token scorers (subs_engine/engine.py's

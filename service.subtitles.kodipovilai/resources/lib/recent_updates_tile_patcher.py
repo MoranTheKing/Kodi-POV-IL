@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Seeds ONE home tile: "10 העדכונים האחרונים", opening the wizard's archive of
 # the last ten update notes.
 #

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Why an add-on with an available update is never installed.
 
 THE REPORT: "sometimes there are updates and it does not update, and then I

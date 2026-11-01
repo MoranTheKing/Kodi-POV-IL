@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Umbrella's search finds nothing when you type Hebrew. It is not TMDb, and
 # it is not the language/region parameters -- TMDb answers a Hebrew query
 # perfectly well. Umbrella never sends the request at all.

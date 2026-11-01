@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Reload repaired Umbrella/Coco settings without risking active playback.
 
 Kodi reads an add-on's profile settings into its CAddon object. Replacing a

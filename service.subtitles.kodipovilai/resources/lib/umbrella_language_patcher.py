@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Self-healing patch: give Umbrella the MODERN addon-language layout so its
 # settings labels render on a Hebrew-interface Kodi.
 #

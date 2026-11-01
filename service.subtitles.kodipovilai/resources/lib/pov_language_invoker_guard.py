@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Turn POV's reuse-language-invoker OFF. It is what turns a burst of
 # concurrent widget loads into a native crash that takes the whole app down.
 #

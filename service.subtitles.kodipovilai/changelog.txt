@@ -1,3 +1,6 @@
+0.3.62
+- License: from this version MoranSubs is licensed under the GNU GPL version 3 or later, with additional terms that require keeping the credit "MoranSubs by MoranTheKing" and its link, marking modified versions as modified, and not using the names MoranSubs or Kodi POV IL for them (LICENSE.txt). Versions up to 0.3.61 were MIT. Only the add-on's description gains a credit line.
+
 0.3.61
 - Usage telemetry: the event a translation sends also names the model of its gender proofread and the lines it fixed, so the dashboard's Recent activity shows them next to the translation -- for every translation, shared to the community pool or not. Nothing changes on screen.
 

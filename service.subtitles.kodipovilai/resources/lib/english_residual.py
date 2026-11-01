@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Conservative one-call repair of verbatim English left in Hebrew subtitles.
 
 This is an omission detector, not a general translation-quality judge. It

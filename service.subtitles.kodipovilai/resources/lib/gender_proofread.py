@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """One request to a stronger model that proofreads the GENDER and NUMBER of a
 finished Hebrew translation against the whole source.
 

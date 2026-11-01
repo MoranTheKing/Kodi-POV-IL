@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Stop Umbrella nagging about an MDBList session it cannot renew.
 #
 # Umbrella captures its Authorization header once, when modules/mdblist.py is

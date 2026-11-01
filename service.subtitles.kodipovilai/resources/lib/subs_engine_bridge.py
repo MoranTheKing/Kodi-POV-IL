@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Bridge between MoranSubs and the vendored DarkSubs fetch engine
 # (resources/lib/subs_engine). Phase B2 of the unification.
 #

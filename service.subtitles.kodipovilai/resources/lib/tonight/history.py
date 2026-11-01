@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Selected-provider viewing evidence; read-only, never a declaration of liking."""
 import sqlite3
 from pathlib import Path

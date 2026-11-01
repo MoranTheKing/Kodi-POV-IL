@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Heal + harden Idan Plus (plugin.video.idanplus) channel loading.
 #
 # WHY: idanplus keeps its channel map in a per-profile file,

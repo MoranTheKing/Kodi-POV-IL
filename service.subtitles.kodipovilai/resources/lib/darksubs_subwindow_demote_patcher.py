@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Sink the EMBEDDED ENGLISH ("תרגום מובנה אנגלית", site_id '[LOC]')
 # subtitle to the bottom of DarkSubs's picker -- patched at the LAST
 # possible point, the picker dialog itself, so it works regardless of how

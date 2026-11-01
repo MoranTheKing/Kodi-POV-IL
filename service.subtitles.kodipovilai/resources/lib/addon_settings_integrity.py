@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Recover a torn add-on ``settings.xml`` without losing the user's values.
 
 Kodi logs this exact line only when TinyXML cannot load the stored values file::

@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Self-healing patch of DarkSubs's engine.py so that EMBEDDED
 # ("[LOC]") subtitle entries sink to the BOTTOM of their language
 # group in the results dialog instead of floating to the top.
