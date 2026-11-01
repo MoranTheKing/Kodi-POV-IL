@@ -5,7 +5,9 @@
 <h1 align="center">Kodi POV IL</h1>
 
 <p align="center">
-  <b>הבילד הישראלי ל־Kodi: סרטים, סדרות, ערוצי ישראל וכתוביות בעברית, במקום אחד.</b><br>
+  <b>הבילד הישראלי ל־Kodi: סרטים, סדרות, ערוצי ישראל וכתוביות בעברית, במקום אחד.</b>
+</p>
+<p align="center">
   <sub>The Israeli Kodi build: films, series, Israeli TV and Hebrew subtitles, in one place.</sub>
 </p>
 
@@ -18,13 +20,13 @@
 <p align="center">
   <a href="https://morantheking.github.io/Kodi-POV-IL/install.html"><b>📖 מדריך התקנה</b></a>
   &nbsp;·&nbsp;
-  <a href="https://morantheking.github.io/Kodi-POV-IL/downloads/android-phone/">📱 טלפון / Shield</a>
+  <a href="https://morantheking.github.io/Kodi-POV-IL/downloads/android-phone/">📱 טלפון ו־Shield</a>
   &nbsp;·&nbsp;
-  <a href="https://morantheking.github.io/Kodi-POV-IL/downloads/android-tv/">📺 Android TV</a>
+  <a href="https://morantheking.github.io/Kodi-POV-IL/downloads/android-tv/">📺 טלוויזיית אנדרואיד</a>
   &nbsp;·&nbsp;
-  <a href="https://morantheking.github.io/Kodi-POV-IL/downloads/windows/">💻 Windows</a>
+  <a href="https://morantheking.github.io/Kodi-POV-IL/downloads/windows/">💻 מחשב Windows</a>
   &nbsp;·&nbsp;
-  <a href="https://morantheking.github.io/Kodi-POV-IL/downloads/lg-tv/">🖥️ LG TV</a>
+  <a href="https://morantheking.github.io/Kodi-POV-IL/downloads/lg-tv/">🖥️ טלוויזיית LG</a>
 </p>
 
 <div dir="rtl">
@@ -38,12 +40,12 @@
 <td width="50%" valign="top">
 
 ### 🎬 סרטים וסדרות
-POV ו־Umbrella, מוכנים לעבודה עם TorBox ו־Real-Debrid, רשימות Trakt ו־MDBList, ושורות בית בעברית שנטענות מהר.
+התוספים POV ו־Umbrella, מוכנים לעבודה עם TorBox ו־Real-Debrid, עם רשימות Trakt ו־MDBList ושורות בית בעברית שנטענות מהר.
 
 </td>
 <td width="50%" valign="top">
 
-### 🇮🇱 ערוצי ישראל
+### 📡 ערוצי ישראל
 כאן 11, קשת 12 ועוד דרך עידן+, בשורות משלהם במסך הבית. ב־Onyx גם ה־IPTV שלכם מקבל שורה.
 
 </td>
@@ -66,7 +68,7 @@ POV ו־Umbrella, מוכנים לעבודה עם TorBox ו־Real-Debrid, רשי�
 <td valign="top">
 
 ### 🎨 חמישה סקינים
-Nox, ‏Onyx (ממשק מימין לשמאל מלא), ‏FENtastic, ‏Arctic Fuse 3 ו־Estuary. כולם בעברית, והמעבר ביניהם נעשה מתוך הבילד.
+הסקינים Nox, ‏Onyx (ממשק מימין לשמאל מלא), ‏FENtastic, ‏Arctic Fuse 3 ו־Estuary. כולם בעברית, והמעבר ביניהם נעשה מתוך הבילד.
 
 </td>
 <td valign="top">
@@ -115,10 +117,10 @@ Nox, ‏Onyx (ממשק מימין לשמאל מלא), ‏FENtastic, ‏Arctic Fu
 
 | רכיב | רישיון |
 |---|---|
-| **MoranSubs** (`service.subtitles.kodipovilai`) | [GNU GPL v3.0 ומעלה, עם תנאי ייחוס](service.subtitles.kodipovilai/LICENSE.txt): כל עותק חייב להשאיר "MoranSubs by MoranTheKing" וקישור לכאן, וגרסה ששונתה חייבת לציין זאת ואסור לה להשתמש בשם MoranSubs. עד 0.3.61: MIT. |
-| **הוויזארד** (`plugin.program.kodipovilwizard`) | GNU GPL v3.0, כפרויקט OpenWizard שהוא מבוסס עליו |
-| **הסקינים** Nox, Onyx, FENtastic, Estuary | CC BY-SA 4.0 ו־GNU GPL v2.0, כמו הסקינים שהם מבוססים עליהם |
-| **שאר הבילד**: הגדרות, כלים, בדיקות, תיעוד, עמודי התקנה ותמונות | © MoranTheKing, כל הזכויות שמורות. אין להעתיק, לשנות, להפיץ או להשתמש בהם לבילד אחר בלי אישור בכתב. |
+| **התוסף MoranSubs** (`service.subtitles.kodipovilai`) | [רישיון GNU GPL v3.0 ומעלה, עם תנאי ייחוס](service.subtitles.kodipovilai/LICENSE.txt): כל עותק חייב להשאיר "MoranSubs by MoranTheKing" וקישור לכאן, וגרסה ששונתה חייבת לציין זאת ואסור לה להשתמש בשם MoranSubs. עד 0.3.61: MIT. |
+| **הוויזארד** (`plugin.program.kodipovilwizard`) | רישיון GNU GPL v3.0, כמו OpenWizard שהוא מבוסס עליו |
+| **הסקינים** Nox, Onyx, FENtastic, Estuary | רישיונות CC BY-SA 4.0 ו־GNU GPL v2.0, כמו הסקינים שהם מבוססים עליהם |
+| **שאר הבילד**: הגדרות, כלים, בדיקות, תיעוד, עמודי התקנה ותמונות | כל הזכויות שמורות ל־MoranTheKing. אין להעתיק, לשנות, להפיץ או להשתמש בהם לבילד אחר בלי אישור בכתב. |
 
 התוספים של צדדים שלישיים בבילד שייכים ליוצריהם ונשארים ברישיון שלהם. הפירוט המלא נמצא ב־[LICENSE](LICENSE).
 
@@ -128,7 +130,7 @@ Nox, ‏Onyx (ממשק מימין לשמאל מלא), ‏FENtastic, ‏Arctic Fu
 
 הבילד עומד על כתפיים של אחרים:
 
-- [Kodi](https://kodi.tv) ‏(Team Kodi)
+- ‏[Kodi](https://kodi.tv) ‏(Team Kodi)
 - ‏POV ‏(kodifitzwell)
 - ‏Umbrella
 - עידן+ ‏(Fishenzon)
@@ -138,7 +140,7 @@ Nox, ‏Onyx (ממשק מימין לשמאל מלא), ‏FENtastic, ‏Arctic Fu
 - ‏OpenWizard ‏(drinfernoo), שהוויזארד מבוסס עליו
 - ‏PyXBMCt ‏(Roman V.M.)
 - ‏DarkSubs
-- [SRT AI Translator NG](https://github.com/Akila3/SRT-AI-Translator-NG) ‏(Akila3)
+- ‏[SRT AI Translator NG](https://github.com/Akila3/SRT-AI-Translator-NG) ‏(Akila3)
 
 </div>
 
