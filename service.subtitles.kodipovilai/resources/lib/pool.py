@@ -674,6 +674,14 @@ def _build_body(info, source_hash, source_lang, srt_text,
         # gender-proofread (gender_proofread.py): replaces the pooled variant
         # of the same source when that one is not
         body['proofread'] = 1
+        if isinstance(proofread, dict) and proofread.get('model'):
+            # the pool's dashboard: which model proofread it, how many lines
+            # it fixed (translate._gp_stats)
+            body['gp_model'] = str(proofread['model'])[:48]
+            try:
+                body['gp_fixed'] = max(0, int(proofread.get('applied') or 0))
+            except (TypeError, ValueError):
+                pass
     return body
 
 
