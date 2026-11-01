@@ -1,3 +1,6 @@
+0.3.60
+- Community pool: a proofread upload also says which model proofread it and how many lines it fixed (the proofread marker keeps them for an upload offered again later), so the pool's owner page can show them per title and per model. Nothing changes on screen.
+
 0.3.59
 - AI translation, gender: a translation made before 0.3.58's proofread -- one in the cache, one picked from the community pool -- gets it once, the first time it is opened: its Hebrew shows at once and the corrected file replaces it a few minutes later. A pooled one needs the subtitle it was translated from, found in the list under the same release and proved by its content hash. The automatic translation on play gets it too, after it is applied, in a background job that only proofreads (it never translates, and says nothing unless it corrected something).
 - Community pool: the corrected file replaces the pooled one of the same source, once, and only when it changes nothing but word forms -- the same cues, timings and lines, the same words but for inflected ones, punctuation moved only as an RTL mode moves it, a tenth of the cues at most; a translation someone already proofread is taken from the pool with no request.

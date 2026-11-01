@@ -159,11 +159,12 @@ class Wiring(unittest.TestCase):
                       '            gemini_quota.note_request(model)', gem)
         settings = (LIB.parent / 'settings.xml').read_text(encoding='utf-8')
         self.assertIn('<setting id="gender_proofread" type="boolean" label="32556" help="32557">', settings)
-        # marked when a model answered; the pool upload says it is proofread
+        # marked when a model answered; the pool upload says it is proofread,
+        # by which model and how many lines it fixed (0.3.60)
         self.assertIn("        if _gp_report.get('model'):\n"
                       "            # proofread: opening it again spends no request\n"
-                      "            _gp_mark(translated)", src)
-        self.assertIn("proofread=bool(_gp_report.get('model')))", src)
+                      "            _gp_mark(translated, _gp_report)", src)
+        self.assertIn("proofread=(_gp_stats(_gp_report) or False))", src)
 
     def test_opened_translations_get_it_once_and_never_a_translation(self):
         src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
