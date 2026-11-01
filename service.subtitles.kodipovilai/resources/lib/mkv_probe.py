@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # SubSync Phase S4 -- MKV/WebM container probe: read the EMBEDDED subtitle
 # track's cue TIMESTAMPS straight out of the playing file, via HTTP Range
 # requests (debrid direct links) or local reads -- WITHOUT downloading the

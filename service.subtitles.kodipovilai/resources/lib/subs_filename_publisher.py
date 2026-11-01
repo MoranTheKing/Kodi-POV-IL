@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Bulletproof publisher of `subs.player_filename` -- the Window(10000)
 # property DarkSubs natively reads into Tagline_From_Fen. By the time
 # our `xbmc.Player` subclass's onAVStarted() fires, the player has

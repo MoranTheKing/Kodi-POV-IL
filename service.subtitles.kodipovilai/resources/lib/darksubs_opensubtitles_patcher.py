@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Self-healing patch for DarkSubs's OpenSubtitles provider.
 #
 # Users can install this AI addon without installing the full POV IL build.

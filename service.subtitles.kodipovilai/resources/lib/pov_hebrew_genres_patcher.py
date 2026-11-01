@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Show POV's genre menu names in HEBREW (all skins).
 #
 # POV's genre menu (menus/navigator.py genres()/anime_genres()/

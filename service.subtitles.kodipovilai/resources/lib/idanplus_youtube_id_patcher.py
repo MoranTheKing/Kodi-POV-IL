@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Idan Plus sends YouTube the word "watch" instead of a video id.
 #
 # THE REPORT: nothing from Kan 11 plays; a YouTube toast says "This video is

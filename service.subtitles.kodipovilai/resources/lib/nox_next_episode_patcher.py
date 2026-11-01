@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Fix the NOX fullscreen-OSD "next episode" button.
 #
 # The NOX skin (skin.povil.nox) OSD has a "הפרק הבא" button next to the

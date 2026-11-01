@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Repoint Arctic Fuse 3's DISCOVER GRID (window 1105 / container 501)
 # from TMDbHelper to POV, so it shows Hebrew POV content with posters and
 # clicking an item plays through POV's source scraping.

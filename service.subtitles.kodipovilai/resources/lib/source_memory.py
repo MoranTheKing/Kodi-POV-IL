@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Remembers which source the user picked for a given movie/episode, so a
 # future play can auto-pick the same (or a similar) source instead of showing
 # the source/servers dialog again.

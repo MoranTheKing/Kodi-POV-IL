@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Adds a "החלף מקור" (change source) button to the Estuary skin's player OSD.
 #
 # Why: the build's Estuary (skin.estuary, the KODI-RD-IL custom Estuary) ships

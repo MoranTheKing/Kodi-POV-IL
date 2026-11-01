@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Bound build-owned artwork caching without deleting existing thumbnails.
 
 The full build historically ships ``<imageres>9999</imageres>``. That tells

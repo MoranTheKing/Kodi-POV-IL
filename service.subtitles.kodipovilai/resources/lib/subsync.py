@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # SubSync Phase S2 -- delivery-time verify & auto-retime orchestration.
 #
 # Called by translate.resolve() right before a Hebrew subtitle (engine human /

@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Which service Umbrella takes watched state and resume points from.
 #
 # Two settings, and each is a single CHOICE rather than a switch:

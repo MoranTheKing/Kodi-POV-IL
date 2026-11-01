@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Adds a "החלף מקור" (change source) button to the NOX skin's player OSD.
 #
 # Why: the NOX skin (skin.povil.nox, an Estuary MOD) ships a fullscreen

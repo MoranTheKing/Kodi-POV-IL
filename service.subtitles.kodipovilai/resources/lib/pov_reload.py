@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Force plugin.video.pov to re-import its patched sources.py after we modify it.
 #
 # Like DarkSubs, POV declares <reuselanguageinvoker>true</> and warms its Python

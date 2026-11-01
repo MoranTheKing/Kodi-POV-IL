@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Hebrew-ise POV's own in-app UI strings (all skins).
 #
 # POV ships ONLY resource.language.en_gb, so every string POV shows via

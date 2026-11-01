@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Fix the NOX player OSD collision the LAST change-source fix exposed: adding the
 # "החלף מקור" button to NOX's right-aligned OSD group (id 202) widened that group,
 # which pushed its leftmost item -- "הפרק הבא" (next episode) -- left into the

@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Embedded-subtitle TEXT extractor for the AI translation pipeline.
 #
 # Reads the *text* of an embedded subtitle track (SRT / ASS-SSA / WebVTT)

@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Auto-on-play Hebrew subtitle machinery (Phase C), extracted VERBATIM from
 # service.py so the STANDALONE (repo-channel) service can run the exact same
 # auto-search / auto-apply flow as the full build -- this is what makes

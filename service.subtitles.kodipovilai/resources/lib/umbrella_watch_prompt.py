@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Ask, once, when Umbrella has a service connected but is not reading from it.
 #
 # The safety net under umbrella_watch_source's claim. That claim is taken once

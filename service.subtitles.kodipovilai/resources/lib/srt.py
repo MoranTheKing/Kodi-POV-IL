@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # SRT parsing + chunking. Kept minimal -- we only need to split a
 # file into translatable chunks of N entries and merge the model's
 # response back into one document.
