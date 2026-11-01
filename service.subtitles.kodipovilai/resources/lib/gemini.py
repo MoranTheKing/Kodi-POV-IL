@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Google Generative Language API client. Just the bits we need:
 # generateContent for translation, ListModels for the connection
 # test. Bring your own API key.

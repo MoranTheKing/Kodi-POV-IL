@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Background daemon: prune the translation cache on Kodi start, then
 # again every 24h while Kodi is running. Lightweight -- one stat
 # pass over a small directory and we're done. Exits if Kodi tells

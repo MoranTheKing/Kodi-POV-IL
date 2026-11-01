@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Add the "החלף מקור" (change source) button to FENtastic's SIMPLE player OSD.
 #
 # WHY: FENtastic's player OSD comes in variants selected by the skin string

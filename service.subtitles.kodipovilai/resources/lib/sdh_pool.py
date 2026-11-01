@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Phase 3b: share content-detected SDH releases via the community pool worker,
 # so a subtitle ONE user content-detected as SDH (srt.is_sdh_content) can be
 # preferred + labelled at ANOTHER user's ranking time -- before it's ever

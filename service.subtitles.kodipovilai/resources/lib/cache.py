@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Persistent translation cache. Stored under
 # userdata/addon_data/<id>/cache/. Files are named by deterministic
 # hash of (imdb_id, season, episode, source_lang) so the same item

@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Draw the watched tick in the Poster view, which is the build's default.
 #
 # THE REPORT. "There is no tick on the poster." Checked in every other view --

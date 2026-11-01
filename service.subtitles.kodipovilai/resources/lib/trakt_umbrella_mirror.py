@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # One Trakt authorisation for POV and Umbrella.
 #
 # Same shape as the MDBList mirror, and for the same reason: connecting Trakt

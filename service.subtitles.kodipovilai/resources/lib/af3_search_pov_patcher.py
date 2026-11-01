@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Repoint Arctic Fuse 3's Search/Discover rows at POV instead of
 # TMDbHelper, so typed search returns POV results (Hebrew, and they play
 # through POV's own source scraping) -- matching the home widgets.

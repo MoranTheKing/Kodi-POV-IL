@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Make the player's "החלף מקור" (change source) button PAUSE the video before it
 # opens the source-selection screen (it used to pause; now it kept playing in
 # the background). We inject one extra onclick -- PlayerControl(Play) gated on

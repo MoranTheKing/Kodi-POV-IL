@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Let a prepared MoranSubs replacement start only after a real Kodi restart.
 
 The old service keeps running on the boot when the Wizard prepares the next

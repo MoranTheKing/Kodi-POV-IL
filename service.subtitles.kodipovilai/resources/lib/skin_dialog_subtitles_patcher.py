@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Generic patcher for ANY skin's DialogSubtitles.xml so the dialog
 # header reads our `Window(10000).Property(subs.player_filename)`
 # instead of (or as a fallback to) `Player.Filename`.
