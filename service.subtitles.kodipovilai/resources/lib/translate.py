@@ -2977,12 +2977,37 @@ def _gp_done(path):
     return bool(path) and os.path.isfile(_gp_marker(path))
 
 
-def _gp_mark(path):
+def _gp_mark(path, report=None):
+    """The marker; with the proofread's report, it keeps the model and the
+    lines it fixed for an upload offered again later (_gp_saved)."""
+    stats = _gp_stats(report)
     try:
         with open(_gp_marker(path), 'w', encoding='utf-8') as f:
-            f.write('1')
+            f.write(json.dumps(stats) if stats else '1')
     except OSError:
         pass
+
+
+def _gp_stats(report):
+    """What the pool's dashboard shows of a proofread: the model that answered
+    and the lines it fixed. {} when no model answered."""
+    model = str((report or {}).get('model') or '')
+    if not model:
+        return {}
+    try:
+        applied = max(0, int((report or {}).get('applied') or 0))
+    except (TypeError, ValueError):
+        applied = 0
+    return {'model': model, 'applied': applied}
+
+
+def _gp_saved(path):
+    """The stats a marker kept ({} from a marker written before 0.3.60)."""
+    try:
+        with open(_gp_marker(path), 'r', encoding='utf-8') as f:
+            return _gp_stats(json.loads(f.read()))
+    except Exception:
+        return {}
 
 
 # An attempt in progress, or one no model answered: no new one for a while
@@ -3207,7 +3232,7 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
     """An older AI translation opened from the list, proofread once.
 
     `path` is the Hebrew file, corrected in place; `deliver(path)` returns the
-    file to show (repairs and timing applied); `share(text)` hands the
+    file to show (repairs and timing applied); `share(text, stats)` hands the
     proofread file to the pool. The Hebrew goes on screen at once, through the
     same phases a fresh translation uses, and the corrected file replaces it
     with 'done'. `shown_already`: it is on screen (proofread_later), so 'done'
@@ -3264,9 +3289,10 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
             # answered, or the viewer moved on: no pause before the next open
             _gp_try_mark(marker, False)
         if report.get('model'):
-            _gp_mark(marker)
+            _gp_mark(marker, report)
             if share is not None:
-                share(final if final is not None else (cache.load_text(path) or ''))
+                share(final if final is not None else (cache.load_text(path) or ''),
+                      _gp_stats(report))
     except Exception as e:
         final = None
         kodi_utils.log('gender proofread of an opened translation failed: '
@@ -3643,14 +3669,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     return None
                 _pshare = None
                 if pool.share_enabled():
-                    def _pshare(text_):
+                    def _pshare(text_, stats=None):
                         if _pool_quality_ok(_psource, text_):
                             pool.contribute_once(
                                 info, _phash, _psrc or 'en', text_,
                                 marker_path=_gp_marker(_gp_base),
                                 release_override=payload.get('release') or None,
                                 kind=('ai_emb' if _pkind == 'ai_emb' else 'ai'),
-                                proofread=True)
+                                proofread=stats or True)
                 return _proofread_opened(
                     _praw, _psource, _pool_job_id(_gp_base),
                     payload.get('release') or '', progressive_cb, _pool_deliver,
@@ -4092,13 +4118,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             return found
 
         def share_to(pool_hash):
-            def share(text):
+            def share(text, stats=None):
                 if _pool_quality_ok(source_text, text):
                     pool.contribute_once(
                         info, pool_hash, source_lang, text,
                         marker_path=_gp_marker(path),
                         release_override=_release_override, kind=_pool_kind,
-                        proofread=True)
+                        proofread=stats or True)
             return share
 
         # Proofread here before, its pool upload never went through (the
@@ -4108,7 +4134,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 and not pool.was_contributed(_gp_marker(path))):
             pool_hash = held_hash()
             if pool_hash:
-                share_to(pool_hash)(cache.load_text(path) or '')
+                share_to(pool_hash)(cache.load_text(path) or '', _gp_saved(path))
             return None
         if not _proofread_due(path, source_text, progressive_cb):
             return None
@@ -6570,13 +6596,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         level='DEBUG')
         if _gp_report.get('model'):
             # proofread: opening it again spends no request
-            _gp_mark(translated)
+            _gp_mark(translated, _gp_report)
             if early_source_id and content_id and content_id != early_source_id:
                 _gp_slot = cache.translated_path(
                     imdb_id, season, episode, source_lang,
                     source_id=content_id, tier=_tier)
                 if os.path.isfile(_gp_slot):
-                    _gp_mark(_gp_slot)
+                    _gp_mark(_gp_slot, _gp_report)
     # The Google file this run replaces can sit in another slot (the gender
     # reference tier came out differently this time). AI owns the title now:
     # a lookup of that slot must not serve the Google text or spend another
@@ -6613,7 +6639,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                                               _pool_kind),
                                      release_override=_release_override,
                                      kind=_pool_kind,
-                                     proofread=bool(_gp_report.get('model')))
+                                     proofread=(_gp_stats(_gp_report) or False))
             except Exception as e:
                 kodi_utils.log('pool contribute dispatch failed: {0}'.format(e),
                                level='DEBUG')
