@@ -1,3 +1,6 @@
+0.3.63
+- Umbrella 6.7.99: Hebrew for what it adds on screen -- the new "שנה (IMDb)" row in Movies and in TV shows, and the message when browsing by year from IMDb is unavailable. Its new settings stay in English, like the rest of Umbrella's settings.
+
 0.3.62
 - License: from this version MoranSubs is licensed under the GNU GPL version 3 or later, with additional terms that require keeping the credit "MoranSubs by MoranTheKing" and its link, marking modified versions as modified, and not using the names MoranSubs or Kodi POV IL for them (LICENSE.txt). Versions up to 0.3.61 were MIT. Only the add-on's description gains a credit line.
 

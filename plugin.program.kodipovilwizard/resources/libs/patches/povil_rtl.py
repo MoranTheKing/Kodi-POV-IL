@@ -60,7 +60,7 @@ UMBRELLA_VIEWS = {'movies': '51', 'tvshows': '51', 'seasons': '51', 'episodes': 
 SEEDED = 'povil.umbrella_views_seeded'
 DETAILS = 'special://profile/addon_data/plugin.program.kodipovilwizard/hero_details/'
 KAN_ITEM = re.compile(r'[?&]module=kan(?:&|$)')
-KAN_ID = re.compile(r'/p-(\d+)/')
+KAN_ID = re.compile(r'/p-(\d+)/?')
 BLUR_ITEMS = 200
 
 
