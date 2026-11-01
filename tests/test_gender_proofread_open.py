@@ -103,6 +103,11 @@ class Opened(Base):
 
     def run_it(self, report, change=True, shown_already=False):
         phases, shared = [], []
+        self.stats = []
+
+        def share(text, stats=None):
+            shared.append(text)
+            self.stats.append(stats)
 
         def fake_proofread(blocks, src, key, model, cast, stopped):
             self.assertEqual(model, 'gemini-3.5-flash-lite')
@@ -115,7 +120,7 @@ class Opened(Base):
             out = translate._proofread_opened(
                 self.path, EN, 'sid1', 'Rel', lambda ph, pl: phases.append((ph, pl)),
                 lambda p: p, lambda: False, {'imdb_id': 'tt1'},
-                share=shared.append, shown_already=shown_already)
+                share=share, shown_already=shown_already)
         return out, phases, shared
 
     def test_on_screen_at_once_then_the_corrected_file(self):
@@ -132,6 +137,11 @@ class Opened(Base):
         self.assertTrue(translate._gp_done(self.path))
         self.assertEqual(len(shared), 1)
         self.assertEqual(shared[0].split(), text.split())
+        # 0.3.60: the pool's dashboard is told the model and the lines fixed,
+        # and the marker keeps them for an upload offered again later
+        self.assertEqual(self.stats, [{'model': 'gemini-3.7-flash', 'applied': 1}])
+        self.assertEqual(translate._gp_saved(self.path),
+                         {'model': 'gemini-3.7-flash', 'applied': 1})
 
     def test_no_model_answered(self):
         out, phases, shared = self.run_it({'model': ''}, change=False)
@@ -144,6 +154,7 @@ class Opened(Base):
         out, phases, shared = self.run_it({'model': 'gemini-3.7-flash'}, change=False)
         self.assertTrue(translate._gp_done(self.path))
         self.assertEqual(shared, [HE])                    # the worker marks it
+        self.assertEqual(self.stats, [{'model': 'gemini-3.7-flash', 'applied': 0}])
 
     def test_never_without_its_source(self):
         # review of 0.3.59: a source look that failed must not become a proofread
@@ -331,6 +342,42 @@ class PoolUpload(Base):
         # a plain upload of a pooled source stays skipped
         sent, marked = self.post([{'hash': 'h1'}], {})
         self.assertEqual((sent, marked), ([], True))
+
+    def test_the_model_and_the_lines_it_fixed_go_along(self):
+        # 0.3.60, for the pool's dashboard
+        sent, _ = self.post([], {'proofread': {'model': 'gemini-3.7-flash', 'applied': 2}})
+        self.assertEqual((sent[0]['proofread'], sent[0]['gp_model'], sent[0]['gp_fixed']),
+                         (1, 'gemini-3.7-flash', 2))
+        # proofread=True (no report kept): the flag alone
+        sent, _ = self.post([], {'proofread': True})
+        self.assertEqual(sent[0]['proofread'], 1)
+        self.assertNotIn('gp_model', sent[0])
+        self.assertNotIn('gp_fixed', sent[0])
+
+
+class Stats(Base):
+
+    def test_what_a_proofread_tells_the_pool(self):
+        self.assertEqual(translate._gp_stats({'model': '', 'applied': 3}), {})
+        self.assertEqual(translate._gp_stats(None), {})
+        self.assertEqual(translate._gp_stats({'model': 'gemini-3.8-flash', 'applied': 'x'}),
+                         {'model': 'gemini-3.8-flash', 'applied': 0})
+        self.assertEqual(translate._gp_stats({'model': 'gemini-3.8-flash', 'applied': -4}),
+                         {'model': 'gemini-3.8-flash', 'applied': 0})
+
+    def test_markers_before_and_after_0_3_60(self):
+        translate._gp_mark(self.path)                     # no report: as before
+        self.assertTrue(translate._gp_done(self.path))
+        with open(translate._gp_marker(self.path), encoding='utf-8') as f:
+            self.assertEqual(f.read(), '1')
+        self.assertEqual(translate._gp_saved(self.path), {})
+        translate._gp_mark(self.path, {'model': 'gemini-3.7-flash', 'applied': 5,
+                                       'proposed': 6, 'refused': 1})
+        self.assertTrue(translate._gp_done(self.path))
+        self.assertEqual(translate._gp_saved(self.path),
+                         {'model': 'gemini-3.7-flash', 'applied': 5})
+        os.remove(translate._gp_marker(self.path))
+        self.assertEqual(translate._gp_saved(self.path), {})
 
 
 if __name__ == '__main__':
