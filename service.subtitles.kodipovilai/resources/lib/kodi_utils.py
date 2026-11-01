@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Thin shims over Kodi's xbmc* APIs. Keeps the rest of the addon
 # testable in isolation -- everything that touches Kodi goes through
 # here.

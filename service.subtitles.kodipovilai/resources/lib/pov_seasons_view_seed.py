@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Open POV's season list in a view that actually draws a poster.
 #
 # The report was "the per-season posters only work in NOX". They do not work

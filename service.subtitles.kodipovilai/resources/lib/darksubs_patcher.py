@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Idempotent, self-healing patch of DarkSubs's engine.py so that
 # when the user picks a non-Hebrew subtitle from DarkSubs, the
 # machine-translation step routes through our Gemini AI instead of

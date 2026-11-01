@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Self-healing patcher for service.subtitles.all_subs_plus.
 #
 # Bug we're fixing: at module-load time, autosub.py imports service.py

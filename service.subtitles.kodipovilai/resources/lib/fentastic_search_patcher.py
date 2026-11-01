@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Self-healing patch of the home SEARCH button.
 #
 # WHY: This is a POV-centric build. On the "beautiful" skin (AF3) the

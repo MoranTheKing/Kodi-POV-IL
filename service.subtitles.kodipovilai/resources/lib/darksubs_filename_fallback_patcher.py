@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Self-healing patch of DarkSubs's get_playing_filename() to fall
 # back to a synthetic release-name-style filename when the played
 # URL has an opaque hash as its basename.

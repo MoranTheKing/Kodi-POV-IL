@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Orchestration: take a video metadata dict and a target language,
 # return either a list of candidate subtitle entries (for the
 # search dialog) or a final SRT path (for the download step).

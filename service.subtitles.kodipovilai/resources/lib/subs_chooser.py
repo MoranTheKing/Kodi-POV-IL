@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # MoranSubs subtitle-chooser window (pyxbmct), opened from the player's
 # "בחר כתוביות" button. It lists the SAME Hebrew candidates the search dialog
 # offers -- WITH a Hebrew match % per real Hebrew sub -- and applies the picked
