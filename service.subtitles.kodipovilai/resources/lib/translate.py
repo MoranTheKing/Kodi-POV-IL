@@ -4756,6 +4756,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         except Exception:
             pass
 
+    # The gender proofread's report (_proofread_gender, below), for the marker,
+    # the pool upload and the telemetry event; empty until a model answers.
+    _gp_report = {}
+
     def _emit(ok, note=''):
         if _telemetry_done[0]:
             return
@@ -4806,6 +4810,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 'ent_src': int(_chunk_stat.get('src', 0)),
                 'blocks': int(_chunk_stat.get('blocks', 0)),
                 'chunks': int(total or 0),
+                # the gender proofread (0.3.61): the model that answered and
+                # the lines it fixed, for the dashboard's Recent activity
+                'gp_model': _gp_stats(_gp_report).get('model', ''),
+                'gp_fixed': _gp_stats(_gp_report).get('applied', 0)
+                if _gp_report.get('model') else None,
             })
         except Exception:
             pass
@@ -6372,9 +6381,6 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     except Exception:
         kodi_utils.log('English residual repair skipped; existing translation retained',
                        level='WARNING')
-
-    # The gender proofread's report, for the marker and the pool upload below.
-    _gp_report = {}
 
     def _proofread_gender(blocks):
         """The blocks with gender_proofread's corrections applied; the blocks
