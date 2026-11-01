@@ -165,6 +165,18 @@ class Wiring(unittest.TestCase):
                       "            # proofread: opening it again spends no request\n"
                       "            _gp_mark(translated, _gp_report)", src)
         self.assertIn("proofread=(_gp_stats(_gp_report) or False))", src)
+        # the telemetry event names them too (0.3.61, the dashboard's Recent
+        # activity): the report is set before _emit is defined, so an early
+        # failure's emit reads an empty one
+        emit_at = src.index('    def _emit(ok, note=\'\'):')
+        self.assertEqual(src.count('    _gp_report = {}\n'), 1)
+        self.assertLess(src.index('    _gp_report = {}\n'), emit_at)
+        emit = src[emit_at:src.index('    if whole_subtitle_request:', emit_at)]
+        self.assertIn("'gp_model': _gp_stats(_gp_report).get('model', ''),", emit)
+        self.assertIn("'gp_fixed': _gp_stats(_gp_report).get('applied', 0)\n"
+                      "                if _gp_report.get('model') else None,", emit)
+        self.assertLess(src.index('_proofed = _proofread_gender(_proof_blocks)'),
+                        src.index('    _emit(True)\n'))
 
     def test_opened_translations_get_it_once_and_never_a_translation(self):
         src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')

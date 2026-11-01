@@ -1,3 +1,6 @@
+0.3.61
+- Usage telemetry: the event a translation sends also names the model of its gender proofread and the lines it fixed, so the dashboard's Recent activity shows them next to the translation -- for every translation, shared to the community pool or not. Nothing changes on screen.
+
 0.3.60
 - Community pool: a proofread upload also says which model proofread it and how many lines it fixed (the proofread marker keeps them for an upload offered again later), so the pool's owner page can show them per title and per model. Nothing changes on screen.
 
