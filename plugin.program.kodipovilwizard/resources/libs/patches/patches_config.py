@@ -91,6 +91,8 @@ PATCH_CONFIG = [
     {'id': 'umbrella_profile_metadata', 'name': 'Child content classification', 'addon_id': 'plugin.video.umbrella', 'enabled': True,
      'target_file': 'resources/lib/modules/control.py', 'marker': '# WIZARD_UMBRELLA_PROFILE_META_v1',
      'anchor': '\t\t\tinfo_tag.setMpaa(meta_get(\'mpaa\'))', 'action': 'append_after',
+     # Umbrella 6.7.99 writes the line with a fallback: or ''
+     'alternatives': [{'anchor': '\t\t\tinfo_tag.setMpaa(meta_get(\'mpaa\') or \'\')'}],
      'hook': "\t\t\tprofile_age_guard.stamp_item(item, meta)\n"},
     {'id': 'pov_profile_directory_guard', 'name': 'Child profile directory guard', 'addon_id': 'plugin.video.pov', 'enabled': True,
      'target_file': 'resources/lib/entry.py', 'marker': '# WIZARD_POV_PROFILE_DIRECTORY_v1',

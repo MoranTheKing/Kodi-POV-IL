@@ -931,7 +931,7 @@ Everything under `tools/` is runnable with no arguments.
 
 ## Repository Protection
 
-See `SECURITY.md` for the GitHub settings that should be enabled to prevent accidental force-pushes, branch deletion, or unreviewed changes.
+The checklist of GitHub settings that prevent force-pushes, branch deletion and unreviewed changes is kept privately (since 1 Nov 2026). `SECURITY.md` is now the public page for reporting a security issue.
 
 `CODEOWNERS` is configured for `@MoranTheKing`; GitHub branch protection must enable "Require review from Code Owners" for this to be enforced.
 
