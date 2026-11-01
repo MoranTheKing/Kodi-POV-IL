@@ -25,7 +25,7 @@
 </addon>
 <addon id="service.subtitles.kodipovilai"
        name="MoranSubs"
-       version="0.3.61"
+       version="0.3.62"
        provider-name="MoranTheKing">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
@@ -49,7 +49,7 @@
     <reuselanguageinvoker>true</reuselanguageinvoker>
     <platform>all</platform>
     <language>en he</language>
-    <license>MIT</license>
+    <license>GPL-3.0-or-later</license>
     <summary lang="en">MoranSubs - Hebrew subtitles: human sources + AI translation + community pool</summary>
     <summary lang="he">MoranSubs - כתוביות עברית: מקורות אנושיים + תרגום AI + מאגר קהילתי</summary>
     <description lang="en">
@@ -63,6 +63,8 @@ addon is gender-aware: it pulls cast metadata from TMDB (via
 script.module.tmdbhelper) and uses it to pick the correct Hebrew
 verb/adjective gender forms based on who is speaking and whom
 they're addressing.
+
+MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
     </description>
     <description lang="he">
 מתרגם כתוביות מאנגלית (או ספרדית וכו') לעברית בזמן אמת באמצעות
@@ -72,6 +74,8 @@ Gemini 2.5/3.1 Flash Lite של גוגל. אם יש כתוביות עברית ק�
 חיבור עם API key חינמי מ-aistudio.google.com. ה-addon מודע למגדר:
 שולף cast מ-TMDB (דרך script.module.tmdbhelper) ומשתמש בו כדי
 לבחור צורות זכר/נקבה נכונות לפי הדובר והנמען.
+
+MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
     </description>
     <assets>
       <icon>icon.png</icon>
