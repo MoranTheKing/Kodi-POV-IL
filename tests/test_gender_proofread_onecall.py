@@ -130,7 +130,7 @@ class Request(unittest.TestCase):
         p.start()
         self.addCleanup(p.stop)
 
-    def run_it(self, outcomes):
+    def run_it(self, outcomes, stopped=lambda: False):
         asked = []
         gem = translate.gemini
 
@@ -146,7 +146,7 @@ class Request(unittest.TestCase):
                 mock.patch.object(translate.time, 'sleep', lambda s: None):
             blocks, report = translate._run_gender_proofread(
                 translate.srt.parse_blocks(HE), EN, 'k', 'gemini-3.5-flash-lite', [],
-                lambda: False)
+                stopped)
         return asked, report
 
     def answered(self, exc):
@@ -177,6 +177,47 @@ class Request(unittest.TestCase):
                                  'gemini-3.8-flash', 'gemini-3.6-flash'])
         self.assertEqual(report['model'], 'gemini-3.6-flash')
         self.assertNotIn('spent', report)
+        self.assertEqual(report['why'], '')
+
+    def test_why_no_model_answered(self):
+        # 0.3.67: the telemetry says why, from what already happened
+        gem = translate.gemini
+        busy = [gem.OverloadError('503')] * 6
+        self.assertEqual(self.run_it(list(busy))[1]['why'], 'busy')
+        quota = [gem.QuotaExceeded('day')] * 3
+        self.assertEqual(self.run_it(list(quota))[1]['why'], 'quota')
+        self.assertEqual(self.run_it([self.answered(gem.FilteredResponse('x'))])[1]['why'],
+                         'unusable')
+        self.assertEqual(self.run_it([gem.InvalidKey('bad key')])[1]['why'], 'key')
+        mixed = [gem.QuotaExceeded('day'), gem.OverloadError('503'), gem.OverloadError('503'),
+                 gem.GeminiError('HTTP 404')]
+        self.assertEqual(self.run_it(mixed)[1]['why'], 'busy')
+        # the viewer left after every model had refused: still 'busy'
+        # (review, 0.3.67); a stop that cut it short: 'stopped'
+        busy_then_left = [gem.OverloadError('503')] * 6
+        # stopped from the moment every refusal is in (the list consumed)
+        self.assertEqual(self.run_it(busy_then_left,
+                                     stopped=lambda: not busy_then_left)[1]['why'], 'busy')
+        self.assertEqual(busy_then_left, [])
+        calls = []
+
+        def stop_after_first():
+            calls.append(1)
+            return len(calls) > 1
+        self.assertEqual(self.run_it([gem.OverloadError('503')] * 6,
+                                     stopped=stop_after_first)[1]['why'], 'stopped')
+        why = translate._gp_why
+        self.assertEqual(why({'model': 'm'}, ['quota'], True), '')
+        self.assertEqual(why({}, ['busy'], True), 'stopped')
+        self.assertEqual(why({}, [], False), 'error')
+        self.assertEqual(why({}, ['quota', 'time'], False), 'time')
+
+    def test_the_event_carries_it(self):
+        src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        emit = src[src.index('    def _gp_event_note(ok, note):'):src.index('    if whole_subtitle_request:')]
+        self.assertIn("'gp_note': _gp_event_note(ok, note),", emit)
+        for word in ("return 'off'", "return 'later'", "_gp_report.get('why')"):
+            self.assertIn(word, emit)
 
 
 class Markers(unittest.TestCase):
