@@ -1,4 +1,5 @@
-"""The gender reference's own windowed alignment (arabic_gender, 0.3.64).
+"""The gender reference's own windowed alignment (arabic_gender, 0.3.64), and
+the gate's own map checked window by window (0.3.65).
 
 The SubSync-grade gate protects displayed timing and refuses what a gender
 oracle can use: small steps at every ad break, one window of music minutes
@@ -171,6 +172,80 @@ class Windowed(unittest.TestCase):
         mapping, diag = self.ag.align_one(
             self.source, self.blocks, srt(shifted(self.base, [(0, 2000)]), 'Ref line'))
         self.assertTrue(diag.startswith('gate OK'), diag)
+        self.assertEqual(self.right_share(mapping), 1.0)
+
+    def body(self, rows):
+        return '\n\n'.join('%d\n%s --> %s\n%s' % (i, stamp(a), stamp(b), text)
+                           for i, (a, b, text) in enumerate(rows, 1)) + '\n'
+
+    def test_a_reference_whose_middle_is_another_title_loses_that_middle(self):
+        # The gate needs 60% of its windows and then maps every line: a
+        # reference with a stretch of another title's subtitle in it passed
+        # with that stretch mapped (review, 0.3.64: 26-34% of lines wrong on
+        # the corpus). The windows that contradict its map now hand the
+        # reference to the windowed plan.
+        rng = random.Random(43)
+        lo, hi = self.at(0.6), self.at(0.78)
+        rows = [(a, b, 'Ref line %d' % n) for n, (a, b) in enumerate(self.base, 1)
+                if not lo <= a < hi]
+        clock = lo
+        while clock < hi:
+            clock += rng.randint(1200, 4000)
+            rows.append((clock, clock + rng.randint(700, 1800), 'Other title'))
+        rows.sort()
+        mapping, diag = self.ag.align_one(self.source, self.blocks, self.body(rows))
+        self.assertIsNotNone(mapping, diag)
+        self.assertIn('contradict', diag)
+        self.assertGreaterEqual(self.right_share(mapping), 0.97, diag)
+        self.assertGreater(len(mapping), 0.5 * len(self.base))
+
+    def test_scenes_cut_from_the_reference(self):
+        # three scenes cut: the gate accepts a piecewise map that put 6.8% of
+        # the lines on a neighbour (0.3.64); the windows contradict it
+        rng = random.Random(23)
+        cuts = sorted((self.at(rng.uniform(0.1, 0.9)), rng.randint(20000, 60000))
+                      for _ in range(3))
+        rows = []
+        for n, (a, b) in enumerate(self.base, 1):
+            if any(at <= a < at + length for at, length in cuts):
+                continue
+            shift = sum(length for at, length in cuts if a >= at + length)
+            rows.append((a - shift, b - shift, 'Ref line %d' % n))
+        mapping, diag = self.ag.align_one(self.source, self.blocks, self.body(rows))
+        self.assertIsNotNone(mapping, diag)
+        self.assertIn('contradict', diag)
+        self.assertGreaterEqual(self.right_share(mapping), 0.97, diag)
+
+    def test_a_short_source_keeps_the_gate_map_where_it_held(self):
+        # 140 lines make 7 windows, too few for the windowed plan: with one
+        # contradicting window the lines of those that hold keep the gate's
+        # map where they fit it, and the other title's stretch gets nothing
+        base = cues(5290, count=140)
+        source = srt(base, 'Source line')
+        at = lambda f: base[int(len(base) * f)][0]
+        rng = random.Random(3)
+        lo, hi = at(0.4), at(0.6)
+        rows = [(a, b, 'Ref line %d' % n) for n, (a, b) in enumerate(base, 1)
+                if not lo <= a < hi]
+        clock = lo
+        while clock < hi:
+            clock += rng.randint(1200, 4000)
+            rows.append((clock, clock + rng.randint(700, 1800), 'Other title'))
+        rows.sort()
+        mapping, diag = self.ag.align_one(source, source.strip().split('\n\n'),
+                                          self.body(rows))
+        self.assertIsNotNone(mapping, diag)
+        self.assertTrue(diag.startswith('windowed: the gate map where it held'), diag)
+        self.assertNotIn('Other title', mapping.values())
+        self.assertEqual(self.right_share(mapping), 1.0)
+        self.assertGreater(len(mapping), 0.7 * len(base))
+
+    def test_a_clean_pair_keeps_every_line(self):
+        mapping, diag = self.ag.align_one(
+            self.source, self.blocks, srt(shifted(self.base, [(0, -1500)]), 'Ref line'))
+        self.assertTrue(diag.startswith('gate OK'), diag)
+        self.assertNotIn('contradict', diag)
+        self.assertEqual(len(mapping), len(self.base))
         self.assertEqual(self.right_share(mapping), 1.0)
 
 
