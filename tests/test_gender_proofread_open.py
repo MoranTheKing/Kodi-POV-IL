@@ -180,7 +180,10 @@ class Opened(Base):
         # review of 0.3.59: two opens in its minutes spent two requests, and an
         # overloaded model was asked again at every open
         with mock.patch.object(translate, '_proofread_stopper', lambda sid, c: (lambda: False)):
-            self.run_it({'model': ''}, change=False)
+            # every model out of quota: nothing was sent, no pause (0.3.65)
+            self.run_it({'model': '', 'asked': False}, change=False)
+            self.assertFalse(os.path.isfile(self.path + '.gp.try'))
+            self.run_it({'model': '', 'asked': True}, change=False)
         self.assertTrue(os.path.isfile(self.path + '.gp.try'))
         self.assertFalse(translate._proofread_due(self.path, EN, object()))
         os.utime(self.path + '.gp.try', (1, 1))           # six hours on
@@ -303,6 +306,16 @@ class PoolPickSource(Base):
             self.assertEqual(translate._pool_pick_source({}, h, ''), '')
         _, kw = bridge.search.call_args
         self.assertEqual(kw.get('cache_only'), True)               # never a new search
+        # nothing cached is no look: no week's pause for it (0.3.65)
+        bridge.search.return_value = None
+        with mock.patch.dict(sys.modules, {'resources.lib.subs_engine_bridge': bridge}), \
+                mock.patch.object(sys.modules['resources.lib'], 'subs_engine_bridge', bridge,
+                                  create=True):
+            self.assertIsNone(translate._pool_pick_source({}, h, 'Blue.2026'))
+            # the same release listed, but no download came through
+            bridge.search.return_value = cands
+            bridge.download.return_value = None
+            self.assertIsNone(translate._pool_pick_source({}, h, 'Blue.2026'))
         # a look that failed is not "not there" (no week's pause for it)
         bridge.search.side_effect = OSError('engine')
         with mock.patch.dict(sys.modules, {'resources.lib.subs_engine_bridge': bridge}), \

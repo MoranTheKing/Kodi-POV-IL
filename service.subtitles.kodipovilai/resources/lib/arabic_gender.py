@@ -410,6 +410,88 @@ def _windowed_for_blocks(src_blocks, ar, plan):
     return out
 
 
+# The gate's own map, checked window by window (0.3.65). The gate needs 60% of
+# its ~5-minute windows to agree and then maps EVERY line by its map: measured
+# (32 clean pairs of the aitr corpus, known answers from their gate maps), the
+# references it passed with a third of another title's subtitle in the middle
+# had 25% of their lines wrong, with three scenes cut out 7%, eight short cuts
+# 11%. A window holds when it agrees with the map as _windowed_plan vouches
+# one. One that does not CONTRADICTS the map when the reference has lines
+# there and fewer than _GATE_FIT_MIN of them fit it (_WIN_LINE_*): in the
+# spliced and cut references most such windows sit under it and carry nearly
+# all their wrong lines. A contradiction hands the reference to the windowed
+# plan, else keeps only the fitting lines of the windows that hold; without
+# one the gate's map stands as it did (dropping the lines that do not fit in
+# the other windows cost a clean pair 0.45% of its right lines and saved no
+# wrong one). Three seeds of those shapes, every path: another title's third
+# 12.5% of lines wrong -> 1.3% (right lines 61.1 -> 60.4%), its sixth 8.4 ->
+# 1.1% (82.3 -> 75.4%), three cut scenes 3.5 -> 2.3%, eight short cuts 4.4 ->
+# 3.5%, small steps 1.8 -> 1.2%; clean pairs, offsets, clocks and staircases
+# unchanged line for line.
+# The margin on clean references is thin (review, 0.3.65): of 88
+# gate-accepted clean pairs (either English source against every other file)
+# none contradicts, but their lowest such windows reach 0.650, 0.656 and 0.667
+# -- and those already sit 1.5 s or more off the map, so asking for that too
+# separates nothing. A clean pair that crossed would lose about a third of its
+# hints and gain next to no wrong one (0, 0 and 3 lines); at 0.60 instead,
+# of the references the gate passed, a sixth of another title would keep 2.9%
+# of its lines wrong (1.2% here) and three cut scenes 3.9% (2.8%).
+_GATE_FIT_MIN = 0.65
+
+
+def _gate_windows(en, ar, s, segments, sa):
+    """(windows, the source-time spans of those that hold, how many
+    contradict) for the gate's map; ([], [], 0) for a source too short for
+    windows."""
+    import bisect
+    bounds = [float(seg['ref_from_ms']) for seg in segments[1:]]
+
+    def offset_at(t):
+        return float(segments[min(bisect.bisect_right(bounds, t),
+                                  len(segments) - 1)].get('offset_ms') or 0.0)
+    ws = sa._local_windows(en, ar, s,
+                           center_offset=float(segments[0].get('offset_ms') or 0.0))
+    starts = [c['start'] for c in ar]
+    ends = [c['end'] for c in ar]
+    held = []
+    contra = 0
+    for i, w in enumerate(ws):
+        span = (en[w['begin']]['start'] if i else float('-inf'),
+                en[ws[i + 1]['begin']]['start'] if i + 1 < len(ws)
+                else float('inf'))
+        d = abs(w['offset_ms'] - offset_at(w['center_ms']))
+        if ((w['vote'] >= sa._LOCAL_MIN_VOTE
+                and w['overlap'] >= sa._LOCAL_MIN_OVERLAP
+                and d < _WIN_SAME_MS)
+                or (w['vote'] >= _WIN_WEAK[0] and w['overlap'] >= _WIN_WEAK[1]
+                    and d < _WIN_TIGHT_MS)):
+            held.append(span)
+            continue
+        found = fit = 0
+        for c in en[w['begin']:w['end']]:
+            off = offset_at((c['start'] + c['end']) / 2.0)
+            es, ee = s * c['start'] + off, s * c['end'] + off
+            j = bisect.bisect_left(ends, es)
+            best = None
+            while j < len(ar) and starts[j] < ee:
+                ov = min(ee, ends[j]) - max(es, starts[j])
+                if ov > 0 and (best is None or ov > best[0]):
+                    best = (ov, j)
+                j += 1
+            if best is None:
+                continue
+            found += 1
+            k = best[1]
+            union = max(ee, ends[k]) - min(es, starts[k])
+            if (abs(starts[k] - es) <= _WIN_LINE_ONSET_MS
+                    or (union > 0 and best[0] / float(union) >= _WIN_LINE_IOU)):
+                fit += 1
+        n = w['end'] - w['begin']
+        if found >= max(sa.MIN_CUES, 0.5 * n) and fit < _GATE_FIT_MIN * found:
+            contra += 1
+    return ws, held, contra
+
+
 def align_one(src_text, src_blocks, ar_text, timing_text=None):
     """Try to align ONE Arabic SRT to the source. Returns (ar_for_blocks, diag)
     on success, or (None, diag) when the alignment isn't trustworthy.
@@ -453,7 +535,26 @@ def align_one(src_text, src_blocks, ar_text, timing_text=None):
         b = float(verdict.get('offset_ms') or 0.0)
         mapping = _arabic_for_blocks(
             src_blocks, ar, a, b, segments=verdict.get('segments'))
-        return mapping, 'gate OK (' + (verdict.get('diag') or '') + ')'
+        diag = 'gate OK (' + (verdict.get('diag') or '') + ')'
+        segments = verdict.get('segments') or [{'offset_ms': b}]
+        ws, held, contra = _gate_windows(en, ar, a, segments, _sync_align)
+        if contra:
+            why = ' | the gate map held in %d of %d windows, %d contradict it' % (
+                len(held), len(ws), contra)
+            plan = _windowed_plan(en, ar, verdict.get('scale'), _sync_align)
+            if plan[0] is not None:
+                windowed = _windowed_for_blocks(src_blocks, ar, plan[:3])
+                if windowed:
+                    return windowed, plan[3] + why
+            kept = (_windowed_for_blocks(src_blocks, ar, (a, segments, held))
+                    if held else {})
+            # neither reads as the gate's OK (the log, the telemetry note); the
+            # windows that hold count as windowed, as on the dashboard
+            if not kept:
+                return None, 'gate map contradicted' + why + ' (' + diag + ')'
+            return kept, ('windowed: the gate map where it held' + why
+                          + ' (' + diag + ')')
+        return mapping, diag
     except Exception as e:
         # sync_align ships in the same add-on.  Falling back to the historical
         # global-only vote here is unsafe: a dominant first half can hide a
