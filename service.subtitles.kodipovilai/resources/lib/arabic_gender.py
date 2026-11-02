@@ -223,6 +223,193 @@ def _arabic_for_blocks(src_blocks, ar_cues, a, b, segments=None):
     return out
 
 
+# The gender oracle's own fallback when the SubSync-grade gate refuses (0.3.64).
+# That gate protects DISPLAYED timing: one global map or at most four >=5 s
+# steps, and a whole-file vote. An oracle only needs each line's neighbourhood,
+# and most refusals were good pairs: a 64% whole-file vote on a file whose
+# every window sits at +0.2 s, a broadcast's 3-4 s step at each ad break (five
+# plateaus), one music window minutes off. Here a ~5-minute window counts when
+# a neighbour agrees with its offset -- a random pairing scores high votes in
+# dense windows too, but at scattered offsets -- windows within 0.6 s form a
+# plateau, the cut points between plateaus come from SubSync's own boundary
+# search, the clock that lines the cue onsets up best wins, and a line in a
+# window nothing vouched for gets no reference. Measured on the aitr corpus (10
+# titles, 5 languages; known answers from the gate's map of clean pairs with
+# cuts injected): 16 of 28 refused same-title pairs rescued; none of 270 pairs
+# with another title's reference accepted, nor any of 5,400 short sources
+# (80-240 lines) against them; wrong lines about 0.4% on staircases of either
+# sign, 1-1.5 s steps and clock drift, 1-2% with six mixed or large steps, 2-3%
+# with a few scenes deleted from the reference (4% with eight short ones).
+_WIN_SAME_MS = 1500        # a neighbouring window agrees
+_WIN_GROUP_MS = 600        # windows on one plateau (wider smears a staircase)
+_WIN_TIGHT_MS = 500        # a weak window needs both neighbours this close
+_WIN_WEAK = (0.45, 0.80)   # vote, overlap of a weak window (other line splits)
+_WIN_MIN_WINDOWS = 8       # 4-5 short windows saturate on a dense reference
+_WIN_MIN_COVER = 0.60      # share of source dialogue cues in vouched windows
+_WIN_MIN_OVERLAP = 0.65    # the historical oracle overlap contract, after the map
+_WIN_LINE_ONSET_MS = 500    # a line's matched cue: onset this close ...
+_WIN_LINE_IOU = 0.5        # ... or this much of their union shared
+
+
+def _windowed_built(en, ar, s, ws, ok, sa):
+    """One clock's plan: (segments, the reference cues mapped) or None."""
+    groups = []
+    for w, k in zip(ws, ok):
+        if not k:
+            continue
+        if groups and abs(w['offset_ms'] - sa._median(
+                [x['offset_ms'] for x in groups[-1]])) < _WIN_GROUP_MS:
+            groups[-1].append(w)
+        else:
+            groups.append([w])
+    offsets = [sa._median([w['offset_ms'] for w in g]) for g in groups]
+    if len(groups) == 1:
+        return [{'offset_ms': offsets[0]}], sa._map_cues_global(ar, s, offsets[0])
+    cuts = sa._optimize_piecewise_boundaries(en, ar, s, groups, offsets)
+    if cuts is None:
+        return None
+    segments = []
+    for i, off in enumerate(offsets):
+        seg = {'offset_ms': off}
+        if i:
+            c = cuts[i - 1]
+            # the boundary on the source timeline, each side's own inverse
+            seg['ref_from_ms'] = ((ar[c - 1]['end'] - offsets[i - 1]) / s
+                                  + (ar[c]['start'] - off) / s) / 2.0
+            seg['cand_from_ms'] = (ar[c - 1]['end'] + ar[c]['start']) / 2.0
+        segments.append(seg)
+    return segments, sa._map_cues_piecewise(ar, s, segments)
+
+
+def _windowed_plan(en, ar, gate_scale, sa):
+    """(scale, segments, spans, diag) for _arabic_for_blocks, or
+    (None, None, None, diag). `spans`: the source-time ranges of the vouched
+    windows; `sa`: sync_align."""
+    # identity first, then the familiar clock ratios nearest to it, the gate's
+    # own estimate last: a tie keeps the plainer clock
+    scales = [1.0] + sorted((s for s in set(round(x, 6) for x in sa.SCALES)
+                             if s != 1.0), key=lambda s: abs(s - 1.0))
+    if gate_scale and round(float(gate_scale), 6) not in scales:
+        scales.append(float(gate_scale))
+    found = []
+    for order, s in enumerate(scales):
+        sa._breathe()
+        b, _votes = sa._best_offset([c['start'] for c in en],
+                                    [c['start'] for c in ar], s, sa._MAXOFF)
+        ws = sa._local_windows(en, ar, s, center_offset=b)
+        if len(ws) < _WIN_MIN_WINDOWS:
+            return None, None, None, 'windowed: %d windows' % len(ws)
+        strong = [w['vote'] >= sa._LOCAL_MIN_VOTE
+                  and w['overlap'] >= sa._LOCAL_MIN_OVERLAP for w in ws]
+        weak = [w['vote'] >= _WIN_WEAK[0] and w['overlap'] >= _WIN_WEAK[1]
+                for w in ws]
+        ok = []
+        for i, w in enumerate(ws):
+            near = [j for j in (i - 1, i + 1) if 0 <= j < len(ws)]
+            if strong[i]:
+                ok.append(any((strong[j] or weak[j]) and abs(
+                    ws[j]['offset_ms'] - w['offset_ms']) < _WIN_SAME_MS
+                    for j in near))
+            elif weak[i]:
+                ok.append(len(near) == 2 and all(weak[j] and abs(
+                    ws[j]['offset_ms'] - w['offset_ms']) < _WIN_TIGHT_MS
+                    for j in near))
+            else:
+                ok.append(False)
+        cover = (sum(w['end'] - w['begin'] for w, k in zip(ws, ok) if k)
+                 / float(len(en)))
+        if cover >= _WIN_MIN_COVER:
+            found.append((round(cover, 2), order, cover, s, ws, ok))
+    if not found:
+        return None, None, None, 'windowed: cover under %d%%' % (
+            100 * _WIN_MIN_COVER)
+    why = ''
+    # the most vouched-for cues first; among those, the clock whose map lines
+    # the cue onsets up best (the fewest plateaus can favour a sloped clock
+    # laid through a staircase: every window agrees, every line 1-2 s off)
+    for level in sorted(set(f[0] for f in found), reverse=True):
+        best = None
+        for _lvl, order, cover, s, ws, ok in [f for f in found if f[0] == level]:
+            sa._breathe()
+            built = _windowed_built(en, ar, s, ws, ok, sa)
+            if built is None:
+                why = 'windowed: no cut placement'
+                continue
+            segments, fixed = built
+            ov = sa.overlap_rate(en, fixed, 1.0, 0.0)
+            if ov < _WIN_MIN_OVERLAP:
+                why = 'windowed: overlap %.0f%%' % (100 * ov)
+                continue
+            tight = sa._tight_agreement(en, fixed, 1.0, 0.0) or 0.0
+            key = (round(tight, 3), -order)
+            if best is None or key > best[0]:
+                best = (key, cover, s, ws, ok, segments, ov, tight)
+        if best is None:
+            continue
+        _key, cover, s, ws, ok, segments, ov, tight = best
+        spans = []
+        for i, (w, k) in enumerate(zip(ws, ok)):
+            if k:
+                spans.append((en[w['begin']]['start'] if i else float('-inf'),
+                              en[ws[i + 1]['begin']]['start'] if i + 1 < len(ws)
+                              else float('inf')))
+        return s, segments, spans, (
+            'windowed scale=%.6f cover=%.0f%% windows=%d/%d plateaus=%d '
+            'overlap=%.0f%% tight=%.0f%%' % (
+                s, 100 * cover, sum(ok), len(ws), len(segments), 100 * ov,
+                100 * tight))
+    return None, None, None, why
+
+
+def _windowed_for_blocks(src_blocks, ar, plan):
+    """{srt entry number: reference line} for the dialogue blocks in vouched
+    windows whose matched reference cue fits them: its onset within
+    _WIN_LINE_ONSET_MS of the block's mapped onset, or the two overlapping by
+    _WIN_LINE_IOU of their union. A line the reference lacks (a scene cut
+    from its version) or one beside a cut lands on a cue that fits it badly;
+    measured on injected staircases and deleted scenes, this halves the wrong
+    lines (staircases 1.0 -> 0.4%, deleted scenes 3.7-5.1 -> 1.9-2.8%) for
+    about a tenth of the hinted ones."""
+    import bisect
+    s, segments, spans = plan
+    bounds = [float(seg['ref_from_ms']) for seg in segments[1:]]
+    starts = [c['start'] for c in ar]
+    ends = [c['end'] for c in ar]
+    out = {}
+    for blk in src_blocks:
+        lines = [ln for ln in blk.split('\n') if ln.strip() != '']
+        if len(lines) < 2 or not lines[0].strip().isdigit():
+            continue
+        m = _TIME_RE.search(blk)
+        if not m:
+            continue
+        b0 = _to_ms(*m.group(1, 2, 3, 4))
+        b1 = _to_ms(*m.group(5, 6, 7, 8))
+        if not _is_dialogue(' '.join(lines[2:]).strip()):
+            continue
+        mid = (b0 + b1) / 2.0
+        if not any(lo <= mid < hi for lo, hi in spans):
+            continue
+        off = float(segments[min(bisect.bisect_right(bounds, mid),
+                                 len(segments) - 1)]['offset_ms'])
+        es, ee = s * b0 + off, s * b1 + off
+        j = bisect.bisect_left(ends, es)
+        best = None
+        while j < len(ar) and starts[j] < ee:
+            ov = min(ee, ends[j]) - max(es, starts[j])
+            if ov > 0 and (best is None or ov > best[0]):
+                best = (ov, j)
+            j += 1
+        if best is None:
+            continue
+        k = best[1]
+        union = max(ee, ends[k]) - min(es, starts[k])
+        if (abs(starts[k] - es) <= _WIN_LINE_ONSET_MS
+                or (union > 0 and best[0] / float(union) >= _WIN_LINE_IOU)):
+            out[int(lines[0].strip())] = ar[k]['text']
+    return out
+
+
 def align_one(src_text, src_blocks, ar_text, timing_text=None):
     """Try to align ONE Arabic SRT to the source. Returns (ar_for_blocks, diag)
     on success, or (None, diag) when the alignment isn't trustworthy.
@@ -248,7 +435,20 @@ def align_one(src_text, src_blocks, ar_text, timing_text=None):
             en, ar, min_vote=0.65, min_overlap=0.65,
             allow_piecewise=True, require_tight=False)
         if verdict.get('status') == _sync_align.STATUS_UNKNOWN:
-            return None, verdict.get('diag') or 'gate FAILED'
+            gate_diag = verdict.get('diag') or 'gate FAILED'
+            # the oracle's own windowed fallback (above) -- not for a file
+            # the gate refused as malformed before measuring anything
+            if (gate_diag.startswith('preflight')
+                    or len(en) < _sync_align._LOCAL_MIN_REF_CUES
+                    or len(ar) < _sync_align.MIN_CUES):
+                return None, gate_diag
+            plan = _windowed_plan(en, ar, verdict.get('scale'), _sync_align)
+            if plan[0] is None:
+                return None, gate_diag + ' | ' + plan[3]
+            mapping = _windowed_for_blocks(src_blocks, ar, plan[:3])
+            if not mapping:
+                return None, gate_diag + ' | ' + plan[3] + ' (no lines)'
+            return mapping, plan[3]
         a = float(verdict.get('scale') or 1.0)
         b = float(verdict.get('offset_ms') or 0.0)
         mapping = _arabic_for_blocks(
@@ -395,6 +595,12 @@ def _provider_of(cand):
 
 # ---------------- fetch reference candidates from the engine ----------------
 
+# How long the reference search waits for a timed-out provider of the search
+# before it (see _reference_candidates). The Hebrew waits with it: a live
+# translation shows the English meanwhile, the automatic one on play nothing.
+_PROVIDER_WAIT_S = 20.0
+
+
 def _reference_candidates(info):
     """Return ALL subtitle CANDIDATES (metadata only -- NOT yet downloaded) for
     this media from the built-in engine (OpenSubtitles / SubSource / YIFY /
@@ -410,6 +616,38 @@ def _reference_candidates(info):
         from resources.lib import subs_engine_bridge
     except Exception:
         return []
+    # What the search for the source subtitle found moments ago -- even when
+    # it stopped at max_search_time -- holds the other languages already: no
+    # new search, no wait.
+    try:
+        reused = subs_engine_bridge.reusable_results(info) or []
+    except Exception:
+        reused = []
+    if any(isinstance(c, dict) and _chain_lang_of(c) not in (None, 'he')
+           for c in reused):
+        _log('gender reference: candidates from the search moments ago '
+             '({0})'.format(len(reused)))
+        return reused
+    # Hebrew alone (the viewer's languages, or the multi-language provider
+    # was the one cut): kept, but the other languages are searched for too --
+    # an out-of-sync Hebrew subtitle often fails to align.
+    reused_he = [c for c in reused
+                 if isinstance(c, dict) and _chain_lang_of(c) == 'he']
+    # That search leaves its slowest provider running, and until it ends the
+    # engine refuses every search: this one came moments later and found
+    # nothing at all. Measured in Kodi (2 Nov 2026): every search after a cut
+    # one came back empty in 0.4 s (Friends, Breaking Bad and The
+    # Untouchables among them), the provider ended ~9 s later, and searched
+    # then they found 19-335 candidates in the chain's languages. Waited for
+    # before the language settings are flipped below.
+    try:
+        if subs_engine_bridge.providers_busy():
+            _log('a timed-out provider of the last search still runs: '
+                 'waiting up to {0:.0f}s to search for a gender '
+                 'reference'.format(_PROVIDER_WAIT_S))
+            subs_engine_bridge.wait_for_providers(_PROVIDER_WAIT_S)
+    except Exception:
+        pass
     cands = []
     prev_all_lang = None
     try:
@@ -432,6 +670,10 @@ def _reference_candidates(info):
             _log('engine search for gender reference failed: {0}'.format(e),
                  level='WARNING')
             cands = []
+        if reused_he:
+            seen = set(c.get('link') for c in cands if isinstance(c, dict))
+            cands = list(cands) + [c for c in reused_he
+                                   if c.get('link') not in seen]
     finally:
         # Always settle Arabic back OFF so it never pollutes normal searches
         # (also self-heals installs left 'true' by the old eager code).
