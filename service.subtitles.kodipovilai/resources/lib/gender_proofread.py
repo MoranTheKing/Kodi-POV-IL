@@ -14,7 +14,8 @@ corrections, 34 right and 1 wrong.
 
 The flash-lite translator has hundreds of requests a day on the free tier;
 the stronger models about 20 each, so this is ONE request per title, falling
-through MODELS when a model is out of quota or overloaded.
+through MODELS when a model is out of quota or overloaded -- never after a
+model took the request (Spent).
 
 A correction is taken only when it changes nothing but gendered/numbered word
 forms: the same words in the same order, each changed word an inflection of
@@ -233,7 +234,13 @@ def parse_reply(reply, count):
 
 
 class Skip(Exception):
-    """This model cannot answer now (quota, overload, cut off): try the next."""
+    """This model cannot answer now (quota, overload): try the next."""
+
+
+class Spent(Exception):
+    """A model took the request and its reply is of no use (cut off, blocked,
+    no reply in time): the proofread stops. The request counted against that
+    model's day; asking the next model would make it two for one proofread."""
 
 
 def _today():
@@ -286,6 +293,9 @@ def proofread(sources, texts, request, models=MODELS, cast=None, cancelled=None)
                 break
             except Skip:
                 continue
+            except Spent:
+                report['spent'] = model
+                return list(texts), report
         if reply is None:
             return list(texts), report
         fixes = parse_reply(reply, len(texts))
