@@ -492,6 +492,64 @@ def _gate_windows(en, ar, s, segments, sa):
     return ws, held, contra
 
 
+# A short source (under 160 dialogue lines) has at most 7 windows of ~20
+# lines (none under 40), too coarse to see a stretch of another title in its
+# reference (review, 0.3.65: a third of one passed with 21% of the lines
+# wrong). There the gate's map is also checked line by line: _STRETCH_LINES
+# lines in a row that found a reference cue, of which under half fit it
+# (_WIN_LINE_*), lose their reference. Measured on the aitr corpus (two seeds,
+# 80/110/140-line excerpts of 10 titles x 5 languages, 140 pairs per shape):
+# a third of another title 14.5% -> 11.0% of lines wrong, a sixth 7.5 ->
+# 5.7%, one cut scene 5.5 -> 4.5%. Clean references (review, 0.3.66: 2,635
+# excerpts of 45-155 lines, both English sources against every other file):
+# 52 lost lines, 0.39% of all hinted lines, 92% of those right ones. Not on
+# long sources: there it cost clean pairs 1.6% of their right lines and saved
+# no wrong one (the windows see those stretches already).
+_STRETCH_LINES = 10
+
+
+def _misfit_stretches(src_blocks, ar, s, segments):
+    """The SRT entry numbers in stretches of _STRETCH_LINES lines, matched
+    under the gate's map, of which under half fit it."""
+    import bisect
+    bounds = [float(seg['ref_from_ms']) for seg in segments[1:]]
+    starts = [c['start'] for c in ar]
+    ends = [c['end'] for c in ar]
+    matched = []
+    for blk in src_blocks:
+        lines = [ln for ln in blk.split('\n') if ln.strip() != '']
+        if len(lines) < 2 or not lines[0].strip().isdigit():
+            continue
+        m = _TIME_RE.search(blk)
+        if not m or not _is_dialogue(' '.join(lines[2:]).strip()):
+            continue
+        b0 = _to_ms(*m.group(1, 2, 3, 4))
+        b1 = _to_ms(*m.group(5, 6, 7, 8))
+        off = float(segments[min(bisect.bisect_right(bounds, (b0 + b1) / 2.0),
+                                 len(segments) - 1)].get('offset_ms') or 0.0)
+        es, ee = s * b0 + off, s * b1 + off
+        j = bisect.bisect_left(ends, es)
+        best = None
+        while j < len(ar) and starts[j] < ee:
+            ov = min(ee, ends[j]) - max(es, starts[j])
+            if ov > 0 and (best is None or ov > best[0]):
+                best = (ov, j)
+            j += 1
+        if best is None:
+            continue
+        k = best[1]
+        union = max(ee, ends[k]) - min(es, starts[k])
+        matched.append((int(lines[0].strip()),
+                        abs(starts[k] - es) <= _WIN_LINE_ONSET_MS
+                        or (union > 0 and best[0] / float(union) >= _WIN_LINE_IOU)))
+    bad = set()
+    for i in range(len(matched) - _STRETCH_LINES + 1):
+        run = matched[i:i + _STRETCH_LINES]
+        if 2 * sum(1 for _n, fit in run if fit) < _STRETCH_LINES:
+            bad.update(n for n, _fit in run)
+    return bad
+
+
 def align_one(src_text, src_blocks, ar_text, timing_text=None):
     """Try to align ONE Arabic SRT to the source. Returns (ar_for_blocks, diag)
     on success, or (None, diag) when the alignment isn't trustworthy.
@@ -554,6 +612,11 @@ def align_one(src_text, src_blocks, ar_text, timing_text=None):
                 return None, 'gate map contradicted' + why + ' (' + diag + ')'
             return kept, ('windowed: the gate map where it held' + why
                           + ' (' + diag + ')')
+        if len(ws) < _WIN_MIN_WINDOWS:
+            bad = _misfit_stretches(src_blocks, ar, a, segments)
+            if bad:
+                mapping = {k: v for k, v in mapping.items() if k not in bad}
+                diag += ' | %d lines in stretches off the map left out' % len(bad)
         return mapping, diag
     except Exception as e:
         # sync_align ships in the same add-on.  Falling back to the historical

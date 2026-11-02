@@ -203,7 +203,10 @@ assert sys.modules['session']._native is None
 
     def test_verified_source_snapshot_survives_a_concurrent_host_update(self):
         with tempfile.TemporaryDirectory() as raw:
-            path=Path(raw)/'session.py';path.write_bytes(FIXTURE.read_bytes().replace(b'\n',b'\r\n'))
+            # the host as a Windows checkout has it; the fixture itself may already
+            # be CRLF there (core.autocrlf), so normalise before converting
+            crlf=FIXTURE.read_bytes().replace(b'\r\n',b'\n').replace(b'\n',b'\r\n')
+            path=Path(raw)/'session.py';path.write_bytes(crlf)
             self.assertTrue(lazy.install(str(path),'6.10.05'))
             module=sys.modules['session']
             path.write_text('raise RuntimeError("new host during invocation")')

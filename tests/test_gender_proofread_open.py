@@ -98,6 +98,36 @@ class Due(Base):
         with mock.patch.object(translate, '_is_google_translated', lambda p: True):
             self.assertFalse(due(self.path, EN, cb, marker=other))
 
+    def test_the_marker_holder_is_still_due(self):
+        # 0.3.66: a pooled row's job holds the in-progress marker through its
+        # source look; its own second check must not stop on it
+        due = translate._proofread_due
+        cb = object()
+        translate._gp_try_mark(self.path, True)
+        self.assertFalse(due(self.path, EN, cb))
+        self.assertTrue(due(self.path, EN, cb, held=True))
+        translate._gp_mark(self.path)
+        self.assertFalse(due(self.path, EN, cb, held=True))      # done is done
+
+    def test_held_through_the_look_and_a_paused_title_takes_the_pools_copy(self):
+        src = (ADDON / 'resources' / 'lib' / 'translate.py').read_text(encoding='utf-8')
+        src = src.replace('\r\n', '\n')
+        branch = src[src.index('                # held through the look'):]
+        branch = branch[:branch.index('return _proofread_opened(')]
+        self.assertLess(branch.index('_gp_try_mark(_gp_base, True)'),
+                        branch.index('_pool_pick_emb_source(info, _phash, _psrc, _praw)'))
+        self.assertEqual(branch.count('_gp_try_mark(_gp_base, False)'), 2)   # no look, not due
+        self.assertIn('marker=_gp_base, held=True)', branch)
+        opened = src[src.index('    def _open_with_proofread('):src.index('    # Respect the user')]
+        # waiting out a pause or in progress elsewhere: the pool's proofread
+        # copy is still looked for, a request is not made
+        self.assertLess(opened.index('asking = not _gp_trying(path)'),
+                        opened.index('_pool_proofread_text(info, pool_hash)'))
+        self.assertLess(opened.index('_pool_proofread_text(info, pool_hash)'),
+                        opened.index('        if not asking:\n            return None'))
+        self.assertLess(opened.index('        if not asking:\n            return None'),
+                        opened.index('return _proofread_opened('))
+
 
 class Opened(Base):
 
@@ -174,7 +204,8 @@ class Opened(Base):
         self.assertEqual((shared, phases), ([], []))
         self.assertFalse(translate._gp_done(self.path))
         src = (ADDON / 'resources' / 'lib' / 'translate.py').read_text(encoding='utf-8')
-        self.assertIn("if _psource is None:\n                    return None", src.replace('\r\n', '\n'))
+        self.assertIn("if _psource is None:\n                    _gp_try_mark(_gp_base, False)\n"
+                      "                    return None", src.replace('\r\n', '\n'))
 
     def test_one_attempt_at_a_time_and_a_pause_after_no_answer(self):
         # review of 0.3.59: two opens in its minutes spent two requests, and an
