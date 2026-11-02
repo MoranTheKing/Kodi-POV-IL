@@ -184,6 +184,21 @@ class Pick(Base):
         self.assertIsNone(self.run_pick(fake, 'f' * 16))           # nothing searched
         fake, paths = self.bridge([self.row('A', lang='es')])
         self.assertEqual(self.run_pick(fake, 'f' * 16), '')       # none in its language
+        # one came through and did not lay on, the other did not come
+        # through: that one may be the source -- looked for again after the
+        # in-progress pause, not at every pick (0.3.66)
+        fake, paths = self.bridge([self.row('A'), self.row('B')])
+        paths['A'] = self.write('a2.srt', OTHER)
+        self.assertIs(self.run_pick(fake, 'f' * 16), False)
+
+    def test_a_partial_look_keeps_the_pause(self):
+        src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        branch = src[src.index('                # held through the look'):]
+        branch = branch[:branch.index('return _proofread_opened(')]
+        partial = branch.index('                if _psource is False:\n'
+                               '                    return None')
+        self.assertLess(partial, branch.index('                if _psource is None:\n'
+                                              '                    _gp_try_mark(_gp_base, False)'))
 
     def test_as_far_down_the_list_as_the_embedded_path_went(self):
         rows = [self.row('Show.S01E01.%d' % i) for i in range(12)]
