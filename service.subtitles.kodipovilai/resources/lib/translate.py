@@ -24,6 +24,7 @@
 
 import json
 import os
+import shutil
 import threading
 import time
 import urllib.parse
@@ -3412,6 +3413,10 @@ def proofread_later(link, selection):
     try:
         payload = _decode_link(link or '') or {}
         kind = payload.get('type')
+        if kind == 'embedded_ai' and not payload.get('proofread_only'):
+            # made here moments ago: the translation of its kept source
+            payload = _EMBEDDED_RESOLVED.get(link) or {}
+            kind = payload.get('type')
         if kind not in ('pool', 'engine_ai', 'ai') or payload.get('proofread_only'):
             return
         if kind == 'pool' and (payload.get('pool_kind') or 'ai') == 'ktuvit':
@@ -3497,16 +3502,40 @@ def _keep_embedded_source(path):
     or an external subtitle retimed onto its cues) under its content hash:
     `path` is overwritten by the next embedded translation in that language,
     and a pooled copy of this translation is proofread against it later
-    (_pool_pick_emb_source). Never raises."""
+    (_pool_pick_emb_source). The copy's path ('' when none); the same bytes,
+    so the translation it keys is the same one. Never raises."""
     try:
         with open(path, 'r', encoding='utf-8', errors='replace') as f:
             raw = f.read()
         cid = _content_hash(_prepare_source(raw))
         if cid:
-            cache.save_text(_embedded_source_path(cid), raw)
+            kept = _embedded_source_path(cid)
+            shutil.copyfile(path, kept)
+            return kept
     except Exception as e:
         kodi_utils.log('embedded source copy failed: {0}'.format(e),
                        level='DEBUG')
+    return ''
+
+
+# An embedded_ai link resolved in this process -> the 'ai' payload it became,
+# its source at the kept copy. The automatic translation on play (autosub)
+# resolves an embedded track with no live preview, so no proofread ran; its
+# proofread_later job takes this payload and proofreads that translation
+# without reading the track again (field, 2 Nov 2026: most embedded
+# translations without a proofread, none of them proofread later).
+_EMBEDDED_RESOLVED = {}
+_EMBEDDED_RESOLVED_KEEP = 4
+
+
+def _remember_embedded(link, payload):
+    try:
+        _EMBEDDED_RESOLVED.pop(link, None)
+        _EMBEDDED_RESOLVED[link] = dict(payload)
+        while len(_EMBEDDED_RESOLVED) > _EMBEDDED_RESOLVED_KEEP:
+            _EMBEDDED_RESOLVED.pop(next(iter(_EMBEDDED_RESOLVED)))
+    except Exception:
+        pass
 
 
 # An external subtitle is a pooled embedded translation's source when nearly
@@ -4149,6 +4178,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # The Advanced mode selector controls which method is attempted. Every
         # mode remains fail-open: on a miss we return None and the caller falls
         # through to the normal external-subtitle path.
+        # this link's payload from an earlier video goes now: one made here
+        # is remembered below, and a miss leaves none (proofread_later)
+        _EMBEDDED_RESOLVED.pop(link, None)
         _emb_policy = _embedded_translation_policy()
         _emb_mode = _emb_policy['mode']
         if not _emb_policy['enabled']:
@@ -4198,7 +4230,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                            level='INFO')
             return None
         # its pooled copy is proofread against this later, here
-        _keep_embedded_source(emb_path)
+        _kept_src = _keep_embedded_source(emb_path)
         _status('AI: מתרגם תרגום מובנה לעברית...', time_ms=3000)
         payload = {'type': 'ai',
                    'source_lang': _emb_lang,
@@ -4216,6 +4248,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                    # and sorted first among the community AI translations.
                    'embedded': True,
                    'force_ai': True}
+        if _kept_src:
+            _remember_embedded(link, dict(payload, local_path=_kept_src))
         kind = 'ai'
         # fall through to the AI logic below
 

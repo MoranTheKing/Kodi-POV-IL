@@ -270,6 +270,35 @@ class Later(Base):
         self.assertEqual(translate._pool_job_id(translate._pool_gp_base('abcdef0123456789')),
                          'pool_abcdef0123456789')
 
+    def test_an_embedded_translation_made_on_play_gets_a_job_too(self):
+        # 0.3.68: autosub translates an embedded track with no live preview;
+        # its job proofreads the translation of the kept source copy, never
+        # reading the track again
+        src = os.path.join(self.dir, 'embedded_aligned_en.srt')
+        with open(src, 'wb') as f:
+            f.write(EN.replace('\n', '\r\n').encode('utf-8'))
+        kept = translate._keep_embedded_source(src)
+        self.assertTrue(kept and os.path.isfile(kept))
+        self.assertEqual(open(kept, 'rb').read(), open(src, 'rb').read())   # the same bytes
+        link = translate._encode_link({'type': 'embedded_ai', 'src_lang': 'en', 'stream_index': 3})
+        self.assertEqual(self.fired(link), [])               # nothing resolved here
+        translate._remember_embedded(link, {'type': 'ai', 'source_lang': 'en',
+                                            'local_path': kept, 'embedded': True,
+                                            'force_ai': True})
+        calls = self.fired(link)
+        self.assertEqual(len(calls), 1)
+        payload = json.loads(urllib.parse.unquote(self.args(calls[0])['link_b64']))
+        self.assertEqual((payload['type'], payload['local_path'], payload['embedded'],
+                          payload['proofread_only']), ('ai', kept, True, True))
+        # only the few latest are kept
+        for i in range(translate._EMBEDDED_RESOLVED_KEEP):
+            translate._remember_embedded('other%d' % i, {'type': 'ai'})
+        self.assertEqual(self.fired(link), [])
+        src_py = (ADDON / 'resources' / 'lib' / 'translate.py').read_text(encoding='utf-8')
+        branch = src_py.replace('\r\n', '\n')
+        branch = branch[branch.index("    if kind == 'embedded_ai':"):branch.index("    if kind == 'engine_ai':")]
+        self.assertIn('_remember_embedded(link, dict(payload, local_path=_kept_src))', branch)
+
     def test_when_none_is_due_nothing_starts(self):
         pooled = {'type': 'pool', 'hash': 'abcdef0123456789', 'pool_kind': 'ai'}
         self.assertEqual(self.fired(translate._encode_link(dict(pooled, pool_kind='ktuvit'))), [])

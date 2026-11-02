@@ -316,6 +316,79 @@ def _quarantine_provider_threads(threads, timeout_s=0.5):
     return not _lingering_provider_threads
 
 
+# A provider that is down holds every search to max_search_time and, still
+# running when the search is cut, makes the next one wait or be refused (Ktuvit
+# on 2 Nov 2026: its own server unreachable, 522 after ~20 s, every search held
+# to the limit for the whole outage). What it finds after the cut is lost
+# anyway. A provider still running at the cut of two searches within
+# _DOWN_STRIKE_SECS is skipped for _DOWN_SECS; the first search after that
+# tries it again, and outliving that one skips it again at once; one that ends
+# in time is clear. One slow answer alone skips nothing: Ktuvit carries most
+# human Hebrew. Nor does a cut that no provider beat WITH RESULTS: then the
+# device's own network is slow, and skipping every provider would leave
+# searches empty. A timing pass that would skip one is temporary instead. Kept
+# in a Kodi window property -- searches run in several interpreters.
+_DOWN_PROP = 'moransubs.provider_down'
+_DOWN_SECS = 600
+_DOWN_STRIKE_SECS = 1800
+
+
+def _down_state():
+    try:
+        state = json.loads(xbmcgui.Window(10000).getProperty(_DOWN_PROP) or '{}')
+        return state if isinstance(state, dict) else {}
+    except Exception:
+        return {}
+
+
+def _provider_down(name, now=None):
+    """Whether `name` is skipped now (marked down, the time not over)."""
+    now = time.time() if now is None else now
+    try:
+        return float((_down_state().get(name) or {}).get('until') or 0) > now
+    except Exception:
+        return False
+
+
+def _note_provider_outcomes(outlived, ended, answered=(), now=None):
+    """After a search: the providers still running at its cut, those that
+    ended in time, and of those the ones that answered with results. Never
+    raises."""
+    now = time.time() if now is None else now
+    try:
+        state = _down_state()
+        for name in ended:
+            state.pop(name, None)
+        # Only a provider that answered with results shows the network was
+        # fine: one that ends at once with nothing (no IMDb id, nothing
+        # playing, never connected) never went out. A cut that no answer
+        # beat is the device's own network (a link buffering the video):
+        # nobody is marked.
+        for name in (outlived if answered else ()):
+            prev = state.get(name) or {}
+            recent = now - float(prev.get('last') or 0) < _DOWN_STRIKE_SECS
+            strikes = int(prev.get('strikes') or 0) + 1 if recent else 1
+            state[name] = {'strikes': strikes, 'last': now,
+                           'until': now + _DOWN_SECS if strikes >= 2 else 0}
+            if strikes >= 2:
+                log.warning('DEBUG | c_get_subtitles | %s outlived %d searches '
+                            'in a row: skipped for %d s' % (name, strikes, _DOWN_SECS))
+        xbmcgui.Window(10000).setProperty(_DOWN_PROP, json.dumps(state))
+    except Exception as e:
+        log.warning('DEBUG | c_get_subtitles | provider state not kept: %r' % e)
+
+
+def _provider_on(name, skipped):
+    """A provider's turn in this search: not while it is marked down (then
+    named in `skipped`)."""
+    if _provider_down(name):
+        log.warning('DEBUG | c_get_subtitles | %s skipped: down (outlived its '
+                    'last searches)' % name)
+        skipped.append(name)
+        return False
+    return True
+
+
 def _finish_timing_timeout(threads, all_sources, timeout_s=0.5):
     """Return only a complete timing result after the timeout grace period.
 
@@ -362,46 +435,54 @@ def c_get_subtitles(video_data, all_lang_override=False, timing_only=False):
 
     for source in [ktuvit, wizdom, telegram, opensubtitles, yify, subsource, subscene, bsplayer]:
         source.global_var = []
+    _skipped = []   # providers left out as down (_provider_on)
     
     # Determine wether to search hebrew language
     search_language_hebrew_bool = (Addon.getSetting('language_hebrew') == 'true' or Addon.getSetting("all_lang") == 'true' or all_lang_override)
     
     # Israeli subtitles sources
     
-    if not timing_only and Addon.getSetting('ktuvit')=='true' and search_language_hebrew_bool:
+    if not timing_only and Addon.getSetting('ktuvit')=='true' and search_language_hebrew_bool and _provider_on('ktuvit', _skipped):
         thread.append(Thread(ktuvit.get_subs,video_data))
         all_sources.append(('ktuvit',ktuvit))
         
-    if not timing_only and Addon.getSetting('wizdom')=='true' and search_language_hebrew_bool:
+    if not timing_only and Addon.getSetting('wizdom')=='true' and search_language_hebrew_bool and _provider_on('wizdom', _skipped):
         thread.append(Thread(wizdom.get_subs,video_data))
         all_sources.append(('wizdom',wizdom))
         
-    if not timing_only and Addon.getSetting('telegram')=='true' and search_language_hebrew_bool:
+    if not timing_only and Addon.getSetting('telegram')=='true' and search_language_hebrew_bool and _provider_on('telegram', _skipped):
         thread.append(Thread(telegram.get_subs,video_data))
         all_sources.append(('telegram',telegram))
         
     # Global subtitles sources
         
-    if Addon.getSetting('opensubtitles')=='true':
+    if Addon.getSetting('opensubtitles')=='true' and _provider_on('opensubtitles', _skipped):
         thread.append(Thread(opensubtitles.get_subs,video_data, all_lang_override))
         all_sources.append(('opensubtitles',opensubtitles))
         
-    if Addon.getSetting('yify')=='true':
+    if Addon.getSetting('yify')=='true' and _provider_on('yify', _skipped):
         thread.append(Thread(yify.get_subs,video_data, all_lang_override))
         all_sources.append(('yify',yify))
         
-    if Addon.getSetting('subsource')=='true':
+    if Addon.getSetting('subsource')=='true' and _provider_on('subsource', _skipped):
         thread.append(Thread(subsource.get_subs,video_data, all_lang_override))
         all_sources.append(('subsource',subsource))
         
-    if Addon.getSetting('subscene')=='true':
+    if Addon.getSetting('subscene')=='true' and _provider_on('subscene', _skipped):
         thread.append(Thread(subscene.get_subs,video_data, all_lang_override))
         all_sources.append(('subscene',subscene))
     
-    if not timing_only and Addon.getSetting('bsplayer')=='true' and search_language_hebrew_bool:
+    if not timing_only and Addon.getSetting('bsplayer')=='true' and search_language_hebrew_bool and _provider_on('bsplayer', _skipped):
         thread.append(Thread(bsplayer.get_subs,video_data))
         all_sources.append(('bsplayer',bsplayer))
         
+
+    # A timing pass is all or nothing (_finish_timing_timeout): one without a
+    # provider is as incomplete as one cut short -- temporary, retried later,
+    # never kept as the all-language result.
+    if timing_only and _skipped:
+        last_search_cut_short = True
+        raise ProviderSearchBusy('provider down: ' + ', '.join(_skipped))
 
     for td in thread:
       xbmc.sleep(100)
@@ -454,22 +535,31 @@ def c_get_subtitles(video_data, all_lang_override=False, timing_only=False):
                 general.show_msg=' אנא המתן '+ time.strftime("%H:%M:%S", time.gmtime(elapsed_time))+'\n'+ string_dp
               
         if still_alive==0:
+            _note_provider_outcomes([], [name for name, _src in all_sources])
             break
         
         if  elapsed_time>ExcludeTime: 
             break_all=True
             last_search_cut_short = True
-            if timing_only:
-                try:
-                    f_result = _finish_timing_timeout(thread, all_sources)
-                except ProviderSearchBusy:
-                    log.warning('DEBUG | c_get_subtitles | Incomplete timing '
-                                'search discarded; provider worker quarantined')
-                    raise
-            elif not _quarantine_provider_threads(thread):
-                log.warning('DEBUG | c_get_subtitles | Timed-out provider '
-                            'worker quarantined; later searches will abstain '
-                            'until it exits')
+            try:
+                if timing_only:
+                    try:
+                        f_result = _finish_timing_timeout(thread, all_sources)
+                    except ProviderSearchBusy:
+                        log.warning('DEBUG | c_get_subtitles | Incomplete timing '
+                                    'search discarded; provider worker quarantined')
+                        raise
+                elif not _quarantine_provider_threads(thread):
+                    log.warning('DEBUG | c_get_subtitles | Timed-out provider '
+                                'worker quarantined; later searches will abstain '
+                                'until it exits')
+            finally:
+                # who outlived the cut, who ended in time (_provider_down)
+                _note_provider_outcomes(
+                    [name for (name, _src), td in zip(all_sources, thread) if td.is_alive()],
+                    [name for (name, _src), td in zip(all_sources, thread) if not td.is_alive()],
+                    [name for (name, src), td in zip(all_sources, thread)
+                     if not td.is_alive() and src.global_var])
             break
         xbmc.sleep(10)
         
