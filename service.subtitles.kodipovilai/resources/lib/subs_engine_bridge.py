@@ -383,6 +383,10 @@ def search(info, modal_progress=True, cache_only=False):
             _cache_put(info, out)
         if _search_finished(time.monotonic() - started):
             _recent_put(info, out)
+        elif out:
+            # cut at max_search_time: never reused as a list to show, but
+            # what it found serves the gender reference (reusable_results)
+            _recent_put(info, out, prop=_CUT_PROP)
         return out
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.search failed: {0}'.format(e),
@@ -395,6 +399,69 @@ def search(info, modal_progress=True, cache_only=False):
         except Exception:
             pass
         return []
+
+
+def reusable_results(info):
+    """What a search of the last two minutes -- one cut at max_search_time
+    too -- or the 24 h cache found for this media, without searching; [] when
+    none. For the gender reference, which needs candidates in other
+    languages, not the complete list a viewer picks from."""
+    if not enabled():
+        return []
+    try:
+        if _release_ready(info):
+            cached = _cache_get(info)
+            if cached:
+                return cached
+        for prop in (_RECENT_PROP, _CUT_PROP):
+            found = _recent_get(info, prop=prop)
+            if found:
+                return found
+    except Exception:
+        pass
+    return []
+
+
+def providers_busy():
+    """A provider of an earlier search ran past max_search_time and still
+    runs: the engine refuses every new search until it ends (its results
+    would land in the new search's buffers). False when the engine was never
+    loaded."""
+    import sys
+    engine = sys.modules.get('resources.lib.subs_engine.engine')
+    try:
+        return engine is not None and any(
+            t.is_alive() for t in (engine._lingering_provider_threads or []))
+    except Exception:
+        return False
+
+
+def wait_for_providers(timeout_s):
+    """Wait up to `timeout_s` for those providers to end (not past Kodi's
+    exit); True when none is left."""
+    import sys
+    engine = sys.modules.get('resources.lib.subs_engine.engine')
+    if engine is None:
+        return True
+    deadline = time.monotonic() + max(0.0, float(timeout_s or 0))
+    try:
+        import xbmc
+        monitor = xbmc.Monitor()
+    except Exception:
+        monitor = None
+    while True:
+        try:
+            if engine._provider_workers_ready(0.5):
+                return True
+        except Exception:
+            return False
+        if time.monotonic() >= deadline:
+            return False
+        try:
+            if monitor is not None and monitor.abortRequested():
+                return False
+        except Exception:
+            pass
 
 
 # ---- result cache (per media, short TTL) ----------------------------
@@ -445,6 +512,8 @@ def _search_finished(took=None):
 
 
 _RECENT_PROP = 'moransubs.engine_recent'
+# Searches stopped at max_search_time, apart: the picker never reuses them.
+_CUT_PROP = 'moransubs.engine_recent_cut'
 _RECENT_KEEP = 3
 
 
@@ -457,23 +526,23 @@ def _release_key(info):
     return hashlib.sha1(rel.encode('utf-8', 'replace')).hexdigest()[:16]
 
 
-def _recent_entries():
+def _recent_entries(prop=_RECENT_PROP):
     try:
         import xbmcgui
-        raw = xbmcgui.Window(10000).getProperty(_RECENT_PROP)
+        raw = xbmcgui.Window(10000).getProperty(prop)
         rows = json.loads(raw) if raw else []
         return rows if isinstance(rows, list) else []
     except Exception:
         return []
 
 
-def _recent_put(info, out):
+def _recent_put(info, out, prop=_RECENT_PROP):
     key = _cache_key(info)
     if not key:
         return
     now = time.time()
     rows = []
-    for r in _recent_entries():
+    for r in _recent_entries(prop):
         try:
             if (isinstance(r, dict) and r.get('key') != key
                     and 0 <= now - float(r.get('t') or 0) < _RECENT_TTL):
@@ -484,19 +553,20 @@ def _recent_put(info, out):
                  'out': out or []})
     try:
         import xbmcgui
-        xbmcgui.Window(10000).setProperty(_RECENT_PROP, json.dumps(
+        xbmcgui.Window(10000).setProperty(prop, json.dumps(
             rows[-_RECENT_KEEP:], ensure_ascii=False))
     except Exception:
         pass
 
 
-def _recent_get(info):
-    """The finished search of the last two minutes for this media, or None."""
+def _recent_get(info, prop=_RECENT_PROP):
+    """The finished search of the last two minutes for this media, or None
+    (`prop` _CUT_PROP: the cut one)."""
     key = _cache_key(info)
     if not key:
         return None
     rec = None
-    for r in _recent_entries():
+    for r in _recent_entries(prop):
         if isinstance(r, dict) and r.get('key') == key:
             rec = r
     try:
