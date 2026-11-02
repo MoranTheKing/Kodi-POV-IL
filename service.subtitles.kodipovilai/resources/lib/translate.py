@@ -1678,6 +1678,79 @@ def _google_rescue(blocks, source_lang):
         return None
 
 
+def _google_fill_missing(missing, source_lang):
+    """Google Translate for entries a chunk is about to keep in English (its
+    budget spent, the reply still without them): one request per ~3,000
+    characters. Returns only the blocks that came back with Hebrew, on the
+    start times asked for; [] on any failure, and the caller keeps the
+    source for the rest. Never raises."""
+    try:
+        if not missing:
+            return []
+        from . import google_translate
+        out = google_translate.translate_srt('\n\n'.join(missing), source_lang)
+        if not out:
+            return []
+        got = [b for b in srt.parse_blocks(out)
+               if any(u'\u05d0' <= c <= u'\u05ea'
+                      for c in ''.join(b.split('\n')[2:]))]
+        return srt.align_blocks(missing, got)
+    except Exception as e:
+        kodi_utils.log('Google fill failed ({0}) -- keeping the source text '
+                       'for {1} entr(ies)'.format(e, len(missing or ())),
+                       level='WARNING')
+        return []
+
+
+class _IntegrityRejected(gemini.FilteredResponse):
+    """A reply the output checks refused (a self-edit, an echoed source cue,
+    a lost negation, no Hebrew). The ladder retries it as it does a content
+    block, but it is no block: it does not start a chunk's block budget
+    (_BlockClock)."""
+
+
+class _BlockClock(object):
+    """A chunk's budget in the AI translation (resolve's _translate_one).
+
+    It is there for one pathology: a chunk fighting content blocks
+    (alternate references, bisecting to the blocked line) can storm for
+    minutes and hold up the whole job. So `budget` runs from the chunk's
+    FIRST block, not from its first request. Field, 2 Nov 2026 (Frasier
+    S11E13, 0.3.68): chunks with no block at all passed 120 s on a slow
+    evening Gemini; 18 lines went out without the reference and 7 the reply
+    skipped stayed in English. A whole-subtitle request
+    (whole_subtitle_request) passed it on almost every run. A chunk that
+    never blocks is still bounded: by `slow_cap` seconds, and by
+    `max_calls` requests (`calls`, counted by the translator) -- a reply that
+    keeps dropping entries bisects down to single lines, about two requests
+    a line. A block fight has its time budget alone, as before: on a fast
+    paid key the request count would cut it short. Past the budget the
+    remainder goes English-only; `grace` (on the time) and half as many
+    requests again bound that too."""
+    __slots__ = ('budget', 'until', 'cap', 'calls', 'max_calls')
+
+    def __init__(self, budget, slow_cap, max_calls):
+        self.budget = float(budget)
+        self.until = None
+        self.cap = time.monotonic() + float(slow_cap)
+        self.calls = 0
+        self.max_calls = int(max_calls)
+
+    def block(self, cause=None):
+        """A content block: the budget starts now (once per chunk). Not for
+        an output-check rejection (`cause`, _IntegrityRejected)."""
+        if self.until is None and not isinstance(cause, _IntegrityRejected):
+            self.until = time.monotonic() + self.budget
+
+    def spent(self, grace=0.0):
+        now = time.monotonic() - grace
+        if now > self.cap:
+            return True
+        if self.until is not None:
+            return now > self.until
+        return self.calls > self.max_calls + (self.max_calls // 2 if grace else 0)
+
+
 def _prepare_source(raw_src, merge=True):
     """Strip hearing-impaired SOUND cues from a source SRT (but KEEP ALL-CAPS
     speaker prefixes like 'MABEL:' -- the AI uses them to look up the character's
@@ -5130,14 +5203,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         """The telemetry's word on a translation with no proofread model
         (_gp_why); 'off' with the setting off, 'later' on a path without a
         live preview (proofread_later's job, or the next open from the
-        list, does it); '' otherwise."""
+        list, does it) -- 'quota' there when no model has quota left for
+        that job; '' otherwise."""
         try:
             if not ok or note or _gp_report.get('model'):
                 return ''
             if not kodi_utils.get_bool('gender_proofread', True):
                 return 'off'
             if progressive_cb is None:
-                return 'later'
+                # the job proofread_later starts asks only a model with quota
+                return 'later' if _gp_models_left() else 'quota'
             return _gp_report.get('why') or ''
         except Exception:
             return ''
@@ -5273,7 +5348,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # bisect-storming a block for ~5 min, so the job never cached/uploaded). When
     # it trips it translates the remainder ENGLISH-ONLY in one shot (still
     # Hebrew, just no gender); source is kept only if even that is blocked.
+    # It runs from the chunk's first block (_BlockClock): a slow Gemini is no
+    # block. A chunk that never blocks has the slow cap instead -- ten
+    # minutes (three seconds a line past 200 lines: a whole-subtitle request)
+    # and 20 requests plus one per 4 lines (32 for 50 lines).
     _CHUNK_BLOCK_BUDGET = 120.0
+    _CHUNK_SLOW_CAP = 600.0
+    _CHUNK_SLOW_PER_LINE = 3.0
+    _CHUNK_MAX_CALLS = 20
+    _CHUNK_LINES_PER_CALL = 4
     # Per-minute rate limit (HTTP 429, RPM/TPM) -- TEMPORARY, clears within ~60s.
     # Back off (preferring Gemini's own retryDelay) and retry the SAME chunk so AI
     # translation continues to the end instead of aborting to Google mid-movie.
@@ -5323,6 +5406,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # keeps its source per-line with zero further calls.
     _EO_GRACE = 90.0
 
+    def _gem(clock, *args, **kwargs):
+        """_call_gemini, counted on the chunk's clock (_BlockClock.calls)."""
+        if clock is not None:
+            clock.calls += 1
+        return _call_gemini(*args, **kwargs)
+
     def _english_only_safe(idx, ch, deadline=None):
         """Translate `ch` with NO gender reference (English only), splitting on
         truncation / residual blocks so a large remainder still completes, and
@@ -5333,16 +5422,20 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         content/format error; a genuine quota/overload abort (_AbortTranslation)
         still propagates, as it must. `deadline` + _EO_GRACE caps its OWN spend
         so the guarantee cannot itself run without a clock."""
-        if (deadline is not None
-                and time.monotonic() > deadline + _EO_GRACE):
+        if deadline is not None and deadline.spent(_EO_GRACE):
+            _resc = _google_fill_missing(ch, source_lang)
             kodi_utils.log(
-                'Chunk {0}: English-only grace budget spent too -- keeping '
-                'source for {1} entr(ies) without further calls'.format(
-                    idx, len(ch)), level='WARNING')
-            _count('src', len(ch))
-            return '\n\n'.join(ch)
+                'Chunk {0}: English-only grace budget spent too -- no further '
+                'Gemini calls; {1} of {2} entr(ies) with Google Translate, '
+                'the rest kept as source'.format(idx, len(_resc), len(ch)),
+                level='WARNING')
+            _count('noar', len(_resc))
+            _count('src', len(ch) - len(_resc))
+            if not _resc:
+                return '\n\n'.join(ch)
+            return srt.stitch_blocks(srt.align_blocks(ch, _resc, ch))
         try:
-            resp = _call_gemini(idx, ch, NO_REF)
+            resp = _gem(deadline, idx, ch, NO_REF)
         except (gemini.FilteredResponse, gemini.TruncatedResponse):
             if len(ch) > 1:
                 mid = len(ch) // 2
@@ -5368,20 +5461,23 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         + _english_only_safe(idx, ch[mid:], deadline))
             # ...and the same silent-drop hole the counting guard cannot see.
             # This is the circuit-breaker path, reached only once the block
-            # budget is already spent, so it does NOT spend another call: any
-            # entry the reply omitted keeps its source text. Visibly
-            # untranslated beats silently absent, and it keeps the entry count
-            # aligned for everything downstream.
+            # budget is already spent, so it does NOT spend another Gemini
+            # call: an entry the reply omitted gets Google Translate, and keeps
+            # its source text only if that fails too. Visibly untranslated
+            # beats silently absent, and it keeps the entry count aligned for
+            # everything downstream.
             _gap = srt.missing_blocks(ch, srt.parse_blocks(resp))
             if _gap:
+                _resc = _google_fill_missing(_gap, source_lang)
                 kodi_utils.log(
                     'Chunk {0} English-only: {1} entr(ies) missing from the '
-                    'reply -- keeping their source text'.format(idx, len(_gap)),
+                    'reply -- {2} with Google Translate, the rest kept as '
+                    'source'.format(idx, len(_gap), len(_resc)),
                     level='WARNING')
-                _count('src', len(_gap))
-                _count('noar', len(ch) - len(_gap))
+                _count('src', len(_gap) - len(_resc))
+                _count('noar', len(ch) - len(_gap) + len(_resc))
                 return srt.stitch_blocks(srt.align_blocks(
-                    ch, srt.parse_blocks(resp), _gap))
+                    ch, srt.parse_blocks(resp), _resc, _gap))
         _count('noar', len(ch))
         return resp
 
@@ -5436,10 +5532,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 missing = srt.missing_blocks(ch, blocks)
                 if not missing:
                     break
-                if deadline is not None and time.monotonic() > deadline:
+                if deadline is not None and deadline.spent():
                     kodi_utils.log(
                         'Chunk {0}: {1} entr(ies) still missing but the block '
-                        'budget is spent -- leaving them as source'.format(
+                        'budget is spent -- no more Gemini calls for them'.format(
                             idx, len(missing)), level='WARNING')
                     break
                 kodi_utils.log(
@@ -5450,14 +5546,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     # The reference the chunk passed with: after a fallback
                     # language, asking with the blocked primary again wastes a
                     # request and then drops the gender hints.
-                    fill = _call_gemini(idx, missing, level,
+                    fill = _gem(deadline, idx, missing, level,
                                         he_context=_accepted_before(ch, blocks, missing))
-                except gemini.FilteredResponse:
+                except gemini.FilteredResponse as _fe:
                     # These specific lines are what the filter objects to. Drop
                     # the gender reference for them and try once more; the
                     # single-entry path below has the full ladder for the rest.
+                    if deadline is not None:
+                        deadline.block(_fe)
                     try:
-                        fill = _call_gemini(idx, missing, NO_REF)
+                        fill = _gem(deadline, idx, missing, NO_REF)
                     except _AbortTranslation:
                         raise
                     except (gemini.FilteredResponse, gemini.TruncatedResponse):
@@ -5486,7 +5584,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             tallied = 0
             still = srt.missing_blocks(ch, blocks)
             if still and len(still) < len(ch) and (
-                    deadline is None or time.monotonic() < deadline):
+                    deadline is None or not deadline.spent()):
                 # The top-up requests the missing entries TOGETHER -- which
                 # CONCENTRATES exactly the content the filter objected to, so
                 # the refill is MORE likely to block than the chunk that
@@ -5519,16 +5617,21 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         'source for the leftovers'.format(idx, e),
                         level='WARNING')
             if still:
-                # Keep the SOURCE for whatever never came back, so the entry
-                # count matches the chunk and every later stage (positional
-                # timing restore, the merge into the final file) stays aligned.
-                blocks = srt.align_blocks(ch, blocks, still)
+                # Google Translate for whatever never came back (machine
+                # Hebrew, no gender), and the SOURCE for what even that missed,
+                # so the entry count matches the chunk and every later stage
+                # (positional timing restore, the merge into the final file)
+                # stays aligned.
+                _resc = _google_fill_missing(still, source_lang)
+                blocks = srt.align_blocks(ch, blocks, _resc, still)
                 kodi_utils.log(
-                    'Chunk {0}: {1} entr(ies) kept as source after top-up'
-                    .format(idx, len(still)), level='WARNING')
+                    'Chunk {0}: {1} entr(ies) missing after top-up -- {2} with '
+                    'Google Translate, the rest kept as source'
+                    .format(idx, len(still), len(_resc)), level='WARNING')
                 if tallied == 0:
                     # counted here only when the rescue never ran/tallied them
-                    _count('src', len(still))
+                    _count('noar', len(_resc))
+                    _count('src', len(still) - len(_resc))
                     tallied = len(still)
             return srt.stitch_blocks(blocks), tallied
         except _AbortTranslation:
@@ -5550,8 +5653,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # language, then English-only (translated, gender dropped), and only as
         # an ABSOLUTE LAST RESORT keep the source for that ONE line.
         if deadline is None:
-            deadline = time.monotonic() + _CHUNK_BLOCK_BUDGET
-        elif time.monotonic() > deadline:
+            deadline = _BlockClock(
+                _CHUNK_BLOCK_BUDGET,
+                max(_CHUNK_SLOW_CAP, _CHUNK_SLOW_PER_LINE * len(ch)),
+                _CHUNK_MAX_CALLS + len(ch) // _CHUNK_LINES_PER_CALL)
+        elif deadline.spent():
             # Circuit-breaker (rare, pathologically explicit chunk): translate the
             # remainder ENGLISH-ONLY so the viewer still gets Hebrew and the JOB
             # finalizes (cache + pool). _english_only_safe splits on truncation /
@@ -5559,13 +5665,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # piece -- source is kept only for an individual line that stays
             # blocked, never a whole sub-chunk dumped at once.
             kodi_utils.log(
-                'Chunk {0} over block-budget ({1:.0f}s) -- translating the '
-                'remainder English-only'.format(idx, _CHUNK_BLOCK_BUDGET),
+                'Chunk {0} over its budget ({1}; {2} requests) -- translating '
+                'the remainder English-only'.format(
+                    idx, 'blocked' if deadline.until is not None
+                    else 'no block, the slow cap', deadline.calls),
                 level='WARNING')
             return _english_only_safe(idx, ch, deadline)
         if len(ch) > 1:
             try:
-                response = _call_gemini(idx, ch, 0)      # primary reference
+                response = _gem(deadline, idx, ch, 0)      # primary reference
             except gemini.TruncatedResponse:
                 mid = len(ch) // 2
                 kodi_utils.log(
@@ -5578,14 +5686,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 # cannot change what the model will not write, and each one is a
                 # download and two requests. Isolate the line directly.
                 _count('blocks')
+                deadline.block()
                 mid = len(ch) // 2
                 kodi_utils.log(
                     'Chunk {0} stopped early -- bisecting into {1} + {2}'
                     .format(idx, mid, len(ch) - mid), level='WARNING')
                 return (_translate_one(idx, ch[:mid], deadline, False) + '\n\n'
                         + _translate_one(idx, ch[mid:], deadline, False))
-            except gemini.FilteredResponse:
+            except gemini.FilteredResponse as _fe:
                 _count('blocks')
+                deadline.block(_fe)
                 # 1) Try the WHOLE chunk with the next human-subtitle language(s)
                 #    -- gender-preserving. Handles the aggregate-volume block
                 #    (Arabic DOUBLED the explicit content; a lighter language may
@@ -5593,12 +5703,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 #    never repeated at every bisect node.
                 if try_alts:
                     for _lvl in range(1, _MAX_ALT_LEVELS + 1):
-                        if time.monotonic() > deadline:
+                        if deadline.spent():
                             break     # out of block-budget -> stop, isolate/degrade
                         if not _ref_ensure(_lvl):
                             break     # no more aligned languages available
                         try:
-                            _resp = _call_gemini(idx, ch, _lvl)
+                            _resp = _gem(deadline, idx, ch, _lvl)
                         except gemini.FilteredResponse:
                             continue   # this language blocked too -> try next
                         except gemini.TruncatedResponse:
@@ -5664,7 +5774,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             return response
         # ---- single-entry chunk ----
         try:
-            _resp = _call_gemini(idx, ch, 0)
+            _resp = _gem(deadline, idx, ch, 0)
             _count('ar', len(ch))
             return _resp
         except gemini.TruncatedResponse as e:
@@ -5682,17 +5792,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # first (e.g. Spanish after Arabic)... -- not for an early stop
             # (RECITATION...), which no reference language changes.
             _count('blocks')
+            deadline.block(_blocked)
             for _lvl in range(1, (0 if isinstance(_blocked, gemini.StoppedEarly)
                                   else _MAX_ALT_LEVELS) + 1):
                 # Cap the uninterruptible window: once past the block-budget, stop
                 # trying more languages for THIS line and degrade -- so one
                 # pathological chunk can't hog the shared RPM gate for other jobs.
-                if time.monotonic() > deadline:
+                if deadline.spent():
                     break
                 if not _ref_ensure(_lvl):
                     break
                 try:
-                    _resp = _call_gemini(idx, ch, _lvl)
+                    _resp = _gem(deadline, idx, ch, _lvl)
                     _count('alt', len(ch))
                     return _resp
                 except (gemini.FilteredResponse, gemini.TruncatedResponse):
@@ -5700,7 +5811,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # ...then English-only (translated, gender dropped for this line)...
             if _ref_stack:
                 try:
-                    _resp = _call_gemini(idx, ch, NO_REF)
+                    _resp = _gem(deadline, idx, ch, NO_REF)
                     _count('noar', len(ch))
                     return _resp
                 except (gemini.FilteredResponse, gemini.TruncatedResponse):
@@ -5879,7 +5990,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         .format(idx, total, len(editorial), len(source_echo),
                                 len(negation_loss), bool(untranslated)),
                         level='WARNING')
-                    raise gemini.FilteredResponse(
+                    raise _IntegrityRejected(
                         'generated-output integrity violation')
                 return response
             except gemini.RateLimited as e:

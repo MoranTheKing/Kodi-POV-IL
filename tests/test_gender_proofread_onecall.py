@@ -216,8 +216,11 @@ class Request(unittest.TestCase):
         src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
         emit = src[src.index('    def _gp_event_note(ok, note):'):src.index('    if whole_subtitle_request:')]
         self.assertIn("'gp_note': _gp_event_note(ok, note),", emit)
-        for word in ("return 'off'", "return 'later'", "_gp_report.get('why')"):
+        for word in ("return 'off'", "_gp_report.get('why')"):
             self.assertIn(word, emit)
+        # 0.3.69: 'deferred' only when the job can ask a model (Frasier,
+        # 2 Nov: 'deferred' on a device that never proofread)
+        self.assertIn("return 'later' if _gp_models_left() else 'quota'", emit)
 
 
 class Markers(unittest.TestCase):
