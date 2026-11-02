@@ -80,6 +80,10 @@ def sampling_params_supported(model):
 
 class GeminiError(Exception):
     """Raised on any non-recoverable API failure."""
+    # True when the model took the request: a reply came back (cut off,
+    # blocked, empty, malformed), or none came in time after it was sent. It
+    # counted against the day's quota whatever the reply was worth.
+    answered = False
 
 
 class QuotaExceeded(GeminiError):
@@ -510,7 +514,13 @@ def generate(api_key, model, prompt, temperature=0.2,
                                        'x-goog-api-key': api_key},
                               timeout=timeout)
         except requests.RequestException as e:
-            raise GeminiError('Network error: {0}'.format(e))
+            err = GeminiError('Network error: {0}'.format(e))
+            # sent, and no reply in time or one cut off mid-read: the model
+            # may well have taken it
+            err.answered = isinstance(e, (getattr(requests, 'ReadTimeout', ()),
+                                          getattr(getattr(requests, 'exceptions', None),
+                                                  'ChunkedEncodingError', ())))
+            raise err
         if (_attempt == 0 and model not in _SAFETY_OFF_MODELS
                 and _refused_threshold(r)):
             _SAFETY_OFF_MODELS.add(model)
@@ -521,8 +531,11 @@ def generate(api_key, model, prompt, temperature=0.2,
     if r.status_code == 429:
         raise _classify_429(r)
     if r.status_code in (500, 502, 503, 504):
-        raise OverloadError(
+        err = OverloadError(
             'Gemini overloaded (HTTP {0})'.format(r.status_code))
+        # past the server's deadline: the model was working on it
+        err.answered = r.status_code == 504
+        raise err
     if r.status_code in (401, 407):
         # 401 (and 407 proxy-auth) is ALWAYS an authentication failure -- the key
         # is invalid / expired / revoked, or the project has no access. It is
@@ -538,9 +551,15 @@ def generate(api_key, model, prompt, temperature=0.2,
     try:
         data = r.json()
     except ValueError:
-        raise GeminiError('Unparseable response from API')
+        err = GeminiError('Unparseable response from API')
+        err.answered = True
+        raise err
 
-    text = _generated_text(data)
+    try:
+        text = _generated_text(data)
+    except GeminiError as e:
+        e.answered = True
+        raise
 
     # Bump the daily-quota counter. Lazy import + try/except so a
     # bug here can never break translation. We only count successful
