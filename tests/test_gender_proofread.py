@@ -151,7 +151,9 @@ class Wiring(unittest.TestCase):
         call = src[src.index('def _run_gender_proofread'):src.index('def _title_cast')]
         # the usage figure counts it only when the model IS the translator's
         self.assertIn('count_usage=(proof_model == model)', call)
-        self.assertIn('except gemini.GeminiError:', call)
+        self.assertIn('except gemini.GeminiError as e:', call)
+        # a model that took the request is not followed by another (0.3.65)
+        self.assertIn('raise gender_proofread.Spent(proof_model)', call)
         self.assertIn('gender_proofread.note_exhausted(proof_model, kodi_utils)', call)
         self.assertNotIn('gemini_quota.note_exhausted', call)
         gem = (LIB / 'gemini.py').read_text(encoding='utf-8').replace('\r\n', '\n')

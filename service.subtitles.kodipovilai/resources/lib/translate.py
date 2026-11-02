@@ -3016,6 +3016,9 @@ def _gp_saved(path):
 # (two opens in its minutes would spend two requests; an overloaded model is
 # not asked again at every open).
 _GP_RETRY_SECS = 6 * 3600
+# A model took the request and its reply was of no use (blocked, cut off): the
+# same title would most likely come back the same, so not for a week.
+_GP_SPENT_SECS = 7 * 86400
 
 
 def _gp_try_marker(path):
@@ -3029,15 +3032,38 @@ def _gp_trying(path):
         return False
 
 
-def _gp_try_mark(path, on):
+def _gp_try_mark(path, on, hold=None):
+    """The in-progress marker on (for _GP_RETRY_SECS, or `hold` seconds) or
+    off."""
     try:
         if on:
             with open(_gp_try_marker(path), 'w', encoding='utf-8') as f:
                 f.write('1')
+            if hold:
+                # _gp_trying measures from the marker's time
+                t = time.time() + hold - _GP_RETRY_SECS
+                os.utime(_gp_try_marker(path), (t, t))
         else:
             os.remove(_gp_try_marker(path))
     except OSError:
         pass
+
+
+def _gp_settle(markers, report, stopped):
+    """The in-progress markers after a proofread: off when a model answered;
+    a week when one took the request and its reply was of no use -- even if
+    the viewer moved on meanwhile, the request is spent; off when nothing was
+    asked (every model out of quota) or the viewer moved on; else they stay
+    (_GP_RETRY_SECS)."""
+    if report.get('model'):
+        for m in markers:
+            _gp_try_mark(m, False)
+    elif report.get('spent'):
+        for m in markers:
+            _gp_try_mark(m, True, hold=_GP_SPENT_SECS)
+    elif not report.get('asked') or stopped():
+        for m in markers:
+            _gp_try_mark(m, False)
 
 
 def _gp_models_left():
@@ -3100,6 +3126,8 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
         # no new model after this: a viewer waits for the swap
         _deadline = time.monotonic() + gender_proofread.TOTAL_BUDGET
 
+        _asked = [False]   # a request went out (the markers pause after one)
+
         def _request(proof_model, prompt_text):
             if (gender_proofread.exhausted_today(proof_model, kodi_utils)
                     or time.monotonic() > _deadline):
@@ -3109,6 +3137,7 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
                     raise RuntimeError('proofread cancelled')
                 if attempt and time.monotonic() > _deadline:
                     raise gender_proofread.Skip(proof_model)
+                _asked[0] = True
                 try:
                     # The usage counter is the translator's and holds one
                     # model: counted only when this IS that model.
@@ -3124,6 +3153,9 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
                     gender_proofread.note_exhausted(proof_model, kodi_utils)
                     raise gender_proofread.Skip(proof_model)
                 except (gemini.OverloadError, gemini.RateLimited) as e:
+                    if getattr(e, 'answered', False):
+                        # past its deadline (504): it was working on it
+                        raise gender_proofread.Spent(proof_model)
                     if attempt:
                         raise gender_proofread.Skip(proof_model)
                     # a stop skips the proofread, never the translation
@@ -3131,9 +3163,13 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
                         5, min(getattr(e, 'retry_after', 0) or 20, 60))
                     while time.monotonic() < _until and not stopped():
                         time.sleep(0.5)
-                except gemini.GeminiError:
-                    # cut off, blocked, a retired model id, a timeout:
-                    # this model cannot answer, the next may
+                except gemini.GeminiError as e:
+                    if getattr(e, 'answered', False):
+                        # it took the request (cut off, blocked, no reply in
+                        # time): counted today, and the next model would be
+                        # a second request for this proofread
+                        raise gender_proofread.Spent(proof_model)
+                    # refused unread, a retired model id: the next may answer
                     raise gender_proofread.Skip(proof_model)
             raise gender_proofread.Skip(proof_model)
 
@@ -3145,6 +3181,7 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
                   and c.get('gender') in ('female', 'male')]
         new_texts, report = gender_proofread.proofread(
             sources, texts, _request, cast=people, cancelled=stopped)
+        report['asked'] = _asked[0]
         if report.get('applied'):
             out = []
             for block, old, new in zip(blocks, texts, new_texts):
@@ -3157,7 +3194,9 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
                              ', '.join(report.get('tried') or []) or 'none'),
                          report.get('proposed', 0), report.get('applied', 0),
                          report.get('refused', 0),
-                         (' -- ' + report['error']) if report.get('error') else ''),
+                         (' -- ' + report['error']) if report.get('error') else
+                         (' -- {0} took it, its reply of no use: no other model'
+                          .format(report['spent'])) if report.get('spent') else ''),
             level='INFO')
     except Exception as e:
         kodi_utils.log('gender proofread skipped: {0}'.format(e), level='WARNING')
@@ -3287,9 +3326,9 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
             delivered = deliver(path)
             kodi_utils.notify('AI: תוקנו זכר/נקבה ב-{0} שורות'.format(
                 report.get('applied', 0)), time_ms=4000)
-        if report.get('model') or stopped():
-            # answered, or the viewer moved on: no pause before the next open
-            _gp_try_mark(marker, False)
+        # answered, nothing sent or the viewer moved on: no pause before the
+        # next open; a reply of no use: a week
+        _gp_settle((marker,), report, stopped)
         if report.get('model'):
             _gp_mark(marker, report)
             if share is not None:
@@ -3408,6 +3447,184 @@ def _pool_proofread_text(info, pool_hash):
     return ''
 
 
+def _embedded_source_path(base_hash):
+    """This device's copy of the subtitle an embedded translation was made
+    from, under its content hash (the pool's key for that translation)."""
+    return os.path.join(kodi_utils.cache_dir(),
+                        'emb_src_{0}.srt'.format(base_hash))
+
+
+def _keep_embedded_source(path):
+    """Keep the source of an embedded translation (the video's own text track,
+    or an external subtitle retimed onto its cues) under its content hash:
+    `path` is overwritten by the next embedded translation in that language,
+    and a pooled copy of this translation is proofread against it later
+    (_pool_pick_emb_source). Never raises."""
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as f:
+            raw = f.read()
+        cid = _content_hash(_prepare_source(raw))
+        if cid:
+            cache.save_text(_embedded_source_path(cid), raw)
+    except Exception as e:
+        kodi_utils.log('embedded source copy failed: {0}'.format(e),
+                       level='DEBUG')
+
+
+# An external subtitle is a pooled embedded translation's source when nearly
+# every Hebrew line starts within this of one of its lines once the gate has
+# put it on the Hebrew's cue times. The translation keeps each source cue's
+# time, and the gate's map lands a retimed subtitle within milliseconds of the
+# times it was laid on; another subtitle of the same film, cut into lines its
+# own way, pairs far fewer.
+_EMB_SRC_PAIR_MS = 120
+_EMB_SRC_MIN_PAIRED = 0.90
+# The embedded path tried the list in release order until one fitted, within
+# 45 s; the look tries as many in the same order, up to eight downloads (the
+# viewer's subtitle quota), once a week at most for a title (_gp_nosrc).
+_EMB_SRC_TRIES = 8
+_EMB_SRC_BUDGET_S = 45.0
+
+
+def _emb_source_paired(he_blocks, text):
+    """`text`'s lines under the Hebrew blocks' own timing lines, each Hebrew
+    line paired with the unused line of `text` starting nearest to it within
+    _EMB_SRC_PAIR_MS; '' when fewer than _EMB_SRC_MIN_PAIRED of them pair."""
+    import bisect
+    from . import sync_align
+    src = []
+    for blk in srt.parse_blocks(text):
+        cue = sync_align.parse_srt(blk)
+        if cue:
+            src.append((cue[0]['start'], srt.block_text_only(blk) or ''))
+    src.sort(key=lambda c: c[0])
+    starts = [c[0] for c in src]
+    used = set()
+    out = []
+    timed = 0
+    for blk in he_blocks:
+        lines = blk.split('\n')
+        cue = sync_align.parse_srt(blk)
+        if len(lines) < 2 or not cue:
+            continue
+        timed += 1
+        h = cue[0]['start']
+        j = bisect.bisect_left(starts, h - _EMB_SRC_PAIR_MS)
+        best = None
+        while j < len(src) and starts[j] <= h + _EMB_SRC_PAIR_MS:
+            if j not in used and (best is None
+                                  or abs(starts[j] - h) < abs(starts[best] - h)):
+                best = j
+            j += 1
+        if best is not None and src[best][1]:
+            used.add(best)
+            out.append('\n'.join([lines[0], lines[1], src[best][1]]))
+    if not timed or len(out) < _EMB_SRC_MIN_PAIRED * timed:
+        return ''
+    return '\n\n'.join(out) + '\n'
+
+
+def _emb_source_laid(he_text, raw):
+    """The external subtitle `raw` (as downloaded) on the cue times of the
+    Hebrew file `he_text` when the Hebrew was translated from it -- its
+    prepared lines under the Hebrew's own timing lines, as the proofread pairs
+    them by start time -- else ''. As it is first (an extracted track, or a
+    subtitle already on the video's clock); then put on the Hebrew's clock the
+    way the embedded path put it on the track's: the SubSync gate on the
+    downloaded file, its map applied, then prepared."""
+    from . import sync_align
+    he_blocks = srt.parse_blocks(he_text)
+    laid = _emb_source_paired(he_blocks, _prepare_source(raw))
+    if laid:
+        return laid
+    try:
+        he = sync_align.parse_srt(he_text)
+        if len(he) < sync_align.MIN_CUES:
+            return ''
+        verdict = sync_align.verify_cues(
+            [{'start': c['start'], 'end': c['end']} for c in he], raw)
+        if verdict.get('status') != sync_align.STATUS_FIXABLE:
+            return ''
+        # it refuses (raises) a map that would break the file
+        return _emb_source_paired(he_blocks, _prepare_source(
+            sync_align.apply_verdict(raw, verdict)))
+    except Exception:
+        return ''
+
+
+def _pool_pick_emb_source(info, pool_hash, source_lang, he_path):
+    """The subtitle a pooled EMBEDDED translation (ai_emb) was made from, for
+    its proofread: the prepared text, '' when it is not to be had, None when
+    the look failed.
+
+    That pool kind holds two things. The video's own text track, extracted;
+    or an external subtitle retimed onto that track's cue times ("embedded
+    timing", _embedded_aligned_source_srt, the way tried first). Neither is in the
+    list under the row's release (the video's) nor under its content hash (the
+    extracted or retimed text), so _pool_pick_source never found one and these
+    were never proofread after the device that made them.
+
+    This device's own copy first (_keep_embedded_source), exact by hash. Then
+    an external subtitle in the source language from the cached search, laid
+    on the Hebrew's cue times (_emb_source_laid): for embedded timing that is
+    the very subtitle it was made from; an extracted track pairs only with an
+    external subtitle cut into the same lines."""
+    base = pool_hash[:-3] if (pool_hash or '').endswith('_ar') else (pool_hash or '')
+    if not base:
+        return ''
+    kept = _embedded_source_path(base)
+    if os.path.isfile(kept):
+        prepared = _prepared_source_reader(kept)()
+        if prepared and _content_hash(prepared) == base:
+            return prepared
+    try:
+        he_text = cache.load_text(he_path) or ''
+        if not he_text:
+            return ''
+        from . import release_match, subs_engine_bridge, subsync
+        # what the list's search found -- one cut at its time limit too: a
+        # look for one subtitle, not a list to show
+        rows = subs_engine_bridge.reusable_results(info)
+        if not rows:
+            return None     # nothing searched lately: look another time
+        lang = (source_lang or 'en').strip().lower()[:2]
+        cands = []
+        for c in rows:
+            if ((c.get('language') or '').strip().lower()[:2] != lang
+                    or c.get('_engine_kind') not in (None, 'other')):
+                continue
+            p = _decode_link(c.get('link') or '') or {}
+            if p.get('type') == 'engine' and not p.get('embedded'):
+                cands.append(p)
+        playing = subsync.playing_release(info) or ''
+        if playing:
+            # the order the embedded path tried them in
+            cands.sort(key=lambda p: release_match.match_pct(
+                playing, p.get('filename') or ''), reverse=True)
+        if not cands:
+            return ''
+        read = 0
+        until = time.monotonic() + _EMB_SRC_BUDGET_S
+        for p in cands[:_EMB_SRC_TRIES]:
+            if read and time.monotonic() > until:
+                break
+            path = subs_engine_bridge.download(p, for_delivery=False)
+            if not path or not os.path.isfile(path):
+                continue
+            read += 1
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                laid = _emb_source_laid(he_text, f.read())
+            if laid:
+                return laid
+        if not read:
+            return None     # no download came through: no look, no week's pause
+    except Exception as e:
+        kodi_utils.log('pool pick: embedded source lookup failed: {0}'.format(e),
+                       level='DEBUG')
+        return None
+    return ''
+
+
 def _pool_pick_source(info, pool_hash, release):
     """The subtitle a pooled translation was translated FROM, found in the
     engine's cached search (the list the viewer just picked from): the same
@@ -3418,9 +3635,12 @@ def _pool_pick_source(info, pool_hash, release):
         return ''
     try:
         from . import subs_engine_bridge
-        tried = 0
-        for c in subs_engine_bridge.search(info, modal_progress=False,
-                                           cache_only=True) or []:
+        rows = subs_engine_bridge.search(info, modal_progress=False,
+                                         cache_only=True)
+        if rows is None:
+            return None     # nothing cached: no look, so no week's pause
+        tried = read = 0
+        for c in rows:
             p = _decode_link(c.get('link') or '') or {}
             if p.get('type') != 'engine' or p.get('filename') != release:
                 continue
@@ -3430,10 +3650,13 @@ def _pool_pick_source(info, pool_hash, release):
             path = subs_engine_bridge.download(p, for_delivery=False)
             if not path or not os.path.isfile(path):
                 continue
+            read += 1
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 prepared = _prepare_source(f.read())
             if _content_hash(prepared) == base:
                 return prepared
+        if tried and not read:
+            return None     # no download came through: no look either
     except Exception as e:
         kodi_utils.log('pool pick: source lookup failed: {0}'.format(e),
                        level='DEBUG')
@@ -3648,13 +3871,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if _proofread_only:
                 # The gender proofread needs the subtitle it was translated
                 # from: the engine's cached search has it when it carries the
-                # same release and hashes the same.
+                # same release and hashes the same -- an embedded one is
+                # looked for its own way.
                 if not (_gp_base and os.path.isfile(_praw)
                         and _proofread_due(_praw, None, progressive_cb,
                                            marker=_gp_base)):
                     return None
-                _psource = _pool_pick_source(info, _phash,
-                                             payload.get('release') or '')
+                if _pkind == 'ai_emb':
+                    _psource = _pool_pick_emb_source(info, _phash, _psrc, _praw)
+                else:
+                    _psource = _pool_pick_source(info, _phash,
+                                                 payload.get('release') or '')
                 if _psource is None:
                     return None     # the look failed: try again another time
                 if not _proofread_due(_praw, _psource, progressive_cb,
@@ -3917,6 +4144,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                            'deferring to the external path'.format(_emb_mode),
                            level='INFO')
             return None
+        # its pooled copy is proofread against this later, here
+        _keep_embedded_source(emb_path)
         _status('AI: מתרגם תרגום מובנה לעברית...', time_ms=3000)
         payload = {'type': 'ai',
                    'source_lang': _emb_lang,
@@ -6637,7 +6866,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             kodi_utils.log('progressive_cb chunk_ready (before the gender '
                            'proofread) raised: ' + str(e), level='WARNING')
         _proof_blocks = srt.parse_blocks(final)
+        # In progress, as for an opened translation: the file is saved, and an
+        # open meanwhile (the list again) would ask a second time.
+        _gp_slots = [translated]
+        if early_source_id and content_id and content_id != early_source_id:
+            _gp_slots.append(cache.translated_path(
+                imdb_id, season, episode, source_lang,
+                source_id=content_id, tier=_tier))
+        for _slot in _gp_slots:
+            _gp_try_mark(_slot, True)
         _proofed = _proofread_gender(_proof_blocks)
+        _gp_settle(_gp_slots, _gp_report, _proofread_stopper(
+            _progressive_source_id, _translation_cancelled))
         if _proofed != _proof_blocks:
             final = srt.stitch_blocks(_proofed)
             cache.save_text(translated, final)
