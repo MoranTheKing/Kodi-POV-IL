@@ -4038,6 +4038,42 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # telemetry, which is unaffected here).
     _pool_kind = ('ai_emb' if payload.get('embedded')
                   else ('ai_ar' if _ar_on else 'ai'))
+
+    # proofread_later's job never translates: it proofreads the translation
+    # already on screen. One made with the reference on but none found went
+    # to the PLAIN tier ("no usable reference" below), where this job's
+    # tier-pinned lookups never looked -- so it never got its proofread (field
+    # data 2 Nov 2026: 0 of 6 on the automatic path, against 5 of 7 made with
+    # a reference). The job looks there too when the reference tier holds
+    # none, and is then a plain-tier job throughout: its pool upload replaces
+    # the plain variant, never one under "_ar". The pinning below exists for
+    # the delivery paths (no progressive_cb before an early return, the
+    # backfill's tier); this job returns at either lookup, before both.
+    def _proofread_plain_tier(source_id):
+        if not (_proofread_only and _ar_on and source_id):
+            return False
+        try:
+            return (not os.path.isfile(cache.translated_path(
+                        imdb_id, season, episode, source_lang,
+                        source_id=source_id, tier='ar'))
+                    and os.path.isfile(cache.translated_path(
+                        imdb_id, season, episode, source_lang,
+                        source_id=source_id, tier='')))
+        except Exception:
+            return False
+
+    def _proofread_content_ar():
+        # A reference-tier translation of the same source under its content
+        # hash (made through a byte-different link) is the one on screen: the
+        # early slot's plain file must not be proofread and swapped over it.
+        try:
+            if not (local_source and os.path.isfile(local_source)):
+                return False
+            cid = _content_hash(_prepared_source_reader(local_source)())
+            return bool(cid) and os.path.isfile(cache.translated_path(
+                imdb_id, season, episode, source_lang, source_id=cid, tier='ar'))
+        except Exception:
+            return False
     _ar_map = None  # {srt_entry_number: reference_line}, PRIMARY ref (_ref_stack[0][1])
     _ar_diag = {}   # gender-reference diagnostics (reason/cands/diag/lang)
     _ref_lang = 'ar'  # PRIMARY chain language actually used (he/ar/es/fr/ru/...)
@@ -4218,6 +4254,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # Fixing the auto-load symptom properly means wiring these early
         # returns to progressive_cb. That is its own change with its own
         # review, not a one-line lookup swap.
+        if (_proofread_plain_tier(early_source_id)
+                and not _proofread_content_ar()):
+            _ar_on, _tier = False, ''
+            _pool_kind = 'ai_emb' if payload.get('embedded') else 'ai'
         translated = cache.translated_path(
             imdb_id, season, episode, source_lang,
             source_id=early_source_id, tier=_tier)
@@ -4330,6 +4370,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # url with identical content also hits cache.
     content_id = _content_hash(src_text)
     if content_id != early_source_id:
+        if _proofread_plain_tier(content_id):
+            _ar_on, _tier = False, ''
+            _pool_kind = 'ai_emb' if payload.get('embedded') else 'ai'
         translated_by_content = cache.translated_path(
             imdb_id, season, episode, source_lang,
             source_id=content_id, tier=_tier)
@@ -4779,6 +4822,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             else:
                 reason = str(_ar_diag.get('reason') or '')
             ev_note = note or ('' if reason in ('ok', '') else _ar_diag.get('diag', ''))
+            if (not ev_note and reason == 'ok'
+                    and str(_ar_diag.get('diag') or '').startswith('windowed')):
+                # aligned by the reference's own windowed fallback (0.3.64,
+                # arabic_gender): the dashboard counts it against the gate
+                ev_note = 'windowed reference'
             telemetry.report({
                 'type': 'episode' if info.get('is_episode') else 'movie',
                 'title': (info.get('tvshow') or info.get('title') or '')[:120],

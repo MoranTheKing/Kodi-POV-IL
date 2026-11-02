@@ -380,5 +380,107 @@ class Stats(Base):
         self.assertEqual(translate._gp_saved(self.path), {})
 
 
+
+class LaterJobPlainTier(Base):
+    """The automatic translation on play, made with the gender reference on
+    but none found, is stored in the PLAIN tier. Its proofread job looked only
+    in the reference tier, so it never ran (2 Nov 2026: 0 of 6 such
+    translations proofread, against 5 of 7 made with a reference)."""
+
+    INFO = {'imdb_id': 'tt1', 'season': '1', 'episode': '2', 'title': 'Show',
+            'tvshow': 'Show', 'is_episode': True}
+
+    def setUp(self):
+        super().setUp()
+        self.en = os.path.join(self.dir, 'Show.S01E02.en.srt')
+        with open(self.en, 'w', encoding='utf-8') as f:
+            f.write(EN)
+        self.payload = {'type': 'ai', 'source_lang': 'en', 'local_path': self.en,
+                        'release': 'Show.S01E02.WEB', 'force_ai': True, 'proofread_only': True}
+        self.sid = translate._source_id_for_ai(self.payload)
+        self.base = translate._content_hash(translate._prepared_source_reader(self.en)())
+        self.opened, self.sent = [], []
+        for target, value in (('_reapply_rtl_fix_in_place', lambda *a, **k: None),
+                              ('_pool_quality_ok', lambda *a, **k: True),
+                              ('_proofread_opened', self.fake_opened)):
+            p = mock.patch.object(translate, target, value)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def fake_opened(self, path, source_text, source_id, release, progressive_cb,
+                    deliver, cancelled, info, share=None, shown_already=False, mark_path=None):
+        self.opened.append({'path': path, 'source_id': source_id, 'shown_already': shown_already})
+        if share is not None:
+            share('fixed', {'model': 'gemini-3.7-flash', 'applied': 1})
+        return path
+
+    def slot(self, tier):
+        return translate.cache.translated_path('tt1', '1', '2', 'en', source_id=self.sid, tier=tier)
+
+    def run_job(self, held, ref_on=True):
+        fake = mock.MagicMock()
+        fake.use_enabled.return_value = True
+        fake.share_enabled.return_value = True
+        fake.was_contributed.return_value = False
+        fake.lookup.return_value = [{'hash': h} for h in held]
+        fake.lookup_cached.return_value = [{'hash': h} for h in held]
+        fake.contribute_once.side_effect = lambda info, h, lang, text, **k: self.sent.append(
+            dict(k, hash=h, text=text))
+        get_bool = (lambda k, d=False: True) if ref_on else (
+            lambda k, d=False: k != 'gender_ref_arabic')
+        with mock.patch.object(translate, 'pool', fake), \
+                mock.patch.object(translate.kodi_utils, 'get_bool', get_bool):
+            return translate.resolve(translate._encode_link(self.payload), self.INFO,
+                                     progressive_cb=lambda *a, **k: None)
+
+    def test_a_plain_tier_translation_gets_its_proofread(self):
+        with open(self.slot(''), 'w', encoding='utf-8') as f:
+            f.write(HE)
+        self.assertEqual(self.run_job([self.base]), self.slot(''))
+        self.assertEqual(self.opened, [{'path': self.slot(''), 'source_id': self.sid,
+                                        'shown_already': True}])
+        # its upload replaces the plain variant, never one under "_ar"
+        self.assertEqual([(s['hash'], s['kind']) for s in self.sent], [(self.base, 'ai')])
+        self.assertEqual(self.sent[0]['proofread'], {'model': 'gemini-3.7-flash', 'applied': 1})
+        # the pool did not answer: still the plain hash, not "<hash>_ar"
+        self.opened, self.sent = [], []
+        self.run_job([])
+        self.assertEqual([(s['hash'], s['kind']) for s in self.sent], [(self.base, 'ai')])
+
+    def test_a_reference_tier_translation_stays_where_it_was(self):
+        for tier in ('', 'ar'):
+            with open(self.slot(tier), 'w', encoding='utf-8') as f:
+                f.write(HE)
+        self.run_job([self.base + '_ar', self.base])
+        self.assertEqual([o['path'] for o in self.opened], [self.slot('ar')])
+        self.assertEqual([(s['hash'], s['kind']) for s in self.sent],
+                         [(self.base + '_ar', 'ai_ar')])
+
+    def test_a_reference_tier_file_under_the_content_hash_wins(self):
+        # the plain file of an earlier link, and the 'ar' one made later through
+        # a byte-different link of the same source: the 'ar' one is on screen
+        with open(self.slot(''), 'w', encoding='utf-8') as f:
+            f.write(HE)
+        content_ar = translate.cache.translated_path('tt1', '1', '2', 'en',
+                                                     source_id=self.base, tier='ar')
+        with open(content_ar, 'w', encoding='utf-8') as f:
+            f.write(HE)
+        self.run_job([self.base + '_ar'])
+        self.assertEqual([o['path'] for o in self.opened], [content_ar])
+        self.assertEqual([(s['hash'], s['kind']) for s in self.sent],
+                         [(self.base + '_ar', 'ai_ar')])
+
+    def test_nothing_cached_nothing_done(self):
+        self.assertIsNone(self.run_job([self.base]))
+        self.assertEqual((self.opened, self.sent), ([], []))
+
+    def test_with_the_reference_off_the_plain_tier_is_the_tier(self):
+        with open(self.slot(''), 'w', encoding='utf-8') as f:
+            f.write(HE)
+        self.run_job([self.base], ref_on=False)
+        self.assertEqual([o['path'] for o in self.opened], [self.slot('')])
+        self.assertEqual([(s['hash'], s['kind']) for s in self.sent], [(self.base, 'ai')])
+
+
 if __name__ == '__main__':
     unittest.main()
