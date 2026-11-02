@@ -3117,6 +3117,27 @@ def _proofread_stopper(source_id, cancelled):
     return stopped
 
 
+def _gp_why(report, fails, stopped):
+    """Why no model answered a proofread, in a word the dashboard shows beside
+    its dash ('' when one did): 'unusable' (one took the request, its reply of
+    no use), 'stopped' (the viewer moved on), 'key' (the key refused), 'quota'
+    (every model out of today's requests), 'busy' (overloaded or at its
+    per-minute limit), 'time' (the proofread's time budget ran out), 'error'
+    (anything else)."""
+    if report.get('model'):
+        return ''
+    if report.get('spent'):
+        return 'unusable'
+    if stopped:
+        return 'stopped'
+    for why in ('key', 'busy', 'time'):
+        if why in fails:
+            return why
+    if fails and all(f == 'quota' for f in fails):
+        return 'quota'
+    return 'error'
+
+
 def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
     """(blocks with gender_proofread's corrections applied, report). The
     blocks come back as they are when no model answers. `src_text` is the
@@ -3129,15 +3150,22 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
         _deadline = time.monotonic() + gender_proofread.TOTAL_BUDGET
 
         _asked = [False]   # a request went out (the markers pause after one)
+        _fails = []        # why each model did not answer (report['why'])
+        _cut = [False]     # the viewer's stop cut the proofread short
 
         def _request(proof_model, prompt_text):
-            if (gender_proofread.exhausted_today(proof_model, kodi_utils)
-                    or time.monotonic() > _deadline):
+            if gender_proofread.exhausted_today(proof_model, kodi_utils):
+                _fails.append('quota')
+                raise gender_proofread.Skip(proof_model)
+            if time.monotonic() > _deadline:
+                _fails.append('time')
                 raise gender_proofread.Skip(proof_model)
             for attempt in range(2):
                 if stopped():
+                    _cut[0] = True
                     raise RuntimeError('proofread cancelled')
                 if attempt and time.monotonic() > _deadline:
+                    _fails.append('time')
                     raise gender_proofread.Skip(proof_model)
                 _asked[0] = True
                 try:
@@ -3150,15 +3178,18 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
                         timeout=(10, gender_proofread.REQUEST_TIMEOUT),
                         count_usage=(proof_model == model))
                 except gemini.InvalidKey:
+                    _fails.append('key')
                     raise           # the same key for every model
                 except gemini.QuotaExceeded:
                     gender_proofread.note_exhausted(proof_model, kodi_utils)
+                    _fails.append('quota')
                     raise gender_proofread.Skip(proof_model)
                 except (gemini.OverloadError, gemini.RateLimited) as e:
                     if getattr(e, 'answered', False):
                         # past its deadline (504): it was working on it
                         raise gender_proofread.Spent(proof_model)
                     if attempt:
+                        _fails.append('busy')
                         raise gender_proofread.Skip(proof_model)
                     # a stop skips the proofread, never the translation
                     _until = time.monotonic() + max(
@@ -3172,7 +3203,9 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
                         # a second request for this proofread
                         raise gender_proofread.Spent(proof_model)
                     # refused unread, a retired model id: the next may answer
+                    _fails.append('error')
                     raise gender_proofread.Skip(proof_model)
+            _fails.append('busy')
             raise gender_proofread.Skip(proof_model)
 
         sources = srt.aligned_source_texts(srt.parse_blocks(src_text), blocks)
@@ -3184,6 +3217,9 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
         new_texts, report = gender_proofread.proofread(
             sources, texts, _request, cast=people, cancelled=stopped)
         report['asked'] = _asked[0]
+        # a stop that ended it, not one after every model had refused
+        report['why'] = _gp_why(report, _fails,
+                                _cut[0] or (not _fails and stopped()))
         if report.get('applied'):
             out = []
             for block, old, new in zip(blocks, texts, new_texts):
@@ -5056,6 +5092,22 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # the pool upload and the telemetry event; empty until a model answers.
     _gp_report = {}
 
+    def _gp_event_note(ok, note):
+        """The telemetry's word on a translation with no proofread model
+        (_gp_why); 'off' with the setting off, 'later' on a path without a
+        live preview (proofread_later's job, or the next open from the
+        list, does it); '' otherwise."""
+        try:
+            if not ok or note or _gp_report.get('model'):
+                return ''
+            if not kodi_utils.get_bool('gender_proofread', True):
+                return 'off'
+            if progressive_cb is None:
+                return 'later'
+            return _gp_report.get('why') or ''
+        except Exception:
+            return ''
+
     def _emit(ok, note=''):
         if _telemetry_done[0]:
             return
@@ -5116,6 +5168,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 'gp_model': _gp_stats(_gp_report).get('model', ''),
                 'gp_fixed': _gp_stats(_gp_report).get('applied', 0)
                 if _gp_report.get('model') else None,
+                # and why none did (0.3.67): read from what already happened
+                'gp_note': _gp_event_note(ok, note),
             })
         except Exception:
             pass
