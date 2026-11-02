@@ -3076,19 +3076,21 @@ def _gp_models_left():
         return False
 
 
-def _proofread_due(path, source_text, progressive_cb, marker=None):
+def _proofread_due(path, source_text, progressive_cb, marker=None,
+                   held=False):
     """Whether an opened translation gets the proofread now: from the list
     (a live preview to swap in), the setting on, a key, not proofread before
     (`marker`, else `path`), AI-made (not Google, not a Hebrew source passed
     through) and a model with quota left. `source_text` None: all of it but
-    the source (before looking for one)."""
+    the source (before looking for one). `held`: the in-progress marker is
+    the caller's own, or not a reason here."""
     try:
         return bool(
             progressive_cb is not None
             and kodi_utils.get_bool('gender_proofread', True)
             and (kodi_utils.get_setting('api_key', '') or '').strip()
             and os.path.isfile(path) and not _gp_done(marker or path)
-            and not _gp_trying(marker or path)
+            and (held or not _gp_trying(marker or path))
             and not _is_google_translated(path)
             and (source_text is None
                  or (source_text
@@ -3481,7 +3483,8 @@ _EMB_SRC_PAIR_MS = 120
 _EMB_SRC_MIN_PAIRED = 0.90
 # The embedded path tried the list in release order until one fitted, within
 # 45 s; the look tries as many in the same order, up to eight downloads (the
-# viewer's subtitle quota), once a week at most for a title (_gp_nosrc).
+# viewer's subtitle quota): a week's pause after a look that found nothing
+# (_gp_nosrc), six hours after one where a download failed.
 _EMB_SRC_TRIES = 8
 _EMB_SRC_BUDGET_S = 45.0
 
@@ -3568,7 +3571,9 @@ def _pool_pick_emb_source(info, pool_hash, source_lang, he_path):
     an external subtitle in the source language from the cached search, laid
     on the Hebrew's cue times (_emb_source_laid): for embedded timing that is
     the very subtitle it was made from; an extracted track pairs only with an
-    external subtitle cut into the same lines."""
+    external subtitle cut into the same lines. False when some laid on
+    nothing and others did not download: looked for again after the
+    in-progress pause."""
     base = pool_hash[:-3] if (pool_hash or '').endswith('_ar') else (pool_hash or '')
     if not base:
         return ''
@@ -3603,21 +3608,25 @@ def _pool_pick_emb_source(info, pool_hash, source_lang, he_path):
                 playing, p.get('filename') or ''), reverse=True)
         if not cands:
             return ''
-        read = 0
+        read = failed = 0
         until = time.monotonic() + _EMB_SRC_BUDGET_S
         for p in cands[:_EMB_SRC_TRIES]:
             if read and time.monotonic() > until:
                 break
             path = subs_engine_bridge.download(p, for_delivery=False)
             if not path or not os.path.isfile(path):
+                failed += 1
                 continue
             read += 1
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 laid = _emb_source_laid(he_text, f.read())
             if laid:
                 return laid
-        if not read:
-            return None     # no download came through: no look, no week's pause
+        if failed:
+            # the one that did not come through may be the source: no week's
+            # pause -- but no look at every pick either (the others laid again
+            # each time): the in-progress pause, six hours
+            return None if not read else False
     except Exception as e:
         kodi_utils.log('pool pick: embedded source lookup failed: {0}'.format(e),
                        level='DEBUG')
@@ -3877,15 +3886,23 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         and _proofread_due(_praw, None, progressive_cb,
                                            marker=_gp_base)):
                     return None
+                # held through the look (an embedded one downloads for up to
+                # 45 s): a second job for this row meanwhile does not ask too
+                _gp_try_mark(_gp_base, True)
                 if _pkind == 'ai_emb':
                     _psource = _pool_pick_emb_source(info, _phash, _psrc, _praw)
                 else:
                     _psource = _pool_pick_source(info, _phash,
                                                  payload.get('release') or '')
+                if _psource is False:
+                    return None     # part of the list did not download: the
+                                    # in-progress pause stands (six hours)
                 if _psource is None:
+                    _gp_try_mark(_gp_base, False)
                     return None     # the look failed: try again another time
                 if not _proofread_due(_praw, _psource, progressive_cb,
-                                      marker=_gp_base):
+                                      marker=_gp_base, held=True):
+                    _gp_try_mark(_gp_base, False)
                     if _psource == '':
                         # looked, and it is not in the list: a week's pause
                         kodi_utils.log('gender proofread: no source subtitle for '
@@ -4403,8 +4420,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if pool_hash:
                 share_to(pool_hash)(cache.load_text(path) or '', _gp_saved(path))
             return None
-        if not _proofread_due(path, source_text, progressive_cb):
+        if not _proofread_due(path, source_text, progressive_cb, held=True):
             return None
+        # In progress elsewhere, or waiting out a reply of no use: no request
+        # -- but another viewer's proofread in the pool is still taken.
+        asking = not _gp_trying(path)
         if pooled_hash and _pool_variant_proofread(info, pooled_hash):
             _gp_mark(path)      # just fetched, and proofread already
             return None
@@ -4424,6 +4444,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 except Exception as e:
                     kodi_utils.log('pool proofread copy save failed: '
                                    '{0}'.format(e), level='WARNING')
+        if not asking:
+            return None
         share = None
         if pool is not None and pool_hash and pool.share_enabled():
             share = share_to(pool_hash)
