@@ -240,6 +240,34 @@ class Windowed(unittest.TestCase):
         self.assertEqual(self.right_share(mapping), 1.0)
         self.assertGreater(len(mapping), 0.7 * len(base))
 
+    def test_a_short_source_loses_a_stretch_its_windows_cannot_see(self):
+        # 100 lines, 5 windows of 20: a twelfth of another title fits inside
+        # one window's tolerance, so no window contradicts the gate -- the
+        # line-level stretch check (0.3.66) still leaves it out
+        base = cues(6200, count=100)
+        source = srt(base, 'Source line')
+        blocks = source.strip().split('\n\n')
+        at = lambda f: base[int(len(base) * f)][0]
+        rng = random.Random(3)
+        lo, hi = at(0.4), at(0.52)
+        rows = [(a, b, 'Ref line %d' % n) for n, (a, b) in enumerate(base, 1)
+                if not lo <= a < hi]
+        clock = lo
+        while clock < hi:
+            clock += rng.randint(1200, 4000)
+            rows.append((clock, clock + rng.randint(700, 1800), 'Other title'))
+        rows.sort()
+        mapping, diag = self.ag.align_one(source, blocks, self.body(rows))
+        self.assertIsNotNone(mapping, diag)
+        self.assertIn('stretches off the map left out', diag)
+        self.assertNotIn('Other title', mapping.values())
+        self.assertEqual(self.right_share(mapping), 1.0)
+        # the same short source with a clean reference keeps every line
+        mapping, diag = self.ag.align_one(
+            source, blocks, srt(shifted(base, [(0, 1200)]), 'Ref line'))
+        self.assertNotIn('stretches', diag)
+        self.assertEqual(len(mapping), len(base))
+
     def test_a_clean_pair_keeps_every_line(self):
         mapping, diag = self.ag.align_one(
             self.source, self.blocks, srt(shifted(self.base, [(0, -1500)]), 'Ref line'))
