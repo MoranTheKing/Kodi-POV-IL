@@ -3212,16 +3212,37 @@ def _gp_why(report, fails, stopped):
     return 'error'
 
 
-def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
+# A background proofread (proofread_later's job: the translation is on screen
+# and nothing waits for the swap) whose every model was busy -- overloaded or
+# at its per-minute limit, none of them answered -- asks again after these
+# waits, doubling, while the viewer stays on the translation, and asks no new
+# model past _GP_JOB_BUDGET. A model out of today's quota or refusing unread
+# (a retired id) beside a busy one does not end the rounds; a reply of no use
+# or a refused key does. Field, 2-3 Nov 2026: of nine automatic
+# translations on play whose proofread went to the job, three were proofread;
+# in the QA Kodi the job's three models all answered 503 within 75 s, and a
+# translation made on play is never opened again to retry it.
+_GP_BUSY_WAIT = 60
+_GP_BUSY_WAIT_MAX = 480
+_GP_JOB_BUDGET = 1800
+
+
+def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
+                          background=False):
     """(blocks with gender_proofread's corrections applied, report). The
     blocks come back as they are when no model answers. `src_text` is the
     prepared source the blocks were translated from; `model` the translator's
-    (the usage counter holds that one only). Never raises."""
+    (the usage counter holds that one only). `background`: nothing waits for
+    it (_GP_BUSY_WAIT). Never raises."""
     report = {}
     try:
         from . import gender_proofread
-        # no new model after this: a viewer waits for the swap
-        _deadline = time.monotonic() + gender_proofread.TOTAL_BUDGET
+        # no new model after this: a viewer waits for the swap (a background
+        # proofread has longer)
+        _start = time.monotonic()
+        _budget = _GP_JOB_BUDGET if background else gender_proofread.TOTAL_BUDGET
+        _deadline = [_start + _budget]
+        _tries = [2]       # requests a model gets in one round
 
         _asked = [False]   # a request went out (the markers pause after one)
         _fails = []        # why each model did not answer (report['why'])
@@ -3231,14 +3252,14 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
             if gender_proofread.exhausted_today(proof_model, kodi_utils):
                 _fails.append('quota')
                 raise gender_proofread.Skip(proof_model)
-            if time.monotonic() > _deadline:
+            if time.monotonic() > _deadline[0]:
                 _fails.append('time')
                 raise gender_proofread.Skip(proof_model)
-            for attempt in range(2):
+            for attempt in range(_tries[0]):
                 if stopped():
                     _cut[0] = True
                     raise RuntimeError('proofread cancelled')
-                if attempt and time.monotonic() > _deadline:
+                if attempt and time.monotonic() > _deadline[0]:
                     _fails.append('time')
                     raise gender_proofread.Skip(proof_model)
                 _asked[0] = True
@@ -3262,7 +3283,7 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
                     if getattr(e, 'answered', False):
                         # past its deadline (504): it was working on it
                         raise gender_proofread.Spent(proof_model)
-                    if attempt:
+                    if attempt or _tries[0] < 2:
                         _fails.append('busy')
                         raise gender_proofread.Skip(proof_model)
                     # a stop skips the proofread, never the translation
@@ -3290,6 +3311,24 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped):
                   and c.get('gender') in ('female', 'male')]
         new_texts, report = gender_proofread.proofread(
             sources, texts, _request, cast=people, cancelled=stopped)
+        _wait, _rounds = _GP_BUSY_WAIT, 1
+        while (background and not report.get('model') and not report.get('spent')
+               and 'busy' in _fails and not set(_fails) - {'busy', 'quota', 'error'}
+               and time.monotonic() + _wait < _start + _budget and not stopped()):
+            kodi_utils.log('gender proofread: every model busy -- asking again '
+                           'in {0}s'.format(_wait), level='INFO')
+            _until = time.monotonic() + _wait
+            while time.monotonic() < _until and not stopped():
+                time.sleep(0.5)
+            if stopped():
+                break
+            del _fails[:]
+            _tries[0] = 1
+            _rounds += 1
+            new_texts, report = gender_proofread.proofread(
+                sources, texts, _request, cast=people, cancelled=stopped)
+            _wait = min(_wait * 2, _GP_BUSY_WAIT_MAX)
+        report['rounds'] = _rounds
         report['asked'] = _asked[0]
         # a stop that ended it, not one after every model had refused
         report['why'] = _gp_why(report, _fails,
@@ -3430,14 +3469,16 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
         blocks = srt.parse_blocks(cache.load_text(path) or '')
         proofed, report = _run_gender_proofread(
             blocks, source_text, kodi_utils.get_setting('api_key', '') or '',
-            model, cast, stopped)
+            model, cast, stopped, background=shown_already)
         final = None
         if proofed != blocks:
             final = srt.stitch_blocks(proofed)
             cache.save_text(path, final)
             delivered = deliver(path)
-            kodi_utils.notify('AI: תוקנו זכר/נקבה ב-{0} שורות'.format(
-                report.get('applied', 0)), time_ms=4000)
+            # a late round may answer once the viewer is on the next video
+            if not stopped():
+                kodi_utils.notify('AI: תוקנו זכר/נקבה ב-{0} שורות'.format(
+                    report.get('applied', 0)), time_ms=4000)
         # answered, nothing sent or the viewer moved on: no pause before the
         # next open; a reply of no use: a week
         _gp_settle((marker,), report, stopped)
