@@ -14,7 +14,7 @@
     <setting id="jumpbacksecsrwdx16">0</setting>
     <setting id="jumpbacksecsrwdx32">0</setting>
     <setting id="ExcludeLiveTV">true</setting>
-    <setting id="ExcludeHTTP" default="true">false</setting>
+    <setting id="ExcludeHTTP">true</setting>
     <setting id="ExcludePathOption" default="true">false</setting>
     <setting id="ExcludePath" default="true" />
     <setting id="ExcludePathOption2" default="true">false</setting>
