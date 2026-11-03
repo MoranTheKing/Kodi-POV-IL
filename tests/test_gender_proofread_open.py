@@ -139,8 +139,11 @@ class Opened(Base):
             shared.append(text)
             self.stats.append(stats)
 
-        def fake_proofread(blocks, src, key, model, cast, stopped):
+        self.background = []
+
+        def fake_proofread(blocks, src, key, model, cast, stopped, background=False):
             self.assertEqual(model, 'gemini-3.5-flash-lite')
+            self.background.append(background)
             if change:
                 blocks = list(blocks)
                 blocks[0] = blocks[0].replace('אתה בא?', 'את באה?')
@@ -235,6 +238,27 @@ class Opened(Base):
         self.assertEqual(out, self.path)
         self.assertEqual([p for p, _ in phases], ['first_ready', 'done'])
         self.assertEqual(phases[-1][1]['success'], True)
+        # on screen already: nothing waits, so a busy model is asked again
+        # (0.3.70, _GP_BUSY_WAIT); opened from the list, the viewer waits
+        self.assertEqual(self.background, [True])
+        self.run_it({'model': 'gemini-3.7-flash'})
+        self.assertEqual(self.background, [False])
+
+    def test_no_toast_once_the_viewer_moved_on(self):
+        # review of 0.3.70: a late round may answer during the next video
+        told = []
+        with mock.patch.object(translate.kodi_utils, 'notify', lambda m, **k: told.append(m)):
+            with mock.patch.object(translate, '_proofread_stopper', lambda sid, c: (lambda: False)):
+                self.run_it({'model': 'gemini-3.7-flash', 'applied': 1}, shown_already=True)
+            self.assertEqual(len([m for m in told if 'תוקנו' in m]), 1)
+            told.clear()
+            with open(self.path, 'w', encoding='utf-8') as f:
+                f.write(HE)                     # the uncorrected file again
+            with mock.patch.object(translate, '_proofread_stopper', lambda sid, c: (lambda: True)):
+                out, phases, shared = self.run_it({'model': 'gemini-3.7-flash', 'applied': 1},
+                                                  shown_already=True)
+        self.assertEqual([m for m in told if 'תוקנו' in m], [])
+        self.assertEqual(out, self.path)        # corrected and kept all the same
 
 
 class Later(Base):
