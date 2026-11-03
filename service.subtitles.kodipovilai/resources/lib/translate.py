@@ -3222,8 +3222,14 @@ def _gp_why(report, fails, stopped):
 # translations on play whose proofread went to the job, three were proofread;
 # in the QA Kodi the job's three models all answered 503 within 75 s, and a
 # translation made on play is never opened again to retry it.
-_GP_BUSY_WAIT = 60
+# A 503 counts toward the day's quota (QA key, 3 Nov: about 16 requests to
+# gemini-3.7-flash, all but one refused with 503, then QuotaExceeded), so the
+# rounds cost no more than the one round they replace: the job asks every
+# model once, then one model a round (in turn from the last, skipping one out
+# of today's quota), _GP_BUSY_ROUNDS times -- six requests at most.
+_GP_BUSY_WAIT = 120
 _GP_BUSY_WAIT_MAX = 480
+_GP_BUSY_ROUNDS = 3
 _GP_JOB_BUDGET = 1800
 
 
@@ -3242,7 +3248,9 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
         _start = time.monotonic()
         _budget = _GP_JOB_BUDGET if background else gender_proofread.TOTAL_BUDGET
         _deadline = [_start + _budget]
-        _tries = [2]       # requests a model gets in one round
+        # requests a model gets in one round: one in the background, where
+        # the rounds are the retry (_GP_BUSY_WAIT)
+        _tries = [1 if background else 2]
 
         _asked = [False]   # a request went out (the markers pause after one)
         _fails = []        # why each model did not answer (report['why'])
@@ -3312,21 +3320,31 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
         new_texts, report = gender_proofread.proofread(
             sources, texts, _request, cast=people, cancelled=stopped)
         _wait, _rounds = _GP_BUSY_WAIT, 1
-        while (background and not report.get('model') and not report.get('spent')
-               and 'busy' in _fails and not set(_fails) - {'busy', 'quota', 'error'}
+        _turn = list(reversed(gender_proofread.MODELS))
+        while (background and _rounds <= _GP_BUSY_ROUNDS
+               and not report.get('model') and not report.get('spent')
+               and not set(_fails) - {'busy', 'quota', 'error'}
+               # the first round: something was busy; a later one asked one
+               # model, and its quota or refusal leaves the others to ask
+               and ('busy' in _fails or _rounds > 1)
                and time.monotonic() + _wait < _start + _budget and not stopped()):
-            kodi_utils.log('gender proofread: every model busy -- asking again '
-                           'in {0}s'.format(_wait), level='INFO')
+            _left = [m for m in _turn
+                     if not gender_proofread.exhausted_today(m, kodi_utils)]
+            if not _left:
+                break
+            _model = _left[(_rounds - 1) % len(_left)]
+            kodi_utils.log('gender proofread: every model busy -- asking {0} '
+                           'again in {1}s'.format(_model, _wait), level='INFO')
             _until = time.monotonic() + _wait
             while time.monotonic() < _until and not stopped():
                 time.sleep(0.5)
             if stopped():
                 break
             del _fails[:]
-            _tries[0] = 1
             _rounds += 1
             new_texts, report = gender_proofread.proofread(
-                sources, texts, _request, cast=people, cancelled=stopped)
+                sources, texts, _request, models=(_model,), cast=people,
+                cancelled=stopped)
             _wait = min(_wait * 2, _GP_BUSY_WAIT_MAX)
         report['rounds'] = _rounds
         report['asked'] = _asked[0]
