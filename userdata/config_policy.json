@@ -1,5 +1,5 @@
 {
-  "config_version": "2.0.9",
+  "config_version": "2.0.10",
   "_comment": "Declarative policy for the Wizard's shipped userdata pack. Bump config_version whenever any file changes. Fresh installs seed build defaults; existing devices retain their chosen values. Modes: replace, merge_id (build wins), merge_missing_id (add only missing setting IDs), merge_name (add missing sources), seed_if_absent.",
   "files": [
     {
@@ -135,6 +135,36 @@
       "fresh": "replace",
       "update": "seed_if_absent",
       "_note": "Seed new installations; preserve a returning user's custom FENtastic home and widget paths."
+    },
+    {
+      "src": "addon_data/script.xbmc.unpausejumpback/settings.xml",
+      "dest": "userdata/addon_data/script.xbmc.unpausejumpback/settings.xml",
+      "fresh": "replace",
+      "update": "merge_id",
+      "_note": "Unpause Jumpback skips streams (ExcludeHTTP): its 4 s jump back after a pause landed outside Kodi's cache and reopened the debrid connection (field log, 3 Nov 2026: ~15 s freezes after each resume of a 4K remux). Updates write ExcludeHTTP only; every other id is excluded, so a user's own jump-back seconds stay.",
+      "exclude_ids": [
+        "jumpbacksecs",
+        "waitforjumpback",
+        "jumpbackonplaybackstarted",
+        "jumpbackonresume",
+        "jumpbacksecsfwdx2",
+        "jumpbacksecsfwdx4",
+        "jumpbacksecsfwdx8",
+        "jumpbacksecsfwdx16",
+        "jumpbacksecsfwdx32",
+        "jumpbacksecsrwdx2",
+        "jumpbacksecsrwdx4",
+        "jumpbacksecsrwdx8",
+        "jumpbacksecsrwdx16",
+        "jumpbacksecsrwdx32",
+        "ExcludeLiveTV",
+        "ExcludePathOption",
+        "ExcludePath",
+        "ExcludePathOption2",
+        "ExcludePath2",
+        "ExcludePathOption3",
+        "ExcludePath3"
+      ]
     }
   ],
   "cleanup": {
