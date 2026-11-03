@@ -1,3 +1,6 @@
+0.3.71
+- AI translation, gender: the background proofread's rounds cost no more requests than the single round before 0.3.70. A model's 503 counts toward the day's quota (QA key, 3 Nov 2026: about 16 requests to gemini-3.7-flash, all but one refused as overloaded, then 'daily quota exceeded'), and 0.3.70 could spend up to 21 on one busy job. The job now asks every model once, then one model a round -- in turn from the last, skipping one out of today's quota -- three times, after 2, 4 and 8 minutes: six requests at most.
+
 0.3.70
 - AI translation, gender: a proofread in the background job (an automatic translation on play, or one already on screen) whose every model was busy -- overloaded or at its per-minute limit -- asks again after 1, 2, 4 and then every 8 minutes while the viewer stays on that translation, within half an hour, one request per model a round; that job may also take half an hour before it stops asking a new model. It used to give up after about a minute, and a translation made on play is never opened again (field, 2-3 Nov 2026: of nine such translations three were proofread; in the QA Kodi gemini-3.7-flash and gemini-3.8-flash answered 503 for over ten minutes while gemini-3.6-flash answered). A reply of no use, a refused key or a day's quota is not asked again.
 
