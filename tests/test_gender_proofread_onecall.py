@@ -216,73 +216,76 @@ class Request(unittest.TestCase):
     def test_a_background_proofread_asks_a_busy_model_again(self):
         # 0.3.70: the job proofread_later starts (nothing waits for it) asks
         # again when every model was busy -- the field's automatic
-        # translations on play were never proofread after a 503 round
+        # translations on play were never proofread after a 503 round.
+        # 0.3.71: a 503 counts toward the day's quota, so every model gets
+        # one request, then one model a round, in turn from the last
         gem = translate.gemini
         M = ['gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.6-flash']
-        asked, report = self.run_it([gem.OverloadError('503')] * 6 + ['1|את באה?'],
-                                    background=True)
-        self.assertEqual(asked, [m for m in M for _ in (0, 1)] + ['gemini-3.7-flash'])
+        busy = gem.OverloadError('503')
+        asked, report = self.run_it([busy] * 3 + ['1|את באה?'], background=True)
+        self.assertEqual(asked, M + ['gemini-3.6-flash'])
         self.assertEqual((report['model'], report['rounds'], report['why']),
-                         ('gemini-3.7-flash', 2, ''))
-        # a later round asks each model once
-        asked, report = self.run_it([gem.OverloadError('503')] * 9 + ['1|את באה?'],
-                                    background=True)
-        self.assertEqual(asked[6:], M + ['gemini-3.7-flash'])
-        self.assertEqual(report['rounds'], 3)
-        # with the viewer waiting (a live preview): one round, as before
-        asked, report = self.run_it([gem.OverloadError('503')] * 6 + ['1|את באה?'])
+                         ('gemini-3.6-flash', 2, ''))
+        # busy all along: three more rounds, one model each -- six requests,
+        # as one round of two each before 0.3.70
+        asked, report = self.run_it([], background=True, step=1)
+        self.assertEqual(asked, M + ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.7-flash'])
+        self.assertEqual((report['rounds'], report['why']), (4, 'busy'))
+        # with the viewer waiting (a live preview): one round of two each
+        asked, report = self.run_it([busy] * 6 + ['1|את באה?'])
         self.assertEqual(len(asked), 6)
         self.assertEqual((report['model'], report['rounds'], report['why']), ('', 1, 'busy'))
 
-    def test_only_busy_is_asked_again(self):
-        gem = translate.gemini
-        for first, why in ((self.answered(gem.FilteredResponse('x')), 'unusable'),
-                           (gem.InvalidKey('bad key'), 'key')):
-            asked, report = self.run_it([first, '1|את באה?'], background=True)
-            self.assertEqual(len(asked), 1, why)
-            self.assertEqual((report['rounds'], report['why']), (1, why))
-        # out of today's quota everywhere: no round; quota on one, busy on the
-        # others: a round
-        asked, report = self.run_it([gem.QuotaExceeded('day')] * 3, background=True)
-        self.assertEqual((len(asked), report['rounds'], report['why']), (3, 1, 'quota'))
-        asked, report = self.run_it(
-            [gem.QuotaExceeded('day')] + [gem.OverloadError('503')] * 4 + ['1|את באה?'],
-            background=True)
-        self.assertEqual((report['model'], report['rounds']), ('gemini-3.7-flash', 2))
-
     def test_what_ends_the_rounds(self):
         # review of 0.3.70: a model refused unread (a retired id) beside busy
-        # ones is asked around again; a reply of no use is not, though a busy
-        # one came before it; a round's own reasons decide the next round
+        # ones does not end them; a reply of no use or a refused key does; a
+        # day's quota everywhere at once is no round
         gem = translate.gemini
         busy = gem.OverloadError('503')
-        asked, report = self.run_it([busy, busy, gem.GeminiError('HTTP 404: no such model'),
-                                     busy, busy, '1|את באה?'], background=True)
-        self.assertEqual((report['model'], report['rounds']), ('gemini-3.7-flash', 2))
-        asked, report = self.run_it([busy, busy, self.answered(gem.FilteredResponse('x')),
+        asked, report = self.run_it([busy, gem.GeminiError('HTTP 404: no such model'), busy,
                                      '1|את באה?'], background=True)
-        self.assertEqual((len(asked), report['rounds'], report['why']), (3, 1, 'unusable'))
-        asked, report = self.run_it([busy] * 6 + [gem.QuotaExceeded('day')] * 3 + ['1|את באה?'],
+        self.assertEqual((report['model'], report['rounds']), ('gemini-3.6-flash', 2))
+        for first, why in ((self.answered(gem.FilteredResponse('x')), 'unusable'),
+                           (gem.InvalidKey('bad key'), 'key')):
+            asked, report = self.run_it([busy, first, '1|את באה?'], background=True)
+            self.assertEqual((len(asked), report['rounds'], report['why']), (2, 1, why))
+        asked, report = self.run_it([gem.QuotaExceeded('day')] * 3, background=True)
+        self.assertEqual((len(asked), report['rounds'], report['why']), (3, 1, 'quota'))
+        # a later round's model out of quota: the next round asks another
+        asked, report = self.run_it([busy] * 3 + [gem.QuotaExceeded('day'), '1|את באה?'],
                                     background=True)
-        self.assertEqual((len(asked), report['rounds'], report['why']), (9, 2, 'quota'))
+        self.assertEqual(asked[3:], ['gemini-3.6-flash', 'gemini-3.8-flash'])
+        self.assertEqual((report['model'], report['rounds']), ('gemini-3.8-flash', 3))
+
+    def test_a_model_out_of_quota_is_not_asked_in_a_round(self):
+        gem = translate.gemini
+        gp = MODS['resources.lib.gender_proofread']
+        with mock.patch.object(gp, 'exhausted_today', lambda m, s: m == 'gemini-3.6-flash'):
+            asked, report = self.run_it([], background=True, step=1)
+        self.assertEqual(asked, ['gemini-3.7-flash', 'gemini-3.8-flash',
+                                 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'])
+        self.assertEqual(report['rounds'], 4)
+        with mock.patch.object(gp, 'exhausted_today', lambda m, s: True):
+            asked, report = self.run_it([], background=True)
+        self.assertEqual((asked, report['rounds'], report['why']), ([], 1, 'quota'))
 
     def test_the_rounds_end_within_the_job_budget_or_when_the_viewer_leaves(self):
         gem = translate.gemini
         self.assertEqual((translate._GP_BUSY_WAIT, translate._GP_BUSY_WAIT_MAX,
-                          translate._GP_JOB_BUDGET), (60, 480, 1800))
-        # busy all along: rounds after waits of 1, 2, 4, 8, 8 minutes, none past the
-        # half hour
-        asked, report = self.run_it([], background=True, step=1)
-        self.assertEqual(report['why'], 'busy')
-        self.assertEqual(report['rounds'], 6)
-        self.assertEqual(len(asked), 6 + 3 * 5)
+                          translate._GP_BUSY_ROUNDS, translate._GP_JOB_BUDGET),
+                         (120, 480, 3, 1800))
+        # the rounds wait 2, 4 and 8 minutes; none starts past the job's
+        # budget (here 200 s: the 2-minute round fits, the 4-minute one not)
+        with mock.patch.object(translate, '_GP_JOB_BUDGET', 200):
+            asked, report = self.run_it([], background=True, step=1)
+        self.assertEqual((report['rounds'], len(asked)), (2, 4))
         # the viewer moved on during a wait: no further round
         logs = []
         with mock.patch.object(translate.kodi_utils, 'log', lambda m, **k: logs.append(m)):
             asked, report = self.run_it(
                 [], background=True,
-                stopped=lambda: any('asking again' in m for m in logs))
-        self.assertEqual((report['rounds'], len(asked)), (1, 6))
+                stopped=lambda: any('again in' in m for m in logs))
+        self.assertEqual((report['rounds'], len(asked)), (1, 3))
 
     def test_the_event_carries_it(self):
         src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
