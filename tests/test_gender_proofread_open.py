@@ -117,7 +117,7 @@ class Due(Base):
         self.assertLess(branch.index('_gp_try_mark(_gp_base, True)'),
                         branch.index('_pool_pick_emb_source(info, _phash, _psrc, _praw)'))
         self.assertEqual(branch.count('_gp_try_mark(_gp_base, False)'), 2)   # no look, not due
-        self.assertIn('marker=_gp_base, held=True)', branch)
+        self.assertIn('marker=_gp_base, held=True, info=_gp_info)', branch)
         opened = src[src.index('    def _open_with_proofread('):src.index('    # Respect the user')]
         # waiting out a pause or in progress elsewhere: the pool's proofread
         # copy is still looked for, a request is not made
