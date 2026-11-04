@@ -3086,6 +3086,79 @@ def _gp_saved(path):
         return {}
 
 
+# Not after a Hebrew gender reference (0.3.72). Two blind studies on the same
+# eight TV episodes (4 Nov 2026, judged by two AI judges and audited by the
+# tester): with a Hebrew subtitle as the reference, the proofread broke more
+# lines than it fixed (15 to 12) -- that reference already carries the right
+# gender, and the proofread second-guesses it; with an Arabic one it fixed 21
+# and broke 7. A translation made here says which reference it used (the
+# .gpref beside it). One of unknown origin (pooled, or made before 0.3.72)
+# that was made with a reference -- a pooled "_ar" variant, an ".ar" tier
+# file; a plain one had none -- counts as Hebrew-referenced when the title's
+# last search found a human Hebrew subtitle: the reference search takes
+# Hebrew first (an Arabic one may still have won when the Hebrew did not
+# align; the search cannot tell).
+
+def _gp_ref_marker(path):
+    return path + '.gpref'
+
+
+def _gp_ref_mark(path, lang):
+    """Beside a translation: the language of its gender reference ('-' when
+    it had none, '?' when it had one of a language not known); None when
+    nothing is known (the marker goes)."""
+    try:
+        if lang is None:
+            os.remove(_gp_ref_marker(path))
+            return
+        with open(_gp_ref_marker(path), 'w', encoding='utf-8') as f:
+            f.write(lang or '-')
+    except OSError:
+        pass
+
+
+def _gp_ref_tier(path, pooled_hash=None):
+    """Whether a translation of unknown origin was made with a gender
+    reference: the pool keeps such a variant under "<hash>_ar", the cache in
+    the ".ar" tier -- or in the plain one marked '?' (a pooled "_ar" variant
+    taken with the reference setting off)."""
+    if pooled_hash:
+        return pooled_hash.endswith('_ar')
+    if os.path.basename(path or '').endswith('.ar.he.srt'):
+        return True
+    try:
+        with open(_gp_ref_marker(path), 'r', encoding='utf-8') as f:
+            return f.read().strip() == '?'
+    except Exception:
+        return False
+
+
+def _hebrew_subtitle_listed(info):
+    """Whether the title's last search (the list's, or the reference search's)
+    found a human Hebrew subtitle."""
+    try:
+        from . import arabic_gender, subs_engine_bridge
+        return any(isinstance(c, dict) and arabic_gender._chain_lang_of(c) == 'he'
+                   for c in subs_engine_bridge.reusable_results(info) or [])
+    except Exception:
+        return False
+
+
+def _gp_hebrew_ref(path, info=None):
+    """Whether the translation at `path` was made with a Hebrew gender
+    reference: its .gpref when it was made here, else -- `info` given for one
+    of unknown origin made with a reference (_gp_ref_tier) -- the title's
+    search; else not."""
+    try:
+        with open(_gp_ref_marker(path), 'r', encoding='utf-8') as f:
+            mark = f.read().strip()
+        if mark != '?':
+            return mark == 'he'
+    except OSError:
+        pass
+    return bool(info) and _hebrew_subtitle_listed(info)
+
+
 # An attempt in progress, or one no model answered: no new one for a while
 # (two opens in its minutes would spend two requests; an overloaded model is
 # not asked again at every open).
@@ -3151,25 +3224,30 @@ def _gp_models_left():
 
 
 def _proofread_due(path, source_text, progressive_cb, marker=None,
-                   held=False):
+                   held=False, info=None):
     """Whether an opened translation gets the proofread now: from the list
     (a live preview to swap in), the setting on, a key, not proofread before
     (`marker`, else `path`), AI-made (not Google, not a Hebrew source passed
-    through) and a model with quota left. `source_text` None: all of it but
-    the source (before looking for one). `held`: the in-progress marker is
-    the caller's own, or not a reason here."""
+    through), not made with a Hebrew gender reference (`info`: the title, for
+    one of unknown origin made with a reference) and a model with quota left. `source_text` None:
+    all of it but the source (before looking for one). `held`: the
+    in-progress marker is the caller's own, or not a reason here."""
     try:
-        return bool(
-            progressive_cb is not None
-            and kodi_utils.get_bool('gender_proofread', True)
-            and (kodi_utils.get_setting('api_key', '') or '').strip()
-            and os.path.isfile(path) and not _gp_done(marker or path)
-            and (held or not _gp_trying(marker or path))
-            and not _is_google_translated(path)
-            and (source_text is None
-                 or (source_text
-                     and not _is_mostly_hebrew(source_text, min_ratio=0.60)))
-            and _gp_models_left())
+        if not (progressive_cb is not None
+                and kodi_utils.get_bool('gender_proofread', True)
+                and (kodi_utils.get_setting('api_key', '') or '').strip()
+                and os.path.isfile(path) and not _gp_done(marker or path)
+                and (held or not _gp_trying(marker or path))
+                and not _is_google_translated(path)
+                and (source_text is None
+                     or (source_text
+                         and not _is_mostly_hebrew(source_text, min_ratio=0.60)))):
+            return False
+        if _gp_hebrew_ref(path, info):
+            kodi_utils.log('gender proofread: not run -- this translation was '
+                           'made with a Hebrew reference', level='INFO')
+            return False
+        return bool(_gp_models_left())
     except Exception:
         return False
 
@@ -4079,9 +4157,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 # from: the engine's cached search has it when it carries the
                 # same release and hashes the same -- an embedded one is
                 # looked for its own way.
+                # A variant made with a reference ("_ar"): the title's search
+                # tells whether it was a Hebrew one (_gp_hebrew_ref).
+                _gp_info = info if _gp_ref_tier(_praw, _phash) else None
                 if not (_gp_base and os.path.isfile(_praw)
                         and _proofread_due(_praw, None, progressive_cb,
-                                           marker=_gp_base)):
+                                           marker=_gp_base, info=_gp_info)):
                     return None
                 # held through the look (an embedded one downloads for up to
                 # 45 s): a second job for this row meanwhile does not ask too
@@ -4098,7 +4179,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     _gp_try_mark(_gp_base, False)
                     return None     # the look failed: try again another time
                 if not _proofread_due(_praw, _psource, progressive_cb,
-                                      marker=_gp_base, held=True):
+                                      marker=_gp_base, held=True, info=_gp_info):
                     _gp_try_mark(_gp_base, False)
                     if _psource == '':
                         # looked, and it is not in the list: a week's pause
@@ -4525,6 +4606,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     _ar_map = None  # {srt_entry_number: reference_line}, PRIMARY ref (_ref_stack[0][1])
     _ar_diag = {}   # gender-reference diagnostics (reason/cands/diag/lang)
     _ref_lang = 'ar'  # PRIMARY chain language actually used (he/ar/es/fr/ru/...)
+    # the saved translation's gender reference ('' none): no proofread after a
+    # Hebrew one (_gp_ref_mark)
+    _gp_ref = ''
     # Reference STACK of gender oracles. [0] = primary; higher tiers are
     # ALTERNATE chain languages pulled LAZILY -- only when a chunk is prompt-
     # blocked -- so a job that never blocks downloads exactly one reference. A
@@ -4622,7 +4706,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if pool_hash:
                 share_to(pool_hash)(cache.load_text(path) or '', _gp_saved(path))
             return None
-        if not _proofread_due(path, source_text, progressive_cb, held=True):
+        if not _proofread_due(path, source_text, progressive_cb, held=True,
+                              info=(info if _gp_ref_tier(path, pooled_hash)
+                                    else None)):
             return None
         # In progress elsewhere, or waiting out a reply of no use: no request
         # -- but another viewer's proofread in the pool is still taken.
@@ -4726,6 +4812,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 os.remove(translated)
             except OSError:
                 pass
+            _gp_ref_mark(translated, None)
         if (progressive_cb is not None and local_source
                 and os.path.isfile(local_source)
                 and _google_cache_upgradeable(translated)):
@@ -4838,6 +4925,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 os.remove(translated_by_content)
             except OSError:
                 pass
+            _gp_ref_mark(translated_by_content, None)
         if (progressive_cb is not None
                 and _google_cache_upgradeable(translated_by_content)):
             kodi_utils.log('Cached file is a Google fallback and AI is available '
@@ -4929,6 +5017,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             try:
                 cache.save_text(translated, pooled)
                 _clear_google_marker(translated)
+                # a plain variant had no reference; an "_ar" one had one of
+                # a language not known
+                _gp_ref_mark(translated, '?' if _pooled_ar else '')
                 _reapply_rtl_fix_in_place(translated, source=src_text,
                                           source_lang=source_lang)
                 kodi_utils.notify(
@@ -5269,6 +5360,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 return ''
             if not kodi_utils.get_bool('gender_proofread', True):
                 return 'off'
+            if _gp_ref == 'he':
+                return 'heref'
             if progressive_cb is None:
                 # the job proofread_later starts asks only a model with quota
                 return 'later' if _gp_models_left() else 'quota'
@@ -7113,6 +7206,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         return None
     cache.save_text(translated, final)
     _clear_google_marker(translated)
+    # its gender reference, for the proofread here and at a later open
+    _gp_ref = _ref_lang if (_ar_on and _used_ar) else ''
+    _gp_ref_mark(translated, _gp_ref)
     # Also save under the content-hash slot when it differs from
     # the early-source-id slot. That way the same translation
     # answers a future lookup whether the user comes back via the
@@ -7126,6 +7222,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 source_id=content_id, tier=_tier)
             cache.save_text(_content_slot, final)
             _clear_google_marker(_content_slot)
+            _gp_ref_mark(_content_slot, _gp_ref)
         except Exception as e:
             kodi_utils.log(
                 'content-hash duplicate save failed: {0}'.format(e),
@@ -7137,7 +7234,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # runs on the file already saved, so a stop or a crash in those minutes
     # keeps this translation; what it corrects is saved over it and goes out
     # with 'done' below, and to the pool.
-    if progressive_cb is not None and kodi_utils.get_bool('gender_proofread', True):
+    if _gp_ref == 'he' and progressive_cb is not None:
+        kodi_utils.log('gender proofread: not run -- translated with a Hebrew '
+                       'reference', level='INFO')
+    if (progressive_cb is not None and _gp_ref != 'he'
+            and kodi_utils.get_bool('gender_proofread', True)):
         try:
             progressive_cb('chunk_ready', {
                 'completed': 1, 'total': 1, 'merged_text': final,
