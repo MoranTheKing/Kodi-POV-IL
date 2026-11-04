@@ -334,7 +334,7 @@ class Markers(unittest.TestCase):
 
     def test_the_fresh_path_holds_it_as_an_opened_one_does(self):
         src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
-        run = src[src.index("    if progressive_cb is not None and kodi_utils.get_bool('gender_proofread', True):"):]
+        run = src[src.index("    if (progressive_cb is not None and _gp_ref != 'he'\n"):]
         run = run[:run.index('    _emit(True)\n')]
         mark = run.index('            _gp_try_mark(_slot, True)')
         ask = run.index('_proofed = _proofread_gender(_proof_blocks)')

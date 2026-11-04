@@ -136,7 +136,9 @@ def save_json(path, data):
 #   .google        srt.is_google_translated -- this file is machine
 #                  translation and must never reach the community pool.
 #   .release       the source release name, used to tag a pool upload.
-_SIDECARS = ('.emb2.shared', '.shared', '.google', '.release')
+#   .gpref         the language of its gender reference: no gender proofread
+#                  after a Hebrew one (translate._gp_ref_mark).
+_SIDECARS = ('.emb2.shared', '.shared', '.google', '.release', '.gpref')
 
 
 def _sidecar_parent(path):

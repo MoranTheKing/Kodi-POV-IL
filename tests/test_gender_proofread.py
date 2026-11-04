@@ -141,7 +141,7 @@ class Wiring(unittest.TestCase):
         # after the translation is saved: a stop or a crash in its minutes keeps
         # it; the corrected file goes out with 'done'
         save = src.index('    cache.save_text(translated, final)\n    _clear_google_marker(translated)')
-        run = src.index("    if progressive_cb is not None and kodi_utils.get_bool('gender_proofread', True):")
+        run = src.index("    if (progressive_cb is not None and _gp_ref != 'he'\n")
         self.assertLess(save, run)
         self.assertLess(src.index('_proofed = _proofread_gender(_proof_blocks)', run),
                         src.index("progressive_cb('done'", run))
