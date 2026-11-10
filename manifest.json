@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-11-10T21:18:50Z",
+  "generated": "2026-11-10T21:30:38Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -167,24 +167,24 @@
     "skin.fentastic": {
       "id": "skin.fentastic",
       "name": "FENtastic",
-      "version": "1.0.31",
+      "version": "1.0.32",
       "type": "skin",
-      "filename": "skin.fentastic-1.0.31.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.fentastic-1.0.31.zip",
-      "size": 20853692,
-      "sha256": "a03e963238db771abc4947d5e1d80b616054637021fe9e8ba9be3da89365fcb9",
-      "updated": "2026-11-10T20:12:09Z"
+      "filename": "skin.fentastic-1.0.32.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.fentastic-1.0.32.zip",
+      "size": 20853972,
+      "sha256": "187e836030b992dd556ff82c7a2affdfdecdbbb939a8db68ab218a74724a37b9",
+      "updated": "2026-11-10T21:30:38Z"
     },
     "skin.povil.nox": {
       "id": "skin.povil.nox",
       "name": "Kodi POV IL - NOX",
-      "version": "1.0.19",
+      "version": "1.0.20",
       "type": "skin",
-      "filename": "skin.povil.nox-1.0.19.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.nox-1.0.19.zip",
-      "size": 24503303,
-      "sha256": "75c947d9a3fe4201bd378905648c3ae9dd7bb194cea2b63f270e8a3517d96f19",
-      "updated": "2026-11-10T20:12:09Z"
+      "filename": "skin.povil.nox-1.0.20.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.nox-1.0.20.zip",
+      "size": 24503538,
+      "sha256": "b858234fdf9b9ce2e83447cf4b4e13c44cf31ddd193c4bc4ea8757db42990be1",
+      "updated": "2026-11-10T21:30:38Z"
     },
     "skin.povil.onyx": {
       "id": "skin.povil.onyx",
