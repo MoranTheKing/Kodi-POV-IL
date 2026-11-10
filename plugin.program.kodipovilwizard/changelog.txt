@@ -1,3 +1,6 @@
+0.4.95
+- player_season_episodes: the skins' season-episodes list for an Idan Plus episode on screen -- its season as Idan Plus saved it when the season was listed (seasons.json, through Idan Plus's own watch_store), no request; an episode picked there plays through Idan Plus with the channel's quality. Allowed in a child profile.
+
 0.4.94
 - Umbrella 6.7.99: the child-profile content-rating hook (umbrella_profile_metadata) finds the line it follows in its new form too -- 6.7.99 writes setMpaa(meta_get('mpaa') or '') -- so Umbrella can move from 6.7.98 to 6.7.99 (before this, 4 of Umbrella's 5 hooks fitted 6.7.99; this one did not).
 - Onyx: povil_rtl reads a Kan item's id with or without a trailing slash, as hero_details does.

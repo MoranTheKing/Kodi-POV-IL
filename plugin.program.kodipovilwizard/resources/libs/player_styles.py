@@ -117,3 +117,94 @@ def episodes():
     else:
         path = 'plugin://plugin.video.pov/?mode=build_next_episode&name=32483&iconImage=next_episodes'
     xbmc.executebuiltin('ActivateWindow(videos,{0},return)'.format(path))
+
+
+_IDANPLUS = 'plugin.video.idanplus'
+
+
+def _idanplus_watch_store():
+    """Idan Plus's own watch_store (pure Python, no Kodi imports): its saved
+    seasons and the plugin url that plays a saved episode -- the same url its
+    Continue watching and next-episode card play."""
+    import importlib.util
+    import xbmcvfs
+    path = xbmcvfs.translatePath(
+        'special://home/addons/{0}/resources/lib/watch_store.py'.format(_IDANPLUS))
+    spec = importlib.util.spec_from_file_location('povil_idanplus_watch_store', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _season_label(entry, current):
+    number = entry.get('number')
+    label = '{0}. {1}'.format(number, entry.get('name', '')) if number not in (None, '') else entry.get('name', '')
+    return '[B]{0}[/B]'.format(label) if current else label
+
+
+def season_episodes(handle):
+    """The skins' 'פרקי העונה' list for an Idan Plus episode on screen: its
+    season as Idan Plus saved it when the season was listed (seasons.json), so
+    no request. Israeli VOD has no TMDb id, and POV -- the list's source for
+    every other episode -- failed on it. Empty when nothing from Idan Plus is
+    playing or its season was never listed."""
+    import xbmcplugin
+    items = []
+    try:
+        key = xbmc.Player().getPlayingItem().getProperty('idanplus_key')
+    except Exception:
+        key = ''
+    if key:
+        try:
+            import xbmcvfs
+            store = _idanplus_watch_store()
+            folder = xbmcvfs.translatePath(
+                'special://profile/addon_data/{0}/watch'.format(_IDANPLUS))
+            seasons = store.SeasonIndex(folder).load()
+            here = store.episode_entry(seasons, key)
+            if here:
+                module = key.split(':')[0]
+                # what Idan Plus's own player service passes: the channel's
+                # quality, 'best' when unset (common.GetAddonSetting) -- Kan and
+                # Reshet fail on an empty one
+                quality = xbmcaddon.Addon(_IDANPLUS).getSetting('{0}_res'.format(module)) or 'best'
+                meta = getattr(store, 'EpisodeMeta', None)
+                facts = meta(folder).load() if meta else {}
+                season = seasons[here['season_url']]
+                # the season number the player shows (the saved season's title
+                # often has none)
+                season_no = xbmc.getInfoLabel('VideoPlayer.Season')
+                for k in season.get('order', []):
+                    entry = store.episode_entry(seasons, k)
+                    if not entry:
+                        continue
+                    item = xbmcgui.ListItem(_season_label(entry, k == key), offscreen=True)
+                    icon = entry.get('icon', '')
+                    item.setArt({'thumb': icon, 'icon': icon, 'fanart': icon, 'landscape': icon})
+                    tag = item.getVideoInfoTag()
+                    tag.setMediaType('episode')
+                    tag.setTitle(entry.get('name', ''))
+                    tag.setTvShowTitle(entry.get('series_title', ''))
+                    if str(entry.get('number', '')).isdigit():
+                        tag.setEpisode(int(entry['number']))
+                    if season_no.isdigit():
+                        tag.setSeason(int(season_no))
+                    fact = facts.get(k) or {}
+                    if fact.get('plot'):
+                        tag.setPlot(fact['plot'])
+                    aired = fact.get('aired') or entry.get('aired', '')
+                    if aired:
+                        tag.setFirstAired(aired)
+                    # Idan Plus keeps its own resume point (noResume): no Kodi
+                    # "resume from" menu over it
+                    tag.setResumePoint(0.0, 1.0)
+                    item.setProperty('IsPlayable', 'true')
+                    items.append((store.play_url(_IDANPLUS, entry, quality), item, False))
+        except Exception as e:
+            xbmc.log('[player_styles] season_episodes: {0}'.format(e), xbmc.LOGWARNING)
+            items = []
+    if handle >= 0:
+        xbmcplugin.setContent(handle, 'episodes')
+        if items:
+            xbmcplugin.addDirectoryItems(handle, items, len(items))
+        xbmcplugin.endOfDirectory(handle, succeeded=True, cacheToDisc=False)
