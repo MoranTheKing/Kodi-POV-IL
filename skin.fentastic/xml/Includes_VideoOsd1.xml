@@ -269,7 +269,7 @@
 			<icon>DefaultAddonPVRClient.png</icon>
 			<property name="id">allepisodes</property>
 			<onclick>Control.SetFocus(200325)</onclick>
-			<visible>$EXP[__episode_OSD]</visible>
+			<visible>$EXP[__episode_OSD] + !String.IsEmpty(VideoPlayer.UniqueID(tmdb))</visible> <!-- not for Israeli VOD: no TMDb id, POV cannot list its season -->
 		</item>
 		<item>
 			<label>לחץ להחלפת נגן</label>
