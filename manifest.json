@@ -3,25 +3,25 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-11-04T21:38:27Z",
+  "generated": "2026-11-10T07:22:51Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
-    "version": "6.11.01",
-    "filename": "plugin.video.pov-6.11.01.zip",
-    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.pov-6.11.01.zip",
-    "size": 797635,
-    "sha256": "21dcbc5df58517a978e1511debabd895f3e6148d8f30495ef8bfde46c419038b",
-    "upstream_zip": "https://kodifitzwell.github.io/repo/plugin.video.pov/plugin.video.pov-6.11.01.zip"
+    "version": "6.11.03",
+    "filename": "plugin.video.pov-6.11.03.zip",
+    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.pov-6.11.03.zip",
+    "size": 797818,
+    "sha256": "9ac93ad045910774503cbfeeb45b63bbd9b23837c9e76749885076c9b11edfba",
+    "upstream_zip": "https://kodifitzwell.github.io/repo/plugin.video.pov/plugin.video.pov-6.11.03.zip"
   },
   "umbrella_pin": {
     "id": "plugin.video.umbrella",
-    "version": "6.7.99",
-    "filename": "plugin.video.umbrella-6.7.99.zip",
-    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.umbrella-6.7.99.zip",
-    "size": 10926551,
-    "sha256": "6f22681cde3af281a4949b9482024d91abfa63bbc2fbf6e6a86e2992db1b943c",
-    "upstream_zip": "https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/omega/zips/plugin.video.umbrella/plugin.video.umbrella-6.7.99.zip"
+    "version": "6.8.00",
+    "filename": "plugin.video.umbrella-6.8.00.zip",
+    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.umbrella-6.8.00.zip",
+    "size": 14240170,
+    "sha256": "c803b88e0834871c6210d5d2c48f7e78e31949131cee0c3b2fdff4e04e75e0b5",
+    "upstream_zip": "https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/omega/zips/plugin.video.umbrella/plugin.video.umbrella-6.8.00.zip"
   },
   "config": {
     "config_version": "2.0.10",
