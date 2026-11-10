@@ -1,3 +1,7 @@
+0.3.73
+- Umbrella 6.8.00: Hebrew for its three new strings a viewer sees -- the kind beside a combined search result ('סרט' / 'סדרה') and the new Download Manager ('מנהל הורדות'); the manager's own buttons and statuses are written in English in its code. 6.8.00 backs out of the source list quietly itself, so the build's quiet cancel is no longer needed there: the source-list warm still goes in, and the missing cancel branch is no longer a warning at every start.
+- AI translation, gender: a proofread stored before 0.3.72 on a translation made with a Hebrew reference, whose pool upload never went through, is no longer offered to the pool again.
+
 0.3.72
 - AI translation, gender: the gender proofread no longer runs on a translation made with a Hebrew subtitle as its gender reference. Two blind studies on the same eight TV episodes (4 Nov 2026, two AI judges, audited by the tester): with a Hebrew reference the proofread broke more lines than it fixed (15 to 12) -- that reference already carries the right gender; with an Arabic one it fixed 21 and broke 7, so it stays for translations made without a Hebrew reference. A translation made from now on records its reference beside it (.gpref). A pooled one, or one made before, counts as Hebrew-referenced only if it was made with a reference (a pooled '_ar' variant, an '.ar' tier file) and the title's last search found a human Hebrew subtitle; a plain one had no reference and keeps its proofread. Usage telemetry reports the skip as 'heref'.
 

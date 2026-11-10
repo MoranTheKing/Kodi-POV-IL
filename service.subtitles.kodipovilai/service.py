@@ -1651,7 +1651,7 @@ def _maybe_patch_umbrella_language():
         st = umbrella_source_ux_patcher.ensure_patched()
         if st == 'patched':
             kodi_utils.log(
-                'umbrella_source_ux_patcher: prewarm + quiet cancel applied',
+                'umbrella_source_ux_patcher: applied (its own line says what)',
                 level='INFO')
         elif st in ('unmatched', 'compile_failed', 'write_failed',
                     'read_failed'):
