@@ -1,0 +1,3 @@
+1.0.31
+- The player's episode list asks POV only for an episode that has a TMDb id: Israeli VOD (Kan 11, Keshet 12, Reshet 13 through Idan Plus) plays as an episode with none, and POV answered tmdb_id= with a script error that popped up over the video.
+
