@@ -492,7 +492,7 @@
 		<property name="episoderesize">https://www.iconsdb.com/icons/preview/white/tv-3-xxl.png</property>
 		<property name="visiblepisodes">true</property>
 		<onclick>Control.SetFocus(200323,0,absolute)</onclick>
-		<visible>$EXP[__episode_OSD]</visible>
+		<visible>$EXP[__episode_OSD] + !String.IsEmpty(VideoPlayer.UniqueID(tmdb))</visible>
 	</item>	
 	<item>
 		<label>סנכרן כתוביות</label>
