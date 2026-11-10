@@ -672,6 +672,31 @@
           </dependencies>
           <control type="toggle"/>
         </setting>
+        <!-- 0.3.74: what the automatic subtitle does when there is no Hebrew
+             at all (embedded, human or pooled): translate with AI (as before),
+             ask each time, or leave it to a pick from the list. -->
+        <setting id="ai_when_no_hebrew" type="string" label="33009" help="33010">
+          <level>0</level>
+          <default>auto</default>
+          <constraints>
+            <options>
+              <option label="33011">auto</option>
+              <option label="33012">ask</option>
+              <option label="33013">manual</option>
+            </options>
+          </constraints>
+          <dependencies>
+            <dependency type="visible">
+              <and>
+                <condition setting="use_builtin_engine" operator="is">true</condition>
+                <condition setting="engine_autosub" operator="is">true</condition>
+              </and>
+            </dependency>
+          </dependencies>
+          <control type="list" format="string">
+            <heading>33009</heading>
+          </control>
+        </setting>
         <setting id="autosub_excluded_addons" type="string" label="32548" help="32549"> <!-- Addons excluded from autosub -->
           <level>0</level>
           <default>plugin.video.idanplus</default>
@@ -682,8 +707,10 @@
             <heading>32548</heading>
           </control>
         </setting>
+        <!-- 0.3.74: hidden; "AI translation when there is no Hebrew" (ai_when_no_hebrew)
+             is the user's choice now. Kept for the old behaviour in "auto". -->
         <setting id="engine_force_translate" type="boolean" label="32531" help="32532">
-          <level>0</level>
+          <level>4</level>
           <default>false</default>
           <dependencies>
             <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>

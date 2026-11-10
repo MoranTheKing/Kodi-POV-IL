@@ -577,3 +577,23 @@ msgstr ""
 msgctxt "#32557"
 msgid "When an AI translation finishes (a subtitle picked from the list, or the automatic translation on play), one request to a stronger Gemini model (3.7 Flash, then 3.8, then 3.6 -- about 20 requests a day each on a free key) reads the whole title and corrects the masculine/feminine and singular/plural forms the translator got wrong (who speaks to whom). Only gendered forms change (word endings, את/אתה, הוא/היא...); a correction that touches anything else is dropped. The subtitles show as usual; the corrected file replaces them a few minutes later. When these models are busy or out of quota, the translation stays as it is. A translation made before -- from the cache or the community pool -- is proofread once, the first time it is opened (a pooled one when the subtitle it was translated from is in the list), and the corrected file goes to the pool for everyone. With a paid key this is one more request per title. Measured, of the lines it changed: 3.7 on two films fixed 56 and broke none, 3.8 on one film fixed 34 and broke 1."
 msgstr ""
+
+msgctxt "#33009"
+msgid "AI translation when there is no Hebrew"
+msgstr "AI translation when there is no Hebrew"
+
+msgctxt "#33010"
+msgid "When a video starts and no Hebrew subtitle is found (embedded, human or from the community pool): translate with AI automatically, ask each time, or only when you pick a translation from the subtitle list yourself. A Hebrew subtitle that exists is always chosen automatically."
+msgstr "When a video starts and no Hebrew subtitle is found (embedded, human or from the community pool): translate with AI automatically, ask each time, or only when you pick a translation from the subtitle list yourself. A Hebrew subtitle that exists is always chosen automatically."
+
+msgctxt "#33011"
+msgid "Automatically"
+msgstr "Automatically"
+
+msgctxt "#33012"
+msgid "Ask each time"
+msgstr "Ask each time"
+
+msgctxt "#33013"
+msgid "Only when I pick it from the list"
+msgstr "Only when I pick it from the list"
