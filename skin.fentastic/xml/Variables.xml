@@ -306,9 +306,12 @@
 	</variable>
 	
 	<variable name="build_Episodes_Url_OSD">
-	<!-- only an episode with a TMDb id: Israeli VOD (Idan Plus) plays as an
-	     episode with none, and POV's list fails on tmdb_id= with a script error -->
+	<!-- POV's list needs a TMDb id. Israeli VOD (Idan Plus) plays as an episode
+	     with none, and POV failed on tmdb_id= with a script error; so its season
+	     comes from Idan Plus's saved season (the Wizard reads it; ep= keeps one
+	     episode's list from serving the next). -->
 	<value condition="$EXP[__episode_OSD] + !String.IsEmpty(VideoPlayer.UniqueID(tmdb))">$VAR[PovStartPoint_OSD]build_episode_list&season=$VAR[OsdSeasonInfo]&tmdb_id=$VAR[__FixTmdbOsd__]</value>
+	<value condition="$EXP[__episode_OSD] + $EXP[__CheckIdanplus_OSD]">plugin://plugin.program.kodipovilwizard/?mode=player_season_episodes&ep=$ESCINFO[VideoPlayer.TVShowTitle]$ESCINFO[VideoPlayer.Title]</value>
 	</variable>
 	
 	<variable name="middlelabelInfo_Next_OSD_Var">
