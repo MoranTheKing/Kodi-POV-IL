@@ -1,3 +1,6 @@
+1.0.19
+- The player's episode list asks POV only for an episode that has a TMDb id: Israeli VOD (Kan 11, Keshet 12, Reshet 13 through Idan Plus) plays as an episode with none, and POV answered tmdb_id= with a script error that popped up over the video.
+
 1.0.15
 - Center the continue-watching dialog and fit its background to the full menu so all personal series shortcuts remain on screen.
 

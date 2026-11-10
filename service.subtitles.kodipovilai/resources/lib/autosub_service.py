@@ -24,6 +24,46 @@ STATE = {'last_file': None, 'busy': False, 'player': None, 'snap_file': None,
          'active_file': '', 'run_id': 0}
 _STATE_LOCK = threading.Lock()
 
+# 'ask' (ai_when_no_hebrew): a yes/no over the playing video that closes
+# itself, as a 'no', after this many milliseconds. It never pauses playback.
+_ASK_AI_CLOSE_MS = 10000
+
+
+def ai_when_no_hebrew(kodi_utils):
+    """'auto' | 'ask' | 'manual': what the automatic subtitle does when there
+    is no Hebrew at all. A user's per-video choice since 0.3.74: a translation
+    costs requests, and the best foreign subtitle may not fit this release's
+    timing -- another link with built-in Hebrew may be the better pick."""
+    try:
+        v = (kodi_utils.get_setting('ai_when_no_hebrew', 'auto') or 'auto').strip().lower()
+    except Exception:
+        v = 'auto'
+    return v if v in ('auto', 'ask', 'manual') else 'auto'
+
+
+# AI rows the list shows as Hebrew -- the translation of the video's own
+# foreign track, of a foreign file beside it -- are translations too
+_AI_ROW_TYPES = ('embedded_ai', 'ai')
+
+
+def _ask_ai_translation(google=False):
+    """'ask': True only on an explicit yes. 'No' has the focus: an OK meant
+    for the player must not spend requests."""
+    try:
+        import xbmcgui
+        args = ('אין כתובית עברית',
+                'לא נמצאה כתובית עברית לסרטון הזה. {0}[CR]'
+                '(נסגר מעצמו תוך 10 שניות)'.format(
+                    'לתרגם ב-Google Translate?' if google else 'לתרגם ב-AI?'))
+        kw = {'nolabel': 'לא', 'yeslabel': 'לתרגם', 'autoclose': _ASK_AI_CLOSE_MS}
+        try:
+            return bool(xbmcgui.Dialog().yesno(
+                *args, defaultbutton=xbmcgui.DLG_YESNO_NO_BTN, **kw))
+        except (TypeError, AttributeError):
+            return bool(xbmcgui.Dialog().yesno(*args, **kw))   # Kodi 19
+    except Exception:
+        return False
+
 
 def autosub_on_play():
     """Phase C auto-on-play: when the built-in engine is on, search and apply
@@ -424,6 +464,48 @@ def autosub_on_play():
         # skip the rest from that SAME source (they fail identically) and move
         # straight on to the next source -- OpenSubtitles / pool / Wizdom.
         he_list = [c for c in cands if c.get('language') == 'he']
+        # 0.3.74: outside 'auto' every AI translation waits for the user --
+        # one question a video, asked when the first one is reached
+        _have_key = bool((kodi_utils.get_setting('api_key', '') or '').strip())
+        _mode = (kodi_utils.get_setting('translation_mode', 'ai') or 'ai')
+        _ai_ok = _mode != 'none'
+        _when = ai_when_no_hebrew(kodi_utils)
+        _ai_offered = False      # an AI translation the user can pick instead
+        _ai_answer = []          # the user's answer, once asked
+
+        def _is_ai_row(row):
+            try:
+                return (translate._decode_link(row.get('link') or '')
+                        or {}).get('type') in _AI_ROW_TYPES
+            except Exception:
+                return False
+
+        def _ai_allowed():
+            if _when == 'auto':
+                return True
+            if _when == 'manual' or not (_have_key and _ai_ok):
+                return False
+            if not _ai_answer:
+                if _eng_general is not None:
+                    try:
+                        _eng_general.show_msg = (
+                            '[COLOR lightblue]אין כתובית עברית — לתרגם?[/COLOR]')
+                    except Exception:
+                        pass
+                _ai_answer.append(_ask_ai_translation(google=_mode == 'google'))
+                if (_ai_answer[0] and _eng_general is not None
+                        and _autosub_owns_player()):
+                    try:
+                        _eng_general.show_msg = (
+                            '[COLOR lightblue]מתרגם ב-AI[/COLOR]')
+                    except Exception:
+                        pass
+            return _ai_answer[0]
+
+        if _when != 'auto':
+            # every real Hebrew subtitle is tried before any translation
+            he_list = ([c for c in he_list if not _is_ai_row(c)]
+                       + [c for c in he_list if _is_ai_row(c)])
         applied = False
         chosen_link = None
         chosen_name = ''
@@ -453,6 +535,15 @@ def autosub_on_play():
                 # to this loop, and the row sorts to the FRONT of he_list --
                 # first pick, by default, on an ordinary install.
                 continue
+            if _when != 'auto' and pl.get('type') in _AI_ROW_TYPES:
+                _ai_offered = True
+                if not _autosub_owns_player():
+                    return
+                _allowed = _ai_allowed()
+                if not _autosub_owns_player():
+                    return
+                if not _allowed:
+                    continue
             is_embedded = (pl.get('type') == 'engine' and pl.get('embedded'))
             if not _autosub_owns_player():
                 return
@@ -520,11 +611,29 @@ def autosub_on_play():
         #     otherwise), and
         #   * the user hasn't opted out of AI (translation_mode != 'none').
         # (The legacy engine_force_translate toggle still forces it if set.)
-        _have_key = bool((kodi_utils.get_setting('api_key', '') or '').strip())
-        _ai_ok = (kodi_utils.get_setting('translation_mode', 'ai')
-                  or 'ai') != 'none'
-        _auto_ai = (_have_key and _ai_ok) or kodi_utils.get_bool(
-            'engine_force_translate', False)
+        # 0.3.74: outside 'auto' the user's answer decides (asked once)
+        if _when == 'auto':
+            _auto_ai = (_have_key and _ai_ok) or kodi_utils.get_bool(
+                'engine_force_translate', False)
+        else:
+            _auto_ai = False
+            _eng_ai = False
+            if not applied:
+                for c in cands:
+                    try:
+                        p2 = translate._decode_link(c.get('link') or '')
+                    except Exception:
+                        p2 = None
+                    if p2 and p2.get('type') == 'engine_ai':
+                        _eng_ai = True
+                        break
+            if _eng_ai:
+                _ai_offered = True
+                if not _autosub_owns_player():
+                    return
+                _auto_ai = _ai_allowed()
+                if not _autosub_owns_player():
+                    return
         if not applied and _auto_ai:
             for c in cands:
                 try:
@@ -572,7 +681,14 @@ def autosub_on_play():
                 kodi_utils.set_current_subtitle('')
             except Exception:
                 pass
-            _final_overlay('[COLOR red]לא נמצאה כתובית עברית[/COLOR]', hold=4.0)
+            if (_ai_offered and _when != 'auto' and _have_key and _ai_ok
+                    and _ai_answer[:1] != [True]):
+                # left to the user: say where the translation is
+                _final_overlay('[COLOR red]לא נמצאה כתובית עברית[/COLOR]\n'
+                               '[COLOR lightblue]תרגום AI זמין ברשימת הכתוביות[/COLOR]',
+                               hold=5.0)
+            else:
+                _final_overlay('[COLOR red]לא נמצאה כתובית עברית[/COLOR]', hold=4.0)
             return
         # The winning candidate was already claimed before resolve. Rewriting
         # it here would let an old autosub run steal ownership back from a

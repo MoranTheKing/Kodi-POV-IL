@@ -240,7 +240,7 @@
 <property name="onright">$NUMBER[500323]</property>
 <property name="menu_id">episodes</property>
 <onclick>Control.SetFocus(500323)</onclick>
-<visible>$EXP[__episode_OSD]</visible>
+<visible>$EXP[__episode_OSD] + !String.IsEmpty(VideoPlayer.UniqueID(tmdb))</visible>
 </item>
 <item id="121">
 <label>הגדרות וידאו</label>
