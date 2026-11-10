@@ -55,6 +55,16 @@ SOURCES_REL_PATH = 'resources/lib/modules/sources.py'
 
 PREWARM_MARKER = 'AI_SUBS_UMB_PREWARM_v1'
 CANCEL_MARKER = 'AI_SUBS_UMB_QUIETCANCEL_v1'
+# Umbrella 6.8.00 backs out of the source list quietly itself: its
+# sourceSelect clears the playlist and resolves offscreen whatever
+# enable_playnext says, and the `else: control.cancelPlayback()` the quiet
+# cancel replaced is gone. Recognised by that shape -- the offscreen resolve
+# alone is in older Umbrella too, inside `if self.enable_playnext:`.
+_QUIET_680_RE = re.compile(
+    r'^(?P<i>[ \t]*)control\.playlist\.clear\(\)[ \t]*\r?\n'
+    r'(?P=i)if self\.enable_playnext:',
+    re.MULTILINE,
+)
 
 # The interactive scrape's entry point. Unique: one def in the file.
 _DIALOG_RE = re.compile(
@@ -182,7 +192,10 @@ def ensure_patched():
     #    below are against the current text, not a stale copy.
     c = _CANCEL_RE.search(content)
     if not c:
-        _log('cancel branch not found -- prewarm only', level='WARNING')
+        if _QUIET_680_RE.search(content):
+            _log('Umbrella backs out quietly itself -- prewarm only', level='INFO')
+        else:
+            _log('cancel branch not found -- prewarm only', level='WARNING')
     else:
         ceol = '\r\n' if c.group('cr') else '\n'
         replacement = (c.group('indent') + 'else:' + ceol
@@ -210,5 +223,6 @@ def ensure_patched():
             pass
         _log('write failed: {0}'.format(e), level='WARNING')
         return 'write_failed'
-    _log('prewarm + quiet cancel injected into Umbrella sources', level='INFO')
+    _log('prewarm{0} injected into Umbrella sources'.format(
+        ' + quiet cancel' if c else ''), level='INFO')
     return 'patched'

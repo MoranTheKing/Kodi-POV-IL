@@ -4698,10 +4698,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             return share
 
         # Proofread here before, its pool upload never went through (the
-        # worker answered 502): offered again, with no new request.
+        # worker answered 502): offered again, with no new request -- not
+        # one made with a Hebrew reference (proofread before 0.3.72).
         if (_gp_done(path) and source_text and pool is not None
                 and pool.share_enabled()
-                and not pool.was_contributed(_gp_marker(path))):
+                and not pool.was_contributed(_gp_marker(path))
+                and not _gp_hebrew_ref(path, info if _gp_ref_tier(path, pooled_hash)
+                                       else None)):
             pool_hash = held_hash()
             if pool_hash:
                 share_to(pool_hash)(cache.load_text(path) or '', _gp_saved(path))
