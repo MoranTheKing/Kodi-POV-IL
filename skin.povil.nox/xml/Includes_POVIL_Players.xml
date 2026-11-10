@@ -856,7 +856,7 @@
 			<property name="onright">$NUMBER[500323]</property>
 			<property name="menu_id">episodes</property>
 			<onclick>Control.SetFocus(500323)</onclick>
-			<visible>$EXP[POVIL_Player___episode_OSD] + !String.IsEmpty(VideoPlayer.UniqueID(tmdb))</visible>
+			<visible>$EXP[POVIL_Player___episode_OSD] + [!String.IsEmpty(VideoPlayer.UniqueID(tmdb)) | String.Contains(Player.FolderPath,idanplus)]</visible>
 		</item>
 		<item id="121">
 			<label>הגדרות וידאו</label>
@@ -2112,7 +2112,7 @@
 						<property name="episoderesize">osd/fullscreen/buttons/guide.png</property>
 						<property name="visiblepisodes">true</property>
 						<onclick>Control.SetFocus(200323,0,absolute)</onclick>
-						<visible>$EXP[POVIL_Player___episode_OSD] + !String.IsEmpty(VideoPlayer.UniqueID(tmdb))</visible>
+						<visible>$EXP[POVIL_Player___episode_OSD] + [!String.IsEmpty(VideoPlayer.UniqueID(tmdb)) | String.Contains(Player.FolderPath,idanplus)]</visible>
 					</item>
 					<item>
 						<label>סנכרן כתוביות</label>
@@ -3700,8 +3700,10 @@
 		<value>$INFO[VideoPlayer.offset(-1).Plot]</value>
 	</variable>
 	<variable name="POVIL_Player_build_Episodes_Url_OSD">
-		<!-- only an episode with a TMDb id: Israeli VOD (Idan Plus) plays as an
-		     episode with none, and POV's list fails on tmdb_id= with a script error -->
+		<!-- POV's list needs a TMDb id. Israeli VOD (Idan Plus) plays as an episode
+		     with none, and POV failed on tmdb_id= with a script error; so its season
+		     comes from Idan Plus's saved season (the Wizard reads it). -->
+		<value condition="$EXP[POVIL_Player___episode_OSD] + String.Contains(Player.FolderPath,idanplus) + String.IsEmpty(VideoPlayer.UniqueID(tmdb))">plugin://plugin.program.kodipovilwizard/?mode=player_season_episodes&amp;ep=$ESCINFO[VideoPlayer.TVShowTitle]$ESCINFO[VideoPlayer.Title]</value>
 		<value condition="$EXP[POVIL_Player___episode_OSD] + !String.IsEmpty(VideoPlayer.UniqueID(tmdb))">$VAR[POVIL_Player_PovStartPoint_OSD]build_episode_list&amp;season=$VAR[POVIL_Player_OsdSeasonInfo]&amp;tmdb_id=$VAR[POVIL_Player___FixTmdbOsd__]</value>
 	</variable>
 	<variable name="POVIL_Player_middlelabelInfo_Next_OSD_Var">
