@@ -20,7 +20,7 @@
 # a string with no entry here simply is not in the file, Kodi falls back to
 # en_gb, and it renders in English exactly as it does today. Nothing breaks,
 # nothing goes blank. That lets us translate the surface a user actually
-# touches -- 305 ids covering the menus, the Discover and My-Lists rows, the
+# touches -- 308 ids covering the menus, the Discover and My-Lists rows, the
 # dialogs and the context actions -- and leave the settings labels in English,
 # where the terms are technical and a translation would more often confuse
 # than help.
@@ -443,6 +443,12 @@ HE = {
     '40846': 'שנה (IMDb)',
     '40852': 'דפדוף בסרטים לפי שנה מ-IMDb לא זמין כרגע. נסו שוב מאוחר יותר, או דפדפו לפי שנה מ-TMDb.',
     '40859': 'דפדוף בסדרות לפי שנה מ-IMDb לא זמין כרגע. נסו שוב מאוחר יותר, או דפדפו לפי שנה מ-TMDb.',
+    # Umbrella 6.8.00: the kind beside a combined search result, and the new
+    # Download Manager (a Tools/Downloads row and its window title; the
+    # window's own buttons and statuses are written in English in its code)
+    '40865': 'סרט',
+    '40866': 'סדרה',
+    '40867': 'מנהל הורדות',
 }
 
 
