@@ -505,7 +505,8 @@ class LaterJobPlainTier(Base):
             self.addCleanup(p.stop)
 
     def fake_opened(self, path, source_text, source_id, release, progressive_cb,
-                    deliver, cancelled, info, share=None, shown_already=False, mark_path=None):
+                    deliver, cancelled, info, share=None, shown_already=False, mark_path=None,
+                    later=None):
         self.opened.append({'path': path, 'source_id': source_id, 'shown_already': shown_already})
         if share is not None:
             share('fixed', {'model': 'gemini-3.7-flash', 'applied': 1})

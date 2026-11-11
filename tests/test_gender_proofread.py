@@ -89,9 +89,11 @@ class Proofread(unittest.TestCase):
             self.assertIn('- Luce (female)', prompt)
             return ('1|.אני מצטערת, אבא\n2|?אתה אוהב אותי\n'
                     '3|.להתראות\nnot a line\n9|.מחוץ לטווח')
-        out, report = gp.proofread(self.SOURCES, self.TEXTS, request,
+        # a chain (0.3.58-0.3.74 shipped three models; 0.3.75 asks 3.7 alone)
+        chain = ('gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.6-flash')
+        out, report = gp.proofread(self.SOURCES, self.TEXTS, request, models=chain,
                                    cast=[('Luce', 'female'), ('Loris', 'male')])
-        self.assertEqual(asked, ['gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.6-flash'])
+        self.assertEqual(asked, list(chain))
         self.assertEqual(out, ['.אני מצטערת, אבא', '?אתה אוהב אותי', '.ביי'])
         self.assertEqual((report['model'], report['proposed'], report['applied'], report['refused']),
                          ('gemini-3.6-flash', 3, 2, 1))
