@@ -112,9 +112,19 @@ class AnsweredErrors(unittest.TestCase):
                         Reply(400, {'error': {'message': 'bad'}}), ConnectionError('dns')):
             self.assertFalse(self.send(outcome).answered, outcome)
 
+    def test_a_failed_connection_is_told_from_a_refusal(self):
+        # 0.3.75: the proofread queue keeps a translation whose request never
+        # reached Google (a box just awake, no network yet)
+        self.assertTrue(getattr(self.send(ConnectionError('dns')), 'transport', False))
+        for outcome in (Reply(503, {}), Reply(404, {})):
+            self.assertFalse(getattr(self.send(outcome), 'transport', False), outcome)
+
 
 class Request(unittest.TestCase):
     """_run_gender_proofread asks the next model only after a refusal."""
+    # The mechanics of a chain (0.3.58-0.3.74 shipped three models; 0.3.75
+    # asks 3.7 alone: OneModel below).
+    CHAIN = ('gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.6-flash')
 
     def setUp(self):
         self.mods = mock.patch.dict(sys.modules, MODS)
@@ -126,11 +136,15 @@ class Request(unittest.TestCase):
             p = mock.patch.object(gp, target, value)
             p.start()
             self.addCleanup(p.stop)
+        if self.CHAIN:
+            p = mock.patch.object(gp, 'MODELS', self.CHAIN)
+            p.start()
+            self.addCleanup(p.stop)
         p = mock.patch.object(translate.kodi_utils, 'log', lambda *a, **k: None)
         p.start()
         self.addCleanup(p.stop)
 
-    def run_it(self, outcomes, stopped=lambda: False, background=False, step=7):
+    def run_it(self, outcomes, stopped=lambda: False, background=False, step=7, rounds=True):
         asked = []
         gem = translate.gemini
         self.slept = []
@@ -147,7 +161,7 @@ class Request(unittest.TestCase):
                 mock.patch.object(translate.time, 'sleep', self.slept.append):
             blocks, report = translate._run_gender_proofread(
                 translate.srt.parse_blocks(HE), EN, 'k', 'gemini-3.5-flash-lite', [],
-                stopped, background=background)
+                stopped, background=background, rounds=rounds)
         return asked, report
 
     def answered(self, exc):
@@ -344,6 +358,49 @@ class Markers(unittest.TestCase):
         opened = src[src.index('def _proofread_opened('):src.index('def _pool_gp_base(')]
         self.assertIn('_gp_try_mark(marker, True)', opened)
         self.assertIn('_gp_settle((marker,), report, stopped)', opened)
+
+
+class OneModel(unittest.TestCase):
+    """0.3.75: the proofread asks gemini-3.7-flash alone (blind studies 004 and
+    005, 11 Nov 2026: without a Hebrew reference it fixed 27 lines and broke
+    none, where 3.6 had broken 6)."""
+    CHAIN = None
+    setUp = Request.setUp
+    run_it = Request.run_it
+
+    def test_the_shipped_chain_is_3_7_alone(self):
+        self.assertEqual(MODS['resources.lib.gender_proofread'].MODELS, ('gemini-3.7-flash',))
+
+    def test_with_the_viewer_waiting_3_7_twice_and_no_other_model(self):
+        busy = translate.gemini.OverloadError('503')
+        asked, report = self.run_it([busy, busy, '1|את באה?'])
+        self.assertEqual(asked, ['gemini-3.7-flash'] * 2)
+        self.assertEqual((report['model'], report['why']), ('', 'busy'))
+        asked, report = self.run_it([busy, '1|את באה?'])
+        self.assertEqual((asked, report['model']), (['gemini-3.7-flash'] * 2, 'gemini-3.7-flash'))
+
+    def test_in_the_background_four_requests_at_most(self):
+        asked, report = self.run_it([], background=True, step=1)
+        self.assertEqual(asked, ['gemini-3.7-flash'] * 4)
+        self.assertEqual((report['rounds'], report['why']), (4, 'busy'))
+
+    def test_a_failed_connection_says_so(self):
+        gem = translate.gemini
+        err = gem.GeminiError('Network error: dns')
+        err.transport = True
+        asked, report = self.run_it([err], background=True, rounds=False)
+        self.assertEqual((report['why'], report['net']), ('error', True))
+        asked, report = self.run_it([gem.GeminiError('HTTP 404: no such model')],
+                                    background=True, rounds=False)
+        self.assertEqual((report['why'], report['net']), ('error', False))
+
+    def test_the_queue_asks_once(self):
+        # gp_later's ask again: one request, no rounds, no second try
+        asked, report = self.run_it([], background=True, step=1, rounds=False)
+        self.assertEqual(asked, ['gemini-3.7-flash'])
+        self.assertEqual((report['rounds'], report['why'], report['asked']), (1, 'busy', True))
+        asked, report = self.run_it(['1|את באה?'], background=True, rounds=False)
+        self.assertEqual((asked, report['model']), (['gemini-3.7-flash'], 'gemini-3.7-flash'))
 
 
 if __name__ == '__main__':
