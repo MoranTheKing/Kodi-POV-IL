@@ -57,7 +57,7 @@ SUBTITLE_SERVICE = {
     '_maybe_migrate_embedded_translation_mode', '_maybe_force_gender_ref_arabic',
     '_maybe_tune_gemini3_defaults', '_maybe_bump_gemini_model',
     '_maybe_bump_gemini_model_38', '_maybe_lower_chunk_lines',
-    '_maybe_start_autosub_player', '_start_pool_queue_drainer',
+    '_maybe_start_autosub_player', '_start_pool_queue_drainer', '_start_gp_later_runner',
 }
 
 

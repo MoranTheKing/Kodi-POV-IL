@@ -1823,6 +1823,32 @@ def _start_pool_queue_drainer(monitor):
         pass
 
 
+def _start_gp_later_runner(monitor):
+    """Every few minutes, the gender proofread's queue (translate.gp_later_tick,
+    0.3.75): a translation whose proofread found gemini-3.7-flash busy is asked
+    again later, one request at a time and spaced out (gp_later). A request
+    takes minutes, so it has a thread of its own, apart from the uploads."""
+    def _loop():
+        try:
+            if monitor.waitForAbort(300):   # let startup settle first
+                return
+            while not monitor.abortRequested():
+                try:
+                    from resources.lib import translate
+                    translate.gp_later_tick(should_cancel=monitor.abortRequested)
+                except Exception:
+                    pass
+                if monitor.waitForAbort(300):
+                    break
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_loop, daemon=True).start()
+    except Exception:
+        pass
+
+
 def _start_he_warm_drainer(monitor):
     """Drain the Hebrew-availability warm queue from this long-lived service.
 
@@ -4596,6 +4622,7 @@ def main():
     else:
         _start_shared_sdh_refresh(monitor)
     _start_pool_queue_drainer(monitor)
+    _start_gp_later_runner(monitor)
     # (the Hebrew warm drainer was already started at the top of main(), before
     # the build startup repairs, so it's alive for the first play of the session)
 
