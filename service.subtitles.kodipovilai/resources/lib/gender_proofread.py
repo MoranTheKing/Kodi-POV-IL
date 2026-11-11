@@ -31,7 +31,15 @@ import re
 # 3.7 first (best on both, and not offered as the translator's model, so its
 # quota is not the translator's), 3.6 the least precise, so last. 3.5 answered
 # no request that evening (overloaded every time): not in the chain unmeasured.
-MODELS = ('gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.6-flash')
+# Since 0.3.75 3.7 alone. Pre-registered blind studies on eight TV episodes (11
+# Nov 2026, two AI judges audited by the tester), 3.7 alone against the same
+# translations without the proofread: made without a Hebrew reference, it
+# fixed 27 lines and broke none (28-0-2), where the chain as shipped -- in
+# practice 3.6, answering while 3.7 was busy -- had fixed 20 and broken 6
+# (21-7-2, 4 Nov); made with a Hebrew reference it fixed 17 and broke 8, so it
+# stays off there (0.3.72). A proofread that finds 3.7 busy is asked again
+# later from the service (gp_later) instead of going to a weaker model.
+MODELS = ('gemini-3.7-flash',)
 # A whole film took 3-6 minutes on these models.
 REQUEST_TIMEOUT = 900
 # No new model is asked after this many seconds: the viewer waits for the swap.

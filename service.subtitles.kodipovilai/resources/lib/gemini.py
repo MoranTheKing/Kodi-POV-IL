@@ -515,6 +515,9 @@ def generate(api_key, model, prompt, temperature=0.2,
                               timeout=timeout)
         except requests.RequestException as e:
             err = GeminiError('Network error: {0}'.format(e))
+            # the connection, not the model (the gender proofread's queue
+            # keeps such a translation for later)
+            err.transport = True
             # sent, and no reply in time or one cut off mid-read: the model
             # may well have taken it
             err.answered = isinstance(e, (getattr(requests, 'ReadTimeout', ()),
