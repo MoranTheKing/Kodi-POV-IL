@@ -832,19 +832,199 @@ class IdanPlusTests(unittest.TestCase):
         self.assertEqual(self.rows(), first)
         self.assertEqual(first[0], ('plugin://x/?c=0', 'Channel 0', False))
 
+    VOD = '?mode=2&url=x&module=keshet&moredata='
+
+    def age(self, seconds):
+        """Every saved row is that much older (the order a folder lists its
+        files in is the file system's business)."""
+        for path in (self.env.root / 'addon_data' / 'plugin.video.idanplus' / 'povil_snapshots').glob('*.snap'):
+            data = rec_load(path); data['created'] -= seconds
+            path.write_bytes(marshal.dumps(data))
+
+    def kodi(self, playing=False, play_started=0.0):
+        """A home window and a player to ask, as Kodi has."""
+        props = self.props = {'povil.play.started': repr(play_started) if play_started else ''}
+        self.env.xbmcgui.Window = lambda _id: types.SimpleNamespace(
+            getProperty=lambda k: props.get(k, ''), setProperty=lambda k, v: props.__setitem__(k, v))
+        self.env.xbmc.Player = lambda: types.SimpleNamespace(isPlayingVideo=lambda: playing)
+        self.env.xbmc.Monitor = lambda: types.SimpleNamespace(waitForAbort=lambda s: False)
+        self.logged = []
+        self.env.xbmc.log = lambda msg, *a: self.logged.append(msg)
+
     def test_an_old_copy_is_shown_rebuilt_and_the_rows_refreshed(self):
-        self.call()
-        path = next((self.env.root / 'addon_data' / 'plugin.video.idanplus' / 'povil_snapshots').glob('*.snap'))
-        data = rec_load(path); data['created'] -= 3600
-        path.write_bytes(marshal.dumps(data))
+        self.call(self.VOD)
+        self.age(7 * 3600)
         self.title = 'New'
-        self.assertTrue(self.call())
+        self.assertTrue(self.call(self.VOD))
         self.assertEqual(self.rows()[0][1], 'Channel 0')                   # shown at once
         self.assertEqual(self.built, 2)
         self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo)'])
-        self.call()
+        self.call(self.VOD)
         self.assertEqual(self.rows()[0][1], 'New 0')
         self.assertEqual(self.built, 2)
+
+    def test_a_programme_list_is_fresh_for_hours(self):
+        for query in (self.VOD, '?mode=1&url=x&module=kan&moredata='):    # a module makes it a programme list
+            self.built = 0
+            self.title = 'Channel'
+            self.call(query)
+            self.age(3600)
+            self.title = 'New'
+            self.assertTrue(self.call(query))
+            self.assertEqual(self.rows()[0][1], 'Channel 0')
+            self.assertEqual(self.built, 1)
+            self.assertEqual(self.env.builtins, [])
+
+    def test_an_old_live_row_is_built_anew_and_no_other_row_reloads(self):
+        # Field (FENtastic): ten seconds into every start, and after every
+        # return from a video, the visible movie rows loaded again, because
+        # the live-TV row's 'now playing' text had changed and a changed row
+        # refreshes every home row.
+        self.kodi()
+        for query in (self.URL, '?mode=3&url=&module=&moredata=', '?mode=1&url&module&moredata'):
+            self.built = 0
+            self.title = 'Channel'
+            self.env.builtins[:] = []
+            self.call(query)
+            self.age(600)
+            self.title = 'Now playing'
+            self.logged[:] = []
+            self.assertTrue(self.call(query))
+            self.assertEqual([r[1] for r in self.rows()], ['Now playing %d' % n for n in range(3)])   # never the old programme
+            self.assertEqual([x[0] for x in self.env.sent].count('endOfDirectory'), 1)
+            self.assertEqual(self.built, 2)
+            self.assertEqual(self.env.builtins, [])                        # no home-wide refresh
+            self.assertTrue(any('built idanplus live items=3' in m and 'sent=new' in m for m in self.logged), self.logged)
+            self.assertTrue(self.call(query))                              # fresh again: served
+            self.assertEqual(self.rows()[0][1], 'Now playing 0')
+            self.assertEqual(self.built, 2)
+
+    def test_a_fresh_live_row_is_still_served_from_its_copy(self):
+        self.call()
+        self.age(60)
+        self.title = 'Later'
+        self.assertTrue(self.call())
+        self.assertEqual(self.rows()[0][1], 'Channel 0')
+        self.assertEqual(self.built, 1)
+        self.assertEqual(self.env.builtins, [])
+
+    def test_a_live_row_changed_in_idan_plus_is_built_anew_too(self):
+        self.kodi()
+        self.call()
+        (self.env.root / 'addon_data' / 'plugin.video.idanplus' / 'favorites.json').write_text('[{"name": "x"}]')
+        self.title = 'Edited'
+        self.assertTrue(self.call())
+        self.assertEqual(self.rows()[0][1], 'Edited 0')
+        self.assertEqual(self.env.builtins, [])
+
+    def test_an_old_live_row_is_served_as_it_is_while_a_video_plays(self):
+        for query, state in ((self.URL, {'playing': True}),
+                             ('?mode=3&url=&module=&moredata=', {'play_started': time.time() - 5})):
+            self.kodi(**state)
+            self.built = 0
+            self.title = 'Channel'
+            self.call(query)
+            self.age(600)
+            self.title = 'Now playing'
+            self.assertTrue(self.call(query))
+            self.assertEqual(self.rows()[0][1], 'Channel 0')               # the copy, no build
+            self.assertEqual(self.built, 1)
+            self.assertEqual(self.env.builtins, [])
+            self.kodi()                                                    # the video is over
+            self.assertTrue(self.call(query))
+            self.assertEqual(self.rows()[0][1], 'Now playing 0')
+            self.assertEqual(self.built, 2)
+
+    def forget_failure(self):
+        """As when the two minutes after a failed build have passed."""
+        self.props.clear()
+
+    def test_a_live_build_that_fails_or_is_empty_leaves_the_last_copy(self):
+        self.kodi()
+        self.call()
+        good = sys.modules['resources.main'].route
+
+        def crash(query):
+            raise KeyError('epg')
+
+        def empty(query):
+            self.env.xbmcplugin.endOfDirectory(7)
+        for broken, note in ((crash, 'new list: KeyError'), (empty, 'new list: empty')):
+            self.age(600)
+            self.forget_failure()
+            sys.modules['resources.main'].route = broken
+            self.logged[:] = []
+            self.assertTrue(self.call())                                   # never an error, never an empty row
+            self.assertEqual([r[1] for r in self.rows()], ['Channel %d' % n for n in range(3)])
+            self.assertEqual([x[0] for x in self.env.sent].count('endOfDirectory'), 1)
+            self.assertEqual(self.env.builtins, [])
+            self.assertTrue(any('sent=last copy' in m and note in m for m in self.logged), self.logged)
+        sys.modules['resources.main'].route = good
+        self.title = 'Back'
+        self.age(600)
+        self.forget_failure()
+        self.assertTrue(self.call())                                       # and the next good build is shown
+        self.assertEqual(self.rows()[0][1], 'Back 0')
+
+    def test_a_failed_live_build_is_not_repeated_on_every_request(self):
+        self.kodi()
+        self.call()
+        self.age(600)
+        tries = []
+
+        def crash(query):
+            tries.append(1)
+            raise KeyError('epg')
+        sys.modules['resources.main'].route = crash
+        for _ in range(3):                                                 # three home loads in a row
+            self.assertTrue(self.call())
+            self.assertEqual(self.rows()[0][1], 'Channel 0')
+        self.assertEqual(len(tries), 1)
+        self.forget_failure()                                              # two minutes later it is tried again
+        self.assertTrue(self.call())
+        self.assertEqual(len(tries), 2)
+
+    def test_a_live_row_that_cannot_be_sent_at_all_still_ends_the_request(self):
+        self.kodi()
+        self.call()
+        self.age(600)
+        path = next((self.env.root / 'addon_data' / 'plugin.video.idanplus' / 'povil_snapshots').glob('*.snap'))
+        data = rec_load(path); data['items'] = []                          # the last copy is damaged
+        path.write_bytes(marshal.dumps(data))
+
+        def crash(query):
+            raise KeyError('epg')
+        sys.modules['resources.main'].route = crash                        # and the build fails
+        self.assertTrue(self.call())
+        ends = [x for x in self.env.sent if x[0] == 'endOfDirectory']
+        self.assertEqual(len(ends), 1)
+        self.assertEqual(ends[0][2], (False,))
+        self.assertEqual(self.rows(), [])
+        self.assertTrue(any('sent=nothing' in m and 'new list: KeyError' in m for m in self.logged), self.logged)
+
+    def test_a_new_live_list_that_fails_while_being_sent_is_not_kept(self):
+        self.kodi()
+        self.call()
+        self.age(600)
+        self.title = 'Now playing'
+        real = self.env.xbmcplugin.addDirectoryItems
+        state = {'fail': True}
+
+        def flaky(handle, items, *a, **k):
+            if state['fail']:
+                raise RuntimeError('kodi')
+            return real(handle, items, *a, **k)
+        self.env.xbmcplugin.addDirectoryItems = flaky
+        self.assertTrue(self.call())
+        ends = [x for x in self.env.sent if x[0] == 'endOfDirectory']
+        self.assertEqual([e[2] for e in ends], [(False,)])                 # ended once, as failed
+        self.assertTrue(any('send failed, new: RuntimeError' in m for m in self.logged), self.logged)
+        state['fail'] = False
+        self.assertTrue(self.call())                                       # what is on disk is still the last good copy
+        self.assertEqual(self.rows()[0][1], 'Channel 0')
+        self.forget_failure()
+        self.assertTrue(self.call())                                       # and the next build is sent and kept
+        self.assertEqual(self.rows()[0][1], 'Now playing 0')
 
     def test_playing_from_a_home_row_gets_a_real_listitem_and_saves_nothing(self):
         resolved = []
