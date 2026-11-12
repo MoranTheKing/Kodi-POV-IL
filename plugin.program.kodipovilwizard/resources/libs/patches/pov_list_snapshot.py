@@ -1135,9 +1135,15 @@ IDANPLUS = 'plugin.video.idanplus'
 # Idan Plus lists come from the broadcasters' sites (no local dependency to
 # watch), so its saved rows work as "show, then refresh": shown at once, and
 # rebuilt behind the scenes once older than this or after a change to Idan
-# Plus's own data.
+# Plus's own data.  A live row is the exception: once stale it is built first
+# and shown after (see idanplus()).
 IDANPLUS_FRESH_S = 6 * 3600       # broadcasters' programme lists change slowly
 IDANPLUS_LIVE_FRESH_S = 2 * 60      # live TV/radio rows show what is on now
+# When a live row's build could not be used (it raised, came out empty or
+# could not be recorded), the last copy is served without another build for
+# as long as a good build would have stayed fresh: otherwise every home load
+# would run the whole failing build again before showing that same copy.
+LIVE_FAILED_PROPERTY = 'povil.idanplus.live.failed.'
 # Listings only (no playback, dialogs, favourites editing or channel edits).
 IDANPLUS_LIST_MODES = frozenset(('-1', '1', '2', '3', '10', '12', '13', '14'))
 
@@ -1200,8 +1206,34 @@ def idanplus(argv):
         now = time.time()
         snap = read(path, raw)
         age = _age(snap, now) if snap is not None else None
+        live = params.get('mode') in ('1', '3') and not params.get('module')
+        limit = IDANPLUS_LIVE_FRESH_S if live else IDANPLUS_FRESH_S
+        fresh = age is not None and age < limit and snap.get('deps') == deps
     except Exception:
         return False
+    # A live row that is no longer fresh is never shown old and then
+    # refreshed.  Its lines carry what is on now, so the saved copy differed
+    # on practically every start (36 of 48 channels between two days' copies;
+    # a start 30 minutes after the last one: changed), and the refresh that
+    # follows a changed row asks EVERY home row again: about ten seconds into
+    # each start, and after each return from a video, the visible movie rows
+    # loaded a second time for a row in a section that was not even on
+    # screen.  It is built off screen and sent when ready; the last copy is
+    # what is sent if that build fails or comes out empty, and what is served
+    # as it is while a video plays, a play is starting, or a build has just
+    # failed (no build then).
+    held = None
+    if age is not None and live and not fresh:
+        try:
+            win = xbmcgui.Window(10000)
+            busy = bool(_play_starting(win) or xbmc.Player().isPlayingVideo())
+            if not busy:
+                failed_at = float(win.getProperty(LIVE_FAILED_PROPERTY + os.path.basename(path)) or 0)
+                busy = 0 <= time.time() - failed_at < IDANPLUS_LIVE_FRESH_S
+        except Exception:
+            busy = False
+        if not busy:
+            held, age = snap, None
     shown = None
     if age is not None:
         started = time.perf_counter()
@@ -1219,34 +1251,40 @@ def idanplus(argv):
             return True
     if age is not None:
         stamp(xbmcgui)
-        limit = IDANPLUS_LIVE_FRESH_S if params.get('mode') in ('1', '3') and not params.get('module') \
-            else IDANPLUS_FRESH_S
-        fresh = age < limit and snap.get('deps') == deps
         xbmc.log('[POV IL snapshot] hit idanplus items=%d age_s=%d ms=%d check_ms=%d%s' % (
             count, age, round((time.perf_counter() - started) * 1000),
-            round((started - begun) * 1000), '' if fresh else ' (refreshing)'), xbmc.LOGINFO)
-        if fresh or not _wait_rows_quiet(xbmc):
+            round((started - begun) * 1000),
+            '' if fresh else (' (old copy, no build now)' if live else ' (refreshing)')), xbmc.LOGINFO)
+        if fresh or live or not _wait_rows_quiet(xbmc):
             return True
         shown = snap
+    if held is not None:
+        stamp(xbmcgui)        # a row is on its way: the services keep waiting
+    quiet = shown is not None or held is not None
+    built = time.perf_counter()
     from resources.main import route
     from resources.lib import common as idan_common
-    recorder = Recorder(None, xbmcplugin, xbmcgui, handle, shadow=shown is not None,
-                        listitem_class=True)
+    recorder = Recorder(None, xbmcplugin, xbmcgui, handle, shadow=quiet, listitem_class=True)
     play_stream = idan_common.PlayStream
 
     def playing(*args, **kwargs):
         recorder.stop_listitems('playback')
         return play_stream(*args, **kwargs)
     idan_common.PlayStream = playing
+    failed = ''
     try:
         with recorder:
             try:
                 route(argv[2])
-            except Exception:
-                if shown is None:
+            except Exception as exc:
+                if not quiet:
                     raise
+                failed = type(exc).__name__
     finally:
         idan_common.PlayStream = play_stream
+    if held is not None:
+        return _idanplus_send_live(recorder, held, path, raw, deps, handle, built, failed,
+                                   xbmc, xbmcgui, xbmcplugin)
     if shown is None:
         stamp(xbmcgui)
     try:
@@ -1268,6 +1306,62 @@ def idanplus(argv):
                      xbmc.LOGINFO)
     except Exception:
         pass
+    return True
+
+
+def _idanplus_send_live(recorder, held, path, raw, deps, handle, built, failed,
+                        xbmc, xbmcgui, xbmcplugin):
+    """A stale live row was just built off screen: send the new list, or the
+    last copy when the build failed or came out empty, and save the new one.
+    No other row is asked again.  Always answers the request."""
+    new = None
+    try:
+        new = recorder.snapshot(deps)
+        if new is not None:
+            new.update(key=raw, sig=None, expires=None)
+    except Exception:
+        new = None
+    why = ''
+    if new is None:
+        # Why the new list cannot be used: the line a field log needs.
+        why = failed or recorder.state.get('unsupported') or (
+            'empty' if not recorder.items else 'not recorded')
+    sent, count, send_error = None, 0, ''
+    for name, record in (('new', new), ('last copy', held)):
+        if record is None:
+            continue
+        try:
+            count = replay(record, handle, None, xbmc, xbmcgui, xbmcplugin, widget=True)
+            sent = name
+            break
+        except BadRecord:
+            continue                  # nothing was sent: try the other one
+        except Exception as exc:
+            # Part of the list may have reached Kodi; the request is ended
+            # as failed below and this record is not kept.
+            send_error = '%s: %s' % (name, type(exc).__name__)
+            break
+    if sent is None:
+        try:
+            xbmcplugin.endOfDirectory(handle, False)
+        except Exception:
+            pass
+    stamp(xbmcgui)
+    if sent == 'new':
+        try:
+            save(path, new)
+        except Exception:
+            pass
+    else:
+        try:
+            xbmcgui.Window(10000).setProperty(
+                LIVE_FAILED_PROPERTY + os.path.basename(path), repr(time.time()))
+        except Exception:
+            pass
+    xbmc.log('[POV IL snapshot] built idanplus live items=%d ms=%d sent=%s%s%s' % (
+        count, round((time.perf_counter() - built) * 1000), sent or 'nothing',
+        (' (new list: %s)' % str(why)[:80]) if why else '',
+        (' (send failed, %s)' % send_error) if send_error else ''), xbmc.LOGINFO)
     return True
 
 

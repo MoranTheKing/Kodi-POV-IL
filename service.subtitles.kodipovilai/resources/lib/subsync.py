@@ -142,7 +142,11 @@ _MAX_VERDICTS = 400
 # older verdict must recompute. v29: a PGS/VobSub track is read as display
 # events (appear AND clear) and its offset re-measured on caption starts, so
 # PGS-only files decide where they used to abstain.
-_VERDICT_VERSION = 29
+# v30: a file whose subtitles are all text (a streaming WEB-DL) proves a
+# short-edit map with its own other-language tracks, the cue-level planner
+# keeps sub-second act steps, and a track tagged 'en-US' is read as English.
+# Every UNKNOWN stored for such a file must recompute.
+_VERDICT_VERSION = 30
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -1542,7 +1546,7 @@ def rank_ready_candidates(info, candidates, max_candidates=4, cached_only=False)
                         continue
                     verdict, label, count = dict(known), 'cached', 0
                 else:
-                    verdict, label, count = _verify_file_bundle(bundle, text)
+                    verdict, label, count = _verify_file_bundle(bundle, text, playing)
                 verdict = verdict or {}
                 status = verdict.get('status')
                 # This comparison uses the cached cue profile of the exact
@@ -2232,11 +2236,46 @@ def _probe_gate_kwargs(cues):
     return {}
 
 
+def _track_base_language(track):
+    """One key per language, whatever the tag: streaming rips tag their
+    tracks 'en-US' / 'pt-BR' (LanguageBCP47), which a three-letter cut read
+    as 'en-' -- no language at all, so the file's English track ranked below
+    every other (The 100 S01E01, AMZN WEB-DL, 28 text tracks).  One file
+    also mixes the forms: 'en-US' beside an SDH twin tagged 'eng' must be one
+    language, as must 'fre' and 'fr-CA', or a twin counts as a second
+    language's agreement."""
+    lang = (track.get('lang') or '').strip().lower()
+    # The table lives in embedded_extract, which the media probe has already
+    # loaded by the time a track is ranked; loading it with this module cost
+    # every script that imports subsync ~50 ms on a PC.
+    if not _ISO_LANG_KEY:
+        try:
+            from resources.lib.embedded_extract import _lang_key
+        except Exception:
+            _lang_key = None
+        _ISO_LANG_KEY.append(_lang_key)
+    if _ISO_LANG_KEY[0] is not None:
+        try:
+            key = _ISO_LANG_KEY[0](lang)
+            return {'english': 'en', 'hebrew': 'he'}.get(key, key)
+        except Exception:
+            pass
+    base = re.split(r'[-_]', lang, 1)[0]
+    return {'eng': 'en', 'english': 'en', 'heb': 'he', 'hebrew': 'he',
+            'iw': 'he'}.get(base, base)
+
+
+_ISO_LANG_KEY = []
+
+
 def _track_language_rank(track):
-    lang = (track.get('lang') or '').strip().lower()[:3]
-    if lang in ('he', 'heb', 'iw'):
+    lang = _track_base_language(track)
+    # (A tag spelled out -- 'hebrew', 'english' -- ranked by its first three
+    # letters before, and still does.)
+    spelled = (track.get('lang') or '').strip().lower()[:3]
+    if lang == 'he' or spelled == 'heb':
         return 0
-    if lang in ('en', 'eng'):
+    if lang == 'en' or spelled == 'eng':
         return 1
     return 2
 
@@ -2671,7 +2710,269 @@ def _validated_pgs_only_piecewise(pgs_tracks, text, planner, validator,
     return {'track': track, 'cues': paired, 'verdict': verdict}
 
 
-def _validated_micro_piecewise(profiles, text):
+# Other-language text tracks consulted for a text-only file, and how many
+# languages must accept the frozen map.  Each consultation re-times the whole
+# subtitle once more, so the set stays small; every one consulted may veto.
+_TEXT_LANE_MAX_TRACKS = 4
+_TEXT_LANE_MIN_LANGUAGES = 2
+# Tracks of the primary's own language (its SDH twin, a second 'en') and
+# untagged ones never count as agreement, but up to this many may still veto.
+_TEXT_SIBLING_MAX = 2
+# The primary track carries the proof (its held-out folds); a lane only has
+# to show that it shares the primary's timeline, so it must fit after the map
+# and fit better than before, by a smaller margin than a second family.
+_TEXT_LANE_MIN_GAIN = 0.08
+_TEXT_FINE_FAMILY_GAIN = 0.10
+# Held-out score the native-lane proof asks, as native-disc-lane-v1 does.  A
+# lane's own score does not stand in for it: a lane may be a translation laid
+# on the primary's very cues, and its score is then the primary's again.
+_TEXT_LANE_STRONG_SCORE = 0.85
+_NO_LANGUAGE = ('', 'und', 'unk', 'mul', 'zxx', 'mis')
+
+
+def _is_sdh_track(track):
+    name = (track.get('name') or '').lower()
+    return bool(track.get('hearing_impaired')) or 'sdh' in name or 'hi' == name
+
+
+# Where a release name's attributes begin: the season/episode, the year or
+# the resolution.  Everything before it is the title.
+_RELEASE_ATTRS_RE = re.compile(
+    r'\b(?:s\d{1,2}(?:e\d{1,3})?|\d{1,2}x\d{2,3}|(?:19|20)\d{2}'
+    r'|(?:2160|1080|720|576|480)[pi]|4k|uhd)\b')
+
+
+def _named_streaming_rip(playing):
+    """Whether a release name says the file is a streaming rip.
+
+    WEB-DL / WEBRip / WEB among the release's attributes, and no other
+    source beside it.  A title can contain the word ('Web of Lies' as an
+    HDTV rip read as WEB), so only what follows the season/episode, year or
+    resolution counts; a bare title says nothing.
+    """
+    try:
+        name = release_match.normalize(playing or '')
+        attrs = _RELEASE_ATTRS_RE.search(name)
+        if not attrs:
+            return False
+        tokens = {token for token in name[attrs.start():].split('.') if token}
+        sources = {cls for cls, words in release_match._SOURCE_SETS
+                   if tokens & words}
+        return sources == {'web'}
+    except Exception:
+        return False
+
+
+def _text_lane_file(bundle, playing):
+    """Whether the playing file may use the text-lane proof at all.
+
+    That proof takes the file's own tracks as the video's timeline, and
+    nothing on its path looks at the video.  That holds for a streaming rip,
+    whose subtitle tracks come with the stream; it does not hold for a disc
+    or broadcast encode that someone gave a set of subtitles taken from a
+    WEB source (review: with every track moved to another cut, a correct
+    subtitle was re-timed).  So the release name must say WEB, and every
+    subtitle track the file lists -- its headers, whatever was read of each
+    -- must be text: a three-caption PGS or a VobSub track marks a disc.
+    """
+    if not _named_streaming_rip(playing):
+        return False
+    listed = [profile.get('track') or {}
+              for profile in (bundle or {}).get('track_cues') or []]
+    listed += [track for track in (bundle or {}).get('tracks') or []
+               if isinstance(track, dict)]
+    return bool(listed) and all(
+        _track_codec_family(track) == 'text' for track in listed)
+
+
+def _validated_text_lane_piecewise(text_tracks, text, planner, validator,
+                                   family_judge):
+    """Act-break regions for a file whose subtitles are all text.
+
+    A streaming WEB-DL carries no PGS, so the disc proofs never applied to it
+    and a subtitle from another cut stayed unverified however clearly the
+    file's own tracks showed the map (The 100 S01E01, AMZN WEB-DL: the
+    WEB-DL-named Hebrew ran +1.0 s in the first act and +16.3 s in the last;
+    26 of the file's 27 other tracks accepted the six-region map).
+
+    Only for a file named as a streaming rip whose subtitle tracks are all
+    text (_text_lane_file).  The map is learned from one preferred text
+    track (English, not SDH) and must pass the held-out folds (>=4 of 5).
+    Then the file's other tracks
+    are asked: up to four other LANGUAGES, and up to two tracks of the
+    primary's own language or of none (its SDH twin), which can only veto.
+    Any track asked that already fitted well and is damaged by the map
+    vetoes.  One of two proofs must hold:
+
+    * native lanes -- two other languages accept the map and the held-out
+      folds are strong (0.85): the shape of native-disc-lane-v1;
+    * a second timing family -- an other-language track whose lines are cut
+      differently from the primary's accepts the frozen map with the full
+      gain, as one distinct PGS track does for a disc's text track.
+
+    A file with a single subtitle language gets no rewrite: one track cannot
+    show whether it or the Hebrew is the one off the video (a track muxed in
+    from another cut passes its own held-out folds, and a correct subtitle
+    was re-timed onto it in review).  Neither does a map that cannot be
+    applied to this very text.
+    """
+    if not text_tracks:
+        return None
+
+    def primary_key(profile):
+        track = profile.get('track') or {}
+        return (1 if _track_language_rank(track) == 1 else 0,
+                0 if _is_sdh_track(track) else 1,
+                _track_span(profile), len(profile.get('cues') or []))
+
+    primary = max(text_tracks, key=primary_key)
+    primary_track = primary.get('track') or {}
+    primary_lang = _track_base_language(primary_track)
+    by_language = {}
+    siblings = []
+    for profile in text_tracks:
+        if profile is primary:
+            continue
+        track = profile.get('track') or {}
+        lang = _track_base_language(track)
+        if lang == primary_lang or lang in _NO_LANGUAGE:
+            siblings.append(profile)
+            continue
+        current = by_language.get(lang)
+        key = (0 if _is_sdh_track(track) else 1,
+               len(profile.get('cues') or []))
+        if current is None or key > current[0]:
+            by_language[lang] = (key, profile)
+    if not by_language:
+        return None
+    # The fine and free modes of the cue-level planner are asked for here
+    # only: sub-second steps and steps that go back and forth need the other
+    # languages below, which no other caller has.
+    try:
+        proposal = planner(primary.get('cues') or [], text,
+                           fine=True, free=True)
+        verdict = (validator(primary.get('cues') or [], text, proposal,
+                             fine=True, free=True)
+                   if proposal is not None else None)
+    except Exception:       # also an older sync_align still in memory
+        verdict = None
+    if not verdict or verdict.get('status') != sync_align.STATUS_FIXABLE:
+        return None
+    try:
+        folds = int(verdict.get('validation_folds') or 0)
+        holdout_min = float(verdict.get('holdout_score_min') or 0.0)
+    except (TypeError, ValueError):
+        return None
+    if folds < 4:
+        return None
+
+    def judged(profile):
+        try:
+            return family_judge(profile.get('cues') or [], text, verdict,
+                                min_gain=_TEXT_LANE_MIN_GAIN)
+        except Exception:
+            return None
+
+    def damaged(metrics):
+        return bool(metrics and metrics.get('before_score', 0.0) >= 0.78
+                    and metrics.get('after_score', 0.0)
+                    < metrics.get('before_score', 0.0) - 0.03)
+
+    siblings.sort(key=lambda profile: len(profile.get('cues') or []),
+                  reverse=True)
+    for profile in siblings[:_TEXT_SIBLING_MAX]:
+        if damaged(judged(profile)):
+            return None
+    # Which languages are consulted is fixed by the file, never by which
+    # track happens to agree: ordered by cue count and taken evenly from the
+    # densest to the sparsest, so the lanes differ in how they split lines
+    # (a streaming rip carries several languages cut from one template).
+    lanes = sorted(by_language.items(),
+                   key=lambda item: (item[1][0], item[0]), reverse=True)
+    if len(lanes) > _TEXT_LANE_MAX_TRACKS:
+        last = len(lanes) - 1
+        picks = sorted({int(round(index * last
+                                  / float(_TEXT_LANE_MAX_TRACKS - 1)))
+                        for index in range(_TEXT_LANE_MAX_TRACKS)})
+        lanes = [lanes[index] for index in picks]
+    accepting = []
+    accepted = []
+    for lang, (_key, profile) in lanes:
+        metrics = judged(profile)
+        if damaged(metrics):
+            return None
+        if metrics and metrics.get('accepted'):
+            accepting.append(lang)
+            accepted.append((profile, metrics))
+    base = {'timing_families': ['text'],
+            'validation_primary_track': '#%s/%s' % (
+                primary_track.get('num', '?'),
+                primary_track.get('lang', '?'))}
+    out = None
+    if (len(accepting) >= _TEXT_LANE_MIN_LANGUAGES
+            and holdout_min >= _TEXT_LANE_STRONG_SCORE):
+        out = dict(verdict, **base)
+        out.update({
+            'validation_proof': 'native-text-lane-v1',
+            'native_lane_tracks': len(accepting),
+            'diag': ('%s; frozen map accepted by the file\'s own text '
+                     'tracks (%s)' % (verdict.get('diag', ''),
+                                      ', '.join(sorted(accepting)))),
+        })
+    else:
+        # Whether a lane is cut differently from the primary costs two more
+        # passes over both timelines, so it is only measured when the native
+        # lanes did not decide.
+        family_gain = (_TEXT_FINE_FAMILY_GAIN
+                       if verdict.get('planner') in ('region-fine',
+                                                     'region-free')
+                       else 0.15)
+        for profile, metrics in accepted:
+            if (float(metrics.get('after_score') or 0.0)
+                    < float(metrics.get('before_score') or 0.0)
+                    + family_gain):
+                continue
+            try:
+                distinct = _timing_profiles_distinct(primary, profile)
+            except Exception:
+                distinct = False
+            if not distinct:
+                continue
+            family_track = profile.get('track') or {}
+            out = dict(verdict, **base)
+            out.update({
+                'timing_family_count': 2,
+                'timing_families': ['text', 'text'],
+                'validation_family_track': '#%s/%s' % (
+                    family_track.get('num', '?'),
+                    family_track.get('lang', '?')),
+                'diag': ('%s; frozen map validated on the file\'s %s text '
+                         'track, cut differently from the primary '
+                         '(score %.3f->%.3f overlap=%.0f%% unique=%.0f%%)'
+                         % (verdict.get('diag', ''),
+                            family_track.get('lang', '?'),
+                            metrics['before_score'], metrics['after_score'],
+                            metrics['after_overlap'] * 100,
+                            metrics['after_unique'] * 100)),
+            })
+            break
+    if out is None:
+        return None
+    # A proof that cannot be applied would end the job as "fixable" with
+    # nothing to deliver, and the alternates and the provider oracle would
+    # never be asked (review: a one-millisecond cue under a half-millisecond
+    # offset).
+    try:
+        applied = sync_align.apply_verdict(text, out)
+    except Exception:
+        applied = ''
+    if not (applied and applied.strip()):
+        return None
+    return {'track': primary_track, 'cues': primary.get('cues') or [],
+            'verdict': out}
+
+
+def _validated_micro_piecewise(profiles, text, text_lanes=False):
     """Prove repeated short edits without counting duplicate tracks twice.
 
     Matroska Cues entries for several language tracks can be near-identical, so
@@ -2679,6 +2980,8 @@ def _validated_micro_piecewise(profiles, text):
     preferred non-SDH English text timeline, demand 4/5 out-of-sample folds,
     then freeze the map and validate it against one PGS codec family.  Other
     PGS language tracks may veto a regression but never add votes.
+
+    ``text_lanes``: the file may use the text-lane proof (_text_lane_file).
     """
     planner = getattr(sync_align, 'micro_piecewise_proposal', None)
     validator = getattr(sync_align, 'validate_micro_piecewise', None)
@@ -2687,18 +2990,24 @@ def _validated_micro_piecewise(profiles, text):
         return None
     text_tracks = []
     pgs_tracks = []
+    every_text = []
     for profile in profiles or []:
         track = profile.get('track') or {}
         family = _track_codec_family(track)
         if family == 'pgs':
             pgs_tracks.append(profile)
-        if (family == 'text' and not track.get('forced')
-                and _track_language_rank(track) == 1):
-            text_tracks.append(profile)
+        if family == 'text' and not track.get('forced'):
+            every_text.append(profile)
+            if _track_language_rank(track) == 1:
+                text_tracks.append(profile)
     # A file whose only subtitles are PGS learns from the disc track itself
-    # (_validated_pgs_only_piecewise, below).
-    if not pgs_tracks:
+    # (_validated_pgs_only_piecewise, below); one whose subtitles are all
+    # text asks its other languages (_validated_text_lane_piecewise).  "All
+    # text" means no PGS track of any length: a short or partial one still
+    # makes it a disc, with the disc's proofs or none.
+    if not pgs_tracks and not every_text:
         return None
+    text_only = not pgs_tracks
 
     try:
         candidate_cues = sync_align.dialogue_cues(
@@ -2716,6 +3025,12 @@ def _validated_micro_piecewise(profiles, text):
 
     text_tracks = complete_family(text_tracks)
     pgs_tracks = complete_family(pgs_tracks)
+    if text_only:
+        if not text_lanes:
+            return None
+        return _validated_text_lane_piecewise(
+            complete_family(every_text), text, planner, validator,
+            family_judge)
     if not text_tracks and pgs_tracks:
         return _validated_pgs_only_piecewise(
             pgs_tracks, text, planner, validator, family_judge)
@@ -2724,9 +3039,7 @@ def _validated_micro_piecewise(profiles, text):
 
     def primary_key(profile):
         track = profile.get('track') or {}
-        name = (track.get('name') or '').lower()
-        is_sdh = bool(track.get('hearing_impaired')) or 'sdh' in name or 'hi' == name
-        return (0 if is_sdh else 1, _track_span(profile),
+        return (0 if _is_sdh_track(track) else 1, _track_span(profile),
                 len(profile.get('cues') or []))
 
     primary = max(text_tracks, key=primary_key)
@@ -3642,14 +3955,15 @@ def _envelope_hypothesis_search(info, text, envelope, before, early_job=None,
     return None
 
 
-def _verify_file_bundle(bundle, text):
+def _verify_file_bundle(bundle, text, playing=None):
     """Judge independent embedded tracks; abstain when they are all too sparse.
 
     A CONFIRMED track wins over a shifted track because it proves the candidate
     already matches one real timeline in the playing file.  Conflicting accepted
     corrections abstain.  A legacy single-track reader remains compatible, but
     modern multi-track timelines are never merged into evidence they did not
-    possess separately.
+    possess separately.  ``playing`` is the playing release's name; without
+    one that says WEB the text-lane proof is not used (_text_lane_file).
     Returns ``(verdict, label, cue_count)``.
     """
     raw_profiles = []
@@ -3711,31 +4025,23 @@ def _verify_file_bundle(bundle, text):
     # accepting it, every track gets an identity-only veto: a truly CONFIRMED
     # track proves that no rewrite is needed, and any competing flat FIXABLE
     # sends us through the complete conflict-aware path below.
-    validated_piecewise = _validated_micro_piecewise(all_profiles, text)
+    # (A CONFIRMED track already returned above; a flat FIXABLE one makes the
+    # map unusable here whatever it says, so the planners -- several dynamic
+    # programmes over every cue -- only run when no track answered.)
+    quick = [item for item in identity_checked
+             if item['verdict'].get('status') in (
+                 sync_align.STATUS_CONFIRMED,
+                 sync_align.STATUS_FIXABLE)]
+    validated_piecewise = (None if quick else _validated_micro_piecewise(
+        all_profiles, text, text_lanes=_text_lane_file(bundle, playing)))
     if validated_piecewise is not None:
-        quick = [item for item in identity_checked
-                 if item['verdict'].get('status') in (
-                     sync_align.STATUS_CONFIRMED,
-                     sync_align.STATUS_FIXABLE)]
-        exact = [item for item in quick
-                 if item['verdict'].get('status')
-                 == sync_align.STATUS_CONFIRMED]
-        if exact:
-            chosen = max(exact, key=_verdict_strength)
-            verdict = _guard_soft_probe_shift(
-                chosen['verdict'], 'FILE PROBE')
-            track = chosen.get('track') or {}
-            return (verdict, 'FILE TRACK #%s %s' % (
-                track.get('num', '?'), track.get('lang') or '?'),
-                    len(chosen.get('cues') or []))
-        if not quick:
-            verdict = _guard_soft_probe_shift(
-                validated_piecewise['verdict'], 'FILE PROBE')
-            track = validated_piecewise.get('track') or {}
-            label = 'FILE TRACK VALIDATED #%s %s' % (
-                track.get('num', '?'), track.get('lang') or '?')
-            return (verdict, label,
-                    len(validated_piecewise.get('cues') or []))
+        verdict = _guard_soft_probe_shift(
+            validated_piecewise['verdict'], 'FILE PROBE')
+        track = validated_piecewise.get('track') or {}
+        label = 'FILE TRACK VALIDATED #%s %s' % (
+            track.get('num', '?'), track.get('lang') or '?')
+        return (verdict, label,
+                len(validated_piecewise.get('cues') or []))
 
     profiles = []
     for profile in raw_profiles:
@@ -3888,7 +4194,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
         # clients reported every unadjusted 15-minute watch as a HUMAN
         # confirmation) silently disabled all verification for that cut.
 
-        file_verdict, ref_kind, ref_count = _verify_file_bundle(bundle, text)
+        file_verdict, ref_kind, ref_count = _verify_file_bundle(bundle, text, playing)
         _remember_rejected_timing(early_job, text, cut_signature,
                                   file_verdict)
         if file_verdict:
@@ -4585,7 +4891,7 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
             continue
         attempted += 1
         if reference is None:
-            verdict, label, count = _verify_file_bundle(bundle, text)
+            verdict, label, count = _verify_file_bundle(bundle, text, playing)
         else:
             verdict = sync_align.verify(reference['text'], text)
             label = 'ORACLE %r' % (reference.get('release') or '?')
@@ -4911,7 +5217,7 @@ def _run_file_only_job(job, info, playing, path, job_selection):
     # come from an oracle, a shared record or a sub-second soft probe, none of
     # which this release-trusted path is allowed to act on.
     if bundle.get('track_cues') or bundle.get('cues'):
-        verdict, ref_kind, ref_count = _verify_file_bundle(bundle, text)
+        verdict, ref_kind, ref_count = _verify_file_bundle(bundle, text, playing)
         if verdict:
             _log('trusted file check for %r vs %s (%d ref cues): %s'
                  % (job.get('release') or '?', ref_kind, ref_count,

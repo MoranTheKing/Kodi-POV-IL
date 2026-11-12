@@ -109,6 +109,68 @@ _REGION_MIN_CUES = 20
 _REGION_MIN_SPAN_MS = 60000.0
 _REGION_BOUNDARY_SLACK = 8
 _REGION_MAX_DRIFT_MS = 400.0
+# Fine mode of the same planner: only for a caller that asks for it (the
+# text-lane proof of a streaming rip), and only where the two planners above
+# give no proven map.  Measured on a streaming WEB-DL whose own English track is
+# the reference (The 100 S01E01, six acts): the broadcast-cut Hebrew sat at
+# -0.46, +0.36, +0.71, +1.17 and +2.31 s and the Blu-ray-cut Hebrew at +1.93,
+# +2.75, +3.92, +4.52, +5.91 and +6.32 s.  The dynamic programme separates
+# every one of those acts; it was the 1-second merge that folded them into
+# drifting plateaus, and the 1-second step floor and 3-second spread that
+# refused the map.  Fine mode keeps plateaus 300 ms apart and accepts a map
+# from two plateaus up, as long as the plateaus span at least a second (a
+# smaller spread is not worth a rewrite).  The proposal space stays as
+# narrow as before in every other way: steps in one direction only, none
+# over 4.5 s, so zigzags and ordinary cuts are still not proposed here.  It
+# is still only a proposal: the same held-out folds and the same independent
+# family or native-lane proof decide.
+_REGION_FINE_MIN_STEP_MS = 300.0
+_REGION_FINE_MIN_RANGE_MS = 1000.0
+# "Materially better than leaving it untouched" is measured by
+# _timing_score, whose onset part counts lines within 450 ms.  A staircase of
+# large steps leaves almost no line there before the fix, so +0.15 was easy;
+# one of sub-second steps leaves many (the broadcast-cut Hebrew above gained
+# 0.156-0.177 on the file's English track and 0.11-0.17 on its other
+# languages, although its last act ran 2.3 s late).  +0.10 still means about
+# four lines in ten moved from more than 450 ms off to within it.
+_PIECEWISE_MIN_GAIN = 0.15
+_REGION_FINE_MIN_GAIN = 0.10
+# Share of the plateaus' total spread that may come from the trend inside
+# them (see _region_piecewise_plan).  Thirteen real staircases measured
+# 0.00-0.09; pure drift cut into plateaus measures about 1.
+_REGION_FINE_MAX_RAMP = 0.2
+# Where exactly a sub-second step falls cannot be read from onsets alone: a
+# line on the wrong side of the cut is only half a second off, about as much
+# as two subbers differ anyway (measured on synthetic half-second steps: cuts
+# 4 and 6 lines from the act break, one of them a 24-second pause).  An edit
+# is made in a pause, so among cut positions that explain the onsets about
+# equally well the longer pause wins: every second of silence is worth 250 ms
+# of onset distance, up to 10 s, and only among positions within 2.5 s of
+# onset distance of the best.  Only for a step under a second: on a 2-second
+# step the onsets do tell the sides apart, and there the pause moved cuts
+# the wrong way (review: 38 lines a whole step off against 13 without it).
+_REGION_FINE_GAP_WEIGHT = 0.25
+_REGION_FINE_GAP_CAP_MS = 10000.0
+_REGION_FINE_GAP_REACH_MS = 2500.0
+_REGION_FINE_GAP_MAX_STEP_MS = 1000.0
+# Two builds of one fine map agree when they time the lines alike.  Counting
+# plateaus fails on a 0.4 s step in a three-minute act, which a fold that
+# lost a fifth of the reference merges into its neighbour (measured: folds
+# of 5 and 6 plateaus for one map, every one of them scoring 0.84-0.90 on its
+# held-out cues); comparing cut times fails when a cut slides to the next
+# pause.  What matters is the line: at most 8 in 100 may differ by more than
+# 300 ms between the two builds.
+_REGION_FINE_AGREE_MS = 300.0
+_REGION_FINE_AGREE_SHARE = 0.92
+# Free mode: fine mode without the one-direction rule and the 4.5 s ceiling.
+# Cuts do not only pad act breaks; one cut can also be shorter in a later
+# act (measured on Supernatural S05E01, AMZN WEB-DL, broadcast-cut Hebrew
+# against the file's English track: -0.03, +1.98, +2.82, +0.88 and +1.82 s,
+# every plateau 57-176 lines).  One reference cannot tell such a zigzag from
+# a subber's uneven timing, which is why the planners above refuse it and
+# why this mode is never offered by default: a caller must ask for it and
+# must hold a proof that does not rest on the reference alone (the playing
+# file's other subtitle languages).
 
 
 # ---- SRT parsing -----------------------------------------------------------
@@ -165,7 +227,7 @@ def parse_srt(text):
     return cues
 
 
-def _preflight_srt(text):
+def _preflight_srt(text, allow_instant=False):
     """Strict, original-order SRT validation for an automatic rewrite.
 
     The tolerant public parser is useful for reading imperfect downloads, but
@@ -192,13 +254,24 @@ def _preflight_srt(text):
             return [], 'unparseable timing block %d' % number
         start = _to_ms(*match.group(1, 2, 3, 4))
         end = _to_ms(*match.group(5, 6, 7, 8))
-        if end <= start:
+        # A cue that ends before it starts is a damaged file.  One that ends
+        # WHEN it starts is merely invisible (no player shows it): subbing
+        # tools leave such markers at act breaks (four of them in every
+        # Blu-ray-lineage Hebrew file of Arrow S01E01, 4 of 29 files
+        # surveyed).  In the subtitle being re-timed (``allow_instant``) it
+        # stays in the list, so a cut is never placed across it carelessly
+        # and the rewrite carries it along unchanged in length;
+        # dialogue_cues() keeps it out of every timing comparison.  A
+        # reference is still read strictly.
+        if end < start or (end == start and not allow_instant):
             return [], 'non-positive cue duration at block %d' % number
         if previous_start is not None and start < previous_start:
             return [], 'non-chronological cue start at block %d' % number
         previous_start = start
         body = _TAG_RE.sub('', block[match.end():].strip())
         cues.append({'start': start, 'end': end, 'text': body.strip()})
+    if not any(cue['end'] > cue['start'] for cue in cues):
+        return [], 'no cue with a duration'
     return cues, ''
 
 
@@ -279,7 +352,8 @@ def dialogue_cues(text_or_cues):
     """Dialogue-only cues (SFX/music and credit/watermark lines dropped)."""
     cues = (text_or_cues if isinstance(text_or_cues, list)
             else parse_srt(text_or_cues))
-    out = [c for c in cues if _is_dialogue(c)]
+    # (A zero-length cue is never on screen, so it is never evidence.)
+    out = [c for c in cues if c['end'] > c['start'] and _is_dialogue(c)]
     if not out:
         return out
     span_end = out[-1]['end']
@@ -584,7 +658,7 @@ def verify(ref_srt_text, cand_srt_text, min_vote=None, min_overlap=None,
                    else None)
         if ref_all is None:
             return _preflight_unknown('reference: ' + ref_error)
-    cand_all, cand_error = _preflight_srt(cand_srt_text)
+    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
     if cand_error:
         return _preflight_unknown('candidate: ' + cand_error)
     return _snap_piecewise_boundaries(
@@ -733,7 +807,7 @@ def verify_cues(ref_cues, cand_srt_text, min_vote=None, min_overlap=None,
     ref, ref_error = _preflight_cues(ref_cues)
     if ref_error:
         return _preflight_unknown('reference: ' + ref_error)
-    cand_all, cand_error = _preflight_srt(cand_srt_text)
+    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
     if cand_error:
         return _preflight_unknown('candidate: ' + cand_error)
     cand = dialogue_cues(cand_all)
@@ -1507,7 +1581,8 @@ def _micro_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
 
 
 def _micro_verdict_from_cuts(ref, cand, cuts, offsets, info, vote, label,
-                             min_overlap=MIN_OVERLAP, max_offset_ms=None):
+                             min_overlap=MIN_OVERLAP, max_offset_ms=None,
+                             min_gain=_PIECEWISE_MIN_GAIN):
     """Shared acceptance tail for both short-edit planners.
 
     Whatever proposed the plateaus, the same region-size, ordering, residual,
@@ -1515,6 +1590,10 @@ def _micro_verdict_from_cuts(ref, cand, cuts, offsets, info, vote, label,
     required proposal exists at all.
     """
     scale = 1.0
+    # Whole milliseconds: a median of deltas can end in .5, and a cue one
+    # millisecond long then has both its ends rounded to the same stamp, which
+    # the rewrite refuses (Supernatural S05E01, a 1 ms cue under -5579.5 ms).
+    offsets = [float(round(value)) for value in offsets]
     candidate_boundaries = []
     reference_boundaries = []
     for cut, left_offset, right_offset in zip(
@@ -1572,7 +1651,7 @@ def _micro_verdict_from_cuts(ref, cand, cuts, offsets, info, vote, label,
             or after_overlap < max(0.85, min_overlap)
             or after_unique < 0.72
             or after_score < 0.78
-            or after_score < before_score + 0.15):
+            or after_score < before_score + min_gain):
         info.update({'post_residual_ms': post_residual,
                      'before_score': before_score,
                      'after_score': after_score,
@@ -1658,7 +1737,7 @@ def envelope_windows(envelope, cand_srt_text):
         return []
     if step <= 0 or len(values) < 1000:
         return []
-    cand_all, cand_error = _preflight_srt(cand_srt_text)
+    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
     if cand_error:
         return []
     cand = dialogue_cues(cand_all)
@@ -1829,7 +1908,7 @@ def timeline_plateaus(ref_cues, cand_srt_text):
     """
     try:
         ref, ref_error = _preflight_cues(ref_cues)
-        cand_all, cand_error = _preflight_srt(cand_srt_text)
+        cand_all, cand_error = _preflight_srt(cand_srt_text, True)
         if ref_error or cand_error:
             return []
         cand = dialogue_cues(cand_all)
@@ -1971,19 +2050,27 @@ def _region_cost_rows(ref_on, cand_on, center):
 
 
 def _region_dp_path(rows):
-    """Cheapest plateau per cue; changing plateau costs a fixed penalty."""
-    count = len(rows[0])
+    """Cheapest plateau per cue; changing plateau costs a fixed penalty.
+
+    The same recurrence as before.  The two per-state passes that only
+    located the minimum and recorded the switches now run in the
+    interpreter's own loops (min / list.index / map): they were a third of
+    this function's time, and it runs once per plan and once per held-out
+    fold.
+    """
     previous = list(rows[0])
     transitions = []
     for row in rows[1:]:
         _breathe()
-        best = min(range(count), key=previous.__getitem__)
-        threshold = previous[best] + _REGION_SWITCH_COST
-        flags = bytes(1 if value > threshold else 0 for value in previous)
+        floor = min(previous)
+        best = previous.index(floor)
+        threshold = floor + _REGION_SWITCH_COST
+        # 1 where the state is dearer than switching in from the best one.
+        flags = bytes(map(threshold.__lt__, previous))
         previous = [cost + (threshold if value > threshold else value)
                     for cost, value in zip(row, previous)]
         transitions.append((best, flags))
-    state = min(range(count), key=previous.__getitem__)
+    state = previous.index(min(previous))
     path = [state]
     for best, flags in reversed(transitions):
         if flags[state]:
@@ -2012,6 +2099,22 @@ def _region_matched_deltas(ref_on, cand, begin, end, base):
     return pairs
 
 
+def _region_trend_ms(pairs):
+    """Signed least-squares offset change across one plateau's cues."""
+    if len(pairs) < 3:
+        return 0.0
+    xs = [float(x) for x, _y in pairs]
+    ys = [float(y) for _x, y in pairs]
+    mean_x = sum(xs) / len(xs)
+    mean_y = sum(ys) / len(ys)
+    var_x = sum((x - mean_x) ** 2 for x in xs)
+    if var_x <= 0:
+        return 0.0
+    slope = sum((x - mean_x) * (y - mean_y)
+                for x, y in zip(xs, ys)) / var_x
+    return slope * (max(xs) - min(xs))
+
+
 def _region_drift_ms(pairs):
     """Least-squares offset change across one plateau's matched cues."""
     if len(pairs) < 3:
@@ -2029,7 +2132,8 @@ def _region_drift_ms(pairs):
 
 
 def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
-                           max_offset_ms=None):
+                           max_offset_ms=None, fine=False, free=False,
+                           _dp=None):
     """Cue-level proposal for repeated short edit pads, pending validation.
 
     Same proposal space and the same acceptance tail as
@@ -2039,15 +2143,31 @@ def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
     supports, so a short act is never smeared by a window straddling it.  A
     plateau whose offset drifts is a clock-rate mismatch, not an edit, and is
     refused here so the scale paths handle it.
+
+    ``fine`` lowers the floors to what the dynamic programme can actually
+    resolve (see _REGION_FINE_MIN_STEP_MS): plateaus 300 ms apart, two or
+    more of them, spanning a second.  Direction and the 4.5 s step ceiling
+    are unchanged.  ``free`` is fine mode without those two (see above).
+    ``_dp`` (a dict) carries the dynamic programme from one mode to the next
+    for the same pair of cue lists; the modes differ only in what they make
+    of its path.
     """
-    info = {'planner': 'region'}
+    fine = bool(fine or free)
+    name = 'region-free' if free else ('region-fine' if fine else 'region')
+    info = {'planner': name}
+    min_step = _REGION_FINE_MIN_STEP_MS if fine else float(_MICRO_MIN_STEP_MS)
     if len(ref) < _LOCAL_MIN_REF_CUES or len(cand) < 3 * _REGION_MIN_CUES:
         return None, info
     max_off = _MAXOFF if max_offset_ms is None else max_offset_ms
     ref_on = [float(c['start']) for c in ref]
     cand_on = [float(c['start']) for c in cand]
-    center, _votes = _best_offset(ref_on, cand_on, 1.0, max_off)
-    path = _region_dp_path(_region_cost_rows(ref_on, cand_on, center))
+    if _dp is not None and _dp.get('max_off') == max_off and 'path' in _dp:
+        center, path = _dp['center'], _dp['path']
+    else:
+        center, _votes = _best_offset(ref_on, cand_on, 1.0, max_off)
+        path = _region_dp_path(_region_cost_rows(ref_on, cand_on, center))
+        if _dp is not None:
+            _dp.update(max_off=max_off, center=center, path=path)
     step = float(_REGION_STEP_MS)
     radius = float(_REGION_RADIUS_MS)
 
@@ -2097,7 +2217,7 @@ def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
         regions = []
         for begin, end, offset, pairs in refined:
             if (regions
-                    and abs(offset - regions[-1][2]) < _MICRO_MIN_STEP_MS):
+                    and abs(offset - regions[-1][2]) < min_step):
                 previous = regions[-1]
                 weight = previous[1] - previous[0] + 1
                 size = end - begin + 1
@@ -2108,21 +2228,33 @@ def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
             else:
                 regions.append([begin, end, offset])
     info['regions'] = [(begin, end, offset) for begin, end, offset in regions]
-    if not (3 <= len(regions) <= _MICRO_MAX_SEGMENTS):
+    if not ((2 if fine else 3) <= len(regions) <= _MICRO_MAX_SEGMENTS):
         return None, info
     offsets = [offset for _begin, _end, offset in regions]
     if any(abs(offset) > MAX_PLAUSIBLE_OFFSET_MS for offset in offsets):
         return None, info
     steps = [offsets[i + 1] - offsets[i] for i in range(len(offsets) - 1)]
     direction = 1.0 if _median(steps) > 0 else -1.0
-    if any(direction * value < _MICRO_MIN_STEP_MS
-           or abs(value) > _MICRO_MAX_STEP_MS for value in steps):
+    if not free and any(direction * value < min_step
+                        or abs(value) > _MICRO_MAX_STEP_MS
+                        for value in steps):
         return None, info
-    if max(offsets) - min(offsets) < 3000.0:
+    if (max(offsets) - min(offsets)
+            < (_REGION_FINE_MIN_RANGE_MS if fine else 3000.0)):
         return None, info
     for begin, end, offset, pairs in refined:
         if _region_drift_ms(pairs) > _REGION_MAX_DRIFT_MS:
             info['reason'] = 'drifting plateau'
+            return None, info
+    if fine:
+        # A slow clock drift cut into 300 ms plateaus looks like a staircase
+        # whose every plateau stays under the drift limit.  What tells them
+        # apart: on a ramp the change happens INSIDE the plateaus, on real
+        # act steps it happens between them and the plateaus are flat.
+        inside = sum(_region_trend_ms(pairs)
+                     for _begin, _end, _offset, pairs in refined)
+        if abs(inside) > _REGION_FINE_MAX_RAMP * (max(offsets) - min(offsets)):
+            info['reason'] = 'ramp, not steps'
             return None, info
 
     # Each cut goes where the two neighbouring plateaus explain the nearby
@@ -2136,6 +2268,7 @@ def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
         if cuts:
             lo = max(lo, cuts[-1] + 4)
         best = None
+        options = []
         for position in range(lo, hi + 1):
             if (cand[position]['start'] - right_off
                     < cand[position - 1]['end'] - left_off):
@@ -2146,47 +2279,119 @@ def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
                 cost += _nearest_onset_distance(
                     ref_on, cand[index]['start'] - offset,
                     cap=_REGION_CAP_MS)
+            options.append((cost, position))
             key = (cost, abs(position - nominal))
             if best is None or key < best[0]:
                 best = (key, position)
         if best is None:
             info['reason'] = 'no ordered boundary'
             return None, info
+        if fine and abs(right_off - left_off) < _REGION_FINE_GAP_MAX_STEP_MS:
+            reach = best[0][0] + _REGION_FINE_GAP_REACH_MS
+
+            def with_pause(option):
+                cost, position = option
+                pause = cand[position]['start'] - cand[position - 1]['end']
+                return (cost - _REGION_FINE_GAP_WEIGHT * max(
+                    0.0, min(float(pause), _REGION_FINE_GAP_CAP_MS)),
+                    abs(position - nominal))
+            best = (None, min((option for option in options
+                               if option[0] <= reach), key=with_pause)[1])
         cuts.append(best[1])
     support = min(len(_region_matched_deltas(
         ref_on, cand, begin, end, offset)) / float(end - begin + 1)
         for begin, end, offset in regions)
     verdict, info = _micro_verdict_from_cuts(
         ref, cand, cuts, offsets, info, vote=support,
-        label='cue-level region proposal',
-        min_overlap=min_overlap, max_offset_ms=max_offset_ms)
+        label=('free cue-level region proposal' if free
+               else 'fine cue-level region proposal' if fine
+               else 'cue-level region proposal'),
+        min_overlap=min_overlap, max_offset_ms=max_offset_ms,
+        min_gain=_REGION_FINE_MIN_GAIN if fine else _PIECEWISE_MIN_GAIN)
     if verdict:
-        verdict['planner'] = 'region'
+        verdict['planner'] = name
     return verdict, info
 
 
+def _region_fine_plan(ref, cand, min_overlap=MIN_OVERLAP, max_offset_ms=None,
+                      _dp=None):
+    """The cue-level planner in fine mode, as a planner of its own (the
+    held-out folds rebuild every fold with the planner that proposed)."""
+    return _region_piecewise_plan(ref, cand, min_overlap=min_overlap,
+                                  max_offset_ms=max_offset_ms, fine=True,
+                                  _dp=_dp)
+
+
+def _region_free_plan(ref, cand, min_overlap=MIN_OVERLAP, max_offset_ms=None,
+                      _dp=None):
+    """The cue-level planner in free mode, as a planner of its own."""
+    return _region_piecewise_plan(ref, cand, min_overlap=min_overlap,
+                                  max_offset_ms=max_offset_ms, free=True,
+                                  _dp=_dp)
+
+
+# Proposal order.  A map from an earlier planner is never replaced by a later
+# one, and the fine and free modes exist only for a caller that asked for
+# them: every other caller gets the two planners it always had.
+_PIECEWISE_PLANNERS = ('micro', 'region')
+_FINE_PLANNER = 'region-fine'
+_FREE_PLANNER = 'region-free'
+# Planners whose folds are compared line by line and scored on the map each
+# fold built, with the lower 'materially better' bar.
+_FINE_PLANNERS = (_region_fine_plan, _region_free_plan)
+
+
+def _piecewise_planner(name):
+    if name == 'region':
+        return _region_piecewise_plan
+    if name == 'region-fine':
+        return _region_fine_plan
+    if name == _FREE_PLANNER:
+        return _region_free_plan
+    return _micro_piecewise_plan
+
+
+def _planner_names(fine, free):
+    return (_PIECEWISE_PLANNERS
+            + ((_FINE_PLANNER,) if fine or free else ())
+            + ((_FREE_PLANNER,) if free else ()))
+
+
+def _plan(name, ref, cand, max_offset_ms, shared):
+    """One planner's full proposal; the cue-level modes share ``shared``."""
+    planner = _piecewise_planner(name)
+    if planner is _micro_piecewise_plan:
+        return planner(ref, cand, max_offset_ms=max_offset_ms)
+    return planner(ref, cand, max_offset_ms=max_offset_ms, _dp=shared)
+
+
 def micro_piecewise_proposal(ref_cues, cand_srt_text,
-                             max_offset_ms=None):
+                             max_offset_ms=None, free=False, fine=False):
     """Return a non-applicable short-edit proposal for external consensus.
 
     This API deliberately does not accept a single timing track as proof.  A
     media-aware caller must validate unseen timing cues (or compare genuinely
     independent timing families) before ``apply_verdict`` can rewrite anything.
+
+    ``fine`` also offers the cue-level planner's fine mode, and ``free`` its
+    free-direction mode after that (see _region_piecewise_plan); only for a
+    caller whose proof does not rest on this one reference.
     """
     ref, ref_error = _preflight_cues(ref_cues)
     if ref_error:
         return None
-    cand_all, cand_error = _preflight_srt(cand_srt_text)
+    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
     if cand_error:
         return None
     cand = dialogue_cues(cand_all)
     if len(ref) < _LOCAL_MIN_REF_CUES or len(cand) < _LOCAL_MIN_REF_CUES:
         return None
-    verdict, _info = _micro_piecewise_plan(
-        ref, cand, max_offset_ms=max_offset_ms)
-    if verdict is None:
-        verdict, _info = _region_piecewise_plan(
-            ref, cand, max_offset_ms=max_offset_ms)
+    verdict = None
+    shared = {}
+    for name in _planner_names(fine, free):
+        verdict, _info = _plan(name, ref, cand, max_offset_ms, shared)
+        if verdict is not None:
+            break
     return verdict
 
 
@@ -2264,8 +2469,27 @@ def piecewise_maps_agree(left, right, tolerance_ms=700.0):
         return False
 
 
+def _piecewise_maps_agree_on_lines(left, right, cand):
+    """Whether two region maps time (nearly) every line alike."""
+    try:
+        if (left.get('mode') != 'piecewise' or right.get('mode') != 'piecewise'
+                or not cand):
+            return False
+        same = 0
+        for cue in cand:
+            ltime = _piecewise_reference_time(left, cue['start'])
+            rtime = _piecewise_reference_time(right, cue['start'])
+            if ltime is None or rtime is None:
+                return False
+            if abs(ltime - rtime) <= _REGION_FINE_AGREE_MS:
+                same += 1
+        return same >= _REGION_FINE_AGREE_SHARE * len(cand)
+    except Exception:
+        return False
+
+
 def validate_micro_piecewise(ref_cues, cand_srt_text, proposal=None,
-                             max_offset_ms=None):
+                             max_offset_ms=None, free=False, fine=False):
     """Five-fold out-of-sample proof for a subtle piecewise proposal.
 
     Each trial removes one fifth of reference cues, rebuilds the complete map
@@ -2277,7 +2501,7 @@ def validate_micro_piecewise(ref_cues, cand_srt_text, proposal=None,
     ref, ref_error = _preflight_cues(ref_cues)
     if ref_error:
         return None
-    cand_all, cand_error = _preflight_srt(cand_srt_text)
+    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
     if cand_error:
         return None
     cand = dialogue_cues(cand_all)
@@ -2287,22 +2511,27 @@ def validate_micro_piecewise(ref_cues, cand_srt_text, proposal=None,
     if full is None:
         full, _info = _micro_piecewise_plan(
             ref, cand, max_offset_ms=max_offset_ms)
+    names = list(_planner_names(fine, free))
+    shared = {}
+    first = (full or {}).get('planner') or 'micro'
+    if first not in names:
+        first = 'micro'
     validated = None
     if full and full.get('validation_required'):
-        planner = (_region_piecewise_plan if full.get('planner') == 'region'
-                   else _micro_piecewise_plan)
-        validated = _holdout_validate(ref, cand, full, planner,
-                                      max_offset_ms)
+        validated = _holdout_validate(
+            ref, cand, full, _piecewise_planner(first), max_offset_ms)
     # Window plateaus can be unstable when a fold removes the cues of a short
-    # act; the cue-level planner gets its own full proposal and its own five
+    # act; every later planner gets its own full proposal and its own five
     # folds.  Never a mix: each fold is rebuilt by the planner that proposed
     # the map it is compared with.
-    if validated is None and not (full and full.get('planner') == 'region'):
-        region, _info = _region_piecewise_plan(
-            ref, cand, max_offset_ms=max_offset_ms)
-        if region and region.get('validation_required'):
+    for name in names[names.index(first) + 1:]:
+        if validated is not None:
+            break
+        planner = _piecewise_planner(name)
+        later, _info = _plan(name, ref, cand, max_offset_ms, shared)
+        if later and later.get('validation_required'):
             validated = _holdout_validate(
-                ref, cand, region, _region_piecewise_plan, max_offset_ms)
+                ref, cand, later, planner, max_offset_ms)
     return _snap_piecewise_boundaries(validated, cand_all)
 
 
@@ -2311,6 +2540,8 @@ def _holdout_validate(ref, cand, full, planner, max_offset_ms=None):
         float(item.get('ref_from_ms'))
         for item in (full.get('segments') or [])[1:]
         if item.get('ref_from_ms') is not None]
+    min_gain = (_REGION_FINE_MIN_GAIN if planner in _FINE_PLANNERS
+                else _PIECEWISE_MIN_GAIN)
     passed = []
     for fold in range(5):
         train = [cue for index, cue in enumerate(ref) if index % 5 != fold]
@@ -2325,7 +2556,12 @@ def _holdout_validate(ref, cand, full, planner, max_offset_ms=None):
             continue
         fold_plan, _info = planner(
             train, cand, max_offset_ms=max_offset_ms)
-        if not fold_plan or not piecewise_maps_agree(full, fold_plan):
+        if not fold_plan:
+            continue
+        if planner in _FINE_PLANNERS:
+            if not _piecewise_maps_agree_on_lines(full, fold_plan, cand):
+                continue
+        elif not piecewise_maps_agree(full, fold_plan):
             continue
         # Score the FULL map that would actually be applied.  The fold-derived
         # map is used as an independent stability requirement above; this keeps
@@ -2333,7 +2569,8 @@ def _holdout_validate(ref, cand, full, planner, max_offset_ms=None):
         # The cue-level planner fits every plateau on the very cues being
         # held out, so for it the map rebuilt WITHOUT them is what must
         # explain them: a genuinely out-of-sample score.
-        scored = fold_plan if planner is _region_piecewise_plan else full
+        scored = (fold_plan if planner is _region_piecewise_plan
+                  or planner in _FINE_PLANNERS else full)
         fixed = _map_cues_piecewise(
             cand, scored.get('scale', 1.0), scored.get('segments') or [])
         if (len(fixed) != len(cand)
@@ -2349,7 +2586,7 @@ def _holdout_validate(ref, cand, full, planner, max_offset_ms=None):
         if (after_overlap < 0.85 or after_unique < 0.72
                 or p95_ms is None or p95_ms > 800.0
                 or after_score < 0.78
-                or after_score < before_score + 0.15):
+                or after_score < before_score + min_gain):
             continue
         passed.append({'fold': fold, 'before_score': before_score,
                        'after_score': after_score,
@@ -2374,16 +2611,21 @@ def _holdout_validate(ref, cand, full, planner, max_offset_ms=None):
 
 
 def evaluate_piecewise_family(ref_cues, cand_srt_text, verdict,
-                              max_offset_ms=None):
+                              max_offset_ms=None,
+                              min_gain=_PIECEWISE_MIN_GAIN):
     """Out-of-family validation/veto metrics for an already frozen map.
 
     This does not refit a single parameter.  It asks whether a map learned from
     a preferred English text timeline also improves a different embedded codec
     family (normally PGS).  One representative validates the family; duplicate
     language tracks never increase its evidence count.
+
+    ``min_gain`` is how much better the frozen map must make this timeline.
+    A second FAMILY carries the proof and keeps the default; a lane that only
+    has to show the reference is native to the file may ask for less.
     """
     ref, ref_error = _preflight_cues(ref_cues)
-    cand_all, cand_error = _preflight_srt(cand_srt_text)
+    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
     if ref_error or cand_error or not verdict:
         return None
     cand = dialogue_cues(cand_all)
@@ -2417,7 +2659,7 @@ def evaluate_piecewise_family(ref_cues, cand_srt_text, verdict,
         and after_unique >= 0.70
         and p95_ms is not None and p95_ms <= 800.0
         and after_score >= 0.74
-        and after_score >= before_score + 0.15)
+        and after_score >= before_score + float(min_gain))
     return {'accepted': accepted, 'before_score': before_score,
             'after_score': after_score, 'after_overlap': after_overlap,
             'after_unique': after_unique, 'unique_median_ms': median_ms,
@@ -2757,7 +2999,8 @@ def retime(cand_srt_text, scale, offset_ms, segments=None, strict=False):
             applied_offset = float(segments[si].get('offset_ms') or 0.0)
         ns = (start - applied_offset) / scale
         ne = (end - applied_offset) / scale
-        if strict and (ns < 0 or ne <= ns):
+        # (A cue that had no length keeps none; any other must keep one.)
+        if strict and (ns < 0 or ne < ns or (ne == ns and end != start)):
             raise ValueError('retime would create invalid/negative cue')
         if ne < 0:
             continue   # cue mapped before t=0 (credit before the new start)
@@ -2965,6 +3208,25 @@ def apply_verdict(cand_srt_text, verdict):
                     <= _MICRO_MAX_SEGMENTS)
             except (TypeError, ValueError):
                 native_pgs = False
+        # A streaming rip whose subtitles are all text: the map was learned
+        # from one text track, its held-out folds are strong, and text
+        # tracks in two other languages of the same file accepted it.  The
+        # shape of native_lane; two plateaus are enough, because the fine
+        # planner proposes them.
+        native_text = False
+        if verdict.get('validation_proof') == 'native-text-lane-v1':
+            try:
+                native_text = bool(
+                    int(verdict.get('native_lane_tracks') or 0) >= 2
+                    and float(verdict.get('holdout_score_min') or 0.0) >= 0.85
+                    # (the folds compared after >= before + gain: allow the
+                    # last bit of the subtraction)
+                    and float(verdict.get('holdout_gain_min') or 0.0)
+                    >= _REGION_FINE_MIN_GAIN - 1e-9
+                    and 2 <= len(verdict.get('segments') or [])
+                    <= _MICRO_MAX_SEGMENTS)
+            except (TypeError, ValueError):
+                native_text = False
         # The playing file's own audio as the independent family: the Hebrew
         # text sat on several envelope plateaus (or one large shift) and the
         # frozen map lands it on a single near-zero plateau of strong windows.
@@ -2987,14 +3249,14 @@ def apply_verdict(cand_srt_text, verdict):
                 or (timing_families < 2 and not same_disc_quorum
                     and not field_certificate and not matched_oracle
                     and not envelope_proof and not native_lane
-                    and not native_pgs)):
+                    and not native_pgs and not native_text)):
             raise ValueError('piecewise proposal lacks holdout/family validation')
-    _all_cues, preflight_error = _preflight_srt(cand_srt_text)
+    _all_cues, preflight_error = _preflight_srt(cand_srt_text, True)
     if preflight_error:
         raise ValueError('source subtitle failed structural preflight: '
                          + preflight_error)
     before = _timed_signature(cand_srt_text)
-    if (not before or any(e <= s for s, e, _ in before)
+    if (not before or any(e < s for s, e, _ in before)
             or any(before[i][0] < before[i - 1][0]
                    for i in range(1, len(before)))):
         raise ValueError('source subtitle failed structural preflight')
@@ -3007,7 +3269,9 @@ def apply_verdict(cand_srt_text, verdict):
         raise ValueError('retime changed cue count')
     if [x[2] for x in after] != [x[2] for x in before]:
         raise ValueError('retime changed cue text/order')
-    if (any(e <= s for s, e, _ in after)
+    # Zero-length cues stay exactly the cues that had no length before.
+    if (any(e < s or ((e == s) != (b[1] == b[0]))
+            for (s, e, _), b in zip(after, before))
             or any(after[i][0] < after[i - 1][0]
                    for i in range(1, len(after)))):
         raise ValueError('retime produced invalid order/duration')
