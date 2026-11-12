@@ -28,6 +28,69 @@ _STATE_LOCK = threading.Lock()
 # itself, as a 'no', after this many milliseconds. It never pauses playback.
 _ASK_AI_CLOSE_MS = 10000
 
+# The top overlay's status line once a subtitle is on screen, by the state of
+# its timing at that moment ...
+_LOADED_HEADINGS = {
+    'checking': 'כתובית נטענה · בודק סנכרון',
+    'confirmed': 'כתובית מסונכרנת',
+    'fixed': 'כתובית סונכרנה אוטומטית',
+    'unverified': 'כתובית נטענה · התזמון טרם אומת',
+}
+# ... and once a check that was still running at that moment has ended.
+_CHECKED_HEADINGS = {
+    'confirmed': 'כתובית מסונכרנת',
+    'fixed': 'כתובית סונכרנה אוטומטית',
+    'unverified': 'כתובית נטענה · הסנכרון לא אומת',
+}
+# A status line stays this long (seconds) ...
+_OVERLAY_LINE_SECONDS = 5.0
+# ... and "checking" stays until the check ends, this long at most.  A check
+# that ends later still announces a fix with its own toast.
+_SYNC_CHECK_OVERLAY_CAP = 25.0
+# A status that reads empty this many times in a row is gone; one empty read
+# can be a player call that failed once.
+_STATUS_GONE_READS = 3
+
+
+def _wait_for_sync_check(read_state, still_ours, sleep,
+                         cap=_SYNC_CHECK_OVERLAY_CAP, step=0.2):
+    """Wait while the timing check of the subtitle on screen is running.
+
+    Returns (state, waited).  state is what the check ended in ('confirmed',
+    'fixed' or 'unverified'); '' when the cap passed or the status is no
+    longer there; None when still_ours() said the overlay does not belong to
+    this run any more (another pick, another film, a stop).  waited counts
+    the steps slept, not the clock.
+    """
+    steps = max(1, int(round(cap / step)))
+    gone = 0
+    for done in range(steps + 1):        # one more read after the last sleep
+        if not still_ours():
+            return None, done * step
+        state = read_state()
+        if state in _CHECKED_HEADINGS:
+            return state, done * step
+        if state == 'checking':
+            gone = 0
+        else:
+            # No status: it left with the pick it belonged to (still_ours()
+            # says so on the next round), or this one read failed.
+            gone += 1
+            if gone >= _STATUS_GONE_READS:
+                return '', done * step
+        if done < steps:
+            sleep(step)
+    return '', steps * step
+
+
+def _toasts_on(kodi_utils):
+    """The viewer's switch for subtitle toasts (kodi_utils.notify obeys it)."""
+    try:
+        return (kodi_utils.get_setting('subs_notifications', 'true')
+                or 'true').strip().lower() != 'false'
+    except Exception:
+        return True
+
 
 def ai_when_no_hebrew(kodi_utils):
     """'auto' | 'ask' | 'manual': what the automatic subtitle does when there
@@ -714,19 +777,67 @@ def autosub_on_play():
                 chosen_link) or {}).get('state')
         except Exception:
             _sync_state = ''
-        _heading = {
-            'checking': 'כתובית נטענה · התזמון נבדק ברקע',
-            'confirmed': 'כתובית מסונכרנת',
-            'fixed': 'כתובית סונכרנה אוטומטית',
-            'unverified': 'כתובית נטענה · התזמון טרם אומת',
-        }.get(_sync_state, 'כתובית נטענה')
-        _status_msg = '[COLOR lightblue]' + _heading
-        if chosen_name:
-            _status_msg += '\n' + chosen_name
-        if chosen_from_cache:
-            _status_msg += '\n(נטענה מהקאש)'
-        _status_msg += '[/COLOR]'
-        _final_overlay(_status_msg)
+        def _status_line(heading):
+            line = '[COLOR lightblue]' + heading
+            if chosen_name:
+                line += '\n' + chosen_name
+            if chosen_from_cache:
+                line += '\n(נטענה מהקאש)'
+            return line + '[/COLOR]'
+
+        if _sync_state != 'checking' or _eng_general is None:
+            _final_overlay(_status_line(
+                _LOADED_HEADINGS.get(_sync_state, 'כתובית נטענה')))
+            return
+        # The check is still running, and a subtitle made for another cut can
+        # be seconds off until its fix arrives.  The line used to leave after
+        # five seconds whatever the check was doing (measured: gone 5.5 s
+        # after the picture started, the fix at 9.5 s), so a viewer looking at
+        # an unsynced subtitle had nothing saying that anything was still
+        # happening.  It now stays until the check ends, then says how.
+        _checking_line = _status_line(_LOADED_HEADINGS['checking'])
+        if not _autosub_owns_player():
+            return          # a stale run never writes into the next overlay
+        try:
+            _eng_general.show_msg = _checking_line
+        except Exception:
+            return
+
+        def _check_state():
+            try:
+                return (kodi_utils.get_subtitle_sync_status(chosen_link)
+                        or {}).get('state') or ''
+            except Exception:
+                return ''
+
+        def _overlay_ours():
+            try:
+                return bool(_autosub_owns_player()
+                            and xbmc.Player().isPlayingVideo())
+            except Exception:
+                return False
+
+        _end_state, _waited = _wait_for_sync_check(
+            _check_state, _overlay_ours,
+            lambda seconds: xbmc.sleep(int(seconds * 1000)))
+        try:
+            kodi_utils.log('autosub overlay: timing check %s after %.1fs' % (
+                ('ended ' + _end_state) if _end_state
+                else 'left to another pick or a stop' if _end_state is None
+                else 'not followed further',
+                _waited))
+        except Exception:
+            pass
+        if _end_state == 'fixed' and _toasts_on(kodi_utils):
+            # SubSync's own "synced automatically" toast is on screen now;
+            # the same words in the overlay beside it would be noise.
+            return
+        if _end_state:
+            _final_overlay(_status_line(_CHECKED_HEADINGS[_end_state]))
+        elif _end_state == '' and _waited < _OVERLAY_LINE_SECONDS:
+            # no result to show: the line still gets its usual time
+            _final_overlay(_checking_line,
+                           hold=_OVERLAY_LINE_SECONDS - _waited)
     except Exception as e:
         try:
             kodi_utils.log('autosub_on_play failed: {0}'.format(e),
