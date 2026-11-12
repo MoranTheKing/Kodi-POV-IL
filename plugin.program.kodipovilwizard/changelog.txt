@@ -1,3 +1,6 @@
+0.4.96
+- Home rows (pov_list_snapshot): an Idan Plus live-TV or radio row that is no longer fresh (2 minutes, or after a favourites/channel edit) is built first and shown when ready, instead of shown from its saved copy and then refreshed. Its lines carry what is on now, so the copy differed on practically every start, and the refresh that follows a changed row asks every home row again: about ten seconds into a start, and after a return from a video, the rows on screen loaded a second time (FENtastic: the two movie rows, for a channels row in a section that was not on screen). The saved copy is still what is shown if that build fails or comes out empty (the reason is logged, and the build is not tried again for two minutes), and what is served, with no build, while a video plays or a play is starting. The row no longer appears at once with the last copy's programme names: it appears when built (a new log line, 'built idanplus live items=N ms=M'). Programme lists, Idan Plus favourites and POV's own rows keep show-then-refresh.
+
 0.4.95
 - player_season_episodes: the skins' season-episodes list for an Idan Plus episode on screen -- its season as Idan Plus saved it when the season was listed (seasons.json, through Idan Plus's own watch_store), no request; an episode picked there plays through Idan Plus with the channel's quality. Allowed in a child profile.
 
