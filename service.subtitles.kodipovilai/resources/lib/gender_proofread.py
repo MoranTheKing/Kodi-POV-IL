@@ -39,7 +39,16 @@ import re
 # (21-7-2, 4 Nov); made with a Hebrew reference it fixed 17 and broke 8, so it
 # stays off there (0.3.72). A proofread that finds 3.7 busy is asked again
 # later from the service (gp_later) instead of going to a weaker model.
-MODELS = ('gemini-3.7-flash',)
+# Since 0.3.79 gemini-4-hydrogen first, 3.7 after it. 3.7 answered 503 through
+# the night of 13 Nov 2026 and the morning after; gemini-4-hydrogen, released
+# that week with the same free allowance, answered six whole-episode requests
+# in 56-88 s each. Pre-registered blind study 006 (short form: four of 005's
+# eight episodes, the same translations, no Hebrew reference; two AI judges
+# audited by the tester): 16-1-3 on the lines it changed, fixed 16 and broke 1
+# -- adopted under the rule scaled to 20 lines (net >= 5, at most 4 broken).
+# Not shown to be better than 3.7 (28-0-2 over 30 in 005): it is first
+# because it answers. The other Flash models stay out (002).
+MODELS = ('gemini-4-hydrogen', 'gemini-3.7-flash')
 # A whole film took 3-6 minutes on these models.
 REQUEST_TIMEOUT = 900
 # No new model is asked after this many seconds: the viewer waits for the swap.

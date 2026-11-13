@@ -106,7 +106,8 @@ class Chunk(object):
             _call_gemini=call, _count=count, _ref_ensure=lambda lvl: False,
             _ref_stack=[('ar', {})], _accepted_before=lambda *a, **k: None,
             _google_rescue=lambda blocks, lang: None, _AbortTranslation=_Abort,
-            source_lang='en', NO_REF=-1, _MAX_ALT_LEVELS=5)
+            source_lang='en', NO_REF=-1, _MAX_ALT_LEVELS=5,
+            _busy_waits=types.SimpleNamespace())
         for name in CONSTANTS:
             self.ns[name] = _assigned(name)
         _define(['_answered', '_google_fill_missing', '_IntegrityRejected', '_BlockClock', '_gem',
@@ -216,6 +217,28 @@ class Clock(unittest.TestCase):
         self.assertNotIn('Line', out)
         self.assertIn("raise _IntegrityRejected(\n                        'generated-output integrity violation')",
                       TRANSLATE.replace('\r\n', '\n'))
+
+    def test_waiting_for_a_busy_model_is_not_the_chunk_being_slow(self):
+        # 0.3.79: a busy default model is asked again for ten minutes. The
+        # reply that finally comes, three lines short, is still topped up:
+        # those minutes were the model's, not the chunk's.
+        def script(ch, level):
+            if len(ch) == 50:
+                c.now[0] += 640
+                c.ns['_busy_waits'].seconds = waited[0]
+                return hebrew(ch[:47])
+            c.now[0] += 5
+            return hebrew(ch)
+        waited = [620.0]
+        c = Chunk(script)
+        out = c.run(CH)
+        self.assertEqual([n for n, _lvl in c.calls], [50, 3])
+        self.assertNotIn('Line', out)
+        # the same 640 s with no busy wait in them: past the slow cap, as before
+        waited[0] = 0.0
+        c = Chunk(script)
+        c.run(CH)
+        self.assertNotEqual([n for n, _lvl in c.calls], [50, 3])
 
     def test_the_slow_cap_still_bounds_a_chunk_that_never_blocks(self):
         # every reply half short: a bisect storm with no block, slow

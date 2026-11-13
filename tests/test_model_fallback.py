@@ -224,6 +224,39 @@ class Wiring(unittest.TestCase):
                       "                    overload_attempts = 0\n                    continue\n", block)
         self.assertLess(block.index('_go_on_with_fallback'), block.index('OVERLOAD_BACKOFF[overload_attempts]'))
 
+    def test_a_busy_default_model_is_asked_again_for_ten_minutes_before_google(self):
+        self.assertIn('    OVERLOAD_BACKOFF = [5, 15, 30, 60, 120, 120, 120, 120]  # seconds\n', TRANSLATE)
+        self.assertEqual(sum([5, 15, 30, 60, 120, 120, 120, 120]), 590)
+
+    def test_busy_waits_do_not_use_up_the_chunks_own_time(self):
+        translate = load_translate()[0]
+        with patch.object(translate.time, 'monotonic', lambda: 1000.0):
+            clock = translate._BlockClock(120.0, 600.0, 20)
+            clock.block()
+            cap, until = clock.cap, clock.until
+            clock.waited(590.0)
+            self.assertEqual((clock.cap, clock.until), (cap + 590.0, until + 590.0))
+            clock.waited(0.0)
+            clock.waited(-5.0)
+            self.assertEqual(clock.cap, cap + 590.0)
+        with patch.object(translate.time, 'monotonic', lambda: 1000.0 + 700.0):
+            self.assertFalse(clock.spent())          # 700 s in, 590 of them waiting for a busy model
+        with patch.object(translate.time, 'monotonic', lambda: 1000.0 + 721.0):
+            self.assertTrue(clock.spent())           # its 120 s of fighting a block are up
+        block = self.between('    def _gem(clock, *args, **kwargs):', '    def _english_only_safe(')
+        self.assertIn("                clock.waited(getattr(_busy_waits, 'seconds', 0.0))\n", block)
+        self.assertIn("                    _busy_waits.seconds = getattr(\n"
+                      "                        _busy_waits, 'seconds', 0.0) + wait\n", TRANSLATE)
+
+    def test_one_chunk_giving_up_stops_the_others_from_waiting_on(self):
+        self.assertIn("            if _translation_cancelled() or _job_gave_up.is_set():\n"
+                      "                raise _AbortTranslation('cancelled', '')\n", TRANSLATE)
+        self.assertEqual(TRANSLATE.count('                    _job_gave_up.set()\n'), 2)
+
+    def test_one_toast_a_retry_number_not_one_a_chunk(self):
+        self.assertIn('                    if overload_attempts not in _busy_toasts:\n'
+                      '                        _busy_toasts.add(overload_attempts)\n', TRANSLATE)
+
     def test_a_chosen_model_gets_a_shorter_wait_than_the_default(self):
         self.assertIn("_CHOSEN_MODEL_TIMEOUT = 60\n", TRANSLATE)
         self.assertIn("timeout=gemini_timeout or (\n"
