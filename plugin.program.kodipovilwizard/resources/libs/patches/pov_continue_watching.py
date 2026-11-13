@@ -480,7 +480,13 @@ def dropped_choice(params, native):
     action = params.get('action')
     remove = action == 'unhide' if action in ('hide', 'unhide') else tmdb_id in current
     text = ('להחזיר להמשך צפייה?' if remove else 'להסיר מהמשך צפייה?') + '[CR]' + title
-    if not native['confirm_dialog'](text=text):
+    # POV 6.11.03 stopped importing confirm_dialog into modules.dialogs (it
+    # calls ku.confirm_dialog), and the name asked of that module's globals
+    # raised KeyError: every removal ended in "POV error".  The dialog is
+    # POV's kodi_utils function in every version, so it is taken from there;
+    # a caller's own one (the tests') still wins.
+    confirm = native.get('confirm_dialog') or kodi_utils.confirm_dialog
+    if not confirm(text=text):
         return
     mutation = remove_from_sync if remove else add_to_sync
     already_done = action in ('hide', 'unhide') and ((tmdb_id not in current) if remove else (tmdb_id in current))
