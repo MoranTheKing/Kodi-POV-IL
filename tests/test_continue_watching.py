@@ -298,6 +298,20 @@ class ContinuationTests(unittest.TestCase):
                 self.assertEqual(cm[0][1],'[B]הסר מהמשך צפייה[/B]')
                 self.assertIn('"action": "hide"',cm[0][2])
 
+    def test_removal_asks_through_povs_own_dialog_when_the_module_has_no_such_global(self):
+        # POV 6.11.03: modules.dialogs calls ku.confirm_dialog and no longer
+        # has confirm_dialog among its globals; native['confirm_dialog']
+        # raised KeyError and every removal ended in "POV error".
+        params=dict(mediatype='tvshow',tmdb_id='1396',title='Show',action='hide')
+        asked=[]
+        with patch.object(self.utils,'confirm_dialog',lambda **kw:asked.append(kw) or True,create=True):
+            self.assertTrue(helper.dropped_choice(params,{'ku':self.utils}))
+        self.assertEqual(asked,[{'text':'להסיר מהמשך צפייה?[CR]Show'}])
+        self.assertIn(1396,helper.dropped_info({},2))
+        with patch.object(self.utils,'confirm_dialog',lambda **kw:False,create=True):
+            self.assertIsNone(helper.dropped_choice(dict(params,action='unhide'),{}))
+        self.assertIn(1396,helper.dropped_info({},2))
+
     def test_repeated_explicit_removal_does_not_toggle_back_a_stale_item(self):
         params=dict(mediatype='tvshow',tmdb_id='1396',title='Show',action='hide')
         native={'confirm_dialog':lambda **kw:True}
