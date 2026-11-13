@@ -2325,7 +2325,7 @@ def extract_srt(url_or_path, track_num=None, lang=None,
                 head_bytes=DEFAULT_HEAD_BYTES, max_bytes=DEFAULT_MAX_BYTES,
                 deadline_s=DEFAULT_DEADLINE_S, allow_http=False,
                 abort_cb=None, log=None, progress_cb=None, resume_path=None,
-                stats=None):
+                stats=None, steps=None):
     """Extract an embedded TEXT subtitle track as an SRT string.
 
     Pick the track by `track_num`, else by `lang` (BCP-47 prefix, e.g. 'en'
@@ -2345,7 +2345,16 @@ def extract_srt(url_or_path, track_num=None, lang=None,
     'backoffs' (how many times the CDN pushed back) and 'pace'. The caller needs
     those to decide things it otherwise has to GUESS at -- above all whether the
     provider is actually under pressure, which is the difference between handing
-    the connection back to the player and cancelling useful work for nothing."""
+    the connection back to the player and cancelling useful work for nothing.
+    `steps`, if given (HTTP only, and only with `resume_path`), is three
+    callables (window, show, timeline). Before the complete pass the track is
+    read in windows: timeline(starts_ms) is handed every cue's start once;
+    window() returns (from_ms, until_ms) of film time, or None when what is
+    left should be read in one go; after each window show(srt_text) is handed
+    everything collected so far as SRT. What this function RETURNS
+    does not change: the whole track, or None. A window that cannot be
+    finished ends the extraction like any other interruption (what was read
+    stays in `resume_path`), and nothing follows it."""
     _log = log or _noop
     t0 = time.time()
     src = None
@@ -2440,9 +2449,13 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         # both local and debrid HTTP). If there are none: over HTTP defer to the
         # external path; a local file gets a complete sequential walk. A partial
         # extract is NEVER delivered -- we return None so the caller falls back.
+        _steps = None
+        if steps and src.is_http and resume_path and scale_ms > 0:
+            _steps = _steps_in_ticks(steps, entries, scale_ms, origin_ms,
+                                     codec)
         if not _extract_cues(src, seeks, seg_start, want, entries,
                              max_bytes, deadline_s, t0, abort_cb, _log,
-                             progress_cb, resume_path, codec):
+                             progress_cb, resume_path, codec, _steps):
             entries = []
             if src.is_http:
                 return None
@@ -2836,7 +2849,7 @@ def _resume_clear(path):
 
 def _extract_cues(src, seeks, seg_start, want, entries,
                   max_bytes, deadline_s, t0, abort_cb, log, progress_cb=None,
-                  resume_path=None, codec=''):
+                  resume_path=None, codec='', steps=None):
     """Cues-guided extraction from per-track SUBTITLE cues. Local visits each
     cluster directly; HTTP uses coalesced sweep-ranges over the single keep-alive
     connection with a 429 circuit-breaker. Returns True only on a COMPLETE pass;
@@ -2868,6 +2881,14 @@ def _extract_cues(src, seeks, seg_start, want, entries,
     identity = _resume_identity(src, want, codec, positions)
     prior, done, scan = _resume_load(resume_path, identity, log)
     entries.extend(prior)
+    if steps is not None and resume_path:
+        if not _extract_in_windows(
+                src, positions, entries, want, deadline_s, t0, abort_cb, log,
+                progress_cb, done, scan, steps,
+                lambda: _resume_save(resume_path, identity, entries, done,
+                                     scan, log)):
+            _resume_save(resume_path, identity, entries, done, scan, log)
+            return False
     ok = _extract_cues_http(src, positions, entries, want, deadline_s, t0,
                             abort_cb, log, progress_cb, done, scan)
     if ok:
@@ -2875,6 +2896,129 @@ def _extract_cues(src, seeks, seg_start, want, entries,
     else:
         _resume_save(resume_path, identity, entries, done, scan, log)
     return ok
+
+
+def _steps_in_ticks(steps, entries, scale_ms, origin_ms, codec):
+    """extract_srt's `steps` (film time in ms, SRT text) as _extract_cues
+    takes them (the file's ticks, nothing): a cue at tick T starts at
+    T * scale_ms - origin_ms, the same sum _entries_to_srt makes."""
+    window, show, timeline = steps
+
+    def window_ticks():
+        span = window()
+        if not span:
+            return None
+        return ((float(span[0]) + origin_ms) / scale_ms,
+                (float(span[1]) + origin_ms) / scale_ms)
+
+    def show_so_far():
+        show(_entries_to_srt(entries, scale_ms, origin_ms, codec))
+
+    def timeline_ms(ticks):
+        timeline([int(t * scale_ms - origin_ms) for t in ticks])
+
+    return (window_ticks, show_so_far, timeline_ms)
+
+
+# How many windows one extraction may read before the complete pass takes
+# over whatever is left (a guard against a caller that never says "the rest";
+# a slow provider gets small windows, and a long film needs many of them).
+_WINDOWS_MAX = 64
+
+
+def _extract_in_windows(src, positions, entries, want, deadline_s, t0,
+                        abort_cb, log, progress_cb, done, scan, steps, save):
+    """The part of the track the viewer needs next, before the rest of it.
+
+    Field report (Nov 2026): "extracting the embedded subtitle takes half the
+    film before any translation shows". Nothing could be shown before the
+    last cue was read, and at the pace a strict provider tolerates that is
+    minutes for an episode and many more for a film.
+
+    `steps` is (window, show, timeline): timeline(ticks) is handed every
+    cue's time once; window() names a span of film time in ticks, or None to
+    stop; show() is called after each span with nothing (the caller reads
+    `entries`). Each span is read by the ordinary pass over the cues of every
+    cluster that has a cue inside it.
+
+    WHOLE CLUSTERS, never a slice of one. _extract_cues_http records a
+    cluster as finished once the cues it was handed came back, and a finished
+    cluster is never read again -- so handing it only the cues before a mark
+    would lose, for good, every later cue of a cluster that straddles the
+    mark (review of the first attempt at this, 0.3.79).
+
+    Returns False when a span could not be finished (the caller saves what
+    was read and gives up, as for any interrupted pass -- nothing may follow
+    it on the same connection budget). True otherwise, with `done` holding
+    the clusters read; the caller's complete pass skips them."""
+    window, show, timeline = steps
+    if any(p[2] is None for p in positions):
+        # Cues without a time cannot be placed in a span. That is every cue
+        # of a file whose Cues carry no CueRelativePosition (_read_cues): such
+        # a file is read in one pass, as before.
+        return True
+    try:
+        timeline(sorted(p[2] for p in positions))
+    except Exception as e:
+        log('timeline(): %r -- reading in one pass' % (e,))
+        return True
+    every = set(p[0] for p in positions)
+    total = len(positions)
+    for _round in range(_WINDOWS_MAX):
+        try:
+            span = window()
+        except Exception as e:
+            log('window(): %r -- reading the rest in one pass' % (e,))
+            return True
+        if not span:
+            return True
+        low, high = span
+        picked = set(p[0] for p in positions if low <= p[2] <= high)
+        if not (every - done - picked):
+            # this span is all that is left: the complete pass reads it, and
+            # reports and clears the resume file as it always has
+            return True
+        todo = picked - done
+        if todo:
+            part = [p for p in positions if p[0] in picked]
+            before = sum(1 for p in positions if p[0] in done)
+            carried = sum(1 for p in part if p[0] in done)
+
+            def _progress(n, _total, _before=before, _carried=carried):
+                # the pass counts within its span; the caller's bar and the
+                # "stopped at N%" message are about the whole track
+                n_all = min(total, _before + max(0, n - _carried))
+                if src._stats is not None:
+                    src._stats['done'] = n_all
+                    src._stats['total'] = total
+                if progress_cb:
+                    progress_cb(n_all, total)
+
+            # Clusters an earlier attempt left for a window scan are scanned
+            # by the pass that is handed them: only this span's here.
+            scan_here = set(c for c in scan if c in picked)
+            # (Each pass closes the connection pool it opened, so a window
+            # after the first runs on one connection. Nothing is lost while
+            # _HTTP_CONNS is 1; if concurrency is switched back on, the pool
+            # has to outlive the windows.)
+            ok = _extract_cues_http(src, part, entries, want, deadline_s, t0,
+                                    abort_cb, log, _progress, done, scan_here)
+            scan.difference_update(picked)
+            scan.update(scan_here)
+            if not ok:
+                return False
+            try:
+                save()
+            except Exception:
+                pass
+            log('window %d: film %.0f..%.0f (ticks), %d cluster(s) read, %d of '
+                '%d done' % (_round + 1, low, high, len(todo),
+                             len(done & every), len(every)))
+        try:
+            show()
+        except Exception as e:
+            log('show(): %r' % (e,))
+    return True
 
 
 def _cluster_prefix_and_ts(header):
