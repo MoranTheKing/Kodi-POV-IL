@@ -360,47 +360,66 @@ class Markers(unittest.TestCase):
         self.assertIn('_gp_settle((marker,), report, stopped)', opened)
 
 
+H, F = 'gemini-4-hydrogen', 'gemini-3.7-flash'
+
+
 class OneModel(unittest.TestCase):
-    """0.3.75: the proofread asks gemini-3.7-flash alone (blind studies 004 and
+    """The shipped chain. 0.3.75: gemini-3.7-flash alone (blind studies 004 and
     005, 11 Nov 2026: without a Hebrew reference it fixed 27 lines and broke
-    none, where 3.6 had broken 6)."""
+    none, where 3.6 had broken 6). 0.3.79: gemini-4-hydrogen before it (blind
+    study 006, 13 Nov 2026: 16-1-3 over 20 lines, fixed 16 and broke 1, while
+    3.7 answered 503 all night and the next morning)."""
     CHAIN = None
     setUp = Request.setUp
     run_it = Request.run_it
 
-    def test_the_shipped_chain_is_3_7_alone(self):
-        self.assertEqual(MODS['resources.lib.gender_proofread'].MODELS, ('gemini-3.7-flash',))
+    def test_the_shipped_chain_is_hydrogen_then_3_7_and_no_other_flash_model(self):
+        self.assertEqual(MODS['resources.lib.gender_proofread'].MODELS, (H, F))
 
-    def test_with_the_viewer_waiting_3_7_twice_and_no_other_model(self):
+    def test_hydrogen_answers_and_nothing_else_is_asked(self):
+        asked, report = self.run_it(['1|את באה?'])
+        self.assertEqual((asked, report['model']), ([H], H))
+
+    def test_with_the_viewer_waiting_each_model_twice_in_turn(self):
         busy = translate.gemini.OverloadError('503')
-        asked, report = self.run_it([busy, busy, '1|את באה?'])
-        self.assertEqual(asked, ['gemini-3.7-flash'] * 2)
+        asked, report = self.run_it([busy, busy, busy, busy, '1|את באה?'])
+        self.assertEqual(asked, [H, H, F, F])
         self.assertEqual((report['model'], report['why']), ('', 'busy'))
         asked, report = self.run_it([busy, '1|את באה?'])
-        self.assertEqual((asked, report['model']), (['gemini-3.7-flash'] * 2, 'gemini-3.7-flash'))
+        self.assertEqual((asked, report['model']), ([H, H], H))
+        asked, report = self.run_it([busy, busy, '1|את באה?'])
+        self.assertEqual((asked, report['model']), ([H, H, F], F))
 
-    def test_in_the_background_four_requests_at_most(self):
+    def test_a_spent_day_on_hydrogen_goes_straight_to_3_7(self):
+        asked, report = self.run_it([translate.gemini.QuotaExceeded('day'), '1|את באה?'])
+        self.assertEqual((asked, report['model']), ([H, F], F))
+
+    def test_in_the_background_five_requests_at_most(self):
+        # each model once, then one model a round, three rounds
         asked, report = self.run_it([], background=True, step=1)
-        self.assertEqual(asked, ['gemini-3.7-flash'] * 4)
+        self.assertEqual(asked, [H, F, F, H, F])
         self.assertEqual((report['rounds'], report['why']), (4, 'busy'))
 
     def test_a_failed_connection_says_so(self):
         gem = translate.gemini
         err = gem.GeminiError('Network error: dns')
         err.transport = True
-        asked, report = self.run_it([err], background=True, rounds=False)
+        err2 = gem.GeminiError('Network error: dns')
+        err2.transport = True
+        asked, report = self.run_it([err, err2], background=True, rounds=False)
         self.assertEqual((report['why'], report['net']), ('error', True))
-        asked, report = self.run_it([gem.GeminiError('HTTP 404: no such model')],
+        asked, report = self.run_it([gem.GeminiError('HTTP 404: no such model'),
+                                     gem.GeminiError('HTTP 404: no such model')],
                                     background=True, rounds=False)
         self.assertEqual((report['why'], report['net']), ('error', False))
 
-    def test_the_queue_asks_once(self):
-        # gp_later's ask again: one request, no rounds, no second try
+    def test_the_queue_asks_each_model_once(self):
+        # gp_later's ask again: no rounds, no second try
         asked, report = self.run_it([], background=True, step=1, rounds=False)
-        self.assertEqual(asked, ['gemini-3.7-flash'])
+        self.assertEqual(asked, [H, F])
         self.assertEqual((report['rounds'], report['why'], report['asked']), (1, 'busy', True))
         asked, report = self.run_it(['1|את באה?'], background=True, rounds=False)
-        self.assertEqual((asked, report['model']), (['gemini-3.7-flash'], 'gemini-3.7-flash'))
+        self.assertEqual((asked, report['model']), ([H], H))
 
 
 if __name__ == '__main__':

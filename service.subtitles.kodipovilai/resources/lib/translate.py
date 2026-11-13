@@ -1742,6 +1742,14 @@ class _BlockClock(object):
         if self.until is None and not isinstance(cause, _IntegrityRejected):
             self.until = time.monotonic() + self.budget
 
+    def waited(self, seconds):
+        """`seconds` went on waiting for a busy model to take the request
+        again: not the chunk being slow, and not it fighting a block."""
+        if seconds > 0:
+            self.cap += seconds
+            if self.until is not None:
+                self.until += seconds
+
     def spent(self, grace=0.0):
         now = time.monotonic() - grace
         if now > self.cap:
@@ -2355,6 +2363,70 @@ def _playing_video_url(info):
     return ''
 
 
+# External subtitles the single-shift check refused that are then tried
+# against SubSync's file proof, per language (each costs a planner run).
+_STAIRCASE_TRIES = 3
+
+
+def _embedded_staircase_source(info, playing, ref, rejected, abort):
+    """An external subtitle made for ANOTHER CUT of the film, re-timed onto
+    the embedded track by a map with one offset per act.
+
+    The align path accepts one shift (and one speed) for the whole file, so
+    a subtitle whose gap grows after every ad break is "not confident"
+    however good its text -- and the embedded text then has to be extracted,
+    hundreds of requests at the provider's pace. SubSync proves such maps
+    since 0.3.76 (a file named as a streaming rip whose text tracks come in
+    two or more languages: the map is learned from one track and the others
+    must accept it). Offline, on the timelines of three such files: of 12
+    subtitle timings a single shift could not align, the proven map aligned
+    11, and each then passed this path's own check as already synced.
+
+    `rejected`: [(release, text)] in the order tried. `ref`: the embedded
+    track's cue times the single-shift check used. Returns (text, release)
+    or (None, None). Reads nothing from the stream: it uses the file profile
+    SubSync cached at play start, and does nothing without one. Takes only a
+    verdict SubSync's own gates passed, applied by apply_verdict (which
+    re-checks the proof), and only when the result is then CONFIRMED against
+    `ref` -- the bar the "already synced" branch above sets."""
+    if not rejected:
+        return None, None
+    try:
+        from . import subsync
+        from . import sync_align
+        bundle = subsync._cached_reference_bundle(info)
+        if not (bundle and bundle.get('track_cues')):
+            return None, None
+        for release, text in rejected[:_STAIRCASE_TRIES]:
+            if abort():
+                return None, None
+            verdict = subsync._verify_file_bundle(bundle, text, playing)[0]
+            if not verdict or verdict.get('status') != sync_align.STATUS_FIXABLE:
+                continue
+            try:
+                aligned = sync_align.apply_verdict(text, verdict)
+            except Exception:
+                continue
+            if not aligned or aligned.count('-->') < 8:
+                continue
+            after = sync_align.verify_cues(ref, aligned)
+            if after.get('status') != sync_align.STATUS_CONFIRMED:
+                kodi_utils.log('embedded-align: %r mapped onto the file but not '
+                               'confirmed against the embedded track (%s)'
+                               % (release, after.get('diag')), level='INFO')
+                continue
+            kodi_utils.log('embedded-align: %r was made for another cut -- '
+                           're-timed by a proven map of %d part(s) (%s)'
+                           % (release, len(verdict.get('segments') or []),
+                              verdict.get('validation_proof')
+                              or 'second timing family'), level='INFO')
+            return aligned, release
+    except Exception as e:
+        kodi_utils.log('embedded-align: staircase check skipped: {0}'.format(e),
+                       level='WARNING')
+    return None, None
+
+
 def _embedded_aligned_source_srt(
         info, src_lang, progress_cb=None, allow_http=True,
         strict_lang=False, include_he=False):
@@ -2610,6 +2682,8 @@ def _embedded_aligned_source_srt(
             # download cap; _abort() (checked each iteration) enforces the 45s
             # deadline + pause/playback-end so the exhaustive search can't hang
             # the player.
+            _refused = []
+            _yielded = False
             for c in cands:
                 if _abort():
                     return None, None
@@ -2622,6 +2696,7 @@ def _embedded_aligned_source_srt(
                     kodi_utils.log('embedded-align: [%s] search time budget '
                                    'reached -- yielding to the English/fallback '
                                    'language' % lang, level='INFO')
+                    _yielded = True
                     break
                 try:
                     src_text = subsync._download_oracle(c.get('payload'))
@@ -2657,6 +2732,7 @@ def _embedded_aligned_source_srt(
                     kodi_utils.log('embedded-align: [%s] %r not confident (%s)'
                                    % (lang, c.get('release'),
                                       verdict.get('diag')), level='INFO')
+                    _refused.append((c.get('release') or '', src_text))
                 if aligned and aligned.count('-->') >= 8:
                     out = os.path.join(
                         kodi_utils.cache_dir(),
@@ -2668,6 +2744,23 @@ def _embedded_aligned_source_srt(
                                    'embedded cue ref, ~%d requests avoided)'
                                    % (lang, n, n), level='INFO')
                     return out, lang
+            # No subtitle of this language fits by one shift: one made for
+            # another cut may still fit by a map. Not when this language has
+            # already used up its share of the search time (the next language
+            # needs what is left).
+            aligned, _rel = (None, None) if _yielded else (
+                _embedded_staircase_source(info, playing, ref, _refused, _abort))
+            if aligned:
+                out = os.path.join(
+                    kodi_utils.cache_dir(),
+                    'embedded_aligned_{0}.srt'.format(lang or 'src'))
+                with open(out, 'w', encoding='utf-8') as f:
+                    f.write(aligned)
+                _p(100, 100, 'מוכן')
+                kodi_utils.log('embedded-align: synced %s source ready (%d '
+                               'embedded cue ref, ~%d requests avoided)'
+                               % (lang, n, n), level='INFO')
+                return out, lang
         kodi_utils.log('embedded-align: no source aligned in any language -- '
                        'deferring to full extract', level='INFO')
         return None, None
@@ -3430,8 +3523,9 @@ def _gp_why(report, fails, stopped):
 # gemini-3.7-flash, all but one refused with 503, then QuotaExceeded), so the
 # rounds cost no more than the one round they replace: the job asks every
 # model once, then one model a round (in turn from the last, skipping one out
-# of today's quota), _GP_BUSY_ROUNDS times -- six requests at most; four since
-# 0.3.75, which asks gemini-3.7-flash alone. Still no answer: the service asks
+# of today's quota), _GP_BUSY_ROUNDS times -- six requests at most; four with
+# 0.3.75's one model, five with 0.3.79's two (gemini-4-hydrogen, then
+# gemini-3.7-flash). Still no answer: the service asks
 # again later (gp_later), one request at a time.
 _GP_BUSY_WAIT = 120
 _GP_BUSY_WAIT_MAX = 480
@@ -5869,7 +5963,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # Backoff schedule for retryable Gemini failures (503 overload,
     # 500 / 502 / 504 transients). Google's published guidance is to
     # wait at least a few seconds before retrying these.
-    OVERLOAD_BACKOFF = [5, 15, 30, 60, 120]  # seconds
+    # Ten minutes of them since 0.3.79 (it was four): a viewer who asked for an
+    # AI translation wants the AI's, and Google's text is what follows the
+    # last retry. The lines not translated yet stay in their source language
+    # meanwhile, and the default model has hundreds of requests a day.
+    OVERLOAD_BACKOFF = [5, 15, 30, 60, 120, 120, 120, 120]  # seconds
     # Other transient (non-overload) Gemini errors get a shorter
     # schedule -- they're usually content / parse / safety issues,
     # not infrastructure.
@@ -6008,7 +6106,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         """_call_gemini, counted on the chunk's clock (_BlockClock.calls)."""
         if clock is not None:
             clock.calls += 1
-        return _call_gemini(*args, **kwargs)
+        _busy_waits.seconds = 0.0
+        try:
+            return _call_gemini(*args, **kwargs)
+        finally:
+            # A chunk answered on its last busy retry had used up its whole
+            # slow cap by then, and its top-ups went English-only or to
+            # Google although nothing about it was slow (review, 0.3.79).
+            if clock is not None:
+                clock.waited(getattr(_busy_waits, 'seconds', 0.0))
 
     def _english_only_safe(idx, ch, deadline=None):
         """Translate `ch` with NO gender reference (English only), splitting on
@@ -6445,10 +6551,20 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     prev_context_lines = max(0, kodi_utils.get_int(
         'prev_context_lines', 5))
 
+    # Set once the job has given up on one chunk (the dispatcher below):
+    # chunks still waiting to ask a busy model again stop there, instead of
+    # holding the Google fill -- and spending requests -- for the rest of
+    # their own ten minutes.
+    _job_gave_up = threading.Event()
+    # busy-retry numbers already announced (one toast a number, not one a chunk)
+    _busy_toasts = set()
+    # seconds this thread's current request spent waiting on a busy model
+    _busy_waits = threading.local()
+
     def _cancel_aware_wait(seconds):
         deadline = time.monotonic() + max(0.0, float(seconds))
         while time.monotonic() < deadline:
-            if _translation_cancelled():
+            if _translation_cancelled() or _job_gave_up.is_set():
                 raise _AbortTranslation('cancelled', '')
             time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
 
@@ -6672,11 +6788,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             idx, total, overload_attempts,
                             len(OVERLOAD_BACKOFF), wait),
                         level='WARNING')
-                    kodi_utils.notify(
-                        'AI: Gemini עמוס. ניסיון {0}/{1} בעוד {2}ש'
-                        .format(overload_attempts,
-                                len(OVERLOAD_BACKOFF), wait),
-                        time_ms=min(wait * 1000, 8000))
+                    if overload_attempts not in _busy_toasts:
+                        _busy_toasts.add(overload_attempts)
+                        kodi_utils.notify(
+                            'AI: Gemini עמוס. ניסיון {0}/{1} בעוד {2}ש'
+                            .format(overload_attempts,
+                                    len(OVERLOAD_BACKOFF), wait),
+                            time_ms=min(wait * 1000, 8000))
+                    _busy_waits.seconds = getattr(
+                        _busy_waits, 'seconds', 0.0) + wait
                     _cancel_aware_wait(wait)
                     continue
                 raise _AbortTranslation('overload',
@@ -6760,6 +6880,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     abort_detail = getattr(e, 'detail', '') or ''
                     # Try to cancel pending futures; in-flight ones
                     # will run to completion but we ignore them.
+                    _job_gave_up.set()
                     for f in future_to_idx:
                         f.cancel()
                     break
@@ -6768,6 +6889,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         str(e)[:80])
                     abort_reason = 'crash'
                     abort_detail = str(e)[:100]
+                    _job_gave_up.set()
                     for f in future_to_idx:
                         f.cancel()
                     break
