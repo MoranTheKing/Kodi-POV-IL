@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """The gender proofread asked again later, from the service (0.3.75).
 
-Since 0.3.75 the proofread asks gemini-3.7-flash only (gender_proofread.MODELS).
+Since 0.3.75 the proofread asks gemini-3.7-flash only (gender_proofread.MODELS);
+since 0.3.79 gemini-4-hydrogen first and 3.7 after it, one request each a turn.
 3.7 is busy much of the day -- the field's answers came mostly 20:00-23:00
 Israel time -- and a translation made on play is seldom opened again, so a
 proofread that found it busy used to be lost. Such a translation waits here
