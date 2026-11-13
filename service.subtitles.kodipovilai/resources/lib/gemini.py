@@ -112,6 +112,12 @@ class InvalidKey(GeminiError):
     """Key is missing / revoked / malformed."""
 
 
+class ModelUnavailable(GeminiError):
+    """Google does not serve this model id to this key (HTTP 404): retired,
+    closed to new users, or never a model. Asking it again cannot help;
+    another model can."""
+
+
 class TruncatedResponse(GeminiError):
     """Model hit its output-token cap mid-response. The text we
     received is real but cut off (incomplete subtitle entries at
@@ -548,6 +554,8 @@ def generate(api_key, model, prompt, temperature=0.2,
                          .format(r.status_code, (r.text or '')[:180]))
     if r.status_code in (400, 403):
         _raise_rejected_request(r)
+    if r.status_code == 404:
+        raise ModelUnavailable('HTTP 404: {0}'.format(r.text[:200]))
     if r.status_code != 200:
         raise GeminiError('HTTP {0}: {1}'.format(r.status_code, r.text[:200]))
 

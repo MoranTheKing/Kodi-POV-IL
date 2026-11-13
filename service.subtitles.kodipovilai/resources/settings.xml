@@ -100,7 +100,6 @@
                       ignored and Kodi falls back to the built-in
                       lookup (giving us the same Videos/Music bug). -->
               <option label="32230">gemini-3.5-flash-lite</option>
-              <option label="32231">gemini-3.1-flash</option>
               <option label="32234">gemini-3.8-flash</option>
               <option label="32232">gemini-2.5-flash-lite</option>
               <option label="32233">gemini-2.5-flash</option>
@@ -369,6 +368,15 @@
              device that took the previous bump, so reusing it would no-op this
              migration for exactly the users who need it. -->
         <setting id="_gemini_model_bump_v3" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: a stored gemini-3.1-flash (no such model at
+             Google any more) was moved to the default model (0.3.78). -->
+        <setting id="_gemini_model_bump_v4" type="string" label="30000">
           <level>4</level>
           <default></default>
           <constraints>
