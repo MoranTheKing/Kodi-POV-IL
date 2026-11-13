@@ -2190,6 +2190,132 @@ def set_quiet(value):
     _QUIET = bool(value)
 
 
+# The model every install starts on, and the one a translation goes on with
+# when the viewer's own choice does not answer.
+_FALLBACK_MODEL = 'gemini-3.5-flash-lite'
+# How long a model that did not answer is passed over by the translations
+# that follow (seconds), by why: 'busy' a 5xx answer (two in a row for a
+# paid key), 'slow' no reply within the timeout, 'quota' its free requests for the day are spent,
+# 'gone' Google does not serve it to this key (404).
+_MODEL_OUT_S = {'busy': 600, 'slow': 600, 'quota': 3 * 3600, 'gone': 6 * 3600}
+_MODEL_OUT_PROP = 'povil.gemini.model_out.'
+# How long a chunk waits for a chosen (non-default) model's reply before it
+# counts as 'slow' (seconds; gemini.REQUEST_TIMEOUT, 90, for the default
+# model, which has nothing behind it).
+_CHOSEN_MODEL_TIMEOUT = 60
+
+
+def _model_out_key(model, api_key=''):
+    # per API key: another key has its own allowance and its own access
+    import hashlib
+    return '{0}{1}.{2}'.format(
+        _MODEL_OUT_PROP, model,
+        hashlib.sha256((api_key or '').encode('utf-8', 'replace')).hexdigest()[:10])
+
+
+def _model_out_note(model, why, now=None, api_key=''):
+    """Remember, for this Kodi session, that `model` did not answer."""
+    try:
+        import xbmcgui as _g
+        until = (time.time() if now is None else now) + _MODEL_OUT_S[why]
+        _g.Window(10000).setProperty(_model_out_key(model, api_key),
+                                     '{0:.0f}|{1}'.format(until, why))
+    except Exception:
+        pass
+
+
+def _model_out(model, now=None, api_key=''):
+    """Why `model` is being passed over right now, or ''."""
+    try:
+        import xbmcgui as _g
+        raw = _g.Window(10000).getProperty(_model_out_key(model, api_key)) or ''
+        until, _sep, why = raw.partition('|')
+        if why in _MODEL_OUT_S and float(until) > (
+                time.time() if now is None else now):
+            return why
+    except Exception:
+        pass
+    return ''
+
+
+def _model_label(model):
+    """'gemini-3.8-flash' -> '3.8 Flash', as the settings list names it."""
+    name = (model or '').strip()
+    if name.lower().startswith('gemini-'):
+        name = name[7:]
+    return ' '.join(part.capitalize() for part in name.split('-')) or 'Gemini'
+
+
+def _model_fallback_notice(chosen, why):
+    """Tell the viewer the translation is on another model than their pick.
+
+    A model Google no longer serves is theirs to change in the settings, so
+    that one is shown even during the automatic translation on play, which
+    shows no other toast (the abort it replaces was shown there too). A busy
+    model or a spent allowance passes on its own and stays a status."""
+    message = _model_fallback_message(chosen, why)
+    if why == 'gone':
+        try:
+            kodi_utils.notify(message, time_ms=6000)
+        except Exception:
+            pass
+    else:
+        _status(message, time_ms=5000)
+
+
+def _model_fallback_message(chosen, why, fallback=None):
+    old, new = _model_label(chosen), _model_label(fallback or _FALLBACK_MODEL)
+    return {
+        'gone': 'AI: המודל {0} כבר לא זמין אצל Google — מתרגם עם {1}. '
+                'אפשר להחליף מודל בהגדרות',
+        'quota': 'AI: נגמרה המכסה היומית של {0} — ממשיך עם {1}',
+    }.get(why, 'AI: {0} עמוס כרגע — ממשיך עם {1}').format(old, new)
+
+
+class _ModelFallback(object):
+    """Which model one translation asks.
+
+    A viewer who picked another model than the default got no AI at all when
+    that model did not answer: 503 after 503 through a five-step backoff
+    (230 s a chunk), or three 90 s timeouts, then Google Translate for
+    whatever was left -- "the subtitles arrive when the film ends" (field,
+    Nov 2026; that night every full Flash model answered 503 or nothing while
+    Flash-Lite answered in two seconds, and three ids in the settings list
+    were no longer served at all). The translation now goes on with the
+    default model, at once, and the ones that follow start on it for a while
+    (_MODEL_OUT_S). The default model itself has nothing to fall back to and
+    keeps the behaviour it had.
+    """
+
+    def __init__(self, chosen, fallback=_FALLBACK_MODEL, out=_model_out,
+                 note=_model_out_note, api_key=''):
+        self.chosen = (chosen or '').strip() or fallback
+        self.fallback = fallback
+        self._note = note
+        self._api_key = api_key or ''
+        self._lock = threading.Lock()
+        # why this translation is not on the chosen model ('' when it is)
+        self.why = (out(self.chosen, api_key=self._api_key)
+                    if self.chosen != fallback else '')
+        self.model = fallback if self.why else self.chosen
+
+    def give_up(self, asked, why):
+        """A request to `asked` failed for `why`. True: send it again at
+        once, self.model has (or already had) another model for it. False:
+        `asked` is the last model there is; the caller's own retries apply."""
+        with self._lock:
+            if asked != self.model:
+                return True          # another chunk switched meanwhile
+            if self.model == self.fallback:
+                return False
+            self.model, self.why = self.fallback, why
+        try:
+            self._note(self.chosen, why, api_key=self._api_key)
+        except Exception:
+            pass
+        return True
+
+
 def _status(msg, **kwargs):
     """Success / informational status. Suppressed during auto-on-play (the
     overlay shows it instead); a normal toast otherwise."""
@@ -5439,8 +5565,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     if not api_key:
         kodi_utils.notify(kodi_utils.localised(33002))
         return None
-    model = kodi_utils.get_setting('model', 'gemini-3.5-flash-lite') \
-            or 'gemini-3.5-flash-lite'
+    _models = _ModelFallback(
+        kodi_utils.get_setting('model', 'gemini-3.5-flash-lite')
+        or 'gemini-3.5-flash-lite', api_key=api_key)
+    model = _models.model
+    if _models.why:
+        kodi_utils.log('model {0} passed over ({1}, seen in this session): '
+                       'translating with {2}'.format(
+                           _models.chosen, _models.why, model), level='INFO')
+        _model_fallback_notice(_models.chosen, _models.why)
     # Gemini tuning (validated A/B on 2.5/3.1): keep temperature at Google's
     # recommended default 1.0 (lowering it degrades Gemini 3 reasoning), use
     # thinking_level MEDIUM (HIGH burns the output budget -> truncation +
@@ -5470,27 +5603,30 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                        .format(model), level='INFO')
     thinking_raw = (kodi_utils.get_setting('thinking_budget', 'medium')
                     or 'medium').strip().lower()
-    thinking_level = None
-    thinking_budget = None
-    if thinking_raw in ('minimal', 'low', 'medium', 'high'):
-        thinking_level = thinking_raw
-    else:
-        try:
-            thinking_budget = int(thinking_raw)
-        except (TypeError, ValueError):
-            thinking_budget = 0
-        if thinking_budget <= 0:
-            thinking_budget = None
-    if thinking_budget and model.lower().startswith('gemini-3.'):
-        if thinking_budget <= 512:
-            thinking_level = 'minimal'
-        elif thinking_budget <= 768:
-            thinking_level = 'low'
-        elif thinking_budget <= 1024:
-            thinking_level = 'medium'
+    def _thinking_for(for_model):
+        level, budget = None, None
+        if thinking_raw in ('minimal', 'low', 'medium', 'high'):
+            level = thinking_raw
         else:
-            thinking_level = 'high'
-        thinking_budget = None
+            try:
+                budget = int(thinking_raw)
+            except (TypeError, ValueError):
+                budget = 0
+            if budget <= 0:
+                budget = None
+        if budget and for_model.lower().startswith('gemini-3.'):
+            if budget <= 512:
+                level = 'minimal'
+            elif budget <= 768:
+                level = 'low'
+            elif budget <= 1024:
+                level = 'medium'
+            else:
+                level = 'high'
+            budget = None
+        return level, budget
+
+    thinking_level, thinking_budget = _thinking_for(model)
     whole_subtitle_request = kodi_utils.get_bool(
         'whole_subtitle_request', False)
     # Safety: a single 'whole subtitle' request can't fit a very large source --
@@ -5814,6 +5950,40 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # Show the "rate limited" toast at most ONCE per job (shared across chunks),
     # not once per chunk per retry.
     _ratelimit_notified = [False]
+
+    _switch_lock = threading.Lock()
+
+    def _go_on_with_fallback(asked, why):
+        """A request to `asked` failed for `why`. True when it should go out
+        again at once to the model the job now uses (_ModelFallback): the
+        names every later request reads are moved to that model here."""
+        nonlocal model, thinking_level, thinking_budget, _rpm_interval
+        if not _models.give_up(asked, why):
+            return False
+        with _switch_lock:
+            if model == _models.model:
+                return True          # another chunk has moved the names
+            model = _models.model
+            thinking_level, thinking_budget = _thinking_for(model)
+            if not _paid_mode:
+                # the pace follows the model: Flash-Lite's free allowance is
+                # three times a Flash model's
+                _cap = _gemini_free_rpm_cap(model)
+                _rpm_interval = 60.0 / max(1, min(
+                    kodi_utils.get_int('gemini_rpm', _cap), _cap))
+            # Slots already handed out were spaced for the old model (15 s
+            # apart on a Flash model): left there, the chunk that caused the
+            # switch -- the first, where the viewer is -- waited 36 s for its
+            # turn at three chunks in flight (review, fake clock). The new
+            # model's allowance is its own; its first slot is now.
+            with _GEMINI_RATE_LOCK:
+                _GEMINI_NEXT_SLOT[0] = min(_GEMINI_NEXT_SLOT[0],
+                                           time.monotonic())
+        kodi_utils.log('model {0} did not answer ({1}): the translation '
+                       'goes on with {2}'.format(asked, why, model),
+                       level='WARNING')
+        _model_fallback_notice(asked, why)
+        return True
 
     # Per-chunk translator. Holds the inner retry loop. Returns the
     # raw Gemini response text, or raises a Stop-style exception
@@ -6379,6 +6549,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             _gemini_rate_gate(_rpm_interval)   # pace to stay under the RPM cap
             if _translation_cancelled():
                 raise _AbortTranslation('cancelled', '')
+            _asked_model = model
             try:
                 response = gemini.generate(
                     api_key=api_key,
@@ -6389,7 +6560,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     top_p=top_p,
                     thinking_budget=thinking_budget,
                     thinking_level=thinking_level,
-                    timeout=gemini_timeout or gemini.REQUEST_TIMEOUT,
+                    timeout=gemini_timeout or (
+                        gemini.REQUEST_TIMEOUT if model == _models.fallback
+                        else _CHOSEN_MODEL_TIMEOUT),
                 )
                 if _NUMBERED_REQUESTS:
                     response = srt_wire.from_wire(ch, response)
@@ -6445,6 +6618,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 # misleading "daily quota exhausted, try again after midnight".
                 raise _AbortTranslation('ratelimit', 'AI: עומס זמני חורג')
             except gemini.QuotaExceeded:
+                # the chosen model's day is spent (20 requests on a Flash
+                # model): the default model has its own allowance
+                if _go_on_with_fallback(_asked_model, 'quota'):
+                    continue
                 raise _AbortTranslation('quota',
                     kodi_utils.localised(33005))
             except gemini.InvalidKey as e:
@@ -6475,6 +6652,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     continue
                 raise
             except gemini.OverloadError as e:
+                # No second try on a chosen model that says it is busy: the
+                # refusal itself took 11 s to come back, and its retry, paced
+                # at a Flash model's 4 requests a minute, put the switch 68 s
+                # into the job (QA Kodi, gemini-3.8-flash, 13 Nov 2026).
+                # (A paid key keeps one 5 s retry: nothing paces it, and
+                # one blip would move ten minutes of its translations.)
+                if ((_asked_model != model or not _paid_mode
+                     or overload_attempts >= 1)
+                        and _go_on_with_fallback(_asked_model, 'busy')):
+                    overload_attempts = 0
+                    continue
                 if overload_attempts < len(OVERLOAD_BACKOFF):
                     wait = OVERLOAD_BACKOFF[overload_attempts]
                     overload_attempts += 1
@@ -6496,6 +6684,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     'תרגום נכשל ב-chunk {1}/{2}.'.format(
                         len(OVERLOAD_BACKOFF), idx, total))
             except gemini.GeminiError as e:
+                # Not served to this key (404), or sent and no reply within
+                # the timeout: the same model again is the same wait again.
+                _why = ('gone' if isinstance(e, gemini.ModelUnavailable)
+                        else 'slow' if (getattr(e, 'transport', False)
+                                        and getattr(e, 'answered', False))
+                        else '')
+                if ((_why or _asked_model != model)
+                        and _go_on_with_fallback(_asked_model, _why or 'busy')):
+                    generic_attempts = 0
+                    continue
                 if generic_attempts < len(GENERIC_BACKOFF):
                     wait = GENERIC_BACKOFF[generic_attempts]
                     generic_attempts += 1
@@ -6716,7 +6914,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if abort_reason == 'quota':
                 try:
                     from . import gemini_quota
-                    gemini_quota.note_exhausted(model)
+                    # under the setting's model: that is the one
+                    # _google_cache_upgradeable asks about, and after a
+                    # fallback both allowances are spent
+                    gemini_quota.note_exhausted(_models.chosen)
                 except Exception:
                     pass
             # Nothing from the AI and a cached Google file in hand: that file,

@@ -289,7 +289,8 @@ class GoogleFillTests(unittest.TestCase):
         self.assertTrue(os.path.isfile(self.path + '.google'))
         self.assertEqual(self.notes, ['Gemini עמוס — 1 מתוך 3 חלקים תורגמו ב-AI, השאר ב-Google Translate'])
         abort = TRANSLATE.index('if abort_reason in _GOOGLE_FILL_ABORTS:')
-        self.assertIn("gemini_quota.note_exhausted(model)", TRANSLATE[abort:abort + 700])
+        # under the SETTING's model (0.3.78): the one _google_cache_upgradeable asks about
+        self.assertIn("gemini_quota.note_exhausted(_models.chosen)", TRANSLATE[abort:abort + 900])
         self.assertIn("if abort_reason == 'quota':", TRANSLATE[abort:abort + 500])
         # an error the user can fix (retired model, API not enabled) still says why
         self.assertIn("if abort_reason in ('error', 'crash'):\n", TRANSLATE[abort:abort + 200])
@@ -425,7 +426,7 @@ class GoogleCacheUpgradeTests(unittest.TestCase):
         abort = TRANSLATE.index("if abort_reason in _GOOGLE_FILL_ABORTS:")
         self.assertIn('gpath = (None if out_blocks_by_index or not _google_chunks\n'
                       '                     else _keep_replaced_google(abort_reason))',
-                      TRANSLATE[abort:abort + 900])
+                      TRANSLATE[abort:abort + 1200])
         # every failure while replacing hands the Google file back
         self.assertIn("_kept = _keep_replaced_google('not_hebrew')", TRANSLATE)
         missing = TRANSLATE.index("'מקור הכתוביות לא נמצא — בחר שוב'")
@@ -452,8 +453,8 @@ class GoogleCacheUpgradeTests(unittest.TestCase):
         self.assertTrue('cache.save_text(translated, final)\n    _clear_google_marker(translated)' in TRANSLATE)
         self.assertIn('_clear_google_marker(_content_slot)', TRANSLATE)
         abort = TRANSLATE.index("if abort_reason in _GOOGLE_FILL_ABORTS:")
-        self.assertIn('gemini_quota.note_exhausted(model)', TRANSLATE[abort:abort + 600])
-        self.assertIn('_google_fill_and_save(chunks, dict(out_blocks_by_index)', TRANSLATE[abort:abort + 1400])
+        self.assertIn('gemini_quota.note_exhausted(_models.chosen)', TRANSLATE[abort:abort + 900])
+        self.assertIn('_google_fill_and_save(chunks, dict(out_blocks_by_index)', TRANSLATE[abort:abort + 1700])
         self.assertIn('_merged_text = _preview_clean(_merged_blocks, src_text)', TRANSLATE)
         self.assertIn('body = srt.fold_stray_latin_letter(body)', TRANSLATE)
 
