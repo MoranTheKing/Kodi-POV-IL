@@ -33,6 +33,7 @@ import struct
 import hashlib
 import threading as _threading
 import time
+import bisect as _bisect
 
 try:
     import urllib.request as _urlreq
@@ -419,10 +420,32 @@ _BLOCK_READ_HTTP = 32 * 1024              # window fetched AT a targeted block
 # one longer than that is read again on its own). A provider that answers
 # anything else -- a whole file, one coalesced range, an error -- is asked one
 # range a request again, as before, for the rest of the run.
-_MULTI_RANGES = 150
+# At most 200 ranges in one request, the cluster heads included: Apache's
+# default MaxRanges is 200, and above it the whole file comes back -- which
+# would end the batches for the run (review of 0.3.82).
+_MULTI_RANGES = 200
+# A cluster's prefix (its ID and the size VINT) is 5 to 12 bytes, and it is
+# NOT the same in every cluster of a file: South Park S04 MULTI WEB 2160p
+# D5T0 has 3-byte sizes in most clusters and 4-byte ones in some. One learned
+# prefix is then a byte off for those, and in QA every such cluster cost a
+# relearn (58 of them) and the batch's alignment (161 reads missed the store):
+# 361 lines in 48 s. So a batch also fetches the first _CLUSTER_HEAD_PEEK
+# bytes of each cluster, and starts each block window at the smallest prefix
+# a cluster can have; each cluster is then read at its own prefix.
+_CLUSTER_HEAD_PEEK = 16
+_PREFIX_MIN, _PREFIX_MAX = 5, 12
 _BLOCK_READ_MULTI = 4 * 1024
 _MULTI_SLACK = 64 * 1024                  # headers of the parts, on top of the data
 _MULTI_BUSY_HOLD_S = 15.0                 # after a busy answer to one: single ranges
+_MULTI_STORE_MAX = 4 * 1024 * 1024        # bytes kept from batches, at most
+# Between clusters, the caller's abort and progress callbacks at most this
+# often. Both ask Kodi things (is it playing, paused, the clock, the selected
+# subtitle), and with a 4K film on screen each such call can take tens of ms:
+# QA, 14 Nov 2026, Interstellar 2160p DV -- 2,666 lines in 97 s from only 40
+# requests, about 35 ms a cluster with the batches served from memory. Every
+# network request still asks abort_cb first (_Source), so nothing is fetched
+# behind the player's back.
+_CALLBACK_POLL_S = 0.25
 # ONE-SHOT ceiling. When a header read IS needed, size it to swallow the first
 # block too if that is cheap -- one request instead of two. Only bites on files
 # whose subtitle block precedes the cluster's video keyframe; measured on a
@@ -622,6 +645,54 @@ def _complete_length(content_range):
     return int(m.group(1)) if m else None
 
 
+class _PartStore(dict):
+    """{offset: bytes} that prefetch() brought. Finds the part holding a span
+    by bisection over the sorted offsets: a batch makes a few hundred lookups
+    over up to a few hundred parts, and a scan each time measured 40 ms a batch
+    on a PC -- most of a second on a slow phone (review of 0.3.82). Only the
+    methods used here keep the index right: set, del, pop, clear."""
+
+    def __init__(self):
+        dict.__init__(self)
+        self._keys = None
+
+    def __setitem__(self, k, v):
+        dict.__setitem__(self, k, v)
+        self._keys = None
+
+    def __delitem__(self, k):
+        dict.__delitem__(self, k)
+        self._keys = None
+
+    def pop(self, k, *default):
+        self._keys = None
+        return dict.pop(self, k, *default)
+
+    def clear(self):
+        dict.clear(self)
+        self._keys = None
+
+    def covering(self, offset, end):
+        """(start, bytes) of a part that holds [offset, end), or None."""
+        keys = self._keys
+        if keys is None:
+            keys = self._keys = sorted(dict.keys(self))
+        i = _bisect.bisect_right(keys, offset) - 1
+        # parts can overlap (a span asked for around a held one): a few back
+        for j in range(i, max(i - 8, -1), -1):
+            at = keys[j]
+            data = dict.__getitem__(self, at)
+            if at + len(data) >= end:
+                return at, data
+        return None
+
+    def drop_before(self, offset):
+        """Forget the parts that end before `offset` (already read past)."""
+        for at in [a for a, d in dict.items(self) if a + len(d) <= offset]:
+            dict.__delitem__(self, at)
+        self._keys = None
+
+
 class _Source(object):
     """Byte source with .read(offset, size) -- local file or HTTP Range. HTTP
     reads go over ONE reused keep-alive connection (see _new_session); a 429/5xx
@@ -657,7 +728,7 @@ class _Source(object):
         self._abort_cb = None         # set by extract_srt; polled DURING sleeps
         self._piece = None            # extract_srt: largest single HTTP request
         self._multi = None            # many ranges a request: None untried, True, False
-        self._pref = {}               # offset -> bytes fetched ahead (prefetch)
+        self._pref = _PartStore()     # offset -> bytes fetched ahead (prefetch)
         self._multi_hold = 0.0        # no batched request before this (busy)
         self.total = 0
         # Every counter above is now touched by several fetch threads, and the
@@ -1103,21 +1174,25 @@ class _Source(object):
         end = offset + size
         if self.total:
             end = min(end, self.total)     # a part cut at the end of the file is whole
-        data = self._pref.get(offset)
-        if data is not None and offset + len(data) >= end:
-            del self._pref[offset]
-            return data[:size]
-        for start in list(self._pref):
-            data = self._pref[start]
-            if start <= offset and start + len(data) >= end:
-                del self._pref[start]
-                return data[offset - start:offset - start + size]
-        return None
+        hit = self._pref.covering(offset, end)
+        if hit is None:
+            return None
+        start, data = hit
+        # Kept, not handed out once: ranges asked for as one serve every
+        # cluster inside them. The store is bounded where a batch is stored.
+        return data[offset - start:offset - start + size]
 
-    def holds(self, offset):
-        return offset in self._pref
+    def holds(self, offset, size=1):
+        """Is all of [offset, offset + size) inside one thing prefetch() holds
+        (a part of its own, or ranges that were asked for as one)? Only the
+        start is not enough: a window that spills past the next cluster's head
+        would skip that cluster's batch (review of 0.3.82)."""
+        end = offset + size
+        if self.total:
+            end = min(end, self.total)
+        return self._pref.covering(offset, end) is not None
 
-    def prefetch(self, spans):
+    def prefetch(self, spans, keep_from=None):
         """Fetch `spans` [(offset, size), ...] in ONE request (HTTP multi-
         range) into the store read() serves from. Returns how many parts came
         back. Takes its slot in the paced schedule and asks the abort callback
@@ -1221,10 +1296,18 @@ class _Source(object):
                 return 0
             with self._lock:
                 self.fetched += len(body)
-            if len(self._pref) > 2 * _MULTI_RANGES:
-                # parts left behind (a window cut short, a layout relearned):
-                # never more than a couple of batches in memory
-                self._pref = {}
+            if (len(self._pref) > 2 * _MULTI_RANGES
+                    or sum(len(d) for d in self._pref.values()) > _MULTI_STORE_MAX):
+                # what earlier batches left (each batch is read before the
+                # next is asked for): never more than a couple in memory. What
+                # is already behind goes first -- a part ahead may be one this
+                # batch left out because it was held (review of 0.3.82).
+                if keep_from is not None:
+                    self._pref.drop_before(keep_from)
+                if (len(self._pref) > 2 * _MULTI_RANGES
+                        or sum(len(d) for d in self._pref.values())
+                        > _MULTI_STORE_MAX):
+                    self._pref = _PartStore()
             for start, data in parts:
                 self._pref[start] = data
             if self._multi is None and self._log:
@@ -1256,7 +1339,7 @@ class _Source(object):
             self._log('many ranges in one request not served (%s) -- one range '
                       'a request' % why)
         self._multi = False
-        self._pref = {}
+        self._pref = _PartStore()
 
     def release_connection(self):
         """Close the idle keep-alive connection(s) and keep the source usable:
@@ -1732,6 +1815,22 @@ def _head_enough(head, limit=None):
     return False
 
 
+class _NotMatroska(ValueError):
+    """The file has a head, and it is another container (MP4, AVI, TS)."""
+
+
+def _container_name(head):
+    """'MP4' / 'AVI' / 'MPEG-TS' for a head that is one of them, else None
+    (an error page from an expired link is not another container; review)."""
+    if head[4:8] == b'ftyp':
+        return 'MP4'
+    if head[:4] == b'RIFF':
+        return 'AVI'
+    if len(head) > 188 and head[:1] == b'\x47' and head[188:189] == b'\x47':
+        return 'MPEG-TS'
+    return None
+
+
 def _parse_head(src, head_bytes, log):
     """(seg_start, ts_scale_ns, tracks, seeks) or raises.
     `seeks` maps element-id -> absolute file offset (from the SeekHead)."""
@@ -1762,7 +1861,10 @@ def _parse_head(src, head_bytes, log):
     buf = _Buf(head, 0)
     eid, _l = _read_vint(buf, True)
     if eid != _EBML:
-        raise ValueError('not EBML/Matroska')
+        kind = _container_name(head)
+        if kind:
+            raise _NotMatroska('not EBML/Matroska (%s)' % kind)
+        raise ValueError('not EBML/Matroska (%d byte(s) read)' % len(head))
     esize, _sl = _read_vint(buf, False)
     if esize is None:
         raise ValueError('bad EBML header')
@@ -2666,7 +2768,7 @@ def extract_srt(url_or_path, track_num=None, lang=None,
                 head_bytes=DEFAULT_HEAD_BYTES, max_bytes=DEFAULT_MAX_BYTES,
                 deadline_s=DEFAULT_DEADLINE_S, allow_http=False,
                 abort_cb=None, log=None, progress_cb=None, resume_path=None,
-                stats=None, steps=None):
+                stats=None, steps=None, other_text=None, on_track=None):
     """Extract an embedded TEXT subtitle track as an SRT string.
 
     Pick the track by `track_num`, else by `lang` (BCP-47 prefix, e.g. 'en'
@@ -2691,7 +2793,14 @@ def extract_srt(url_or_path, track_num=None, lang=None,
     connection (_Source.release_connection), for an `abort_cb` that stands
     aside for a while before letting the reading go on; and 'why' = 'no_index'
     when the file's index has no entry for the subtitle lines, so they cannot
-    be found in a stream short of reading the whole file.
+    be found in a stream short of reading the whole file, or 'no_text' when
+    `lang`'s subtitle here is a picture and no other text track is read.
+    `other_text`, if given, is language codes in order of preference: when
+    `lang`'s subtitle in this file is a picture (PGS), the best other TEXT
+    track is read instead, and `on_track`, if given, is called with that
+    track's language as soon as it is chosen -- ONLY then: a track _pick_track
+    returns under another tag (an untagged one defaults to 'eng') is still
+    the picked language's (review of 0.3.82).
     `steps`, if given (HTTP only, and only with `resume_path`), is three
     callables (window, show, timeline). Before the complete pass the track is
     read in windows: timeline(starts_ms) is handed every cue's start once;
@@ -2736,6 +2845,48 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         # the complete dialogue. (The cue_reference_times* callers deliberately do
         # NOT prefer SDH -- there the track is only a timing skeleton.)
         track = _pick_track(subs, track_num, lang, prefer_sdh=True)
+        if track is None and track_num is None and lang:
+            want_key = _lang_key(lang)
+            if any(_is_bitmap_codec(t['codec']) and not t['forced']
+                   and _lang_key(t['lang']) == want_key for t in subs):
+                # The picked language's subtitle here is a picture, not text
+                # (owner's log, 14 Nov 2026: South Park S04E04 MULTI WEB
+                # 2160p, English was S_HDMV/PGS, French was text; the pick
+                # ended in "could not extract"). The owner: no OCR -- read
+                # another TEXT track of the file, in the language best for the
+                # AI (`other_text`), and say so. Signs-only tracks last,
+                # forced ones and Hebrew never. A forced-only text track or a
+                # language that is not here at all is not a picture: as before.
+                texts = [t for t in subs
+                         if _is_text_codec(t['codec']) and not t['forced']
+                         and _lang_key(t['lang']) not in ('he', want_key)]
+                if other_text and texts:
+                    order = [_lang_key(c) for c in other_text]
+
+                    def _rank(t):
+                        k = _lang_key(t['lang'])
+                        # a track with no language of its own defaults to
+                        # 'eng': its real language is unknown -- after the
+                        # tagged ones (review)
+                        return (_track_is_signs(t),
+                                not t.get('lang_explicit', True),
+                                order.index(k) if k in order else len(order),
+                                not _track_is_sdh(t), t['num'])
+                    texts.sort(key=_rank)
+                    track = texts[0]
+                    if on_track is not None:
+                        try:
+                            on_track(_lang_key(track['lang']) or track['lang'])
+                        except Exception:
+                            pass
+                    _log('the %s subtitle is a picture (the file has: %s) -- '
+                         'reading the %s text track #%s instead' % (
+                             lang, ', '.join('#%s %s [%s]' % (
+                                 t['num'], t['codec'] or '?', t['lang'])
+                                 for t in subs),
+                             track['lang'], track['num']))
+                elif src._stats is not None:
+                    src._stats['why'] = 'no_text'
         if track is None:
             # SAY WHAT WAS ACTUALLY THERE. "no matching text track" reads as a
             # defect in this parser, and on the report that prompted this it was
@@ -2824,6 +2975,10 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         return srt
     except Exception as e:
         _log('extract_srt failed: %s' % e)
+        if (isinstance(e, _NotMatroska) and src is not None
+                and getattr(src, '_stats', None) is not None):
+            # the caller can offer the external subtitle instead
+            src._stats['why'] = 'not_mkv'
         return None
     finally:
         # On EVERY exit, including the ones that gave up. A run the provider
@@ -2922,6 +3077,13 @@ def _track_is_sdh(t):
     name says so. SDH tracks carry the FULL dialogue (nothing dropped for the
     hearing), so they translate more completely -- preferred by _pick_track."""
     return bool(t.get('hearing_impaired')) or _name_is_sdh(t.get('name'))
+
+
+def _track_is_signs(t):
+    """A text track named as signs/songs only (anime releases leave many
+    unflagged): the dialogue is not in it."""
+    toks = [x for x in re.split(r'[^a-z0-9]+', (t.get('name') or '').lower()) if x]
+    return any(x in ('sign', 'signs', 'song', 'songs', 'forced') for x in toks)
 
 
 def _pick_track(subs, track_num, lang, prefer_sdh=False):
@@ -3515,6 +3677,49 @@ def _read_cluster_header(src, cpos, first_relpos):
     return prefix, cluster_ts, header
 
 
+def _join_spans(spans):
+    """[(offset, size), ...] sorted, with the ones that meet or overlap as one."""
+    out = []
+    for at, size in sorted(spans):
+        if out and at <= out[-1][0] + out[-1][1]:
+            last_at, last_size = out[-1]
+            out[-1] = (last_at, max(last_size, at + size - last_at))
+        else:
+            out.append((at, size))
+    return out
+
+
+def _held_prefix(src, cpos):
+    """This cluster's own prefix (ID + size VINT length) from the head a
+    batched request fetched (see _CLUSTER_HEAD_PEEK), or None."""
+    pref = getattr(src, '_pref', None)
+    if not pref:
+        return None
+    head = pref.get(cpos)
+    if head is not None and len(head) <= _CLUSTER_HEAD_PEEK:
+        del pref[cpos]          # only the head; a longer part also holds a block
+    elif head is None:
+        # inside a part that also holds the cluster before it (ranges that
+        # met were asked for as one)
+        hit = (pref.covering(cpos, cpos + _PREFIX_MAX)
+               if hasattr(pref, 'covering') else
+               next(((s, d) for s, d in pref.items()
+                     if s < cpos and s + len(d) >= cpos + _PREFIX_MAX), None))
+        if hit is not None:
+            start, data = hit
+            head = data[cpos - start:cpos - start + _CLUSTER_HEAD_PEEK]
+    if head is None or len(head) < 6:
+        return None
+    b = _Buf(head, cpos)
+    eid, idl = _read_vint(b, True)
+    if eid != _CLUSTER:
+        return None
+    _size, slen = _read_vint(b, False)
+    if not slen:
+        return None
+    return idl + slen
+
+
 def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
     """CueRelativePosition FAST PATH for ONE cluster. `items` is that cluster's
     [(relpos, cue_time), ...], sorted by relpos. Returns how many of them were
@@ -3531,6 +3736,9 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
     both shortcuts before any later cluster relies on them."""
     resolved = 0
     prefix, cluster_ts, header = src._prefix, None, b''
+    own = _held_prefix(src, cpos)
+    if own is not None:
+        prefix = own
     # Take the header when we have not learned the prefix yet, when CueTime has
     # not been proven to agree with it, or when any cue in THIS cluster has no
     # CueTime to stand in for the cluster timestamp. (`_cue_time_ok is False`
@@ -3830,6 +4038,8 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                    getattr(src, '_pace', 0.0), getattr(src, '_429_total', 0),
                    done / el))
 
+    _polled = {'abort': 0.0, 'tick': 0.0}
+
     def _defer():
         """Return a reason string when we must stop, else None."""
         if src.tripped:
@@ -3837,10 +4047,14 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
         _got = src.fetched_now()
         if _got >= _HTTP_TOTAL_CAP:
             return 'http byte cap reached (%.0fMB)' % (_got / 1e6)
-        if (time.time() - t0) > budget:
-            return 'http time budget reached (%.0fs)' % (time.time() - t0)
-        if _aborted(abort_cb):
-            return 'http extract aborted (playback ended)'
+        now = time.time()
+        if (now - t0) > budget:
+            return 'http time budget reached (%.0fs)' % (now - t0)
+        # at most every _CALLBACK_POLL_S (see there)
+        if now - _polled['abort'] >= _CALLBACK_POLL_S:
+            if _aborted(abort_cb):
+                return 'http extract aborted (playback ended)'
+            _polled['abort'] = time.time()
         return None
 
     def _tick(n):
@@ -3849,6 +4063,10 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
             src._stats['done'] = min(n, total)
             src._stats['total'] = total
         if progress_cb:
+            now = time.time()
+            if n < total and now - _polled['tick'] < _CALLBACK_POLL_S:
+                return
+            _polled['tick'] = now
             try:
                 progress_cb(min(n, total), total)
             except Exception:
@@ -3858,36 +4076,55 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
     state = {'done': carried, 'stop': None}
     state_lock = _threading.Lock()
 
-    def _first_offset(entry):
-        cpos, items = entry
-        return cpos + src._prefix + _batch_relposes(items)[0][0][0]
+    def _cluster_spans(cpos, items):
+        # What _fetch_cluster_blocks reads of this cluster: its head, and each
+        # block window from the smallest prefix a cluster can have. A block
+        # right at the start of its cluster overlaps the head: one range for
+        # both (some servers refuse overlapping ranges).
+        slack = _PREFIX_MAX - _PREFIX_MIN
+        mine = [(cpos, _CLUSTER_HEAD_PEEK)]
+        for batch in _batch_relposes(items):
+            lo = batch[0][0]
+            mine.append((cpos + _PREFIX_MIN + lo,
+                         (batch[-1][0] - lo) + _BLOCK_READ_MULTI + slack))
+        merged = [mine[0]]
+        for at, size in mine[1:]:
+            last_at, last_size = merged[-1]
+            if at <= last_at + last_size:
+                merged[-1] = (last_at, max(last_size, at + size - last_at))
+            else:
+                merged.append((at, size))
+        return merged
 
     def _fetch_ahead(seq, j):
-        # The next _MULTI_RANGES blocks in one request (see _MULTI_RANGES),
-        # once the layout is learned -- exactly the reads _fetch_cluster_
-        # blocks will make, so they are served from the store.
+        # The next clusters' reads in one request, at most _MULTI_RANGES
+        # ranges (see there), once the layout is learned -- exactly the reads
+        # _fetch_cluster_blocks will make, so they are served from the store.
         if (not getattr(src, 'is_http', False) or not hasattr(src, 'prefetch')
                 or getattr(src, '_multi', None) is False
                 or src._prefix is None or src._cue_time_ok is not True):
             return
-        if src.holds(_first_offset(seq[j])):
-            return
-        spans = []
-        for cpos, items in seq[j:]:
+        joined = []
+        for k, (cpos, items) in enumerate(seq[j:]):
             if any(t is None for _r, t in items):
                 break                    # such a cluster reads its header
-            for batch in _batch_relposes(items):
-                lo = batch[0][0]
-                at = cpos + src._prefix + lo
-                if not src.holds(at):    # never ask twice for what is held
-                    spans.append((at, (batch[-1][0] - lo) + _BLOCK_READ_MULTI))
-            if len(spans) >= _MULTI_RANGES:
+            # never ask twice for what is held, all of it
+            mine = [s for s in _cluster_spans(cpos, items) if not src.holds(*s)]
+            if k == 0 and not mine:
+                return                   # this cluster is in the store already
+            # ranges that meet go as one (some servers refuse overlapping
+            # ones); the cap counts what is sent
+            more = _join_spans(joined + mine)
+            if joined and len(more) > _MULTI_RANGES:
                 break
-        if not spans:
+            joined = more[:_MULTI_RANGES]
+            if len(joined) >= _MULTI_RANGES:
+                break
+        if not joined:
             return
-        if src.fetched_now() + sum(k for _o, k in spans) >= _HTTP_TOTAL_CAP:
+        if src.fetched_now() + sum(k for _o, k in joined) >= _HTTP_TOTAL_CAP:
             return
-        src.prefetch(spans)
+        src.prefetch(joined, keep_from=seq[j][0])
 
     def _moved():
         # Between clusters: has the viewer gone where this window does not

@@ -1209,6 +1209,21 @@ def _maybe_fix_idanplus_vod():
             pass
 
 
+UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
+
+
+def _umbrella_installed():
+    """Is Umbrella on this device? Asked of the disk each time (silent, two
+    file checks): the Wizard can install it while Kodi runs. A device without
+    it skips every Umbrella step (field report, 14 Nov 2026: "it keeps looking
+    for Umbrella at every start"). Unsure -> True: the steps check again."""
+    try:
+        from resources.lib import addon_presence
+        return addon_presence.installed(UMBRELLA_ADDON_ID)
+    except Exception:
+        return True
+
+
 def _maybe_patch_mdblist_reauth():
     """Let an expired MDBList token heal itself instead of being reconnected.
 
@@ -1226,7 +1241,9 @@ def _maybe_patch_mdblist_reauth():
     # the switch's own text promises to stop changes to plugin.video.pov and
     # says nothing about any other add-on, and turning it on to isolate a POV
     # problem must not change Umbrella's behaviour as a side effect.
-
+    # Both halves here are Umbrella's: nothing to do without it.
+    if not _umbrella_installed():
+        return
     try:
         from resources.lib import umbrella_mdblist_token_patcher, kodi_utils
         st = umbrella_mdblist_token_patcher.ensure_patched()
@@ -1431,7 +1448,48 @@ def _maybe_patch_umbrella_language():
     the modern resource.language.en_gb folder Kodi actually looks for.
     Additive-only and self-healing: an Umbrella self-update replaces the
     addon folder, and this re-applies on the next startup. Instant no-op
-    for everyone who never installed the pilot."""
+    for everyone who never installed the pilot.
+
+    Two steps here are NOT Umbrella's and run on every device, first:
+    Account Manager Lite's labels and Kodi's own playlist timeout (review of
+    0.3.82 -- the Umbrella gate below used to sit above them)."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    # Account Manager Lite (the other opt-in pilot) trips over the same
+    # locale-folder fallback, and the labels it loses are Authorize,
+    # Username, Password and API Key -- the controls a user has to press to
+    # connect an account. No-op for anyone who never installed it.
+    try:
+        from resources.lib import legacy_lang_mirror
+        if legacy_lang_mirror.mirror('script.module.acctmgr') == 'patched':
+            kodi_utils.log(
+                'legacy_lang_mirror: Account Manager Lite labels will render',
+                level='INFO')
+    except Exception:
+        pass
+    # Kodi's own "playback failed" after a deliberate back-out of the source
+    # list. It is a 20-second timer on consecutive unresolved plays, not a
+    # report about this playback -- see kodi_playlist_timeout_patcher.
+    try:
+        from resources.lib import kodi_playlist_timeout_patcher
+        st = kodi_playlist_timeout_patcher.ensure_patched()
+        if st in ('patched', 'created'):
+            kodi_utils.log(
+                'kodi_playlist_timeout_patcher: ' + st, level='INFO')
+        elif st in ('unmatched', 'bad_xml', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'kodi_playlist_timeout_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'kodi_playlist_timeout_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+    if not _umbrella_installed():
+        return          # none of the Umbrella steps below, not even an import
     try:
         from resources.lib import umbrella_language_patcher, kodi_utils
     except Exception:
@@ -1479,18 +1537,6 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
-    # Account Manager Lite (the other opt-in pilot) trips over the same
-    # locale-folder fallback, and the labels it loses are Authorize,
-    # Username, Password and API Key -- the controls a user has to press to
-    # connect an account. No-op for anyone who never installed it.
-    try:
-        from resources.lib import legacy_lang_mirror
-        if legacy_lang_mirror.mirror('script.module.acctmgr') == 'patched':
-            kodi_utils.log(
-                'legacy_lang_mirror: Account Manager Lite labels will render',
-                level='INFO')
-    except Exception:
-        pass
     # Wiring + subtitle-matching hook for the same optional add-on.
     try:
         from resources.lib import umbrella_setup_patcher
@@ -1548,25 +1594,6 @@ def _maybe_patch_umbrella_language():
         try:
             kodi_utils.log(
                 'umbrella_subtitle_match_patcher failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
-    # Kodi's own "playback failed" after a deliberate back-out of the source
-    # list. It is a 20-second timer on consecutive unresolved plays, not a
-    # report about this playback -- see kodi_playlist_timeout_patcher.
-    try:
-        from resources.lib import kodi_playlist_timeout_patcher
-        st = kodi_playlist_timeout_patcher.ensure_patched()
-        if st in ('patched', 'created'):
-            kodi_utils.log(
-                'kodi_playlist_timeout_patcher: ' + st, level='INFO')
-        elif st in ('unmatched', 'bad_xml', 'write_failed', 'read_failed'):
-            kodi_utils.log(
-                'kodi_playlist_timeout_patcher: ' + st, level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'kodi_playlist_timeout_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
@@ -1724,11 +1751,15 @@ def _start_service_mirror_keeper(monitor):
             if monitor.waitForAbort(90):   # let startup settle first
                 return
             while not monitor.abortRequested():
+                # Without Umbrella there is nothing to keep in step (and the
+                # watch prompt below would look it up every minute).
+                umbrella = _umbrella_installed()
                 try:
-                    mdblist_umbrella_mirror.mirror()
+                    if umbrella:
+                        mdblist_umbrella_mirror.mirror()
                 except Exception:
                     pass
-                if trakt_umbrella_mirror is not None:
+                if umbrella and trakt_umbrella_mirror is not None:
                     try:
                         trakt_umbrella_mirror.mirror()
                     except Exception:
@@ -1746,7 +1777,7 @@ def _start_service_mirror_keeper(monitor):
                 # Deliberately in the keeper and not in the startup steps:
                 # it can put a dialog on screen, and boot is already crowded
                 # with them. By the first tick the splash is long gone.
-                if umbrella_watch_prompt is not None:
+                if umbrella and umbrella_watch_prompt is not None:
                     try:
                         umbrella_watch_prompt.maybe_ask_async()
                     except Exception:
