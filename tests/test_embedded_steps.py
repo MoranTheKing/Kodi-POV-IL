@@ -144,6 +144,59 @@ class Steps(unittest.TestCase):
         self.assertEqual(low, 20 * 60000 + 1000 - 15000)
         self.assertLessEqual(high, 20 * 60000 + 1000 + 150000 + 1)        # small: the viewer is waiting
 
+    def test_moved_asks_only_while_a_window_is_read(self):
+        steps = self.make(None, at_ms=30 * 60000, cues=every(3.0, 100))
+        self.assertFalse(steps.moved())                                # no window asked yet
+        steps.window()
+        self.watch(1)
+        self.assertFalse(steps.moved())                                # the viewer is inside it
+
+    def test_a_jump_back_out_of_the_window_being_read_cuts_it_short(self):
+        steps = self.make(None, at_ms=30 * 60000, cues=every(3.0, 100))
+        self.next_window(steps)
+        self.watch(60)
+        span = steps.window()                                         # being read
+        self.place['ms'] = 20 * 60000                                 # back, before it, onto lines not read
+        self.watch(1)
+        self.assertTrue(steps.moved())
+        steps.feed('')                                                # what the cut window read
+        self.assertNotIn(span, steps._covered)                        # its span is not counted as read
+        low, high = self.next_window(steps)
+        self.assertEqual(low, self.place['ms'] - 15000)               # the next window is where the viewer is
+
+    def test_a_jump_onto_lines_read_does_not_cut_the_window(self):
+        steps = self.make(None, at_ms=30 * 60000, cues=every(3.0, 100))
+        first = self.next_window(steps)
+        self.watch(60)
+        steps.window()
+        self.place['ms'] = first[0] + 20000                            # back into the first window: read
+        self.watch(1)
+        self.assertFalse(steps.moved())
+
+    def test_moved_is_asked_of_the_player_at_most_twice_a_second(self):
+        steps = self.make(None, at_ms=30 * 60000, cues=every(3.0, 100))
+        steps.window()
+        self.watch(1)
+        self.assertFalse(steps.moved())
+        self.place['ms'] = 10 * 60000
+        self.assertFalse(steps.moved())                                # 0 s later: not asked again
+        self.now['s'] += 0.6
+        self.assertTrue(steps.moved())
+
+    def test_a_window_cut_short_measures_no_rate(self):
+        steps = self.make(None, at_ms=30 * 60000, cues=every(3.0, 100))
+        self.next_window(steps)
+        self.watch(60)
+        steps.window()
+        rate = steps._rate
+        self.place['ms'] = 10 * 60000
+        self.watch(1)
+        self.assertTrue(steps.moved())
+        steps.feed('')
+        self.watch(3)
+        steps.window()
+        self.assertEqual(steps._rate, rate)
+
     def test_a_jump_back_into_a_stretch_read_carries_on_where_the_reading_stops(self):
         cues = every(3.0, 100)
         steps = self.make(None, at_ms=30 * 60000, cues=cues)
@@ -710,7 +763,7 @@ class OnScreen(unittest.TestCase):
         cls.t = load_translate()
         cls.ee = windows.load()
 
-    def simulate(self, cues, per_cue_s, at_ms=0, seeks=()):
+    def simulate(self, cues, per_cue_s, at_ms=0, seeks=(), cut=False):
         t, ee = self.t, self.ee
         clock = {'s': 0.0}
         seeks = sorted(seeks)
@@ -735,7 +788,7 @@ class OnScreen(unittest.TestCase):
         self.addCleanup(steps.finish)
         positions = [(1000 + 10 * i, 5, ms) for i, ms in enumerate(cues)]
         done = set()
-        tally = {'embedded': 0, 'view': 0, 'nothing': 0}
+        tally = {'embedded': 0, 'view': 0, 'nothing': 0, 'embedded_after_seek': 0}
         state = {'checked': 0.0}
 
         def advance(seconds):
@@ -751,6 +804,8 @@ class OnScreen(unittest.TestCase):
                         if before < ms <= after:
                             if not steps.on_screen:
                                 tally['embedded'] += 1
+                                if seeks and clock['s'] > seeks[0][0]:
+                                    tally['embedded_after_seek'] += 1
                             elif ms in shown['starts']:
                                 tally['view'] += 1
                             else:
@@ -759,9 +814,12 @@ class OnScreen(unittest.TestCase):
                     state['checked'] = clock['s']
                     steps.check()
 
-        def http(src, part, entries, want, deadline_s, t0, abort_cb, log, progress_cb, finished, scan):
+        def http(src, part, entries, want, deadline_s, t0, abort_cb, log, progress_cb, finished, scan,
+                 moved_cb=None):
             for cpos, _rel, _ms in part:
                 if cpos not in finished:
+                    if moved_cb is not None and moved_cb():
+                        return ee._MOVED
                     advance(per_cue_s)
                     finished.add(cpos)
             return True
@@ -774,7 +832,8 @@ class OnScreen(unittest.TestCase):
 
         with patch.object(ee, '_extract_cues_http', http):
             ee._extract_in_windows(windows.Source(), positions, [], 3, 900.0, 0.0, None, lambda m: None, None,
-                                   done, set(), (steps.window, feed, steps.timeline), lambda: None)
+                                   done, set(), (steps.window, feed, steps.timeline)
+                                   + ((steps.moved,) if cut else ()), lambda: None)
             http(None, positions, None, None, None, None, None, None, None, done, None)     # the complete pass
         steps.finish()
         return tally, backs
@@ -793,6 +852,19 @@ class OnScreen(unittest.TestCase):
         self.assertLessEqual(tally['nothing'], 1, tally)          # until the next check, 2 s at most
         self.assertTrue(backs)
         self.assertGreater(tally['view'], 100)
+
+    def test_a_jump_back_cuts_the_window_being_read_short(self):
+        # a film: picked at minute 30, read at 0.55 s a line; at 160 s, while a long window is read, the
+        # viewer goes back to minute 20. Without the cut the window in progress finishes first and the
+        # embedded track stays on screen meanwhile (QA 14 Nov 2026: ~2 min on a film). Measured in this
+        # simulation: 84 lines on the embedded track after the jump without the cut, 6 with it.
+        film = self.film(140, 4.0)
+        jump = dict(at_ms=30 * 60000, seeks=[(160.0, 20 * 60000)])
+        old, _b = self.simulate(film, 0.55, **jump)
+        new, _b = self.simulate(film, 0.55, cut=True, **jump)
+        self.assertLessEqual(new['nothing'], 1, new)
+        self.assertGreater(old['embedded_after_seek'], 40, old)
+        self.assertLessEqual(new['embedded_after_seek'], 10, new)
 
     def test_ahead_and_back(self):
         # from the start; at 100 s a jump to minute 50; at 300 s back to minute 30

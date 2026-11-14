@@ -2335,6 +2335,49 @@ def _status(msg, **kwargs):
         pass
 
 
+def _still_playing():
+    try:
+        import xbmc as _x
+        return bool(_x.Player().isPlayingVideo())
+    except Exception:
+        return False
+
+
+def _external_for_unreadable_embedded(info, lang):
+    """The 'AI translation' payload (type engine_ai) for the external subtitle
+    in `lang` -- else English -- that best matches the playing release, or
+    None. For an embedded track that cannot be read from the stream."""
+    try:
+        from . import subsync, release_match
+        cands = subsync._oracle_candidates(info) or []
+    except Exception:
+        return None
+    try:
+        playing = subsync.playing_release(info) or ''
+    except Exception:
+        playing = ''
+    picked = (lang or 'en').lower()[:2]
+    mine = [c for c in cands
+            if (c.get('language') or '').lower()[:2] in (picked, 'en')
+            and c.get('payload')]
+    if not mine:
+        return None
+
+    def rank(c):
+        # the best match to the release first, whichever of the two
+        # languages it is in (review); on a tie, the picked language
+        try:
+            pct = release_match.match_pct(playing, c.get('release') or '') if playing else 0
+        except Exception:
+            pct = 0
+        return (pct, (c.get('language') or '').lower()[:2] == picked)
+    best = max(mine, key=rank)
+    out = dict(best['payload'])
+    out['type'] = 'engine_ai'
+    out['src_lang'] = (best.get('language') or picked).lower()[:2]
+    return out
+
+
 def _playing_video_url(info):
     """URL/path of the file being played -- a direct http(s) stream (debrid) or
     a local file; '' for HLS/plugin:// or when unavailable. Mirrors the probe-
@@ -2770,7 +2813,8 @@ def _embedded_aligned_source_srt(
 
 
 def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
-                          progress_cb=None, allow_http=True, steps=None):
+                          progress_cb=None, allow_http=True, steps=None,
+                          cancelled=None, why=None):
     """Extract the playing file's embedded `src_lang` subtitle track to a temp
     SRT and return its path, or None. `deadline_s` bounds the extraction (default
     900s). Every current caller runs in the BACKGROUND -- the auto-on-play thread
@@ -2784,7 +2828,11 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
     extraction (bandwidth hygiene).
     `steps` (an _EmbeddedSteps, a stream only): the track is read in windows
     that start where the viewer is, and it is fed what has been read after
-    each. What is returned does not change."""
+    each. What is returned does not change.
+    `cancelled()`, if given, is True once the viewer has picked something
+    else; a wait for the player's buffer then ends the reading. `why`, a dict
+    if given, gets 'reason' = 'no_index' when the stream's index has no entry
+    for the subtitle lines (they cannot be read short of the whole file)."""
     try:
         url = _playing_video_url(info)
         if not url:
@@ -2911,6 +2959,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     return True
                 if _x.getCondVisibility('Player.Paused'):
                     _stall['t'] = None
+                    _buf['trend'] = []
                     _pnow = _tt.time()
                     if _stall['paused_at'] is None:
                         _stall['paused_at'] = _pnow
@@ -2993,6 +3042,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                             _hold, ' (it has been throttling us)' if _hot_now
                             else '', _xstats.get('done') or 0,
                             _xstats.get('total') or 0), level='INFO')
+                    _release()
                     _until = now + _hold
                     while _tt.time() < _until:
                         try:
@@ -3003,25 +3053,355 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                         _tt.sleep(1.0)
                     # Not an abort: the pass carries on with everything it has
                     # already banked, and the stall guard below still watches
-                    # the picture for the contention this cannot prevent.
+                    # the picture for the contention this cannot prevent --
+                    # and the buffer gate decides whether to read now.
                     _stall['t'] = None
+                    if _remote and _buffer_stand_aside(p):
+                        return True
                     return False
-                try:
-                    cur = p.getTime()
-                except Exception:
+                frozen = _clock_frozen(p, now)
+                if frozen is None:
                     return False
-                if _stall['t'] is None or abs(cur - _stall['t']) > 0.4:
-                    _stall['t'] = cur
-                    _stall['since'] = now
-                    return False
-                if _stall['since'] and (now - _stall['since']) > _STALL_ABORT_S:
-                    kodi_utils.log('embedded: player stalled >{0}s -- aborting '
-                                   'extraction to free the debrid token'
-                                   .format(_STALL_ABORT_S), level='WARNING')
+                if frozen:
+                    _log_stalled()
+                    return True
+                if _remote and _buffer_stand_aside(p):
                     return True
                 return False
             except Exception:
                 return False
+
+        def _clock_frozen(p, now):
+            """None when the clock cannot be read; True once the picture (playing,
+            not paused) has not moved for more than _STALL_ABORT_S."""
+            try:
+                cur = p.getTime()
+            except Exception:
+                return None
+            if _stall['t'] is None or abs(cur - _stall['t']) > 0.4:
+                _stall['t'] = cur
+                _stall['since'] = now
+                return False
+            return bool(_stall['since']
+                        and (now - _stall['since']) > _STALL_ABORT_S)
+
+        def _log_stalled():
+            kodi_utils.log('embedded: player stalled >{0}s -- aborting '
+                           'extraction to free the debrid token'
+                           .format(_STALL_ABORT_S), level='WARNING')
+
+        # The player's own buffer. The stall guard acts once the picture has
+        # ALREADY frozen, and then it throws the reading away. QA (TorBox,
+        # 13-14 Nov 2026): the picture froze in most evening runs with an
+        # extraction, and in a quiet night hour the provider also froze it in
+        # runs where nothing else touched the link; with the provider well,
+        # nothing the reading does -- not even 3.3 MB in two requests at a
+        # jump -- slowed the player's refill (24 trials). So the reading
+        # cannot cause a provider's bad minutes, but it can stay out of the
+        # way during them and survive them: read only while the player's
+        # buffer is stocked; once it runs low, close the connection and send
+        # nothing -- through a frozen picture too -- until it is stocked
+        # again, then carry on.
+        # Kodi reports the buffer two ways: how full its read-ahead cache is
+        # (Player.CacheLevel, %) and how much film that is (cachepercentage -
+        # percentage of the running time). Either one is enough: a small cache
+        # under a heavy file is full at a few seconds of film, the build's
+        # 128 MB one holds minutes. Measured in QA (TorBox, night): full ~10 s
+        # after a start or a jump, ~100 s of film ahead.
+        _BUF_READY_S = 30.0      # read with this much film ahead...
+        _BUF_READY_LEVEL = 90    # ...or with the cache this full
+        _BUF_LOW_S = 15.0        # stand aside below this much film...
+        _BUF_LOW_LEVEL = 50      # ...with the cache below this
+        # A buffer that fills slowly but steadily -- a provider a little
+        # faster than the film -- may never reach the marks above while the
+        # film plays on. After this much film played without a stop, with at
+        # least _BUF_LOW_S ahead and not falling, the wait ends too (review
+        # of 0.3.81: otherwise such a pick waited out the limit and gave up a
+        # reading 0.3.80 would have finished).
+        _BUF_STEADY_S = 20.0
+        # ...with this much ahead: a little over the low mark, so the first
+        # requests after it do not put the wait straight back (review)
+        _BUF_STEADY_AHEAD_S = 20.0
+        _BUF_HOLD_MAX_S = 180.0  # not stocked again by then: stop, progress saved
+        _BUF_NOINFO_S = 10.0     # this much film played with nothing reported:
+        #                          Kodi keeps no buffer here -- the guard alone
+        _BUF_FAILS_OFF = 5       # unreadable this many times running: the guard alone
+        # Falling: while we read, the film playing on and Kodi's cache not
+        # full, the buffer lost this much film within _BUF_FALL_SPAN_S -- the
+        # provider is giving the player less than the film needs, and our
+        # requests take a share of what it gives (QA 14 Nov 2026 05:08: after
+        # a jump the buffer refilled to 32 s; in the 19 s we then read, 3 MB,
+        # it fell to 15 s -- the low mark -- and the film never recovered).
+        _BUF_FALL_S = 3.0
+        _BUF_FALL_SPAN_S = 5.0
+        # ...but not with this much film in hand: minutes ahead leave time to
+        # see whether the fall goes on (review)
+        _BUF_FALL_CEILING_S = 120.0
+        _buf = {'hold': True, 'known': False, 'off': False, 'fails': 0,
+                'at': None, 'm': None, 'trend': []}
+        _t_start = {'at': None}      # when the reading began (monotonic)
+
+        def _player_buffer():
+            """(seconds of film ahead, cache fill %, seconds of film left) or
+            None if unreadable -- also for a JSON-RPC error reply, which is not
+            an empty buffer."""
+            try:
+                import json as _j
+                import xbmc as _x
+                lvl = (_x.getInfoLabel('Player.CacheLevel') or '').strip()
+                reply = _j.loads(_x.executeJSONRPC(_j.dumps({
+                    'jsonrpc': '2.0', 'id': 1,
+                    'method': 'Player.GetProperties',
+                    'params': {'playerid': 1, 'properties': [
+                        'percentage', 'cachepercentage', 'totaltime']}}))
+                    or '{}')
+                res = reply.get('result') if isinstance(reply, dict) else None
+                if not isinstance(res, dict) or 'cachepercentage' not in res:
+                    return None
+                tt = res.get('totaltime') or {}
+                total = (((tt.get('hours') or 0) * 60 + (tt.get('minutes') or 0))
+                         * 60 + (tt.get('seconds') or 0))
+                pct = float(res.get('percentage') or 0.0)
+                ahead = ((float(res.get('cachepercentage') or 0.0) - pct)
+                         / 100.0 * total)
+                rest = max(0.0, (100.0 - pct) / 100.0 * total)
+                return (max(0.0, ahead), (int(lvl) if lvl.isdigit() else 0),
+                        rest)
+            except Exception:
+                return None
+
+        def _buffer_reading():
+            """The player's buffer, asked at most about once a second (the
+            check runs before every request and in every second of the pace
+            sleeps). None = no reading this time; _BUF_FAILS_OFF of those in
+            a row switch the gate off."""
+            import time as _tt
+            mono = _tt.monotonic()
+            if _buf['at'] is not None and mono - _buf['at'] < 0.9:
+                return _buf['m']
+            m = _player_buffer()
+            _buf['at'], _buf['m'] = mono, m
+            if m is not None:
+                _buf['fails'] = 0
+                return m
+            _buf['fails'] += 1
+            if _buf['fails'] >= _BUF_FAILS_OFF and not _buf['off']:
+                _buf['off'] = True
+                _buf['hold'] = False
+                kodi_utils.log('embedded: the player\'s buffer cannot be read '
+                               '-- reading with the stall guard only',
+                               level='INFO')
+            return None
+
+        def _release():
+            # Not even an idle connection: one we are not using is still one
+            # more on the provider's count for this link. The next request
+            # opens a fresh one.
+            try:
+                _rel = _xstats.get('release')
+                if _rel:
+                    _rel()
+            except Exception:
+                pass
+
+        def _to_the_end(ahead, rest):
+            # Kodi's cache already reaches the end of the film: from here the
+            # seconds ahead ARE the rest of the film and fall with it, and
+            # the cache % falls too (review: a pick in the last minutes of an
+            # episode read as "falling" and gave up on a healthy provider).
+            return rest > 0 and ahead >= rest - 2.0
+
+        def _falling(p, ahead, lvl):
+            """While reading: has the buffer lost _BUF_FALL_S of film in the
+            last _BUF_FALL_SPAN_S, with the film playing steadily (it moved
+            as far as the clock did) and Kodi's cache not full? One entry per
+            fresh reading; anything else (a pause, a jump) starts it over."""
+            at = _buf['at']
+            tr = _buf['trend']
+            if tr and tr[-1][3] == at:
+                return False                 # the same reading again
+            try:
+                film = p.getTime()
+            except Exception:
+                return False
+            import time as _tt
+            mono = _tt.monotonic()
+            # Played on = the film moved as far as the clock over the whole
+            # trend, give or take 1.5 s (Kodi's play time moves in steps,
+            # and a poll can be late behind a busy interpreter: review).
+            if tr and abs((film - tr[0][1]) - (mono - tr[0][0])) > 1.5:
+                tr[:] = []                   # stood or jumped: start over
+            tr.append((mono, film, ahead, at, lvl))
+            while tr and mono - tr[0][0] > _BUF_FALL_SPAN_S + 1.5:
+                tr.pop(0)
+            return (lvl < _BUF_READY_LEVEL and ahead < _BUF_FALL_CEILING_S
+                    and mono - tr[0][0] >= _BUF_FALL_SPAN_S - 0.5
+                    and tr[0][2] - ahead >= _BUF_FALL_S)
+
+        def _buffer_stand_aside(p):
+            """With the picture playing: wait here, sending nothing, while the
+            player's buffer is low or falling. True = stop the extraction."""
+            if _buf['off']:
+                return False
+            m = _buffer_reading()
+            if m is None:
+                return False
+            ahead, lvl, rest = m
+            if ahead >= 0.5 or lvl > 0:
+                _buf['known'] = True
+            if _to_the_end(ahead, rest):
+                _buf['hold'] = False
+                _buf['trend'] = []
+                return False
+            if _buf['hold']:
+                if ahead >= _BUF_READY_S or lvl >= _BUF_READY_LEVEL:
+                    _buf['hold'] = False
+                    _buf['trend'] = []
+                    return False
+                why = 'is not stocked yet'
+            elif ahead < _BUF_LOW_S and lvl < _BUF_LOW_LEVEL:
+                _buf['hold'] = True
+                why = 'ran low'
+            elif _falling(p, ahead, lvl):
+                _buf['hold'] = True
+                why = 'is falling'
+            else:
+                return False
+            seed = [(e[0], e[2], e[4]) for e in _buf['trend']]
+            _buf['trend'] = []
+            import time as _tt
+            t_hold = _tt.monotonic()
+            # Never past the extraction's own deadline: the single-extraction
+            # flag is reclaimed as stale after deadline + 120 s.
+            _began = _t_start['at'] if _t_start['at'] is not None else t_hold
+            limit = min(_BUF_HOLD_MAX_S,
+                        max(0.0, deadline_s - (t_hold - _began)))
+            frozen_said = False
+            try:
+                film0 = p.getTime()
+            except Exception:
+                film0 = None
+            steady_from = film0          # where the film last stood or jumped
+            steady_mono = t_hold
+            # (monotonic, seconds ahead, %), ~10 s -- a fall carries on
+            # from the readings that showed it
+            seen = seed if why == 'is falling' else []
+            _release()
+            kodi_utils.log(
+                'embedded: the player\'s buffer {0} ({1:.0f}s of film ahead, '
+                'cache {2}%) -- connection closed, sending nothing until it '
+                'holds {3:.0f}s or {4}%'.format(why, ahead, lvl, _BUF_READY_S,
+                                                _BUF_READY_LEVEL),
+                level='INFO')
+            while True:
+                _tt.sleep(1.0)
+                try:
+                    if not p.isPlayingVideo():
+                        return True
+                    if cancelled is not None and cancelled():
+                        # the viewer has picked something else: the reading
+                        # is not wanted (and a new pick would be refused
+                        # while this one holds the single-extraction flag)
+                        kodi_utils.log('embedded: the pick was replaced while '
+                                       'waiting for the player\'s buffer -- '
+                                       'stopping', level='INFO')
+                        return True
+                    import xbmc as _x
+                    paused = bool(_x.getCondVisibility('Player.Paused'))
+                except Exception:
+                    return True
+                # A freeze sat out here is never counted after the wait.
+                if paused:
+                    _stall['t'] = None
+                    if why == 'is not stocked yet':
+                        # The pause branch takes over (reading while paused
+                        # is allowed, as before -- a pick from the subtitle
+                        # list starts paused); the hold stays set for the
+                        # moment the picture moves again.
+                        return False
+                    # A viewer who pauses a picture that ran short is letting
+                    # the player refill: stay out of its way (review).
+                now = _tt.time()
+                mono = _tt.monotonic()
+                # A frozen picture here is not ours to answer for: we send
+                # nothing and hold no connection. Stopping would throw away
+                # the reading and give the player nothing back; it was what
+                # made the extraction "not work on TorBox" (QA 13-14 Nov 2026:
+                # the provider froze the picture in runs where nothing else
+                # touched the link). So wait on, within the limit.
+                if (not paused and _clock_frozen(p, now)
+                        and not frozen_said):
+                    frozen_said = True
+                    kodi_utils.log('embedded: the picture is frozen while we '
+                                   'send nothing -- waiting for the provider '
+                                   'to serve the player again', level='INFO')
+                try:
+                    film = p.getTime()
+                except Exception:
+                    film = None
+                # Played steadily = the film moved as far as the clock since
+                # the count began, give or take 1.5 s -- over the window, not
+                # per poll: Kodi's play time moves in steps, and a poll can
+                # take seconds behind a busy interpreter (review).
+                if (film is None or steady_from is None
+                        or abs((film - steady_from) - (mono - steady_mono)) > 1.5):
+                    steady_from, steady_mono = film, mono   # count again
+                m = _buffer_reading()
+                if m is None and _buf['off']:
+                    _stall['t'] = None
+                    return False
+                if m is not None:
+                    ahead, lvl, rest = m
+                    seen.append((mono, ahead, lvl))
+                    seen = [s for s in seen if mono - s[0] <= 10.5]
+                    if ahead >= 0.5 or lvl > 0:
+                        _buf['known'] = True
+                    elif not _buf['known'] and film0 is not None:
+                        played = (film - film0) if film is not None else 0.0
+                        if played >= _BUF_NOINFO_S:
+                            _buf['off'] = True
+                            _buf['hold'] = False
+                            _stall['t'] = None
+                            kodi_utils.log('embedded: the player reports no '
+                                           'buffer -- reading with the stall '
+                                           'guard only', level='INFO')
+                            return False
+                    still_falling = (len(seen) > 1
+                                     and mono - seen[0][0] >= _BUF_FALL_SPAN_S - 0.5
+                                     and seen[0][1] - ahead >= _BUF_FALL_S
+                                     and lvl < _BUF_READY_LEVEL
+                                     and ahead < _BUF_FALL_CEILING_S)
+                    stocked = (_to_the_end(ahead, rest)
+                               or ((ahead >= _BUF_READY_S
+                                    or lvl >= _BUF_READY_LEVEL)
+                                   and not still_falling))
+                    # Steady: in film seconds, or -- a cache too small for
+                    # that much of a heavy file -- in how full it is.
+                    steady = (film is not None and steady_from is not None
+                              and mono - steady_mono >= _BUF_STEADY_S
+                              and ((ahead >= _BUF_STEADY_AHEAD_S
+                                    and ahead >= seen[0][1] - 1.0)
+                                   or (lvl >= _BUF_LOW_LEVEL
+                                       and lvl >= seen[0][2] - 2)))
+                    if stocked or steady:
+                        _buf['hold'] = False
+                        # The clock may still be standing for a moment while
+                        # the player picks up again: measure a freeze from
+                        # here, not from one we sat out.
+                        _stall['t'] = None
+                        kodi_utils.log(
+                            'embedded: the player\'s buffer is {0} after '
+                            '{1:.0f}s ({2:.0f}s of film ahead, cache {3}%) -- '
+                            'reading'.format('back' if stocked else 'steady',
+                                             mono - t_hold, ahead, lvl),
+                            level='INFO')
+                        return False
+                if mono - t_hold > limit:
+                    kodi_utils.log(
+                        'embedded: the player\'s buffer did not fill in {0:.0f}s '
+                        '-- stopping the extraction for the film\'s sake'
+                        .format(limit), level='WARNING')
+                    return True
 
         # Automatic/direct modes may extract from a live debrid/HTTP stream.
         # Over HTTP the extractor uses ONE keep-alive connection, paced requests
@@ -3111,12 +3491,13 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     pass
 
         try:
+            _t_start['at'] = time.monotonic()
             srt_text = embedded_extract.extract_srt(
                 url, track_num=track_num, lang=src_lang,
                 allow_http=_allow_http, deadline_s=deadline_s,
                 abort_cb=_should_abort, progress_cb=_progress,
                 resume_path=_resume, stats=_xstats,
-                steps=((steps.window, steps.feed, steps.timeline)
+                steps=((steps.window, steps.feed, steps.timeline, steps.moved)
                        if (steps is not None and _remote) else None),
                 log=lambda m: kodi_utils.log('embedded_extract: ' + m,
                                              level='INFO'))
@@ -3126,6 +3507,8 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     _win.clearProperty(_ACTIVE)
                 except Exception:
                     pass
+        if why is not None and _xstats.get('why'):
+            why['reason'] = _xstats.get('why')
         if not srt_text or srt_text.count('-->') < 3:
             # Say WHICH of the two this was. "Could not extract -- try another
             # subtitle" is wrong and actively harmful when the pass actually
@@ -3326,6 +3709,11 @@ def _with_steps_preview(blocks, he):
     return [_block_with_text(b, he.get(_srt_start_ms(b))) for b in blocks]
 
 
+def _ms_label(ms):
+    ms = int(ms or 0)
+    return '%d:%02d' % (ms // 60000, ms // 1000 % 60)
+
+
 class _EmbeddedSteps(object):
     """What the viewer is shown while an embedded track is still being read.
 
@@ -3374,6 +3762,9 @@ class _EmbeddedSteps(object):
         self._read = set()                     # starts of every line fed
         self._covered = []                     # (from, until) of every window fed
         self._asked_span = None                # the window being read
+        self._cut = False                      # it was cut short by a jump
+        self._read_before = 0                  # lines read when it was asked for
+        self._moved_at = 0.0                   # moved(): asked at most 2x a second
         self._frozen = False                   # the last feed: nothing more to ask
         self._mark = None                      # the last window's end (ms)
         self._count = 0                        # lines the last window had to read
@@ -3418,9 +3809,17 @@ class _EmbeddedSteps(object):
             # by the complete pass
             return None
         spent = now - self._asked
-        if (self._count >= _STEPS_MEASURE_MIN_CUES
+        lines = self._count
+        if self._cut:
+            # a window cut short read only part of its lines: measured by
+            # those (a provider the film overtakes is cut too, and that is
+            # exactly when the rate matters; review)
+            self._cut = False
+            with self._lock:
+                lines = len(self._read) - self._read_before
+        if (lines >= _STEPS_MEASURE_MIN_CUES
                 and spent >= _STEPS_MEASURE_MIN_S):
-            self._rate = self._count / spent
+            self._rate = lines / spent
         if first == need:
             # Nothing read ahead of the viewer: the first window, a jump
             # (either way) into a stretch not read, or a provider slower than
@@ -3453,9 +3852,39 @@ class _EmbeddedSteps(object):
             count = sum(1 for c in cues[bisect.bisect_left(cues, low):last + 1]
                         if not self._is_read(c))
             self._asked_span = (low, mark)
+            self._read_before = len(self._read)
         self._mark, self._count, self._asked = mark, count, now
         self.windows += 1
         return (low, mark)
+
+    def moved(self):
+        """Asked by the extractor between clusters while a window is read:
+        has the viewer jumped where this window does not help -- before it or
+        past its end, onto a line not read? Then the window is cut short and
+        the next one starts from the viewer. Its span is not counted as read
+        (only the lines that came in are)."""
+        span = self._asked_span
+        if span is None or self._closed or not self._cues:
+            return False
+        now = self._clock()
+        if now - self._moved_at < 0.5:
+            return False
+        self._moved_at = now
+        pos = self._position()
+        if pos is None:
+            return False
+        low, mark = span
+        if low <= pos <= mark:
+            return False
+        with self._lock:
+            need = self._need(pos)
+            if need >= len(self._cues) or self._is_read(self._cues[need]):
+                return False
+            self._asked_span = None
+            self._cut = True
+        self._log('embedded steps: the viewer jumped out of the window being '
+                  'read (to %s) -- cutting it short' % _ms_label(pos))
+        return True
 
     # -- what was read (under _lock)
 
@@ -5661,6 +6090,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         if not _emb_policy['enabled']:
             return None
         _emb_lang = payload.get('src_lang') or 'en'
+        _emb_why = {}     # why the embedded text could not be read, if it was not
         # FAST PATH first (debrid-safe): re-sync an external source sub to the
         # embedded track's DENSE cue-time skeleton (~5 range requests) rather
         # than pulling ~1700 text blocks -- which a strict provider (TorBox)
@@ -5722,7 +6152,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 emb_path = _extract_embedded_srt(
                     info, _emb_lang, payload.get('track_num'),
                     progress_cb=extract_progress_cb,
-                    allow_http=_emb_policy['allow_http'], steps=_steps)
+                    allow_http=_emb_policy['allow_http'], steps=_steps,
+                    cancelled=_translation_cancelled, why=_emb_why)
                 if (_steps is not None and emb_path
                         and os.path.isfile(emb_path)):
                     # The whole track, once: the last pass read lines no view
@@ -5750,34 +6181,55 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 _steps_source_id = _screen.source_id
             # the id the viewer's handler adopted with the first view
             progressive_cb = _screen.handler()
+        _unreadable = None
         if not emb_path or not os.path.isfile(emb_path):
-            kodi_utils.log('embedded_ai: mode={0} produced no synced source -- '
-                           'deferring to the external path'.format(_emb_mode),
-                           level='INFO')
-            return None
-        # its pooled copy is proofread against this later, here
-        _kept_src = _keep_embedded_source(emb_path)
-        _status('AI: מתרגם תרגום מובנה לעברית...', time_ms=3000)
-        payload = {'type': 'ai',
-                   'source_lang': _emb_lang,
-                   'local_path': emb_path,
-                   # An embedded track carries no release string of its own, so
-                   # use the video's real release (the 'ai' pipeline's own
-                   # fallback chain -- picked_release/tagline/label -- fills any
-                   # gap). NEVER reuse the '[מובנה] XX' placeholder here: it
-                   # would poison the pool upload's release tag and the display
-                   # name for every embedded translation.
-                   'release': info.get('picked_release') or '',
-                   # Mark this as an EMBEDDED-sourced translation so the pool
-                   # stores it under kind='ai_emb' -- it is synced to the video's
-                   # own timing, so it is surfaced distinctly ("תרגום מובנה")
-                   # and sorted first among the community AI translations.
-                   'embedded': True,
-                   'force_ai': True}
-        if _kept_src:
-            _remember_embedded(link, dict(payload, local_path=_kept_src))
-        kind = 'ai'
-        # fall through to the AI logic below
+            # A file whose index has no entry for the subtitle lines cannot be
+            # read from a stream short of downloading all of it. Instead of
+            # failing (field: 'could not extract -- try another subtitle'),
+            # translate the external subtitle that best matches the release,
+            # as its own "AI translation" row would (owner, 14 Nov 2026: do
+            # not hide the row, fix it).
+            if (_emb_why.get('reason') == 'no_index'
+                    and not _proofread_only and not _translation_cancelled()
+                    and _still_playing()):
+                _unreadable = _external_for_unreadable_embedded(info, _emb_lang)
+            if _unreadable is None:
+                kodi_utils.log('embedded_ai: mode={0} produced no synced source '
+                               '-- deferring to the external path'.format(
+                                   _emb_mode), level='INFO')
+                return None
+            kodi_utils.log(
+                'embedded_ai: the embedded track cannot be read from the stream '
+                '(its index has no subtitle lines) -- translating the external '
+                '{0} subtitle "{1}" instead'.format(
+                    _unreadable.get('src_lang'), _unreadable.get('filename') or ''),
+                level='INFO')
+            _status('AI: את הכתובית המובנית בקובץ הזה אי אפשר לקרוא מהזרם — '
+                    'מתרגם במקומה כתובית תואמת לגרסה', time_ms=6000)
+            payload, kind = _unreadable, 'engine_ai'
+        else:
+            _kept_src = _keep_embedded_source(emb_path)
+            _status('AI: מתרגם תרגום מובנה לעברית...', time_ms=3000)
+            payload = {'type': 'ai',
+                       'source_lang': _emb_lang,
+                       'local_path': emb_path,
+                       # An embedded track carries no release string of its own, so
+                       # use the video's real release (the 'ai' pipeline's own
+                       # fallback chain -- picked_release/tagline/label -- fills any
+                       # gap). NEVER reuse the '[מובנה] XX' placeholder here: it
+                       # would poison the pool upload's release tag and the display
+                       # name for every embedded translation.
+                       'release': info.get('picked_release') or '',
+                       # Mark this as an EMBEDDED-sourced translation so the pool
+                       # stores it under kind='ai_emb' -- it is synced to the video's
+                       # own timing, so it is surfaced distinctly ("תרגום מובנה")
+                       # and sorted first among the community AI translations.
+                       'embedded': True,
+                       'force_ai': True}
+            if _kept_src:
+                _remember_embedded(link, dict(payload, local_path=_kept_src))
+            kind = 'ai'
+            # fall through to the AI logic below
 
     if kind == 'engine_ai':
         # User picked "AI Hebrew (translate from English)" sourced from the
