@@ -1,6 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <window>
   <!--POVIL Profile UI v1: native control 52 owns profile selection and locks.-->
+  <!--Reads the files the chosen profile will load while this picker is open; stops when it closes.-->
+  <onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/login_warm.py)</onload>
   <defaultcontrol always="true">52</defaultcontrol>
   <controls>
     <control type="image">
