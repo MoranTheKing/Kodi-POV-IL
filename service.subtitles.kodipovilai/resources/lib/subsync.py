@@ -4909,6 +4909,25 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
                           sync_align.STATUS_FIXABLE):
             _remember_rejected_timing(job, text, cut_signature, verdict)
             continue
+        if status == sync_align.STATUS_FIXABLE:
+            # A map this subtitle cannot take is no fix: try the next row, as
+            # the primary's deep check does (it turns such a verdict UNKNOWN).
+            # Field log, 14 Nov 2026 (Dexter S03E05 2160p AI upscale): HDTV
+            # rows proved FIXABLE with a +104 s region, applying it refused a
+            # negative cue, and the tournament stopped there -- leaving an
+            # unsynced subtitle on screen while the BluRay row the viewer then
+            # picked by hand was CONFIRMED at +0.1 s.
+            try:
+                if not (sync_align.apply_verdict(text, verdict) or '').strip():
+                    raise ValueError('the map leaves no subtitle')
+            except Exception as e:
+                _log('autosub tournament: %r is FIXABLE but its map cannot be '
+                     'applied (%r) -- trying the next one' % (rel, e))
+                _remember_rejected_timing(
+                    job, text, cut_signature,
+                    dict(verdict, status=sync_align.STATUS_UNKNOWN,
+                         reason='map_not_applicable'))
+                continue
         # Preserve the complete proof (including piecewise certificates) for
         # this canonical subtitle/cut pair. Delivery-side RTL may produce a
         # different text hash, in which case its own fast background check
