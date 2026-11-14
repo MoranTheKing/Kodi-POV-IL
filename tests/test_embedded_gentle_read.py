@@ -353,10 +353,10 @@ class Gentle(unittest.TestCase):
 
     # ---- many lines in one request -----------------------------------------
 
-    def extract(self, name, many):
+    def extract(self, name, many, pad=0):
         local = self.ee.extract_srt(str(FIXTURES / name), lang='en')
         self.sessions[:] = []
-        blob, net = self.serve(name, many=many)
+        blob, net = self.serve(name, many=many, pad=pad)
         logs = []
         made = []
         real = self.ee._Source
@@ -370,13 +370,14 @@ class Gentle(unittest.TestCase):
         return local, got, logs
 
     def test_many_lines_come_in_one_request(self):
-        local, got, logs = self.extract('attached.mkv', 'multipart')
+        # padded: the batch must not lean on the end of the file to cover a read
+        local, got, logs = self.extract('attached.mkv', 'multipart', pad=1024 * 1024)
         self.assertEqual(got, local)
         multi = [m for s in self.sessions for m in s.multi]
         self.assertEqual(len(multi), 1)                    # the 36 clusters after the first two: one request
-        self.assertGreaterEqual(len(multi[0]), 30)
-        # each line in a short window, not the 32 KB one
-        self.assertTrue(all(b - a + 1 <= self.ee._BLOCK_READ_MULTI + 4096 for a, b in multi[0]))
+        # in this small file the clusters lie a few hundred bytes apart, so their ranges meet and go as
+        # one (a film's clusters are megabytes apart: 241 ranges, 515 KB in QA); none overlaps another
+        self.assertTrue(all(b < c for (_a, b), (c, _d) in zip(multi[0], multi[0][1:])))
         self.assertTrue([l for l in logs if 'ranges in one request' in l])
         cluster_reads = [n for s in self.sessions for o, n in s.asked if n == self.ee._BLOCK_READ_HTTP]
         self.assertLessEqual(len(cluster_reads), 3)        # only the clusters that learn the layout
@@ -443,6 +444,275 @@ class Gentle(unittest.TestCase):
                                  abort_cb=lambda: calls.append(1) or len(calls) > 1)
         self.assertIsNone(got)
         self.assertIsNone(stats.get('why'))
+
+    def test_each_cluster_is_read_at_its_own_prefix(self):
+        # South Park S04 MULTI WEB 2160p (owner's log, 14 Nov 2026): the clusters' size VINT is 3 bytes in
+        # most and 4 in some, so one learned prefix is a byte off for those -- 58 relearns and 161 reads
+        # past the batch in QA. Here the learned prefix is made wrong before every batch: each cluster's
+        # own head, fetched in the batch, must still put every line in place without a relearn.
+        ee = self.ee
+        real = ee._Source.prefetch
+
+        def stale(src, spans, **kw):
+            src._prefix = (src._prefix or 7) + 1
+            return real(src, spans, **kw)
+        with patch.object(ee._Source, 'prefetch', stale):
+            local, got, logs = self.extract('attached.mkv', 'multipart')
+        self.assertEqual(got, local)
+        self.assertEqual(self.src._prefix_relearn, 0)
+        order = self.sessions[0].order
+        self.assertEqual(order[order.index('multi') + 1:], [])
+
+    def test_a_block_at_the_start_of_its_cluster_shares_one_range_with_the_head(self):
+        ee = self.ee
+        self.extract('attached.mkv', 'multipart')
+        spans = self.sessions[0].multi[0]
+        starts = [a for a, _b in spans]
+        self.assertEqual(starts, sorted(starts))
+        self.assertTrue(all(b < c for (_a, b), (c, _d) in zip(spans, spans[1:])), 'ranges overlap')
+
+    def test_held_prefix_reads_the_cluster_head(self):
+        ee = self.ee
+        src = types.SimpleNamespace(_pref=ee._PartStore())
+        self.assertIsNone(ee._held_prefix(src, 100))
+        src._pref[100] = b'\x1f\x43\xb6\x75\x20\x01\x02' + b'\x00' * 9          # ID + a 3-byte size
+        self.assertEqual(ee._held_prefix(src, 100), 7)
+        self.assertNotIn(100, src._pref)                                         # a head alone: handed out
+        src._pref[200] = b'\x1f\x43\xb6\x75\x10\x00\x01\x02' + b'\x00' * 4000   # a 4-byte size, and a block
+        self.assertEqual(ee._held_prefix(src, 200), 8)
+        self.assertIn(200, src._pref)                                            # it still serves the block
+        src._pref[300] = b'\x1a\x45\xdf\xa3\x80' + b'\x00' * 11                    # not a cluster
+        self.assertIsNone(ee._held_prefix(src, 300))
+
+    # ---- a picked language whose embedded subtitle is a picture ----------------
+
+    PGS_EN = {'num': 7, 'codec': 'S_HDMV/PGS', 'lang': 'eng', 'forced': False, 'type': 17,
+              'lang_explicit': True, 'name': ''}
+
+    def _tracks(self, *extra):
+        ee = self.ee
+        real = ee._sub_tracks
+        return patch.object(ee, '_sub_tracks', lambda tracks: real(tracks) + list(extra))
+
+    PGS_FR = dict(PGS_EN, num=6, lang='fre')
+    AI_ORDER = ('en', 'es', 'de', 'fr', 'pt')
+
+    def text(self, num, lang, name=''):
+        return {'num': num, 'codec': 'S_TEXT/UTF8', 'lang': lang, 'forced': False, 'type': 17,
+                'lang_explicit': True, 'name': name}
+
+    def test_another_text_track_is_read_when_the_picked_one_is_a_picture(self):
+        # the owner's file had English as a picture and French as text; here plain.mkv's English text
+        # is read for a French pick whose French track is a picture
+        ee = self.ee
+        local = ee.extract_srt(str(FIXTURES / 'plain.mkv'), lang='en')
+        used, stats = [], {}
+        blob, net = self.serve('plain.mkv')
+        with net, self._tracks(self.PGS_FR):
+            got = ee.extract_srt(URL, lang='fr', allow_http=True, stats=stats, other_text=self.AI_ORDER,
+                                 on_track=used.append)
+            plain = ee.extract_srt(URL, lang='fr', allow_http=True, stats=stats)
+        self.assertEqual(got, local)
+        self.assertEqual(used, ['en'])
+        self.assertIsNone(plain)                                              # not asked for: no other track
+        self.assertEqual(stats.get('why'), 'no_text')
+
+    def test_a_language_that_is_not_here_reads_nothing_else(self):
+        ee = self.ee
+        used, stats = [], {}
+        blob, net = self.serve('plain.mkv')
+        with net:
+            self.assertIsNone(ee.extract_srt(URL, lang='fr', allow_http=True, stats=stats,
+                                             other_text=self.AI_ORDER, on_track=used.append))
+        self.assertEqual(used, [])
+        self.assertIsNone(stats.get('why'))
+
+    def test_the_best_language_for_the_ai_is_chosen(self):
+        ee = self.ee
+        tracks = [self.PGS_FR, self.text(21, 'ger'), self.text(22, 'spa', 'Signs & Songs'),
+                  self.text(23, 'por'), self.text(24, 'heb')]
+        used, logs = [], []
+        blob, net = self.serve('plain.mkv')
+        with net, patch.object(ee, '_sub_tracks', lambda t: list(tracks)):
+            ee.extract_srt(URL, lang='fr', allow_http=True, other_text=self.AI_ORDER, on_track=used.append,
+                           log=logs.append)
+        self.assertEqual(used, ['de'])                                        # Spanish is signs only: last
+        self.assertTrue(any('reading the ger text track #21 instead' in m for m in logs), logs)
+
+    def test_an_untagged_track_ranks_after_the_tagged_ones(self):
+        ee = self.ee
+        untagged = dict(self.text(21, 'eng'), lang_explicit=False)
+        used = []
+        blob, net = self.serve('plain.mkv')
+        with net, patch.object(ee, '_sub_tracks', lambda t: [self.PGS_FR, untagged, self.text(22, 'spa')]):
+            ee.extract_srt(URL, lang='fr', allow_http=True, other_text=self.AI_ORDER, on_track=used.append)
+        self.assertEqual(used, ['es'])
+
+    def test_no_switch_is_reported_for_the_picked_language_s_own_track(self):
+        # review of 0.3.82: _pick_track hands back a file's one untagged text track (it defaults to 'eng')
+        # for a Spanish pick -- that is the Spanish pick's own track, not a switch from a picture
+        ee = self.ee
+        local = ee.extract_srt(str(FIXTURES / 'plain.mkv'), lang='en')
+        used = []
+        blob, net = self.serve('plain.mkv')
+        real = ee._sub_tracks
+        with net, patch.object(ee, '_sub_tracks',
+                               lambda t: [dict(x, lang_explicit=False) for x in real(t)]):
+            got = ee.extract_srt(URL, lang='es', allow_http=True, other_text=self.AI_ORDER, on_track=used.append)
+        self.assertEqual(got, local)
+        self.assertEqual(used, [])
+
+    def test_hebrew_and_forced_tracks_are_never_the_other_track(self):
+        ee = self.ee
+        forced_fr = dict(self.text(25, 'fre'), forced=True)
+        used, stats = [], {}
+        blob, net = self.serve('plain.mkv')
+        with net, patch.object(ee, '_sub_tracks', lambda t: [self.PGS_EN, self.text(24, 'heb'), forced_fr]):
+            self.assertIsNone(ee.extract_srt(URL, lang='en', allow_http=True, stats=stats,
+                                             other_text=self.AI_ORDER, on_track=used.append))
+        self.assertEqual(used, [])
+        self.assertEqual(stats.get('why'), 'no_text')
+
+    def test_signs_tracks_are_known_by_name(self):
+        ee = self.ee
+        self.assertTrue(ee._track_is_signs({'name': 'English [Signs/Songs]'}))
+        self.assertTrue(ee._track_is_signs({'name': 'Forced'}))
+        self.assertFalse(ee._track_is_signs({'name': 'English SDH'}))
+        self.assertFalse(ee._track_is_signs({'name': None}))
+
+    def test_a_picture_track_in_the_picked_language_says_so(self):
+        ee = self.ee
+        blob, net = self.serve('plain.mkv')
+        fr_text = {'num': 8, 'codec': 'S_TEXT/UTF8', 'lang': 'fre', 'forced': False, 'type': 17,
+                   'lang_explicit': True, 'name': ''}
+        stats = {}
+        with net, patch.object(ee, '_sub_tracks', lambda tracks: [self.PGS_EN, fr_text]):
+            self.assertIsNone(ee.extract_srt(URL, lang='en', allow_http=True, stats=stats))
+        self.assertEqual(stats.get('why'), 'no_text')
+
+    def test_a_forced_text_track_beside_the_picture_does_not_hide_it(self):
+        ee = self.ee
+        blob, net = self.serve('plain.mkv')
+        forced = {'num': 9, 'codec': 'S_TEXT/UTF8', 'lang': 'eng', 'forced': True, 'type': 17,
+                  'lang_explicit': True, 'name': 'Forced'}
+        stats = {}
+        with net, patch.object(ee, '_sub_tracks', lambda tracks: [self.PGS_EN, forced]):
+            self.assertIsNone(ee.extract_srt(URL, lang='en', allow_http=True, stats=stats))
+        self.assertEqual(stats.get('why'), 'no_text')
+
+    def test_a_text_track_of_the_picked_language_is_read_even_beside_its_picture(self):
+        ee = self.ee
+        local = ee.extract_srt(str(FIXTURES / 'plain.mkv'), lang='en')
+        blob, net = self.serve('plain.mkv')
+        stats = {}
+        with net, self._tracks(self.PGS_EN):
+            got = ee.extract_srt(URL, lang='en', allow_http=True, stats=stats)
+        self.assertEqual(got, local)
+        self.assertIsNone(stats.get('why'))
+
+    # ---- the store of batched parts ----------------------------------------------
+
+    def test_the_store_finds_the_part_that_holds_a_span(self):
+        ee = self.ee
+        store = ee._PartStore()
+        self.assertIsNone(store.covering(10, 20))
+        store[100] = b'a' * 50
+        store[300] = b'b' * 10
+        store[120] = b'c' * 5                     # overlaps the first (asked for around a held one)
+        self.assertEqual(store.covering(110, 150), (100, b'a' * 50))
+        self.assertEqual(store.covering(121, 124), (120, b'c' * 5))
+        self.assertEqual(store.covering(126, 140), (100, b'a' * 50))   # the nearest start does not hold it
+        self.assertIsNone(store.covering(140, 151))
+        self.assertIsNone(store.covering(250, 260))
+        self.assertEqual(store.covering(300, 310)[0], 300)
+        del store[100]
+        self.assertIsNone(store.covering(110, 115))
+        store.drop_before(200)
+        self.assertEqual(sorted(store), [300])
+
+    def test_a_full_store_keeps_what_lies_ahead(self):
+        ee = self.ee
+        blob, net = self.serve('attached.mkv', pad=1024 * 1024)
+        with net, patch.object(ee, '_MULTI_STORE_MAX', 150):
+            src = ee._Source(URL)
+            src._pace = 0
+            self.assertEqual(src.prefetch([(1000, 100), (5000, 100)]), 2)
+            # over 150 bytes held: what lies behind the reading goes, what lies ahead stays
+            self.assertEqual(src.prefetch([(9000, 100), (12000, 100)], keep_from=4000), 2)
+            self.assertEqual(sorted(src._pref), [5000, 9000, 12000])
+            self.assertEqual(src.read(5000, 100), blob[5000:5100])
+            src.prefetch([(20000, 100), (30000, 100)])           # no position given: the store starts again
+            self.assertEqual(sorted(src._pref), [20000, 30000])
+
+    def test_holds_means_all_of_the_span(self):
+        ee = self.ee
+        src = types.SimpleNamespace(_pref=ee._PartStore(), total=0)
+        src._pref[1000] = b'x' * 100
+        self.assertTrue(ee._Source.holds(src, 1000))
+        self.assertTrue(ee._Source.holds(src, 1050, 50))
+        self.assertFalse(ee._Source.holds(src, 1050, 51))   # a window that spills past what is held
+        src.total = 1100
+        self.assertTrue(ee._Source.holds(src, 1050, 4096))  # cut at the end of the file: whole
+
+    def test_no_request_carries_more_ranges_than_the_cap(self):
+        ee = self.ee
+        # short block windows, so the fixture's close clusters do not join into one range
+        with patch.object(ee, '_MULTI_RANGES', 4), patch.object(ee, '_BLOCK_READ_MULTI', 200):
+            local, got, logs = self.extract('attached.mkv', 'multipart')
+        self.assertEqual(got, local)
+        multi = self.sessions[0].multi
+        self.assertGreater(len(multi), 1)
+        self.assertTrue(all(len(spans) <= 4 for spans in multi), [len(x) for x in multi])
+
+    def test_kodi_is_not_asked_between_every_cluster(self):
+        # QA, 14 Nov 2026, Interstellar 2160p DV: 2,666 lines in 97 s from 40 requests -- the abort and
+        # progress callbacks ask Kodi things, ~35 ms a cluster with a 4K film on screen. Between clusters
+        # they are asked at most every _CALLBACK_POLL_S; before every request still.
+        ee = self.ee
+        calls = {'abort': 0, 'tick': 0}
+        blob, net = self.serve('attached.mkv', many='multipart')
+        with net, patch.object(ee, '_CALLBACK_POLL_S', 60.0):
+            got = ee.extract_srt(URL, lang='en', allow_http=True,
+                                 abort_cb=lambda: calls.__setitem__('abort', calls['abort'] + 1) or False,
+                                 progress_cb=lambda d, t: calls.__setitem__('tick', calls['tick'] + 1))
+        self.assertTrue(got)
+        reqs = sum(1 for s in self.sessions for a in s.asked if a[1] > 1) + sum(len(s.multi) for s in self.sessions)
+        self.assertLessEqual(calls['abort'], reqs + 2)            # the requests' own, plus the first between clusters
+        self.assertLessEqual(calls['tick'], 4)                     # the first, a pass's last, the end (36 clusters)
+
+    def test_an_mp4_says_so(self):
+        # QA, 14 Nov 2026: The Dark Knight 2160p DV WEB-DL is an MP4 -- the pick ended in "could not extract";
+        # the caller now offers the external subtitle instead
+        ee = self.ee
+        blob = b'\x00\x00\x00\x20ftypisom' + bytes(2 * 1024 * 1024)
+        stats, logs = {}, []
+        with patch.object(ee, '_new_session', lambda: Session(blob, None, 'multipart')):
+            self.assertIsNone(ee.extract_srt(URL, lang='en', allow_http=True, stats=stats, log=logs.append))
+        self.assertEqual(stats.get('why'), 'not_mkv')
+        self.assertTrue(any('(MP4)' in m for m in logs), logs)
+
+    def test_an_error_page_is_not_called_another_container(self):
+        ee = self.ee
+        stats = {}
+        page = b'<html><body>link expired</body></html>' + b' ' * 4096
+        with patch.object(ee, '_new_session', lambda: Session(page, None, 'multipart')):
+            self.assertIsNone(ee.extract_srt(URL, lang='en', allow_http=True, stats=stats))
+        self.assertIsNone(stats.get('why'))
+        self.assertEqual(ee._container_name(b'G' + bytes(187) + b'G' + bytes(10)), 'MPEG-TS')
+        self.assertIsNone(ee._container_name(b'G' + bytes(300)))
+
+    def test_an_empty_answer_is_not_called_another_container(self):
+        ee = self.ee
+        stats = {}
+        with patch.object(ee, '_new_session', lambda: Session(b'', None, 'multipart')):
+            self.assertIsNone(ee.extract_srt(URL, lang='en', allow_http=True, stats=stats))
+        self.assertIsNone(stats.get('why'))
+
+    def test_join_spans(self):
+        ee = self.ee
+        self.assertEqual(ee._join_spans([(50, 10), (0, 10), (10, 5), (60, 1), (100, 4), (2, 3)]),
+                         [(0, 15), (50, 11), (100, 4)])
+        self.assertEqual(ee._join_spans([]), [])
 
     def test_byteranges_are_split_only_when_sound(self):
         ee = self.ee
