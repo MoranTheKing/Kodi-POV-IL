@@ -443,13 +443,37 @@ _BLOCK_READ_MULTI = 1024
 _MULTI_SLACK = 64 * 1024                  # headers of the parts, on top of the data
 _MULTI_BUSY_HOLD_S = 15.0                 # after a busy answer to one: single ranges
 _MULTI_STORE_MAX = 4 * 1024 * 1024        # bytes kept from batches, at most
-# Batches in flight at once, each on its own connection (see prefetch_many).
-# ONE: measured in Kodi on TorBox (QA, 14 Nov 2026), "2 batches in parallel:
-# 200+135 ranges in 9.5 s" -- what the two take one after the other; the node
-# seeks one file serially, so more connections buy nothing there and cost a
-# provider that limits them per link (review). The path stays for a provider
-# it can be shown to help on.
-_MULTI_PARALLEL = 1
+# A COLD file -- one the provider has not served these places of yet -- costs
+# 40-100 ms a range, a warm one 3-4 ms (lab, 14 Nov 2026, TorBox: the same
+# link read twice outside Kodi while the film played; the first read of The
+# Boys 1x01 took 69.5 s, the second 5.6 s). On a cold file connections that
+# SHARE small batches scale almost linearly: 1 -> 86-100 ms a range, 3 -> 43,
+# 4 -> 24-31, 6 -> 21, 8 -> 15.6, every answer 206 and the film playing on.
+# (One big batch per connection did not: connections land on a few back-end
+# workers at random, and two on one worker wait for each other -- 0.3.83 read
+# that as "no gain".) So: only on a host it was measured on, only once a batch
+# has shown the file is cold, _MULTI_PARALLEL connections take batches of
+# _MULTI_SHARE_RANGES from one queue; the player's buffer gate is asked twice
+# a second and holds every new request while it waits; any batch that fails
+# ends it for the run (review of 0.3.83).
+# FOUR, not more: with 12 and 16 connections the provider answered 429 to most
+# batches (lab, a cold film: 8 -> all 206), so its limit lies between 9 and
+# 13 -- and it may count the account, not the link. Four leave room for the
+# player (its cache opens a connection at every seek) and another device at
+# home: a 429 that lands on the PLAYER closes the film (review of 0.3.84).
+_MULTI_PARALLEL = 4
+# ...and not for this long after the buffer gate stood aside in mid-reading:
+# the player was short of data a moment ago.
+_SHARE_AFTER_HOLD_S = 60.0
+_MULTI_SHARE_RANGES = 50
+# The first batch of a pass, where sharing is possible and the file is not
+# known to be cold: only this many ranges, so a cold stretch shows itself in a
+# couple of seconds and the rest of the pass is shared (QA, 14 Nov 2026, Pulp
+# Fiction: the lines beside the viewer were warm -- the player had just read
+# there -- and the next 119, cold, went as one 11.9 s batch).
+_MULTI_PROBE_RANGES = 24
+_COLD_RANGE_MS = 15.0
+_PARALLEL_HOSTS = ('tb-cdn.st',)
 # parts the store keeps between batches: what a parallel set brings, and one
 _MULTI_STORE_PARTS = (_MULTI_PARALLEL + 1) * 200
 # Between clusters, the caller's abort and progress callbacks at most this
@@ -765,6 +789,14 @@ class _Source(object):
                 self._spare.append(s)
         self._free = None             # session pool, built on first concurrent use
         self._batch_sess = []         # parallel batches' extra connections
+        self._range_ms = 0.0          # the last batch's cost a range (cold or warm?)
+        self._parallel_off = False    # a shared set failed: one batch at a time
+        self._held_at = 0.0           # when the buffer gate last stood aside mid-reading
+        try:
+            self._host = (re.match(r'^https?://([^/:]+)', self.url, re.I).group(1)
+                          if self.is_http else '').lower()
+        except Exception:
+            self._host = ''
         if not self.is_http:
             try:
                 self.total = os.path.getsize(self.url)
@@ -1103,46 +1135,98 @@ class _Source(object):
             self._gate_at = start + pace
         return start - now
 
-    def prefetch_many(self, groups, keep_from=None):
-        """Several batches at once (see _MULTI_PARALLEL), each on its own
-        connection; one batch is prefetch(). The abort callback is asked once,
-        here, for the set. Returns the parts that came back."""
-        groups = [g for g in groups if g]
-        if (len(groups) <= 1 or self._multi is not True
-                or getattr(self, '_parallel_off', False)):
-            return self.prefetch(groups[0], keep_from) if groups else 0
+    def parallel_now(self):
+        """How many connections may share the next batches: _MULTI_PARALLEL
+        on a measured host once a batch has shown the file is cold, else 1."""
+        if (not self.can_share() or self._range_ms < _COLD_RANGE_MS
+                or time.time() - self._held_at < _SHARE_AFTER_HOLD_S):
+            return 1
+        return _MULTI_PARALLEL
+
+    def can_share(self):
+        """Sharing is possible here at all (a measured host, batches served,
+        no shared batch has failed), cold file or not."""
+        return not (_MULTI_PARALLEL <= 1 or self._parallel_off
+                    or self._multi is not True
+                    or not self._host.endswith(_PARALLEL_HOSTS))
+
+    def prefetch_many(self, spans, keep_from=None):
+        """A cold file's next ranges on parallel_now() connections that take
+        batches of _MULTI_SHARE_RANGES from one queue (see _MULTI_PARALLEL).
+        This thread fetches nothing: it asks the abort callback (the player's
+        buffer gate) twice a second, under the lock every worker passes
+        before a request -- so while the gate waits, nothing new is sent. A
+        batch that fails ends the sharing for the run. Returns the parts
+        that came back."""
+        workers = self.parallel_now()
+        if workers <= 1 or len(spans) <= _MULTI_SHARE_RANGES:
+            return self.prefetch(spans[:_MULTI_RANGES], keep_from) if spans else 0
         if (not self.is_http or self._sess is None or self.tripped
                 or time.time() < self._multi_hold):
             return 0
-        if self._abort_cb is not None:
-            try:
-                if self._abort_cb():
-                    self.tripped = True
-                    return 0
-            except Exception:
-                pass
-        while len(self._batch_sess) < len(groups) - 1:
+        groups = [spans[i:i + _MULTI_SHARE_RANGES]
+                  for i in range(0, len(spans), _MULTI_SHARE_RANGES)]
+        workers = min(workers, len(groups))
+        while len(self._batch_sess) < workers:
             s = _new_session()
             if s is None:
                 break
             self._batch_sess.append(s)
-        sessions = [self._sess] + self._batch_sess[:len(groups) - 1]
-        groups = groups[:len(sessions)]
-        got = [0] * len(groups)
+        workers = min(workers, len(self._batch_sess))
+        if workers <= 1:
+            return self.prefetch(spans[:_MULTI_RANGES], keep_from)
+        # the connection the head and the index came on idles meanwhile: not
+        # one more on the provider's count for this link
+        try:
+            self._sess.close()
+        except Exception:
+            pass
+        gate = _threading.Lock()
+        stop = _threading.Event()
+        state = {'got': 0, 'failed': 0, 'next': 0}
 
-        def one(i):
-            try:
-                got[i] = self.prefetch(groups[i], keep_from, sess=sessions[i],
-                                       checked=True)
-            except Exception:
-                got[i] = 0
-        threads = [_threading.Thread(target=one, args=(i,))
-                   for i in range(1, len(groups))]
+        def worker(sess):
+            while not stop.is_set():
+                with gate:              # held while the buffer gate waits
+                    pass
+                with self._lock:
+                    i = state['next']
+                    if i >= len(groups) or stop.is_set():
+                        return
+                    state['next'] = i + 1
+                try:
+                    n = self.prefetch(groups[i], keep_from, sess=sess, checked=True)
+                except Exception:
+                    n = 0
+                with self._lock:
+                    state['got'] += n
+                    if not n:
+                        state['failed'] += 1
+                if not n:
+                    stop.set()
+                    return
+        threads = [_threading.Thread(target=worker, args=(self._batch_sess[i],))
+                   for i in range(workers)]
         t0 = time.time()
         for t in threads:
             t.daemon = True
             t.start()
-        one(0)
+        limit = t0 + _HTTP_TIMEOUT + 60
+        asked = 0.0
+        while any(t.is_alive() for t in threads) and time.time() < limit:
+            now = time.time()
+            if (self._abort_cb is not None and not stop.is_set()
+                    and now - asked >= 0.5):
+                with gate:
+                    try:
+                        if self._abort_cb():
+                            self.tripped = True
+                            stop.set()
+                    except Exception:
+                        pass
+                asked = time.time()
+            time.sleep(0.05)
+        stop.set()
         for t in threads:
             t.join(_HTTP_TIMEOUT + 30)
         # No idle extra connections on the link between sets (review).
@@ -1151,21 +1235,22 @@ class _Source(object):
                 s.close()
             except Exception:
                 pass
-        if not all(got):
-            # Any batch of the set refused, pushed back, failed or came back
-            # empty: one batch at a time for the rest of this run (review of
-            # 0.3.83 -- a provider that limits connections per link, or drops
-            # the oldest, must not keep seeing three).
+        took = time.time() - t0
+        if state['failed'] and not self.tripped:
+            # refused, pushed back, failed or empty: one batch at a time for
+            # the rest of this run (review of 0.3.83 -- a provider that limits
+            # connections per link must not keep seeing several)
             self._parallel_off = True
             if self._log:
-                self._log('a batch of a parallel set did not come back -- one '
-                          'batch at a time from here')
+                self._log('a shared batch did not come back -- one batch at a '
+                          'time from here')
         if self._log and not getattr(self, '_parallel_logged', False):
             self._parallel_logged = True
-            self._log('%d batches in parallel: %s ranges, %d part(s) in %.1fs'
-                      % (len(groups), '+'.join(str(len(g)) for g in groups),
-                         sum(got), time.time() - t0))
-        return sum(got)
+            self._log('a cold file (%.0f ms a range): %d connections share '
+                      'batches of %d -- %d range(s), %d part(s) in %.1fs'
+                      % (self._range_ms, workers, _MULTI_SHARE_RANGES,
+                         len(spans), state['got'], took))
+        return state['got']
 
     def _gate_wait(self, pace):
         """Wait for this request's slot in the ONE shared schedule. Returns True
@@ -1415,6 +1500,8 @@ class _Source(object):
                           '%.1fs' % (len(spans), len(parts), len(body) / 1024.0,
                                      time.time() - t0))
             self._multi = True
+            if len(spans) >= 8 and len(parts) >= len(spans):
+                self._range_ms = (time.time() - t0) * 1000.0 / len(spans)
             return len(parts)
         except Exception as ex:
             # a timeout or a reset: TorBox's bad minutes are full of them,
@@ -1438,20 +1525,29 @@ class _Source(object):
         if self._multi is not False and self._log:
             self._log('many ranges in one request not served (%s) -- one range '
                       'a request' % why)
-        self._multi = False
-        self._pref = _PartStore()
+        with self._lock:
+            self._multi = False
+            self._pref = _PartStore()
 
     def release_connection(self):
         """Close the idle keep-alive connection(s) and keep the source usable:
         the next read opens a fresh one. For a caller that stands aside while
         the player refills -- an open connection we are not using is still one
         more on the provider's count for this link. Only between reads."""
+        # ...a shared set's too: its workers wait at the gate meanwhile, and a
+        # request still in flight keeps its connection until it is answered
+        # (review of 0.3.84: six idle connections sat on the link for the
+        # whole wait).
         for sess in [self._sess] + list(self._batch_sess):
             if sess is not None:
                 try:
                     sess.close()
                 except Exception:
                     pass
+        if self._multi is True:
+            # mid-reading (the wait before the first batch is every pick's
+            # start): no shared set for a while (_SHARE_AFTER_HOLD_S)
+            self._held_at = time.time()
 
     def close(self):
         """Release every HTTP session owned by this byte source."""
@@ -3708,15 +3804,20 @@ def _extract_srt_mp4(src, track_num, lang, other_text, on_track, deadline_s,
         want = sorted(idx, key=lambda i: keep[i][0])
         spans = _join_spans([(keep[i][0], keep[i][1]) for i in want])
         k = 0
-        for g in range(0, len(spans), _MULTI_RANGES):
+        g = 0
+        while g < len(spans):
             if (time.time() - t0) > deadline_s:
                 log('MP4: time budget reached')
                 return False
             if src.fetched_now() >= _HTTP_TOTAL_CAP:
                 log('MP4: byte cap reached')
                 return False
-            group = spans[g:g + _MULTI_RANGES]
-            if (src.is_http and len(group) > 1
+            share = src.parallel_now() if src.is_http else 1
+            group = spans[g:g + _MULTI_RANGES * share]
+            g += len(group)
+            if share > 1:
+                src.prefetch_many(group, keep_from=group[0][0])
+            elif (src.is_http and len(group) > 1
                     and getattr(src, '_multi', None) is not False):
                 src.prefetch(group, keep_from=group[0][0])
             for off, size in group:
@@ -4470,6 +4571,8 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
     state = {'done': carried, 'stop': None}
     state_lock = _threading.Lock()
 
+    probe = {'due': True}        # this pass has not sent a batch yet
+
     def _cluster_spans(cpos, items):
         # What _fetch_cluster_blocks reads of this cluster: each block window
         # from the smallest prefix a cluster can have, so the cluster's own
@@ -4490,9 +4593,8 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                 or getattr(src, '_multi', None) is False
                 or src._prefix is None or src._cue_time_ok is not True):
             return
-        sets = (_MULTI_PARALLEL if getattr(src, '_multi', None) is True
-                and hasattr(src, 'prefetch_many')
-                and not getattr(src, '_parallel_off', False) else 1)
+        # a shared set (a cold file, see _MULTI_PARALLEL) looks further ahead
+        sets = src.parallel_now() if hasattr(src, 'parallel_now') else 1
         groups, joined = [], []
         for k, (cpos, items) in enumerate(seq[j:]):
             if any(t is None for _r, t in items):
@@ -4517,10 +4619,14 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
             return
         if src.fetched_now() + sum(k for g in groups for _o, k in g) >= _HTTP_TOTAL_CAP:
             return
-        if len(groups) > 1:
-            src.prefetch_many(groups, keep_from=seq[j][0])
+        first, probe['due'] = probe['due'], False
+        if sets > 1:
+            src.prefetch_many([s for g in groups for s in g],
+                              keep_from=seq[j][0])
             return
         joined = groups[0]
+        if first and hasattr(src, 'can_share') and src.can_share():
+            joined = joined[:_MULTI_PROBE_RANGES]    # see _MULTI_PROBE_RANGES
         if src.fetched_now() + sum(k for _o, k in joined) >= _HTTP_TOTAL_CAP:
             return
         src.prefetch(joined, keep_from=seq[j][0])
