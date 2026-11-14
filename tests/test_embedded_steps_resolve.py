@@ -136,7 +136,7 @@ class Job(object):
     """One embedded pick. `views`: the step translator answers. `whole`: the extraction comes back."""
 
     def __init__(self, mods, views=True, whole=True, handler=True, fed=N, moved_on=False, folder=None,
-                 noindex=False, externals=None, picked='en', read_lang=None, quick=False):
+                 noindex=False, externals=None, picked='en', read_lang=None, quick=False, busy=False):
         self.mods = mods
         self.t = mods['resources.lib.translate']
         self.views, self.whole, self.handler, self.fed = views, whole, handler, fed
@@ -162,12 +162,16 @@ class Job(object):
         self.picked = picked             # the embedded language the viewer picked
         self.read_lang = read_lang       # the language extract_srt reports reading (another text track)
         self.quick = quick               # the whole track is in before the first view's answer
+        self.busy = busy                 # another extraction (the pick on play) is running
         self.prompts = []
+        self.notices = []                # what kodi_utils.notify was asked to show
 
     def run(self):
         t, mods = self.t, self.mods
         kodi_utils = mods['resources.lib.kodi_utils']
         PROPS.clear()
+        if self.busy:
+            PROPS['povil.embedded_extract_active'] = str(time.monotonic())
         del EVENTS[:]
         Player.streams = ['embedded:eng']
         Player.at_s = 0.0
@@ -267,7 +271,7 @@ class Job(object):
             mock.patch.object(kodi_utils, 'get_bool', lambda k, d=False: bools.get(k, d)),
             mock.patch.object(kodi_utils, 'get_int', lambda k, d=0: d),
             mock.patch.object(kodi_utils, 'get_float', lambda k, d=0.0: d),
-            mock.patch.object(kodi_utils, 'notify', lambda *a, **k: None),
+            mock.patch.object(kodi_utils, 'notify', lambda *a, **k: self.notices.append(a[0] if a else '')),
             mock.patch.object(kodi_utils, 'log', lambda m, level='DEBUG': self.log.append(m)),
             mock.patch.object(kodi_utils, 'cache_dir', lambda: folder),
             mock.patch.object(kodi_utils, 'addon_profile_path', lambda: folder),
@@ -773,3 +777,21 @@ class QuickTrack(unittest.TestCase):
     def test_no_wait_once_a_view_is_up(self):
         job = Job(self.mods).run()
         self.assertFalse(job.logged('waited for it'))
+
+
+class AlreadyRunning(unittest.TestCase):
+    """The pick on play started this embedded job; the viewer picks its row (marked current) too. QA, 14 Nov
+    2026: that ended in "could not extract -- try another subtitle". It is under way: say so, no external
+    subtitle instead, and the picker's failure toast stays quiet (it reads povil.embedded_partial)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mods = _load()
+
+    def test_a_second_pick_of_a_running_job_is_not_a_failure(self):
+        job = Job(self.mods, views=False, busy=True).run()
+        self.assertTrue(job.logged('another extraction already running'))
+        self.assertEqual(job.downloads, [])
+        self.assertEqual(job.extract_kwargs, {})                       # nothing was read twice
+        self.assertTrue(any('כבר רץ ברקע' in n for n in job.notices), job.notices)
+        self.assertFalse(any('נסו כתובית אחרת' in n for n in job.notices), job.notices)

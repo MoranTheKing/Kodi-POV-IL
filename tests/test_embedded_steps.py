@@ -104,6 +104,8 @@ class Steps(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.t = load_translate()
+        # these tests follow the windows over many requests; the ceiling has its own class (StepsBudget)
+        cls.t._STEPS_MAX_REQUESTS = 99
 
     def make(self, model, at_ms=0, cues=None, restore=None):
         self.place = {'ms': at_ms}
@@ -762,6 +764,7 @@ class OnScreen(unittest.TestCase):
     def setUpClass(cls):
         cls.t = load_translate()
         cls.ee = windows.load()
+        cls.t._STEPS_MAX_REQUESTS = 99          # (see Steps)
 
     def simulate(self, cues, per_cue_s, at_ms=0, seeks=(), cut=False):
         t, ee = self.t, self.ee
@@ -1296,3 +1299,42 @@ class OnPlay(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class StepsBudget(unittest.TestCase):
+    """The owner (14 Nov 2026): an embedded pick must not cost more Gemini quota than a regular AI translation.
+    The views translate lines the full job translates again; read in minutes they were up to +40% of a
+    regular translation's requests (QA: Interstellar 12 on 54 chunks, Fight Club 9 on 39, Game of Thrones 4
+    on 10). At most _STEPS_MAX_REQUESTS for a pick; a jump earns one more for the new place."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.t = load_translate()
+
+    def make(self, model):
+        self.views = []
+        steps = self.t._EmbeddedSteps(lambda: 0, model, self.views.append, clock=lambda: 1000.0)
+        self.addCleanup(steps.finish)
+        return steps
+
+    def test_two_requests_at_most(self):
+        self.assertEqual(self.t._STEPS_MAX_REQUESTS, 2)
+        model = Model()
+        steps = self.make(model)
+        steps.feed(english(300))                       # six requests' worth of lines
+        self.assertTrue(until(lambda: len(model.asked) == 2))
+        time.sleep(0.3)
+        self.assertEqual(len(model.asked), 2)
+        self.assertEqual(steps.requests, 2)
+        self.assertIn('שורה 100.', self.views[-1])     # the 100 lines ahead of the viewer are in Hebrew
+
+    def test_a_jump_earns_one_more(self):
+        place = {'ms': 0}
+        steps = self.t._EmbeddedSteps(lambda: place['ms'], Model(), [].append, clock=lambda: 1000.0)
+        self.addCleanup(steps.finish)
+        steps.timeline([i * 3000 for i in range(600)])               # a line every 3 s, 30 minutes
+        self.assertTrue(steps.window())                                # a window around minute 0 is asked
+        steps.requests = 2                                             # the two views were spent
+        place['ms'] = 20 * 60000                                       # the viewer jumps to minute 20
+        self.assertTrue(steps.moved())
+        self.assertEqual(steps._budget, 3)

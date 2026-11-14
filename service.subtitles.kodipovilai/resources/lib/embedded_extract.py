@@ -434,10 +434,24 @@ _MULTI_RANGES = 200
 # a cluster can have; each cluster is then read at its own prefix.
 _CLUSTER_HEAD_PEEK = 16
 _PREFIX_MIN, _PREFIX_MAX = 5, 12
-_BLOCK_READ_MULTI = 4 * 1024
+# The window a batch reads at each line. A text block is a few hundred bytes;
+# 4 KB windows made Interstellar's batches 13 MB, and inside Kodi, with the 4K
+# film streaming from the same node, reading those bodies was ~60 of its 106 s
+# (sampled profile, QA 14 Nov 2026). A block longer than this is read again on
+# its own, so nothing is lost.
+_BLOCK_READ_MULTI = 1024
 _MULTI_SLACK = 64 * 1024                  # headers of the parts, on top of the data
 _MULTI_BUSY_HOLD_S = 15.0                 # after a busy answer to one: single ranges
 _MULTI_STORE_MAX = 4 * 1024 * 1024        # bytes kept from batches, at most
+# Batches in flight at once, each on its own connection (see prefetch_many).
+# ONE: measured in Kodi on TorBox (QA, 14 Nov 2026), "2 batches in parallel:
+# 200+135 ranges in 9.5 s" -- what the two take one after the other; the node
+# seeks one file serially, so more connections buy nothing there and cost a
+# provider that limits them per link (review). The path stays for a provider
+# it can be shown to help on.
+_MULTI_PARALLEL = 1
+# parts the store keeps between batches: what a parallel set brings, and one
+_MULTI_STORE_PARTS = (_MULTI_PARALLEL + 1) * 200
 # Between clusters, the caller's abort and progress callbacks at most this
 # often. Both ask Kodi things (is it playing, paused, the clock, the selected
 # subtitle), and with a 4K film on screen each such call can take tens of ms:
@@ -750,6 +764,7 @@ class _Source(object):
                     break
                 self._spare.append(s)
         self._free = None             # session pool, built on first concurrent use
+        self._batch_sess = []         # parallel batches' extra connections
         if not self.is_http:
             try:
                 self.total = os.path.getsize(self.url)
@@ -1079,6 +1094,79 @@ class _Source(object):
         with self._lock:
             return self.fetched
 
+    def _claim_slot(self, pace):
+        """Reserve this request's slot in the one shared schedule; seconds to
+        wait for it."""
+        now = time.time()
+        with self._lock:
+            start = self._gate_at if self._gate_at > now else now
+            self._gate_at = start + pace
+        return start - now
+
+    def prefetch_many(self, groups, keep_from=None):
+        """Several batches at once (see _MULTI_PARALLEL), each on its own
+        connection; one batch is prefetch(). The abort callback is asked once,
+        here, for the set. Returns the parts that came back."""
+        groups = [g for g in groups if g]
+        if (len(groups) <= 1 or self._multi is not True
+                or getattr(self, '_parallel_off', False)):
+            return self.prefetch(groups[0], keep_from) if groups else 0
+        if (not self.is_http or self._sess is None or self.tripped
+                or time.time() < self._multi_hold):
+            return 0
+        if self._abort_cb is not None:
+            try:
+                if self._abort_cb():
+                    self.tripped = True
+                    return 0
+            except Exception:
+                pass
+        while len(self._batch_sess) < len(groups) - 1:
+            s = _new_session()
+            if s is None:
+                break
+            self._batch_sess.append(s)
+        sessions = [self._sess] + self._batch_sess[:len(groups) - 1]
+        groups = groups[:len(sessions)]
+        got = [0] * len(groups)
+
+        def one(i):
+            try:
+                got[i] = self.prefetch(groups[i], keep_from, sess=sessions[i],
+                                       checked=True)
+            except Exception:
+                got[i] = 0
+        threads = [_threading.Thread(target=one, args=(i,))
+                   for i in range(1, len(groups))]
+        t0 = time.time()
+        for t in threads:
+            t.daemon = True
+            t.start()
+        one(0)
+        for t in threads:
+            t.join(_HTTP_TIMEOUT + 30)
+        # No idle extra connections on the link between sets (review).
+        for s in self._batch_sess:
+            try:
+                s.close()
+            except Exception:
+                pass
+        if not all(got):
+            # Any batch of the set refused, pushed back, failed or came back
+            # empty: one batch at a time for the rest of this run (review of
+            # 0.3.83 -- a provider that limits connections per link, or drops
+            # the oldest, must not keep seeing three).
+            self._parallel_off = True
+            if self._log:
+                self._log('a batch of a parallel set did not come back -- one '
+                          'batch at a time from here')
+        if self._log and not getattr(self, '_parallel_logged', False):
+            self._parallel_logged = True
+            self._log('%d batches in parallel: %s ranges, %d part(s) in %.1fs'
+                      % (len(groups), '+'.join(str(len(g)) for g in groups),
+                         sum(got), time.time() - t0))
+        return sum(got)
+
     def _gate_wait(self, pace):
         """Wait for this request's slot in the ONE shared schedule. Returns True
         if the wait was aborted (player needs the line).
@@ -1192,26 +1280,35 @@ class _Source(object):
             end = min(end, self.total)
         return self._pref.covering(offset, end) is not None
 
-    def prefetch(self, spans, keep_from=None):
+    def prefetch(self, spans, keep_from=None, sess=None, checked=False):
         """Fetch `spans` [(offset, size), ...] in ONE request (HTTP multi-
         range) into the store read() serves from. Returns how many parts came
         back. Takes its slot in the paced schedule and asks the abort callback
         first, like any read. Anything but a sound multipart answer (or one
         part for one span) switches it off for the rest of the run: the reads
         then go one range a request, as before. Never reads a body larger than
-        the spans asked for."""
+        the spans asked for. `sess`/`checked`: one batch of a parallel set
+        (prefetch_many) -- its own connection, and the abort callback already
+        asked for the whole set in the calling thread (the callback is not
+        made to be entered by several threads at once)."""
         if (not self.is_http or self._sess is None or self.tripped
                 or self._multi is False or not spans
                 or time.time() < self._multi_hold):
             return 0
+        sess = sess or self._sess
         with self._lock:
             self.reqs += 1
             n = self.reqs
             _pace = getattr(self, '_pace', _HTTP_REQ_PACE_S)
-        if n > 1 and _pace > 0 and self._gate_wait(_pace):
-            self.tripped = True
-            return 0
-        if self._abort_cb is not None:
+        if n > 1 and _pace > 0:
+            if checked:
+                wait = self._claim_slot(_pace)
+                if wait > 0:
+                    time.sleep(wait)
+            elif self._gate_wait(_pace):
+                self.tripped = True
+                return 0
+        if self._abort_cb is not None and not checked:
             try:
                 if self._abort_cb():
                     self.tripped = True
@@ -1225,8 +1322,8 @@ class _Source(object):
         try:
             with self._lock:
                 self.http_reqs += 1
-            r = self._sess.get(self.url, headers={'Range': rng, 'User-Agent': _UA},
-                               timeout=_HTTP_TIMEOUT, stream=True)
+            r = sess.get(self.url, headers={'Range': rng, 'User-Agent': _UA},
+                         timeout=_HTTP_TIMEOUT, stream=True)
             code = r.status_code
             ctype = r.headers.get('Content-Type') or ''
             try:
@@ -1296,20 +1393,23 @@ class _Source(object):
                 return 0
             with self._lock:
                 self.fetched += len(body)
-            if (len(self._pref) > 2 * _MULTI_RANGES
-                    or sum(len(d) for d in self._pref.values()) > _MULTI_STORE_MAX):
-                # what earlier batches left (each batch is read before the
-                # next is asked for): never more than a couple in memory. What
-                # is already behind goes first -- a part ahead may be one this
-                # batch left out because it was held (review of 0.3.82).
-                if keep_from is not None:
-                    self._pref.drop_before(keep_from)
-                if (len(self._pref) > 2 * _MULTI_RANGES
+            with self._lock:
+                if (len(self._pref) > _MULTI_STORE_PARTS
                         or sum(len(d) for d in self._pref.values())
                         > _MULTI_STORE_MAX):
-                    self._pref = _PartStore()
-            for start, data in parts:
-                self._pref[start] = data
+                    # what earlier batches left (each set is read before the
+                    # next is asked for): never more than a couple in memory.
+                    # What is already behind goes first -- a part ahead may be
+                    # one this batch left out because it was held (review of
+                    # 0.3.82), or a part of a batch of the same set.
+                    if keep_from is not None:
+                        self._pref.drop_before(keep_from)
+                    if (len(self._pref) > _MULTI_STORE_PARTS
+                            or sum(len(d) for d in self._pref.values())
+                            > _MULTI_STORE_MAX):
+                        self._pref = _PartStore()
+                for start, data in parts:
+                    self._pref[start] = data
             if self._multi is None and self._log:
                 self._log('%d ranges in one request: %d part(s), %.0f KB in '
                           '%.1fs' % (len(spans), len(parts), len(body) / 1024.0,
@@ -1346,16 +1446,22 @@ class _Source(object):
         the next read opens a fresh one. For a caller that stands aside while
         the player refills -- an open connection we are not using is still one
         more on the provider's count for this link. Only between reads."""
-        sess = self._sess
-        if sess is not None:
-            try:
-                sess.close()
-            except Exception:
-                pass
+        for sess in [self._sess] + list(self._batch_sess):
+            if sess is not None:
+                try:
+                    sess.close()
+                except Exception:
+                    pass
 
     def close(self):
         """Release every HTTP session owned by this byte source."""
         self.close_pool()
+        for s in self._batch_sess:
+            try:
+                s.close()
+            except Exception:
+                pass
+        self._batch_sess = []
         sess, self._sess = self._sess, None
         if sess is not None:
             try:
@@ -1815,6 +1921,9 @@ def _head_enough(head, limit=None):
     return False
 
 
+_EBML_MAGIC = b'\x1a\x45\xdf\xa3'
+
+
 class _NotMatroska(ValueError):
     """The file has a head, and it is another container (MP4, AVI, TS)."""
 
@@ -1845,9 +1954,11 @@ def _parse_head(src, head_bytes, log):
             head += more
             if len(more) < want or _head_enough(head, head_bytes):
                 break
+            if len(head) >= 4 and head[:4] != _EBML_MAGIC:
+                break           # another container: the rest says nothing more
         # A single read was all or nothing; a piece that failed part-way must
         # not leave a cut head to parse as if it were whole.
-        if (not _head_enough(head, head_bytes)
+        if (head[:4] == _EBML_MAGIC and not _head_enough(head, head_bytes)
                 and len(head) < min(head_bytes, src.total or head_bytes)):
             raise ValueError('head read cut short (%d bytes)' % len(head))
     else:
@@ -1862,6 +1973,10 @@ def _parse_head(src, head_bytes, log):
     eid, _l = _read_vint(buf, True)
     if eid != _EBML:
         kind = _container_name(head)
+        try:
+            src._other_head = head      # the MP4 reader's box headers come from it
+        except Exception:
+            pass
         if kind:
             raise _NotMatroska('not EBML/Matroska (%s)' % kind)
         raise ValueError('not EBML/Matroska (%d byte(s) read)' % len(head))
@@ -2837,56 +2952,40 @@ def extract_srt(url_or_path, track_num=None, lang=None,
                 src._stats['release'] = src.release_connection
         if not src.total:
             return None
-        seg_start, ts_scale, tracks, seeks = _parse_head(src, head_bytes, _log)
+        try:
+            seg_start, ts_scale, tracks, seeks = _parse_head(src, head_bytes,
+                                                             _log)
+        except _NotMatroska as nm:
+            if 'MP4' not in str(nm):
+                raise
+            # QA, 14 Nov 2026: 4K DV WEB-DLs are often MP4 (The Dark Knight,
+            # The Matrix) -- their tx3g subtitles are read from the sample
+            # tables, through the same _Source. What still cannot be read
+            # keeps the 0.3.82 fallback (src._stats['why'] = 'not_mkv').
+            if src.is_http and not (allow_http and src.has_session):
+                _log('MP4: HTTP extraction not allowed here -- deferring')
+                return None
+            try:
+                got = _extract_srt_mp4(src, track_num, lang, other_text,
+                                       on_track, deadline_s, t0, progress_cb,
+                                       steps, _log)
+            except Exception as ex:
+                # a box this parser cannot make sense of: the external
+                # subtitle, not "could not extract" (review)
+                _log('MP4: could not parse the file (%r)' % (ex,))
+                got = None
+            if (got is None and src._stats is not None
+                    and not src._stats.get('why')):
+                src._stats['why'] = 'not_mkv'
+            return got
         subs = _sub_tracks(tracks)
         if not subs:
             return None
         # We translate THIS track's own text, so prefer an SDH track: it carries
         # the complete dialogue. (The cue_reference_times* callers deliberately do
         # NOT prefer SDH -- there the track is only a timing skeleton.)
-        track = _pick_track(subs, track_num, lang, prefer_sdh=True)
-        if track is None and track_num is None and lang:
-            want_key = _lang_key(lang)
-            if any(_is_bitmap_codec(t['codec']) and not t['forced']
-                   and _lang_key(t['lang']) == want_key for t in subs):
-                # The picked language's subtitle here is a picture, not text
-                # (owner's log, 14 Nov 2026: South Park S04E04 MULTI WEB
-                # 2160p, English was S_HDMV/PGS, French was text; the pick
-                # ended in "could not extract"). The owner: no OCR -- read
-                # another TEXT track of the file, in the language best for the
-                # AI (`other_text`), and say so. Signs-only tracks last,
-                # forced ones and Hebrew never. A forced-only text track or a
-                # language that is not here at all is not a picture: as before.
-                texts = [t for t in subs
-                         if _is_text_codec(t['codec']) and not t['forced']
-                         and _lang_key(t['lang']) not in ('he', want_key)]
-                if other_text and texts:
-                    order = [_lang_key(c) for c in other_text]
-
-                    def _rank(t):
-                        k = _lang_key(t['lang'])
-                        # a track with no language of its own defaults to
-                        # 'eng': its real language is unknown -- after the
-                        # tagged ones (review)
-                        return (_track_is_signs(t),
-                                not t.get('lang_explicit', True),
-                                order.index(k) if k in order else len(order),
-                                not _track_is_sdh(t), t['num'])
-                    texts.sort(key=_rank)
-                    track = texts[0]
-                    if on_track is not None:
-                        try:
-                            on_track(_lang_key(track['lang']) or track['lang'])
-                        except Exception:
-                            pass
-                    _log('the %s subtitle is a picture (the file has: %s) -- '
-                         'reading the %s text track #%s instead' % (
-                             lang, ', '.join('#%s %s [%s]' % (
-                                 t['num'], t['codec'] or '?', t['lang'])
-                                 for t in subs),
-                             track['lang'], track['num']))
-                elif src._stats is not None:
-                    src._stats['why'] = 'no_text'
+        track = _choose_track(src, subs, track_num, lang, other_text, on_track,
+                              _log)
         if track is None:
             # SAY WHAT WAS ACTUALLY THERE. "no matching text track" reads as a
             # defect in this parser, and on the report that prompted this it was
@@ -3084,6 +3183,57 @@ def _track_is_signs(t):
     unflagged): the dialogue is not in it."""
     toks = [x for x in re.split(r'[^a-z0-9]+', (t.get('name') or '').lower()) if x]
     return any(x in ('sign', 'signs', 'song', 'songs', 'forced') for x in toks)
+
+
+def _choose_track(src, subs, track_num, lang, other_text, on_track, _log):
+    """The track extract_srt reads: _pick_track's, or -- when the picked
+    language's subtitle is a picture -- the best other text track
+    (`other_text`), reported through `on_track`; src._stats['why'] =
+    'no_text' when there is none. Shared by the Matroska and MP4 paths."""
+    track = _pick_track(subs, track_num, lang, prefer_sdh=True)
+    if track is None and track_num is None and lang:
+        want_key = _lang_key(lang)
+        if any(_is_bitmap_codec(t['codec']) and not t['forced']
+               and _lang_key(t['lang']) == want_key for t in subs):
+            # The picked language's subtitle here is a picture, not text
+            # (owner's log, 14 Nov 2026: South Park S04E04 MULTI WEB
+            # 2160p, English was S_HDMV/PGS, French was text; the pick
+            # ended in "could not extract"). The owner: no OCR -- read
+            # another TEXT track of the file, in the language best for the
+            # AI (`other_text`), and say so. Signs-only tracks last,
+            # forced ones and Hebrew never. A forced-only text track or a
+            # language that is not here at all is not a picture: as before.
+            texts = [t for t in subs
+                     if _is_text_codec(t['codec']) and not t['forced']
+                     and _lang_key(t['lang']) not in ('he', want_key)]
+            if other_text and texts:
+                order = [_lang_key(c) for c in other_text]
+
+                def _rank(t):
+                    k = _lang_key(t['lang'])
+                    # a track with no language of its own defaults to
+                    # 'eng': its real language is unknown -- after the
+                    # tagged ones (review)
+                    return (_track_is_signs(t),
+                            not t.get('lang_explicit', True),
+                            order.index(k) if k in order else len(order),
+                            not _track_is_sdh(t), t['num'])
+                texts.sort(key=_rank)
+                track = texts[0]
+                if on_track is not None:
+                    try:
+                        on_track(_lang_key(track['lang']) or track['lang'])
+                    except Exception:
+                        pass
+                _log('the %s subtitle is a picture (the file has: %s) -- '
+                     'reading the %s text track #%s instead' % (
+                         lang, ', '.join('#%s %s [%s]' % (
+                             t['num'], t['codec'] or '?', t['lang'])
+                             for t in subs),
+                         track['lang'], track['num']))
+            elif src._stats is not None:
+                src._stats['why'] = 'no_text'
+    return track
 
 
 def _pick_track(subs, track_num, lang, prefer_sdh=False):
@@ -3375,9 +3525,13 @@ def _extract_cues(src, seeks, seg_start, want, entries,
     connection with a 429 circuit-breaker. Returns True only on a COMPLETE pass;
     False (no sub cues / breaker / budget / abort) -> the caller defers to the
     external path (HTTP) or a full sequential walk (local)."""
-    positions, is_sub = _read_cues(src, seeks, seg_start, want, log)
+    # The index in 2 MB pieces too, not the head's 256 KB: a file with many
+    # tracks has a Cues of megabytes (QA, 14 Nov 2026: Interstellar with 91
+    # tracks -- 13 s of paced 256 KB pieces before the first line). Every piece
+    # still asks the buffer gate first.
     if getattr(src, '_piece', None):
         src._piece = _HTTP_PIECE_CLUSTERS
+    positions, is_sub = _read_cues(src, seeks, seg_start, want, log)
     if not positions or not is_sub:
         if positions:
             # Whole-file/video cues don't point at subtitle blocks, so a capped
@@ -3426,6 +3580,202 @@ def _extract_cues(src, seeks, seg_start, want, entries,
     else:
         _resume_save(resume_path, identity, entries, done, scan, log)
     return ok
+
+
+_MP4_MOD = []
+
+
+def _mp4():
+    """embedded_mp4, loaded from beside this file (this module is also loaded
+    on its own, outside the add-on's package)."""
+    if not _MP4_MOD:
+        import importlib.util
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            'embedded_mp4.py')
+        spec = importlib.util.spec_from_file_location('povil_embedded_mp4', path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _MP4_MOD.append(mod)
+    return _MP4_MOD[0]
+
+
+def _rows_to_srt(rows):
+    """[(start_ms, end_ms, text)] -> SRT, in time order."""
+    out = []
+    for i, (start, end, text) in enumerate(sorted(rows), 1):
+        if end <= start:
+            end = start + 700
+        out.append('%d' % i)
+        out.append('%s --> %s' % (_fmt_ts(max(0, start)), _fmt_ts(max(1, end))))
+        out.append(text)
+        out.append('')
+    return '\n'.join(out)
+
+
+def _mp4_cut(src, log):
+    """A reading cut part-way (the player's buffer, the budget, a dropped
+    answer): not the file's fault, so not 'not_mkv' -- no external subtitle
+    instead -- and nothing is saved, so no "progress saved" either (review)."""
+    if src._stats is not None:
+        src._stats['why'] = 'mp4_cut'
+        src._stats['done'] = 0
+    log('MP4: the reading was cut -- pick it again to read it again')
+    return None
+
+
+def _extract_srt_mp4(src, track_num, lang, other_text, on_track, deadline_s,
+                     t0, progress_cb, steps, log):
+    """extract_srt for an MP4 (see embedded_mp4): the sample tables say where
+    every subtitle sample is and when it plays, so only those bytes are read
+    -- batched like a Matroska track's blocks, the lines near the viewer first
+    when `steps` asks for windows. None when it cannot be read (the caller
+    then offers the external subtitle)."""
+    mp4 = _mp4()
+    head = getattr(src, '_other_head', b'') or b''
+
+    def read(off, n):
+        if off + n <= len(head):
+            return head[off:off + n]
+        return src.read(off, n)
+    found = mp4.find_moov(read, src.total)
+    if found is None:
+        log('MP4: no moov box within the first %d top-level boxes'
+            % mp4.TOP_BOXES_MAX)
+        return None
+    m_off, m_size = found
+    piece = src._piece
+    if src.is_http:
+        src._piece = _HTTP_PIECE_CLUSTERS
+    try:
+        # a small moov right after ftyp is already in the head
+        moov = read(m_off, m_size)
+    finally:
+        src._piece = piece
+    if len(moov) < m_size:
+        log('MP4: moov read short (%d of %d bytes)' % (len(moov), m_size))
+        return None
+    subs = mp4.tracks(moov)
+    if not subs:
+        log('MP4: no subtitle track (moov %.1f MB)' % (m_size / 1e6))
+        return None
+    # A text track with a handful of lines beside a full one in the same
+    # language is its signs/forced track, flagged or not (QA, 14 Nov 2026: The
+    # Dark Knight 2160p DV WEB-DL has a 49-sample track beside ~3,700-sample
+    # ones): never the one translated.
+    lines = {}
+    for t in subs:
+        if _is_text_codec(t['codec']):
+            lines[t['num']] = sum(1 for s in mp4.samples(moov, t)
+                                  if s[1] > mp4.empty_size(t['entry']))
+    for t in subs:
+        n = lines.get(t['num'])
+        if n is None or t['forced']:
+            continue
+        key = _lang_key(t['lang'])
+        most = max(lines.get(o['num'], 0) for o in subs
+                   if _lang_key(o['lang']) == key)
+        if n < 200 and most >= 5 * max(1, n):
+            t['forced'] = True
+    track = _choose_track(src, subs, track_num, lang, other_text, on_track, log)
+    if track is None:
+        log('MP4: no matching text track (num=%s lang=%s); the file has: %s'
+            % (track_num, lang, ', '.join(
+                '#%s %s [%s]%s' % (t['num'], t['codec'], t['lang'],
+                                   ' forced' if t['forced'] else '')
+                for t in subs)))
+        return None
+    if not _is_text_codec(track['codec']):
+        log('MP4: track #%s is %s (not text) -- skipping'
+            % (track['num'], track['codec']))
+        return None
+    entry = track['entry']
+    every = mp4.samples(moov, track)
+    keep = [s for s in every
+            if mp4.empty_size(entry) < s[1] <= mp4.SAMPLE_BYTES_MAX]
+    total = len(keep)
+    log('MP4: moov %.1f MB at %d; track #%s %s [%s]: %d sample(s), %d with '
+        'text' % (m_size / 1e6, m_off, track['num'], entry.decode('latin1'),
+                  track['lang'], len(every), total))
+    if not keep:
+        return None
+    rows = {}
+    if src._stats is not None:
+        src._stats['done'], src._stats['total'] = 0, total
+
+    def fetch(idx):
+        """Read the samples keep[i] for i in idx (batched). False when the
+        reading was cut (abort, budget, byte cap, a short answer)."""
+        want = sorted(idx, key=lambda i: keep[i][0])
+        spans = _join_spans([(keep[i][0], keep[i][1]) for i in want])
+        k = 0
+        for g in range(0, len(spans), _MULTI_RANGES):
+            if (time.time() - t0) > deadline_s:
+                log('MP4: time budget reached')
+                return False
+            if src.fetched_now() >= _HTTP_TOTAL_CAP:
+                log('MP4: byte cap reached')
+                return False
+            group = spans[g:g + _MULTI_RANGES]
+            if (src.is_http and len(group) > 1
+                    and getattr(src, '_multi', None) is not False):
+                src.prefetch(group, keep_from=group[0][0])
+            for off, size in group:
+                blob = src.read(off, size)
+                if len(blob) < size and not (src.total and off + len(blob) >= src.total):
+                    log('MP4: short read at %d (%d of %d bytes)'
+                        % (off, len(blob), size))
+                    return False
+                while k < len(want) and keep[want[k]][0] < off + size:
+                    i = want[k]
+                    s_off, s_size, start, end = keep[i]
+                    text = mp4.sample_text(blob[s_off - off:s_off - off + s_size],
+                                           entry)
+                    if text:
+                        rows[i] = (start, end, text)
+                    else:
+                        rows.setdefault(i, None)
+                    k += 1
+            if src._stats is not None:
+                src._stats['done'] = len(rows)
+            if progress_cb:
+                try:
+                    progress_cb(len(rows), total)
+                except Exception:
+                    pass
+        return True
+
+    def srt_so_far():
+        return _rows_to_srt([r for r in rows.values() if r])
+
+    if steps and src.is_http:
+        window, show, timeline = steps[:3]
+        try:
+            timeline(sorted(s[2] for s in keep))
+            for n in range(_WINDOWS_MAX):
+                span = window()
+                if not span:
+                    break
+                low, high = span
+                todo = [i for i, s in enumerate(keep)
+                        if low <= s[2] <= high and i not in rows]
+                if len(rows) + len(todo) >= total:
+                    break                      # all that is left: one go
+                if todo:
+                    if not fetch(todo):
+                        return _mp4_cut(src, log)
+                    log('MP4 window %d: film %.0f..%.0f ms, %d line(s), %d of '
+                        '%d read' % (n + 1, low, high, len(todo), len(rows),
+                                     total))
+                show(srt_so_far())
+        except Exception as ex:
+            log('MP4 windows: %r -- reading the rest in one go' % (ex,))
+    rest = [i for i in range(total) if i not in rows]
+    if rest and not fetch(rest):
+        return _mp4_cut(src, log)
+    srt = srt_so_far()
+    log('MP4: extracted %d line(s) from track #%s, %.1fMB, %.1fs'
+        % (srt.count('-->'), track['num'], src.fetched / 1e6, time.time() - t0))
+    return srt or None
 
 
 def _steps_in_ticks(steps, entries, scale_ms, origin_ms, codec):
@@ -3756,6 +4106,8 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
         """Parse the block at `relpos` out of `buf`, which starts at file offset
         `base`. Appends to `entries` on success. Returns True/False."""
         off = (cpos + prefix + relpos) - base
+        if off < 0:
+            return False
         if not (0 <= off < len(buf)):
             return False
         got = []
@@ -3790,6 +4142,41 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
                     src._cue_time_ok = True
         return True
 
+    def _own_prefix(buf, base, relpos, cue_time):
+        """This cluster's prefix found inside a batch window that starts at
+        the shortest one: the block parses at exactly its own. The learned one
+        was tried already."""
+        nonlocal prefix
+        learned = prefix
+        # one byte longer first: a 3-byte size VINT next to 4-byte ones is the
+        # common case (review)
+        for p in sorted(range(_PREFIX_MIN, _PREFIX_MAX + 1),
+                        key=lambda q: (abs(q - learned), q < learned)):
+            if p == learned:
+                continue
+            prefix = p
+            n = len(entries)
+            if _place(buf, base, relpos, cue_time):
+                # a block found at an inferred prefix must also READ as text
+                # (review: ~4e-7 false parses a wrong shift; never keep one)
+                # strict UTF-8, and no control/unassigned/private characters
+                # (NBSP, RTL marks and a BOM are normal in subtitles; review)
+                try:
+                    import unicodedata as _ud
+                    txt = entries[-1][2].decode('utf-8')
+                    sound = not any(
+                        _ud.category(c) in ('Cc', 'Cs', 'Co', 'Cn')
+                        and c not in '\r\n\t' for c in txt)
+                except Exception:
+                    sound = False
+                if sound:
+                    with src._lock:
+                        src._prefix_inferred = getattr(src, '_prefix_inferred', 0) + 1
+                    return True
+                del entries[n:]
+        prefix = learned
+        return False
+
     for batch in _batch_relposes(items):
         # Anything the header read already covers costs no extra request.
         pending = []
@@ -3804,15 +4191,22 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
         if src.fetched_now() >= _HTTP_TOTAL_CAP:
             return resolved
         lo = pending[0][0]
-        block_read = (_BLOCK_READ_MULTI if getattr(src, '_multi', None) is True
-                      else _BLOCK_READ_HTTP)
+        windowed = getattr(src, '_multi', None) is True and cluster_ts is None
+        block_read = _BLOCK_READ_MULTI if windowed else _BLOCK_READ_HTTP
         span = (pending[-1][0] - lo) + block_read
         base = cpos + prefix + lo
+        if windowed:
+            # the batch's window: from the shortest prefix a cluster can have
+            base = cpos + _PREFIX_MIN + lo
+            span += _PREFIX_MAX - _PREFIX_MIN
         buf = src.read(base, min(span, _HTTP_TOTAL_CAP - src.fetched_now()))
         if src.tripped or not buf:
             return resolved
         for (relpos, cue_time) in pending:
             if _place(buf, base, relpos, cue_time):
+                resolved += 1
+                continue
+            if windowed and _own_prefix(buf, base, relpos, cue_time):
                 resolved += 1
                 continue
             if block_read != _BLOCK_READ_HTTP:
@@ -4077,24 +4471,16 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
     state_lock = _threading.Lock()
 
     def _cluster_spans(cpos, items):
-        # What _fetch_cluster_blocks reads of this cluster: its head, and each
-        # block window from the smallest prefix a cluster can have. A block
-        # right at the start of its cluster overlaps the head: one range for
-        # both (some servers refuse overlapping ranges).
+        # What _fetch_cluster_blocks reads of this cluster: each block window
+        # from the smallest prefix a cluster can have, so the cluster's own
+        # prefix is found inside it (_fetch_cluster_blocks). No head range:
+        # on a slow node every range costs ~40 ms of the server's time,
+        # whatever its size (QA, 14 Nov 2026).
         slack = _PREFIX_MAX - _PREFIX_MIN
-        mine = [(cpos, _CLUSTER_HEAD_PEEK)]
-        for batch in _batch_relposes(items):
-            lo = batch[0][0]
-            mine.append((cpos + _PREFIX_MIN + lo,
-                         (batch[-1][0] - lo) + _BLOCK_READ_MULTI + slack))
-        merged = [mine[0]]
-        for at, size in mine[1:]:
-            last_at, last_size = merged[-1]
-            if at <= last_at + last_size:
-                merged[-1] = (last_at, max(last_size, at + size - last_at))
-            else:
-                merged.append((at, size))
-        return merged
+        return _join_spans([(cpos + _PREFIX_MIN + batch[0][0],
+                             (batch[-1][0] - batch[0][0]) + _BLOCK_READ_MULTI
+                             + slack)
+                            for batch in _batch_relposes(items)])
 
     def _fetch_ahead(seq, j):
         # The next clusters' reads in one request, at most _MULTI_RANGES
@@ -4104,7 +4490,10 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                 or getattr(src, '_multi', None) is False
                 or src._prefix is None or src._cue_time_ok is not True):
             return
-        joined = []
+        sets = (_MULTI_PARALLEL if getattr(src, '_multi', None) is True
+                and hasattr(src, 'prefetch_many')
+                and not getattr(src, '_parallel_off', False) else 1)
+        groups, joined = [], []
         for k, (cpos, items) in enumerate(seq[j:]):
             if any(t is None for _r, t in items):
                 break                    # such a cluster reads its header
@@ -4116,12 +4505,22 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
             # ones); the cap counts what is sent
             more = _join_spans(joined + mine)
             if joined and len(more) > _MULTI_RANGES:
-                break
+                groups.append(joined)    # this batch is full: the next one
+                if len(groups) >= sets:
+                    joined = []
+                    break
+                more = _join_spans(mine)
             joined = more[:_MULTI_RANGES]
-            if len(joined) >= _MULTI_RANGES:
-                break
-        if not joined:
+        if joined:
+            groups.append(joined)
+        if not groups:
             return
+        if src.fetched_now() + sum(k for g in groups for _o, k in g) >= _HTTP_TOTAL_CAP:
+            return
+        if len(groups) > 1:
+            src.prefetch_many(groups, keep_from=seq[j][0])
+            return
+        joined = groups[0]
         if src.fetched_now() + sum(k for _o, k in joined) >= _HTTP_TOTAL_CAP:
             return
         src.prefetch(joined, keep_from=seq[j][0])
