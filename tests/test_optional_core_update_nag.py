@@ -33,7 +33,15 @@ class CoreUpdateNagTests(unittest.TestCase):
             return ['versioncheck_enable'], [], []
 
         module.addon_settings_safe = SimpleNamespace(apply=Mock(side_effect=apply))
-        return module, state, SimpleNamespace(Addon=addon)
+        # the disk's answer (addon_presence): only what is installed is on it
+        module.addon_presence = SimpleNamespace(
+            installed=lambda ident: installed and ident == 'service.xbmc.versioncheck')
+        self.constructed = []
+
+        def counted(ident):
+            self.constructed.append(ident)
+            return addon(ident)
+        return module, state, SimpleNamespace(Addon=counted)
 
     def run_quiet(self, module, sdk):
         from unittest.mock import patch
@@ -67,6 +75,16 @@ class CoreUpdateNagTests(unittest.TestCase):
         module, state, sdk = self.load(installed=False)
         self.assertEqual(self.run_quiet(module, sdk), 'not_installed')
         self.assertEqual(state['done'], '')
+
+    def test_an_absent_addon_is_never_constructed(self):
+        # Kodi logs a red "Unknown addon id" line for each one (field report, 14 Nov 2026: a device
+        # without Umbrella got one at every start)
+        module, state, sdk = self.load()
+        self.run_quiet(module, sdk)
+        self.assertEqual(self.constructed, ['service.xbmc.versioncheck'])
+        module, state, sdk = self.load(installed=False)
+        self.run_quiet(module, sdk)
+        self.assertEqual(self.constructed, [])
 
     def test_failed_settings_write_can_retry_on_next_start(self):
         module, state, sdk = self.load(fails=True)

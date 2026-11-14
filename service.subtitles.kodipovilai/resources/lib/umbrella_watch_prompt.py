@@ -51,6 +51,11 @@ try:
 except Exception:
     ws = None
 
+try:
+    from resources.lib import addon_presence
+except Exception:
+    addon_presence = None
+
 
 UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
 UMBRELLA_GUARD_PROPERTY = 'umbrella.updateSettings'
@@ -152,7 +157,7 @@ def _restorable(umbrella):
 
 def maybe_ask():
     """Returns 'asked_yes' | 'asked_no' | 'already_asked' | 'no_mismatch'
-    | 'busy' | 'in_flight' | 'unavailable'. Never raises."""
+    | 'busy' | 'in_flight' | 'unavailable' | 'not_installed'. Never raises."""
     if ws is None or addon_settings_safe is None or xbmcgui is None:
         return 'unavailable'
     if not _IN_FLIGHT.acquire(False):
@@ -169,6 +174,11 @@ def maybe_ask():
 def _ask():
     if _asked():
         return 'already_asked'
+    # The keeper calls this every minute. Without Umbrella, _reader() made
+    # Kodi log "Unknown addon id" each time nothing was playing (field
+    # report, 14 Nov 2026): ask the disk first, silently.
+    if addon_presence is not None and not addon_presence.installed(UMBRELLA_ADDON_ID):
+        return 'not_installed'
     # Not over a film. There is no hurry -- the question keeps until the next
     # tick, and a modal dialog across somebody's playback is worse than
     # waiting.

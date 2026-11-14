@@ -2364,13 +2364,13 @@ def _external_for_unreadable_embedded(info, lang):
         return None
 
     def rank(c):
-        # the best match to the release first, whichever of the two
-        # languages it is in (review); on a tie, the picked language
+        # the picked language first (owner: "I picked English"), English only
+        # when it has none; within a language, the best match to the release
         try:
             pct = release_match.match_pct(playing, c.get('release') or '') if playing else 0
         except Exception:
             pct = 0
-        return (pct, (c.get('language') or '').lower()[:2] == picked)
+        return ((c.get('language') or '').lower()[:2] == picked, pct)
     best = max(mine, key=rank)
     out = dict(best['payload'])
     out['type'] = 'engine_ai'
@@ -2812,6 +2812,13 @@ def _embedded_aligned_source_srt(
         return None, None
 
 
+# The picked language's embedded subtitle is a picture (PGS): the file's other
+# TEXT tracks are read instead, the best language for the AI first -- the order
+# the AI rows list languages in (the owner, 14 Nov 2026: "switch to an embedded
+# text subtitle, in the preferred language for AI translation"; no OCR).
+_EMBEDDED_TEXT_ORDER = ('en', 'es', 'de', 'fr', 'pt')
+
+
 def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                           progress_cb=None, allow_http=True, steps=None,
                           cancelled=None, why=None):
@@ -2832,7 +2839,11 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
     `cancelled()`, if given, is True once the viewer has picked something
     else; a wait for the player's buffer then ends the reading. `why`, a dict
     if given, gets 'reason' = 'no_index' when the stream's index has no entry
-    for the subtitle lines (they cannot be read short of the whole file)."""
+    for the subtitle lines (they cannot be read short of the whole file) or
+    'no_text' when `src_lang`'s subtitle in this file is a picture (PGS) and
+    the file has no other text subtitle; and 'lang_used' as soon as the track
+    is chosen -- another text track's, in _EMBEDDED_TEXT_ORDER, when
+    `src_lang`'s is a picture."""
     try:
         url = _playing_video_url(info)
         if not url:
@@ -3492,11 +3503,32 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
 
         try:
             _t_start['at'] = time.monotonic()
+            def _on_track(used):
+                # The track is chosen: when it is another language's text
+                # track (src_lang's is a picture), say so NOW, while the first
+                # Hebrew lines are being read -- not after the whole track.
+                why['lang_used'] = used
+                try:
+                    if (embedded_extract._lang_key(used)
+                            != embedded_extract._lang_key(src_lang)):
+                        kodi_utils.log(
+                            'embedded_ai: the {0} embedded subtitle is a '
+                            'picture, not text -- reading the {1} embedded '
+                            'track instead'.format(src_lang, used), level='INFO')
+                        _status('AI: הכתובית המובנית ב{0} היא תמונה ולא טקסט — '
+                                'מתרגם מהכתובית המובנית ב{1}'.format(
+                                    _lang_display_he(src_lang),
+                                    _lang_display_he(used)), time_ms=6000)
+                except Exception:
+                    pass
+
             srt_text = embedded_extract.extract_srt(
                 url, track_num=track_num, lang=src_lang,
                 allow_http=_allow_http, deadline_s=deadline_s,
                 abort_cb=_should_abort, progress_cb=_progress,
                 resume_path=_resume, stats=_xstats,
+                other_text=(_EMBEDDED_TEXT_ORDER if why is not None else None),
+                on_track=(_on_track if why is not None else None),
                 steps=((steps.window, steps.feed, steps.timeline, steps.moved)
                        if (steps is not None and _remote) else None),
                 log=lambda m: kodi_utils.log('embedded_extract: ' + m,
@@ -3623,6 +3655,11 @@ _STEPS_TRIES = 2
 _STEPS_GIVE_UP = 3
 # A step's request is answered in seconds or not worth waiting for.
 _STEPS_TIMEOUT = 45
+# The whole track in before the first view's answer: how long after the
+# request went out to wait for it (see _EmbeddedSteps.settle). An answer
+# normally lands ~8 s after it is sent; past this, the full translation's first
+# lines come about as fast (review).
+_STEPS_SETTLE_S = 12.0
 # How often the view is checked against the viewer's position (seconds), and
 # how far past its last line the viewer may be before the embedded track is
 # put back (ms).
@@ -3775,6 +3812,9 @@ class _EmbeddedSteps(object):
         self._dead = translate is None
         self._stop = threading.Event()
         self._wake = threading.Event()
+        self._idle = threading.Event()         # no request out (see settle)
+        self._idle.set()
+        self._sent_at = 0.0                    # when the last request went out
         self._thread = None
         self._watcher = None
         self.shown = False                     # a view was shown at least once
@@ -3965,6 +4005,31 @@ class _EmbeddedSteps(object):
             self._thread.start()
         self._wake.set()
 
+    def settle(self, cancelled=None, timeout=None):
+        """The whole track is in (the last feed froze new requests). When no
+        view is up yet but a window's request is out, wait for its answer: it
+        is the lines the viewer reaches next, and the full translation's first
+        lines take as long again (QA, 14 Nov 2026, South Park S04E04 MULTI
+        BluRay: the track was read in 5.5 s, the first window's answer was
+        dropped, and the first Hebrew line came at +24 s, not +12 s). At most
+        _STEPS_SETTLE_S from when the request went out, and not past a
+        replaced pick (`cancelled`). Returns whether it waited."""
+        if self.shown or self._dead or self._idle.is_set():
+            return False
+        limit = timeout if timeout is not None else _STEPS_SETTLE_S
+        until = self._sent_at + limit
+        while not self._idle.is_set():
+            left = until - time.time()
+            if left <= 0:
+                break
+            try:
+                if cancelled is not None and cancelled():
+                    break
+            except Exception:
+                pass
+            self._idle.wait(min(0.5, left))
+        return True
+
     def finish(self):
         """The reading is over (the whole track is in): no more views."""
         self._stop.set()
@@ -4003,6 +4068,10 @@ class _EmbeddedSteps(object):
             take = pending[:_STEPS_CHUNK]
             before = [srt.block_text_only(b)
                       for b in self._blocks[max(0, take[0] - 3):take[0]]]
+            # a request is about to go out: settle() waits from here (under
+            # the lock, so the last feed cannot slip between; review)
+            self._idle.clear()
+            self._sent_at = time.time()
             return ([self._starts[i] for i in take],
                     [self._blocks[i] for i in take],
                     [line for line in before if line])
@@ -4016,33 +4085,37 @@ class _EmbeddedSteps(object):
                 self._wake.wait(2.0)
                 continue
             starts, blocks, before = batch
-            if self._stop.is_set():
-                return
-            self.requests += 1
             try:
-                got = self._translate(blocks, before)
-            except Exception as e:
-                self._log('embedded steps: request failed: {0}'.format(e))
-                got = {}
-            if self._stop.is_set():
-                return
-            if got is None:
-                self._dead = True
-                self._log('embedded steps: no more requests -- the lines keep '
-                          'their source text until the full translation')
-                return
-            with self._lock:
-                for i, start in enumerate(starts):
-                    if got.get(i):
-                        self._he[start] = got[i]
-                    elif i in got:
-                        self._kept.add(start)
-                    else:
-                        self._tries[start] = self._tries.get(start, 0) + 1
-            if any(got.values()):
-                failed = 0
-                self._view()
-                continue
+                if self._stop.is_set():
+                    return
+                self.requests += 1
+                try:
+                    got = self._translate(blocks, before)
+                except Exception as e:
+                    self._log('embedded steps: request failed: {0}'.format(e))
+                    got = {}
+                if self._stop.is_set():
+                    return
+                if got is None:
+                    self._dead = True
+                    self._log('embedded steps: no more requests -- the lines '
+                              'keep their source text until the full '
+                              'translation')
+                    return
+                with self._lock:
+                    for i, start in enumerate(starts):
+                        if got.get(i):
+                            self._he[start] = got[i]
+                        elif i in got:
+                            self._kept.add(start)
+                        else:
+                            self._tries[start] = self._tries.get(start, 0) + 1
+                if any(got.values()):
+                    failed = 0
+                    self._view()
+                    continue
+            finally:
+                self._idle.set()
             failed += 1
             if failed >= _STEPS_GIVE_UP:
                 self._dead = True
@@ -4251,7 +4324,9 @@ def _steps_translator(info, source_lang, cancelled):
                 cast, title, year = [], info.get('title') or '', info.get(
                     'year') or ''
             state['template'] = prompt.build(
-                source_lang=source_lang, title=title, year=year, cast=cast,
+                source_lang=(source_lang() if callable(source_lang)
+                             else source_lang),
+                title=title, year=year, cast=cast,
                 is_episode=info.get('is_episode', False),
                 tvshow=info.get('tvshow', ''), season=season, episode=episode,
                 numbered=False)
@@ -6143,7 +6218,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             _steps = None
             if _emb_policy['allow_http'] and not _proofread_only:
                 _steps = _embedded_steps(
-                    info, _emb_lang, _screen.show, _translation_cancelled,
+                    info, lambda: _emb_why.get('lang_used') or _emb_lang,
+                    _screen.show, _translation_cancelled,
                     restore=(_steps_restore if (
                         progressive_cb is not None
                         and payload.get('stream_index') is not None)
@@ -6162,6 +6238,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     try:
                         _steps.feed(cache.load_text(emb_path) or '',
                                     translate=False)
+                        if _steps.settle(cancelled=_translation_cancelled):
+                            kodi_utils.log(
+                                'embedded steps: the whole track was in before '
+                                'the answer for the first view -- waited for '
+                                'it, shown={0}'.format(_steps.shown),
+                                level='INFO')
                     except Exception:
                         pass
             finally:
@@ -6189,7 +6271,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # translate the external subtitle that best matches the release,
             # as its own "AI translation" row would (owner, 14 Nov 2026: do
             # not hide the row, fix it).
-            if (_emb_why.get('reason') == 'no_index'
+            if (_emb_why.get('reason') in ('no_index', 'no_text', 'not_mkv')
                     and not _proofread_only and not _translation_cancelled()
                     and _still_playing()):
                 _unreadable = _external_for_unreadable_embedded(info, _emb_lang)
@@ -6198,16 +6280,41 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                '-- deferring to the external path'.format(
                                    _emb_mode), level='INFO')
                 return None
+            _reason = _emb_why.get('reason')
+            _no_text = _reason == 'no_text'
             kodi_utils.log(
-                'embedded_ai: the embedded track cannot be read from the stream '
-                '(its index has no subtitle lines) -- translating the external '
-                '{0} subtitle "{1}" instead'.format(
+                'embedded_ai: the {0} embedded track cannot be read {1} -- '
+                'translating the external {2} subtitle "{3}" instead'.format(
+                    _emb_lang,
+                    '(it is a picture track and the file has no other text subtitle)'
+                    if _no_text else
+                    '(the file is not Matroska; its embedded subtitles are not '
+                    'read yet)' if _reason == 'not_mkv'
+                    else 'from the stream (its index has no subtitle lines)',
                     _unreadable.get('src_lang'), _unreadable.get('filename') or ''),
                 level='INFO')
-            _status('AI: את הכתובית המובנית בקובץ הזה אי אפשר לקרוא מהזרם — '
+            _status('AI: הכתובית המובנית ב{0} בקובץ הזה היא תמונה ולא טקסט — '
+                    'מתרגם במקומה כתובית ב{1} שתואמת לגרסה'.format(
+                        _lang_display_he(_emb_lang),
+                        _lang_display_he(_unreadable.get('src_lang')))
+                    if _no_text else
+                    'AI: את הכתובית המובנית בקובץ הזה אי אפשר לקרוא — '
                     'מתרגם במקומה כתובית תואמת לגרסה', time_ms=6000)
             payload, kind = _unreadable, 'engine_ai'
         else:
+            _used = _emb_why.get('lang_used') or ''
+            try:
+                from . import embedded_extract as _ee
+                _switched = bool(_used) and (_ee._lang_key(_used)
+                                             != _ee._lang_key(_emb_lang))
+            except Exception:
+                _switched = False
+            if _switched:
+                # the viewer was told when the track was chosen (_on_track)
+                kodi_utils.log(
+                    'embedded_ai: translating from the {1} embedded track, not '
+                    'the {0} picture one'.format(_emb_lang, _used), level='INFO')
+                _emb_lang = _used
             _kept_src = _keep_embedded_source(emb_path)
             _status('AI: מתרגם תרגום מובנה לעברית...', time_ms=3000)
             payload = {'type': 'ai',
