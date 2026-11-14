@@ -193,8 +193,11 @@ class Windows(unittest.TestCase):
 
     def test_an_aborted_window_is_not_followed_by_the_complete_pass(self):
         # the abort is over by the time anything else could run: a complete pass started now would read on
+        # the callbacks are asked between every cluster here (in a stream they are asked at most every
+        # _CALLBACK_POLL_S, and before every request)
         run = Run(self.ee, one_per_cluster(10), abort_once_at=2)
-        ok, entries = run.go(spans=[(0, 4500), (0, 8500)])
+        with patch.object(self.ee, '_CALLBACK_POLL_S', 0.0):
+            ok, entries = run.go(spans=[(0, 4500), (0, 8500)])
         self.assertFalse(ok)
         self.assertEqual(run.aborts, 1)
         self.assertEqual(len(run.fetches), 2)

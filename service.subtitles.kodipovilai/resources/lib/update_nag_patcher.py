@@ -45,6 +45,11 @@ except Exception:
     addon_settings_safe = None
 
 try:
+    from resources.lib import addon_presence
+except Exception:
+    addon_presence = None
+
+try:
     import xbmc
 except Exception:
     xbmc = None
@@ -118,6 +123,12 @@ def ensure_quiet():
             # nobody could act on, for the ordinary case of a device where
             # this has already run once.
             saw_one = True
+            continue
+        # Asked of the disk first: constructing the Addon of one that is not
+        # installed makes Kodi write a red "Unknown addon id" line, and on a
+        # device without Umbrella that was a line at every start (field
+        # report, 14 Nov 2026). See addon_presence.
+        if addon_presence is not None and not addon_presence.installed(addon_id):
             continue
         try:
             import xbmcaddon

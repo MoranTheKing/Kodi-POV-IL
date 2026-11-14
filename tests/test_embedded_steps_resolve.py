@@ -136,7 +136,7 @@ class Job(object):
     """One embedded pick. `views`: the step translator answers. `whole`: the extraction comes back."""
 
     def __init__(self, mods, views=True, whole=True, handler=True, fed=N, moved_on=False, folder=None,
-                 noindex=False, externals=None):
+                 noindex=False, externals=None, picked='en', read_lang=None, quick=False):
         self.mods = mods
         self.t = mods['resources.lib.translate']
         self.views, self.whole, self.handler, self.fed = views, whole, handler, fed
@@ -159,6 +159,10 @@ class Job(object):
             {'release': RELEASE, 'language': 'fr',
              'payload': {'type': 'engine', 'filename': RELEASE + '.fr', 'id': 'c'}}]
         self.downloads = []
+        self.picked = picked             # the embedded language the viewer picked
+        self.read_lang = read_lang       # the language extract_srt reports reading (another text track)
+        self.quick = quick               # the whole track is in before the first view's answer
+        self.prompts = []
 
     def run(self):
         t, mods = self.t, self.mods
@@ -182,8 +186,11 @@ class Job(object):
             kind = 'step' if step else 'chunk' if blocks else (
                 'proofread' if kw['model'] != 'gemini-3.5-flash-lite' else 'repair')
             self.sent.append((kw['model'], kind))
+            self.prompts.append((kind, prompt))
             if kind == 'step' and not self.views:
                 raise t.gemini.QuotaExceeded('test: no view')
+            if kind == 'step' and self.quick:
+                time.sleep(1.0)
             if kind in ('proofread', 'repair'):
                 raise t.gemini.GeminiError('test: no answer')
             out = []
@@ -209,8 +216,10 @@ class Job(object):
         def extract_srt(url, **kw):
             # as embedded_extract.extract_srt drives its `steps`: the cue times, a window, what was read
             self.extract_kwargs = kw
+            if self.read_lang and kw.get('on_track'):
+                kw['on_track'](self.read_lang)
             if self.noindex:
-                kw['stats']['why'] = 'no_index'
+                kw['stats']['why'] = self.noindex if isinstance(self.noindex, str) else 'no_index'
                 if self.moved_on:
                     self.current = False     # the viewer picked something else meanwhile
                 return None
@@ -224,9 +233,12 @@ class Job(object):
                 self.timelines.append(list(STARTS))
                 self.spans.append(window())
                 show('\n\n'.join(ENGLISH.strip().split('\n\n')[:self.fed]) + '\n')
-                if self.views:
+                if self.views and not self.quick:
                     held = self.steps[0]
-                    until(lambda: len(held._he) >= self.fed - 1 and held.on_screen)
+                    # ...and no answer still out (review: under load the second batch's answer was
+                    # dropped by finish() and the mixed view missed its lines -- the same in production,
+                    # where the full job covers them a moment later)
+                    until(lambda: len(held._he) >= self.fed - 1 and held.on_screen and held._idle.is_set())
                 progress(30, N)                                  # the reading goes on under the view
             if self.moved_on:
                 self.current = False         # the viewer picks another subtitle while the track is read
@@ -285,7 +297,7 @@ class Job(object):
         for p in patches:
             p.start()
         try:
-            link = t._encode_link({'type': 'embedded_ai', 'src_lang': 'en', 'stream_index': 0})
+            link = t._encode_link({'type': 'embedded_ai', 'src_lang': self.picked, 'stream_index': 0})
             selection = {'token': 'tok', 'link_hash': 'lh', 'stream_hash': 'sh'}
             if self.handler:
                 spec = importlib.util.spec_from_file_location('default_steps_resolve', ADDON / 'default.py')
@@ -646,7 +658,7 @@ class NoIndexChoice(unittest.TestCase):
         self.assertEqual(job.downloads, [])
         self.assertTrue(job.logged('deferring to the external path'))
 
-    def test_the_best_match_wins_across_the_picked_language_and_english(self):
+    def test_the_picked_language_comes_first_then_the_best_match(self):
         t = self.mods['resources.lib.translate']
         sub = self.mods['resources.lib.subsync']
         rm = self.mods['resources.lib.release_match']
@@ -660,5 +672,104 @@ class NoIndexChoice(unittest.TestCase):
                 mock.patch.object(rm, 'match_pct', lambda a, b: 100 if b == RELEASE else 20):
             got = t._external_for_unreadable_embedded({}, 'fr')
             tie = t._external_for_unreadable_embedded({}, 'en')
-        self.assertEqual((got['filename'], got['src_lang'], got['type']), ('EN-exact', 'en', 'engine_ai'))
+        # the owner (14 Nov 2026): "I picked" that language -- its subtitle, even a poorer match
+        self.assertEqual((got['filename'], got['src_lang'], got['type']), ('FR-poor', 'fr', 'engine_ai'))
         self.assertEqual(tie['filename'], 'EN-exact')                 # German is neither language
+        cands.append({'release': RELEASE, 'language': 'fr', 'payload': {'type': 'engine', 'filename': 'FR-exact'}})
+        with mock.patch.dict(sys.modules, self.mods), \
+                mock.patch.object(sub, '_oracle_candidates', lambda info, **k: cands), \
+                mock.patch.object(sub, 'playing_release', lambda info: RELEASE), \
+                mock.patch.object(rm, 'match_pct', lambda a, b: 100 if b == RELEASE else 20):
+            self.assertEqual(t._external_for_unreadable_embedded({}, 'fr')['filename'], 'FR-exact')
+
+class PictureSubtitle(unittest.TestCase):
+    """The picked language's embedded subtitle is a picture (PGS), not text (the owner's log, 14 Nov 2026:
+    South Park S04E04, English PGS, French text). The owner: no OCR -- another embedded TEXT track is read,
+    in the language best for the AI, translated from ITS language, and the viewer is told. Only a file with
+    no text subtitle at all gets the external subtitle (the picked language first)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mods = _load()
+
+    def test_the_other_text_track_is_translated_from_its_language(self):
+        job = Job(self.mods, read_lang='fr').run()
+        self.assertTrue(job.logged('is a picture, not text'))
+        self.assertEqual(job.extract_kwargs.get('other_text'), job.t._EMBEDDED_TEXT_ORDER)
+        chunk_prompts = [p for k, p in job.prompts if k in ('chunk', 'step')]
+        self.assertTrue(chunk_prompts)
+        self.assertTrue(all('French' in p for p in chunk_prompts), chunk_prompts[0][:400])
+        self.assertTrue(job.of('final'))
+
+    def test_the_picked_language_itself_says_nothing(self):
+        job = Job(self.mods, read_lang='en').run()
+        self.assertFalse(job.logged('is a picture, not text'))
+        chunk_prompts = [p for k, p in job.prompts if k in ('chunk', 'step')]
+        self.assertTrue(chunk_prompts)
+        self.assertTrue(all('English' in p for p in chunk_prompts))
+
+    def test_a_three_letter_pick_is_not_a_switch(self):
+        job = Job(self.mods, read_lang='en', picked='eng').run()
+        self.assertFalse(job.logged('is a picture, not text'))
+
+    def test_the_external_subtitle_in_the_picked_language_is_translated(self):
+        job = Job(self.mods, views=False, whole=False, noindex='no_text').run()
+        self.assertEqual([d.get('filename') for d in job.downloads], [RELEASE])     # English, the release
+        self.assertTrue(job.logged('it is a picture track and the file has no other text subtitle'))
+        self.assertTrue(job.of('final'))
+
+    def test_a_file_that_is_not_matroska_gets_the_external_one(self):
+        job = Job(self.mods, views=False, whole=False, noindex='not_mkv').run()
+        self.assertEqual([d.get('filename') for d in job.downloads], [RELEASE])
+        self.assertTrue(job.logged('the file is not Matroska'))
+        self.assertTrue(job.of('final'))
+
+    def test_a_french_pick_gets_the_french_external_subtitle(self):
+        job = Job(self.mods, views=False, whole=False, noindex='no_text', picked='fr').run()
+        self.assertEqual([d.get('filename') for d in job.downloads], [RELEASE + '.fr'])
+        self.assertTrue(job.of('final'))
+
+
+class EmbeddedRowLanguage(unittest.TestCase):
+    """Kodi names an embedded stream by its 3-letter code; its first two letters are another language for
+    several (review of 0.3.82): a Swedish pick asked the extractor for Swahili and read nothing."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mods = _load()
+
+    def test_kodi_codes_become_their_own_language(self):
+        b = self.mods['resources.lib.subs_engine_bridge']
+        names = ('swe', 'rum', 'slo', 'jpn', 'cze', 'ind', 'pob', 'eng', 'fil', 'und', 'en', 'e', 'Heb', 'French')
+        with mock.patch.dict(sys.modules, self.mods):
+            got = [b._stream_code(n) for n in names]
+        # an unknown 3-letter code stays whole: 'fil' is not Finnish, 'und' not a language to offer
+        self.assertEqual(got, ['sv', 'ro', 'sk', 'ja', 'cs', 'id', 'pt', 'en', 'fil', 'und', 'en', 'e', 'he', 'fr'])
+
+
+class QuickTrack(unittest.TestCase):
+    """The whole track is read before the first view's answer is back (QA, 14 Nov 2026, South Park S04E04
+    MULTI BluRay: read in 5.5 s; the answer was dropped and the first Hebrew line came at +24 s instead of
+    +12 s, from the full translation's first chunk). The answer is waited for and shown."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mods = _load()
+
+    def test_the_first_view_s_answer_is_still_shown(self):
+        job = Job(self.mods, quick=True).run()
+        self.assertTrue(job.logged('waited for it, shown=True'), job.log[-10:])
+        self.assertTrue(job.steps[0].shown)
+        views = [e for e in EVENTS if e[0] == 'view']
+        self.assertTrue(views and 'תצוגה' in views[0][2])
+
+    def test_an_answer_later_than_the_cap_is_not_waited_for(self):
+        t = self.mods['resources.lib.translate']
+        with mock.patch.object(t, '_STEPS_SETTLE_S', 0.3):
+            t0 = time.time()
+            job = Job(self.mods, quick=True).run()
+        self.assertTrue(job.logged('waited for it, shown=False'), job.log[-10:])
+
+    def test_no_wait_once_a_view_is_up(self):
+        job = Job(self.mods).run()
+        self.assertFalse(job.logged('waited for it'))

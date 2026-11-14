@@ -106,10 +106,11 @@ def _log(msg, level='INFO'):
 
 
 def _installed(addon_id):
+    # Asked of the disk: constructing the Addon of one that is not installed
+    # makes Kodi log a red "Unknown addon id" line (see addon_presence).
     try:
-        import xbmcaddon
-        xbmcaddon.Addon(addon_id)
-        return True
+        from resources.lib import addon_presence
+        return addon_presence.installed(addon_id)
     except Exception:
         return False
 

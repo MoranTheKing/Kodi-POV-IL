@@ -168,7 +168,8 @@ class Gate(unittest.TestCase):
         self.addCleanup(shutil.rmtree, tmp, True)
 
         def extract(url_or_path, track_num=None, lang=None, allow_http=False, deadline_s=0,
-                    abort_cb=None, progress_cb=None, resume_path=None, stats=None, steps=None, log=None):
+                    abort_cb=None, progress_cb=None, resume_path=None, stats=None, steps=None, log=None,
+                    **more):
             if stats is not None and url_or_path.startswith('http'):
                 stats['release'] = lambda: world.releases.append(world.t)
             for _ in range(n_requests):
