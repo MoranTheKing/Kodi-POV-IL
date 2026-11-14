@@ -178,6 +178,18 @@ _SUB_TRACK_TYPE = 0x11
 
 # ---- budgets ----------------------------------------------------------------
 DEFAULT_HEAD_BYTES = 2 * 1024 * 1024
+# extract_srt over HTTP asks for at most this much in one request. It used to
+# open with one 2 MB head read and one 1.3 MB Cues read; on a provider at a bad
+# minute (TorBox, QA 13 Nov 2026) such a request holds the line for seconds,
+# and the caller's check of the player's buffer can only run between requests.
+# In pieces it runs every 256 KB, and the head is read only as far as the
+# first Cluster -- usually one piece instead of 2 MB.
+_HTTP_PIECE = 256 * 1024
+# Once the index is in, cluster reads use this instead: a window scan (1.75 MB)
+# stays one request as before, an 8 MB coalesced range goes in four. In 256 KB
+# pieces a file without per-cue positions took about three times as long
+# (review of 0.3.81), for a check that already runs before every request.
+_HTTP_PIECE_CLUSTERS = 2 * 1024 * 1024
 # A remote MP4 movie index is read only when it is this small: an
 # episode's moov is 1-3 MB, and playback must keep the bandwidth.
 _MP4_REMOTE_INDEX_BYTES = 8 * 1024 * 1024
@@ -337,6 +349,10 @@ _PACE_MEMORY_MIN_REQS = 20        # too short a run tells us nothing -- don't sa
 # needs is still here and still tested -- set this to 3 to run it -- and the
 # stand-down now also puts the pace back where it found it (see below), so a
 # burst can no longer poison the rest of the run.
+# NOTE (0.3.81): translate.py's buffer gate assumes ONE connection. Before this
+# goes above 1, release_connection() must close the spares too, and the gate's
+# state (_buf, _stall in _extract_embedded_srt) needs a lock: the abort
+# callback would then be entered by several fetch threads at once.
 _HTTP_CONNS = 1
 
 # Clusters fetched one at a time before the concurrent phase may start (see
@@ -392,6 +408,21 @@ _HTTP_TOTAL_CAP = 700 * 1024 * 1024       # give up (defer) past this many bytes
 # just falls through to the window-scan for that one cue.
 _CLUSTER_HDR_READ = 8 * 1024              # header read to resolve prefix + ts
 _BLOCK_READ_HTTP = 32 * 1024              # window fetched AT a targeted block
+# Many lines in one request. A cue fetched on its own costs one request at the
+# provider's pace -- 2,376 lines of a film took ten minutes in QA (TorBox, 14
+# Nov 2026) though each is a few hundred bytes. HTTP can ask for many ranges in
+# one GET, and TorBox answers it (multipart/byteranges): 200 ranges of 4 KB in
+# 2.6 s, where 20 single requests took 4.6 s. So once a file's layout is
+# learned, the next _MULTI_RANGES blocks are fetched in one request into a
+# small store that the ordinary reads are then served from, each _BLOCK_READ_
+# MULTI long instead of _BLOCK_READ_HTTP (a text block is a few hundred bytes;
+# one longer than that is read again on its own). A provider that answers
+# anything else -- a whole file, one coalesced range, an error -- is asked one
+# range a request again, as before, for the rest of the run.
+_MULTI_RANGES = 150
+_BLOCK_READ_MULTI = 4 * 1024
+_MULTI_SLACK = 64 * 1024                  # headers of the parts, on top of the data
+_MULTI_BUSY_HOLD_S = 15.0                 # after a busy answer to one: single ranges
 # ONE-SHOT ceiling. When a header read IS needed, size it to swallow the first
 # block too if that is cheap -- one request instead of two. Only bites on files
 # whose subtitle block precedes the cluster's video keyframe; measured on a
@@ -624,6 +655,10 @@ class _Source(object):
         self._progress_at = 0.0       # ...and when that was
         self._stats = None            # caller-visible progress/pressure dict
         self._abort_cb = None         # set by extract_srt; polled DURING sleeps
+        self._piece = None            # extract_srt: largest single HTTP request
+        self._multi = None            # many ranges a request: None untried, True, False
+        self._pref = {}               # offset -> bytes fetched ahead (prefetch)
+        self._multi_hold = 0.0        # no batched request before this (busy)
         self.total = 0
         # Every counter above is now touched by several fetch threads, and the
         # pace gate below decides ONE schedule for all of them, so both live
@@ -710,8 +745,26 @@ class _Source(object):
                 return b''
         if self.tripped:
             return b''
+        if self._pref:
+            held = self._pref_take(offset, size)
+            if held is not None:
+                return held
         if self._sess is not None:
-            return self._read_session(offset, size)
+            piece = self._piece
+            if not piece or size <= piece:
+                return self._read_session(offset, size)
+            # In pieces (see _HTTP_PIECE): each one takes its own slot in the
+            # paced schedule and polls the abort callback first. What comes back
+            # is what one request would have returned: short on EOF or on a
+            # stop, and the callers' own checks (tripped, _short_read) see it.
+            out = bytearray()
+            while len(out) < size:
+                want = min(piece, size - len(out))
+                got = self._read_session(offset + len(out), want)
+                out += got
+                if len(got) < want or self.tripped:
+                    break
+            return bytes(out)
         return self._read_urllib(offset, size)
 
     def _probe_fetch(self, offset, size):
@@ -1044,6 +1097,179 @@ class _Source(object):
                 pass
         self._spare = []
 
+    def _pref_take(self, offset, size):
+        """The bytes [offset, offset + size) from what prefetch() holds, or
+        None. A part is handed out once."""
+        end = offset + size
+        if self.total:
+            end = min(end, self.total)     # a part cut at the end of the file is whole
+        data = self._pref.get(offset)
+        if data is not None and offset + len(data) >= end:
+            del self._pref[offset]
+            return data[:size]
+        for start in list(self._pref):
+            data = self._pref[start]
+            if start <= offset and start + len(data) >= end:
+                del self._pref[start]
+                return data[offset - start:offset - start + size]
+        return None
+
+    def holds(self, offset):
+        return offset in self._pref
+
+    def prefetch(self, spans):
+        """Fetch `spans` [(offset, size), ...] in ONE request (HTTP multi-
+        range) into the store read() serves from. Returns how many parts came
+        back. Takes its slot in the paced schedule and asks the abort callback
+        first, like any read. Anything but a sound multipart answer (or one
+        part for one span) switches it off for the rest of the run: the reads
+        then go one range a request, as before. Never reads a body larger than
+        the spans asked for."""
+        if (not self.is_http or self._sess is None or self.tripped
+                or self._multi is False or not spans
+                or time.time() < self._multi_hold):
+            return 0
+        with self._lock:
+            self.reqs += 1
+            n = self.reqs
+            _pace = getattr(self, '_pace', _HTTP_REQ_PACE_S)
+        if n > 1 and _pace > 0 and self._gate_wait(_pace):
+            self.tripped = True
+            return 0
+        if self._abort_cb is not None:
+            try:
+                if self._abort_cb():
+                    self.tripped = True
+                    return 0
+            except Exception:
+                pass
+        want = sum(k for _o, k in spans)
+        rng = 'bytes=' + ','.join('%d-%d' % (o, o + k - 1) for o, k in spans)
+        r = None
+        t0 = time.time()
+        try:
+            with self._lock:
+                self.http_reqs += 1
+            r = self._sess.get(self.url, headers={'Range': rng, 'User-Agent': _UA},
+                               timeout=_HTTP_TIMEOUT, stream=True)
+            code = r.status_code
+            ctype = r.headers.get('Content-Type') or ''
+            try:
+                length = int(r.headers.get('Content-Length') or 0)
+            except (TypeError, ValueError):
+                length = 0
+            if code == 429 or code >= 500:
+                # pressure, not a refusal of the form: the next blocks go one
+                # range a request, where the back-off lives, and no batch is
+                # asked for a while (one before every block would double the
+                # requests to a provider that is already pushing back). It is
+                # pushback like any other: counted, and the pace widened once
+                # per event (review of 0.3.81, round 5).
+                ra = 0.0
+                try:
+                    ra = float(r.headers.get('Retry-After') or 0)
+                except (TypeError, ValueError):
+                    ra = 0.0
+                if not (0.0 <= ra <= _HTTP_429_MAX_WAIT):
+                    ra = 0.0
+                _now = time.time()
+                with self._lock:
+                    self._429_total += 1
+                    _was = self._pace
+                    if not (self._epoch_reqs is not None
+                            and (self.http_reqs - self._epoch_reqs
+                                 < _HTTP_PACE_EPOCH_REQS
+                                 or _now < self._epoch_at + _HTTP_PACE_EPOCH_S
+                                 or _now < self._epoch_until)):
+                        self._pace = min(_was * 1.5, _HTTP_REQ_PACE_MAX)
+                        self._clean_streak = 0
+                        self._epoch_reqs = self.http_reqs
+                        self._epoch_at = _now
+                        self._epoch_until = _now + ra if ra else 0.0
+                    else:
+                        self._429_absorbed += 1
+                    if self._stats is not None:
+                        self._stats['backoffs'] = self._429_total
+                        self._stats['pace'] = self._pace
+                self._multi_busy('HTTP %s' % code, max(_MULTI_BUSY_HOLD_S, ra))
+                return 0
+            multipart = 'multipart/byteranges' in ctype.lower()
+            if (code != 206 or length <= 0 or length > want + _MULTI_SLACK
+                    or (len(spans) > 1 and not multipart)):
+                self._multi_off('HTTP %s, %s, %s byte(s)' % (code, ctype[:40] or '-',
+                                                             length or '?'))
+                return 0
+            body = bytearray()
+            while len(body) < length:
+                chunk = r.raw.read(length - len(body))
+                if not chunk:
+                    break
+                body += chunk
+            body = bytes(body)
+            if len(body) < length:
+                # the connection dropped mid-answer: a bad moment, not a
+                # refusal of the form
+                self._multi_busy('a short answer (%d of %d bytes)' % (len(body), length))
+                return 0
+            if multipart:
+                parts = _parse_byteranges(body, ctype)
+            else:
+                start = _range_start(r.headers.get('Content-Range'))
+                parts = [(start, body)] if start == spans[0][0] else []
+            if not parts:
+                self._multi_off('an answer that could not be split')
+                return 0
+            with self._lock:
+                self.fetched += len(body)
+            if len(self._pref) > 2 * _MULTI_RANGES:
+                # parts left behind (a window cut short, a layout relearned):
+                # never more than a couple of batches in memory
+                self._pref = {}
+            for start, data in parts:
+                self._pref[start] = data
+            if self._multi is None and self._log:
+                self._log('%d ranges in one request: %d part(s), %.0f KB in '
+                          '%.1fs' % (len(spans), len(parts), len(body) / 1024.0,
+                                     time.time() - t0))
+            self._multi = True
+            return len(parts)
+        except Exception as ex:
+            # a timeout or a reset: TorBox's bad minutes are full of them,
+            # and the run should not lose the batches for good over one
+            self._multi_busy(type(ex).__name__)
+            return 0
+        finally:
+            if r is not None:
+                try:
+                    r.close()
+                except Exception:
+                    pass
+
+    def _multi_busy(self, why, hold=None):
+        self._multi_hold = time.time() + (hold or _MULTI_BUSY_HOLD_S)
+        if self._log:
+            self._log('a batched request failed (%s) -- one range a request for '
+                      '%.0fs' % (why, hold or _MULTI_BUSY_HOLD_S))
+
+    def _multi_off(self, why):
+        if self._multi is not False and self._log:
+            self._log('many ranges in one request not served (%s) -- one range '
+                      'a request' % why)
+        self._multi = False
+        self._pref = {}
+
+    def release_connection(self):
+        """Close the idle keep-alive connection(s) and keep the source usable:
+        the next read opens a fresh one. For a caller that stands aside while
+        the player refills -- an open connection we are not using is still one
+        more on the provider's count for this link. Only between reads."""
+        sess = self._sess
+        if sess is not None:
+            try:
+                sess.close()
+            except Exception:
+                pass
+
     def close(self):
         """Release every HTTP session owned by this byte source."""
         self.close_pool()
@@ -1311,6 +1537,45 @@ class _Source(object):
             return b''
 
 
+def _range_start(content_range):
+    m = re.match(r'\s*bytes\s+(\d+)-\d+/', content_range or '')
+    return int(m.group(1)) if m else None
+
+
+def _parse_byteranges(body, ctype):
+    """[(start, bytes), ...] from a multipart/byteranges body, or [] when it
+    is not one that can be split soundly (every part must carry a Content-Range
+    and be as long as it says)."""
+    m = re.search(r'boundary=("?)([^";]+)\1', ctype or '')
+    if not m:
+        return []
+    sep = b'--' + m.group(2).strip().encode('latin-1')
+    out = []
+    pos = 0
+    while True:
+        i = body.find(sep, pos)
+        if i < 0:
+            break
+        j = i + len(sep)
+        if body[j:j + 2] == b'--':
+            break                                   # the closing boundary
+        head_end = body.find(b'\r\n\r\n', j)
+        if head_end < 0:
+            return []
+        head = body[j:head_end].decode('latin-1', 'replace')
+        cr = re.search(r'Content-Range:\s*bytes\s+(\d+)-(\d+)/', head, re.I)
+        if not cr:
+            return []
+        a, b = int(cr.group(1)), int(cr.group(2))
+        start = head_end + 4
+        data = body[start:start + (b - a + 1)]
+        if len(data) != b - a + 1:
+            return []
+        out.append((a, data))
+        pos = start + len(data)
+    return out
+
+
 def _cut_signature_from_source(src, head_hint=b'', log=None):
     """Content-derived, privacy-safe id for the exact playing media file.
 
@@ -1422,10 +1687,72 @@ def _parse_track_entry(data):
     return t
 
 
+def _head_enough(head, limit=None):
+    """Would more bytes change what _parse_head reads from `head`? False while
+    an element before the first Cluster is still cut off; True once the walk
+    reaches a Cluster or an element of unknown size (where the parse stops),
+    or the start is not Matroska at all (the parse raises either way). With
+    `limit` (the most a single read would have fetched), also True once the
+    next element starts at or runs past it: a single read would not have
+    used its payload either (attachments in front of the first Cluster)."""
+    buf = _Buf(head, 0)
+    eid, _l = _read_vint(buf, True)
+    if eid is None:
+        return False
+    if eid != _EBML:
+        return True
+    esize, slen = _read_vint(buf, False)
+    if slen == 0:
+        return False
+    if esize is None:
+        return True
+    buf.p += esize
+    eid, _l = _read_vint(buf, True)
+    if eid is None:
+        return False
+    if eid != _SEGMENT:
+        return True
+    _size, slen = _read_vint(buf, False)
+    if slen == 0:
+        return False
+    p = buf.p
+    while p < len(head):
+        buf.p = p
+        eid, _l = _read_vint(buf, True)
+        if eid is None:
+            return False
+        size, slen = _read_vint(buf, False)
+        if slen == 0:
+            return False
+        if eid == _CLUSTER or size is None:
+            return True
+        p = buf.p + size
+        if limit is not None and p > limit:
+            return True
+    return False
+
+
 def _parse_head(src, head_bytes, log):
     """(seg_start, ts_scale_ns, tracks, seeks) or raises.
     `seeks` maps element-id -> absolute file offset (from the SeekHead)."""
-    head = src.read(0, head_bytes)
+    piece = getattr(src, '_piece', None)
+    if piece and head_bytes > piece:
+        # Only as far as the parse below looks: it stops at the first Cluster
+        # (or an element of unknown size), so bytes past that change nothing.
+        head = b''
+        while len(head) < head_bytes:
+            want = min(piece, head_bytes - len(head))
+            more = src.read(len(head), want)
+            head += more
+            if len(more) < want or _head_enough(head, head_bytes):
+                break
+        # A single read was all or nothing; a piece that failed part-way must
+        # not leave a cut head to parse as if it were whole.
+        if (not _head_enough(head, head_bytes)
+                and len(head) < min(head_bytes, src.total or head_bytes)):
+            raise ValueError('head read cut short (%d bytes)' % len(head))
+    else:
+        head = src.read(0, head_bytes)
     # Reused by the content signature so a remote cue-profile probe does not
     # issue another request for bytes it already owns.
     try:
@@ -2264,6 +2591,7 @@ def cue_reference_times_multi(url_or_path, langs, track_num=None,
     fills it -- above all 'backoffs', so the caller can tell provider pressure
     from an ordinary pause instead of guessing. Never raises."""
     _log = log or _noop
+    src = None
     try:
         seen = list(dict.fromkeys(
             [str(l).lower()[:2] for l in (langs or []) if l]))
@@ -2272,6 +2600,12 @@ def cue_reference_times_multi(url_or_path, langs, track_num=None,
         src = _Source(url_or_path)
         src._abort_cb = abort_cb
         src._log = _log
+        # The head is read the gentle way (see _HTTP_PIECE): this runs first
+        # when a viewer picks the embedded track in the automatic mode. The
+        # index goes in one request, as before: this path has no buffer gate
+        # to use the gaps between pieces, and it is meant to be quick.
+        if src.is_http:
+            src._piece = _HTTP_PIECE
         src._stats = stats if stats is not None else None
         if src._stats is not None:
             src._stats['backoffs'] = 0
@@ -2282,6 +2616,7 @@ def cue_reference_times_multi(url_or_path, langs, track_num=None,
             _log('cue-times: HTTP not allowed (setting off) -- skipping')
             return {}
         seg_start, ts_scale, tracks, seeks = _parse_head(src, head_bytes, _log)
+        src._piece = None
         subs = _sub_tracks(tracks)
         if not subs:
             return {}
@@ -2319,6 +2654,12 @@ def cue_reference_times_multi(url_or_path, langs, track_num=None,
     except Exception as e:
         (log or _noop)('cue_reference_times_multi failed: %s' % e)
         return {}
+    finally:
+        try:
+            if src is not None and src.is_http:
+                src.close()
+        except Exception:
+            pass
 
 
 def extract_srt(url_or_path, track_num=None, lang=None,
@@ -2346,6 +2687,11 @@ def extract_srt(url_or_path, track_num=None, lang=None,
     those to decide things it otherwise has to GUESS at -- above all whether the
     provider is actually under pressure, which is the difference between handing
     the connection back to the player and cancelling useful work for nothing.
+    Over HTTP it also carries 'release': a callable that closes the idle
+    connection (_Source.release_connection), for an `abort_cb` that stands
+    aside for a while before letting the reading go on; and 'why' = 'no_index'
+    when the file's index has no entry for the subtitle lines, so they cannot
+    be found in a stream short of reading the whole file.
     `steps`, if given (HTTP only, and only with `resume_path`), is three
     callables (window, show, timeline). Before the complete pass the track is
     read in windows: timeline(starts_ms) is handed every cue's start once;
@@ -2362,6 +2708,8 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         src = _Source(url_or_path)
         src._abort_cb = abort_cb   # polled DURING pace/backoff sleeps too
         src._log = _log            # so pacing/back-pressure is visible in a log
+        if src.is_http:
+            src._piece = _HTTP_PIECE
         # Start where this provider left off last time (see _PACE_MEMORY_*),
         # rather than spending the burst allowance re-learning it every episode.
         _remembered = _pace_memory_load(url_or_path)
@@ -2376,6 +2724,8 @@ def extract_srt(url_or_path, track_num=None, lang=None,
             src._stats.setdefault('total', 0)
             src._stats['backoffs'] = 0
             src._stats['pace'] = src._pace
+            if src.is_http:
+                src._stats['release'] = src.release_connection
         if not src.total:
             return None
         seg_start, ts_scale, tracks, seeks = _parse_head(src, head_bytes, _log)
@@ -2482,6 +2832,14 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         try:
             if src is not None and src.is_http:
                 _pace_memory_save(url_or_path, src._pace, src.http_reqs)
+        except Exception:
+            pass
+        # Hand the connection back now, not whenever the garbage collector
+        # gets to it: the player shares the provider with it, and after a stop
+        # for a stalled picture it is the player that needs the line.
+        try:
+            if src is not None and src.is_http:
+                src.close()
         except Exception:
             pass
 
@@ -2856,12 +3214,22 @@ def _extract_cues(src, seeks, seg_start, want, entries,
     False (no sub cues / breaker / budget / abort) -> the caller defers to the
     external path (HTTP) or a full sequential walk (local)."""
     positions, is_sub = _read_cues(src, seeks, seg_start, want, log)
-    if not positions:
-        return False
-    if not is_sub:
-        # Whole-file/video cues don't point at subtitle blocks, so a capped
-        # per-cluster fetch would risk missing lines. Defer.
-        log('no per-subtitle Cues -- deferring (avoid a partial extract)')
+    if getattr(src, '_piece', None):
+        src._piece = _HTTP_PIECE_CLUSTERS
+    if not positions or not is_sub:
+        if positions:
+            # Whole-file/video cues don't point at subtitle blocks, so a capped
+            # per-cluster fetch would risk missing lines. Defer.
+            log('no per-subtitle Cues -- deferring (avoid a partial extract)')
+        # Over a stream that is final -- the lines are somewhere in the whole
+        # file -- and the caller can offer something else. Only for a file
+        # that HAS no such index: the index read whole without subtitle
+        # entries, or no index at all in the SeekHead. An index that could
+        # not be read (a dropped connection, a stop, a cut answer) is not
+        # that (review of 0.3.81, round 5).
+        if (src.is_http and src._stats is not None and not src.tripped
+                and (positions or not seeks.get(_CUES))):
+            src._stats['why'] = 'no_index'
         return False
     if not src.is_http:
         # positions can now list a cluster more than once (one entry per relpos);
@@ -2902,7 +3270,8 @@ def _steps_in_ticks(steps, entries, scale_ms, origin_ms, codec):
     """extract_srt's `steps` (film time in ms, SRT text) as _extract_cues
     takes them (the file's ticks, nothing): a cue at tick T starts at
     T * scale_ms - origin_ms, the same sum _entries_to_srt makes."""
-    window, show, timeline = steps
+    window, show, timeline = steps[:3]
+    moved = steps[3] if len(steps) > 3 else None
 
     def window_ticks():
         span = window()
@@ -2917,7 +3286,9 @@ def _steps_in_ticks(steps, entries, scale_ms, origin_ms, codec):
     def timeline_ms(ticks):
         timeline([int(t * scale_ms - origin_ms) for t in ticks])
 
-    return (window_ticks, show_so_far, timeline_ms)
+    if moved is None:
+        return (window_ticks, show_so_far, timeline_ms)
+    return (window_ticks, show_so_far, timeline_ms, moved)
 
 
 # How many windows one extraction may read before the complete pass takes
@@ -2935,11 +3306,16 @@ def _extract_in_windows(src, positions, entries, want, deadline_s, t0,
     last cue was read, and at the pace a strict provider tolerates that is
     minutes for an episode and many more for a film.
 
-    `steps` is (window, show, timeline): timeline(ticks) is handed every
-    cue's time once; window() names a span of film time in ticks, or None to
-    stop; show() is called after each span with nothing (the caller reads
-    `entries`). Each span is read by the ordinary pass over the cues of every
-    cluster that has a cue inside it.
+    `steps` is (window, show, timeline[, moved]): timeline(ticks) is handed
+    every cue's time once; window() names a span of film time in ticks, or
+    None to stop; show() is called after each span with nothing (the caller
+    reads `entries`). Each span is read by the ordinary pass over the cues of
+    every cluster that has a cue inside it. moved(), if given, is asked
+    between clusters: True when the viewer has jumped where the span does not
+    help, and the span is then cut short -- what was read stays read, and the
+    next window() starts from the viewer (QA 14 Nov 2026: after a jump back,
+    Hebrew came back only once the window in progress was done, ~2 min on a
+    film).
 
     WHOLE CLUSTERS, never a slice of one. _extract_cues_http records a
     cluster as finished once the cues it was handed came back, and a finished
@@ -2951,7 +3327,8 @@ def _extract_in_windows(src, positions, entries, want, deadline_s, t0,
     was read and gives up, as for any interrupted pass -- nothing may follow
     it on the same connection budget). True otherwise, with `done` holding
     the clusters read; the caller's complete pass skips them."""
-    window, show, timeline = steps
+    window, show, timeline = steps[:3]
+    moved = steps[3] if len(steps) > 3 else None
     if any(p[2] is None for p in positions):
         # Cues without a time cannot be placed in a span. That is every cue
         # of a file whose Cues carry no CueRelativePosition (_read_cues): such
@@ -3002,7 +3379,8 @@ def _extract_in_windows(src, positions, entries, want, deadline_s, t0,
             # _HTTP_CONNS is 1; if concurrency is switched back on, the pool
             # has to outlive the windows.)
             ok = _extract_cues_http(src, part, entries, want, deadline_s, t0,
-                                    abort_cb, log, _progress, done, scan_here)
+                                    abort_cb, log, _progress, done, scan_here,
+                                    **({'moved_cb': moved} if moved else {}))
             scan.difference_update(picked)
             scan.update(scan_here)
             if not ok:
@@ -3011,9 +3389,10 @@ def _extract_in_windows(src, positions, entries, want, deadline_s, t0,
                 save()
             except Exception:
                 pass
-            log('window %d: film %.0f..%.0f (ticks), %d cluster(s) read, %d of '
+            log('window %d: film %.0f..%.0f (ticks), %d cluster(s) %s, %d of '
                 '%d done' % (_round + 1, low, high, len(todo),
-                             len(done & every), len(every)))
+                             'asked, cut short by a jump' if ok == _MOVED
+                             else 'read', len(done & every), len(every)))
         try:
             show()
         except Exception as e:
@@ -3217,7 +3596,9 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
         if src.fetched_now() >= _HTTP_TOTAL_CAP:
             return resolved
         lo = pending[0][0]
-        span = (pending[-1][0] - lo) + _BLOCK_READ_HTTP
+        block_read = (_BLOCK_READ_MULTI if getattr(src, '_multi', None) is True
+                      else _BLOCK_READ_HTTP)
+        span = (pending[-1][0] - lo) + block_read
         base = cpos + prefix + lo
         buf = src.read(base, min(span, _HTTP_TOTAL_CAP - src.fetched_now()))
         if src.tripped or not buf:
@@ -3226,6 +3607,19 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
             if _place(buf, base, relpos, cue_time):
                 resolved += 1
                 continue
+            if block_read != _BLOCK_READ_HTTP:
+                # the short window of a batched request may cut a long block
+                # off: the ordinary window, once, before anything is blamed on
+                # the prefix
+                base2 = cpos + prefix + relpos
+                if src.fetched_now() < _HTTP_TOTAL_CAP and _place(
+                        src.read(base2, min(_BLOCK_READ_HTTP,
+                                            _HTTP_TOTAL_CAP - src.fetched_now())),
+                        base2, relpos, cue_time):
+                    resolved += 1
+                    continue
+                if src.tripped:
+                    return resolved
             if cluster_ts is not None:
                 continue   # header path already; nothing left to try
             # The learned prefix did not resolve this block. Before writing the
@@ -3373,9 +3767,14 @@ def _run_concurrently(fn, work, workers, should_stop):
     return n
 
 
+# What _extract_cues_http returns when `moved_cb` cut a window short: true
+# (the clusters it read are in, nothing failed), and not True.
+_MOVED = 'moved'
+
+
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                        log, progress_cb=None, done_clusters=None,
-                       scan_pending=None):
+                       scan_pending=None, moved_cb=None):
     """HTTP/debrid: ONE keep-alive connection, single-range serial. Per cue,
     two strategies chosen by whether the Cues carried a CueRelativePosition:
       * relpos present -> TARGETED: a small window AT the subtitle block, one
@@ -3458,6 +3857,52 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
     done = carried
     state = {'done': carried, 'stop': None}
     state_lock = _threading.Lock()
+
+    def _first_offset(entry):
+        cpos, items = entry
+        return cpos + src._prefix + _batch_relposes(items)[0][0][0]
+
+    def _fetch_ahead(seq, j):
+        # The next _MULTI_RANGES blocks in one request (see _MULTI_RANGES),
+        # once the layout is learned -- exactly the reads _fetch_cluster_
+        # blocks will make, so they are served from the store.
+        if (not getattr(src, 'is_http', False) or not hasattr(src, 'prefetch')
+                or getattr(src, '_multi', None) is False
+                or src._prefix is None or src._cue_time_ok is not True):
+            return
+        if src.holds(_first_offset(seq[j])):
+            return
+        spans = []
+        for cpos, items in seq[j:]:
+            if any(t is None for _r, t in items):
+                break                    # such a cluster reads its header
+            for batch in _batch_relposes(items):
+                lo = batch[0][0]
+                at = cpos + src._prefix + lo
+                if not src.holds(at):    # never ask twice for what is held
+                    spans.append((at, (batch[-1][0] - lo) + _BLOCK_READ_MULTI))
+            if len(spans) >= _MULTI_RANGES:
+                break
+        if not spans:
+            return
+        if src.fetched_now() + sum(k for _o, k in spans) >= _HTTP_TOTAL_CAP:
+            return
+        src.prefetch(spans)
+
+    def _moved():
+        # Between clusters: has the viewer gone where this window does not
+        # help (a window pass only; see _extract_in_windows)? The clusters
+        # read so far stay read; the rest wait for a later window or the
+        # complete pass.
+        if moved_cb is None or state['stop'] is not None:
+            return state['stop'] == _MOVED
+        try:
+            if moved_cb():
+                state['stop'] = _MOVED
+                return True
+        except Exception:
+            pass
+        return False
 
     def _one_cluster(cpos, items):
         """Fetch ONE cluster's blocks and record the outcome. Safe to run from
@@ -3552,6 +3997,8 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
         # CueTime at all, say), so stop seeding and let it run serially.
         seed = 0
         while seed < len(rel_clusters) and state['stop'] is None:
+            if _moved():
+                break
             _one_cluster(*rel_clusters[seed])
             seed += 1
             if _healthy() or seed >= _CONC_SEED_MAX:
@@ -3575,7 +4022,7 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                 i = _run_concurrently(
                     _one_cluster, rest, conns,
                     lambda: state['stop'] is not None or src.tripped
-                    or _aborted(abort_cb) or not _healthy())
+                    or _aborted(abort_cb) or not _healthy() or _moved())
                 if i < len(rest):
                     log('finishing the last %d cluster(s) on one connection '
                         '(%d backoff(s), %d cluster(s) needing a scan)'
@@ -3584,11 +4031,16 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                     src.restore_pace(pace_before)
         finally:
             src.close_pool()
-        for (cpos, items) in rest[i:]:
-            if state['stop'] is not None:
+        tail = rest[i:]
+        for j, (cpos, items) in enumerate(tail):
+            if state['stop'] is not None or _moved():
                 break
+            _fetch_ahead(tail, j)
             _one_cluster(cpos, items)
     done = state['done']
+    if state['stop'] == _MOVED:
+        log('window cut short -- the viewer moved [' + _cost() + ']')
+        return _MOVED
     if state['stop'] is not None:
         log(state['stop'] + ' -- deferring [' + _cost() + ']')
         return False
