@@ -80,7 +80,8 @@ class ProfileStoreTests(unittest.TestCase):
                 self.assertTrue(fn(str(path)))
             first = path.read_bytes()
             xml = ET.fromstring(first)
-            self.assertEqual([a.text for a in xml.findall('onload')], ['OriginalAction'])
+            self.assertEqual([a.text for a in xml.findall('onload')], ['OriginalAction',
+                'RunScript(special://home/addons/plugin.program.kodipovilwizard/login_warm.py)'])
             self.assertIsNotNone(xml.find(".//control[@id='52']"))
             self.assertEqual(xml.findtext(".//control[@id='20']/onclick"), 'ActivateWindow(ShutdownMenu)')
             self.assertNotIn('Profiles.LoadProfile', first.decode())

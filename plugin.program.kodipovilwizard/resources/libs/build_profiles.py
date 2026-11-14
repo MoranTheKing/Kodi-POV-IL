@@ -154,9 +154,11 @@ def install_login_design(path):
     source = os.path.join(xbmcaddon.Addon(WIZARD).getAddonInfo('path'),
                           'resources', 'skins', 'Default', '1080i', 'ProfileLogin.xml')
     design = ET.parse(source).getroot()
-    # Keep skin-owned startup actions, excluding the obsolete auto-login hook.
+    # Keep skin-owned startup actions, excluding the obsolete auto-login hook
+    # and the design's own warm-up action (it would be added once per pass).
     actions = [action for action in original.findall('onload')
-               if 'single_profile_login.py' not in (action.text or '')]
+               if 'single_profile_login.py' not in (action.text or '')
+               and 'login_warm.py' not in (action.text or '')]
     for index, action in enumerate(actions):
         design.insert(index, action)
     from resources.libs import child_profiles
