@@ -82,8 +82,19 @@ class StandalonePackage(unittest.TestCase):
                          'resources/lib/translate.py', 'resources/lib/subs_engine_bridge.py',
                          'resources/lib/gender_guard.py', 'resources/lib/srt_wire.py',
                          # imported inside a try: the guard above cannot see it missing
-                         'resources/lib/gender_proofread.py'):
+                         'resources/lib/gender_proofread.py',
+                         # loaded by path from embedded_extract (0.3.83 shipped without it at first)
+                         'resources/lib/embedded_mp4.py'):
             self.assertIn(required, names)
+
+    def test_modules_loaded_by_path_are_shipped(self):
+        # embedded_extract loads its MP4 parser by file name, beside itself: no import scan sees that
+        names = {r.as_posix() for r in shipped()}
+        for rel in [r for r in shipped() if r.suffix == '.py']:
+            text = (SRC / rel).read_text(encoding='utf-8', errors='replace')
+            for lib in re.findall(r"'([a-z_0-9]+\.py)'\)", text):
+                if (SRC / 'resources' / 'lib' / lib).is_file():
+                    self.assertIn('resources/lib/' + lib, names, '%s loads %s' % (rel.as_posix(), lib))
 
     def test_left_out_modules_are_reached_only_inside_try(self):
         files = [r for r in shipped() if r.suffix == '.py' and r.parts[:3] != ('resources', 'patches', 'darksubs')]

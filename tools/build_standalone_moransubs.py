@@ -63,7 +63,10 @@ legacy = _legacy()
 STANDALONE_LIB_FILES = (
     {name for name in legacy.STANDALONE_LIB_FILES if (SRC / "resources" / "lib" / name).is_file()}
     | {"gender_guard.py", "gender_proofread.py", "he_person_gender.py",
-       "script_residual.py", "sdh_pool.py", "sdh_registry.py", "srt_wire.py"}
+       "script_residual.py", "sdh_pool.py", "sdh_registry.py", "srt_wire.py",
+       # loaded by path from embedded_extract (0.3.83: MP4 subtitles) -- an
+       # import scan does not see it
+       "embedded_mp4.py"}
 )
 
 # default.py actions only the build has, and the helpers only they use.
