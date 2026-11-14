@@ -84,7 +84,7 @@ class Run(object):
             return True
         return False
 
-    def go(self, spans=(), resume_path='resume.bin', with_steps=True):
+    def go(self, spans=(), resume_path='resume.bin', with_steps=True, moved_after=None):
         entries = []
         spans = list(spans)
 
@@ -102,6 +102,17 @@ class Run(object):
 
         ee = self.ee
         steps = (window, lambda: self.shown.append(len(entries)), self.timelines.append) if with_steps else None
+        if steps and moved_after is not None:
+            # the viewer jumps once, after `moved_after` clusters were fetched
+            fired = []
+            self.logs = []
+
+            def moved():
+                if not fired and len(self.fetches) >= moved_after:
+                    fired.append(len(self.fetches))
+                    return True
+                return False
+            steps = steps + (moved,)
         with patch.object(ee, '_read_cues', lambda *a: (self.positions, True)), \
                 patch.object(ee, '_fetch_cluster_blocks', fetch), \
                 patch.object(ee, '_resume_identity', lambda *a: 'the-file'), \
@@ -146,6 +157,21 @@ class Windows(unittest.TestCase):
         self.assertEqual(run.saved, [(3, [1000, 1010, 1020]), (6, [1000, 1010, 1020, 1030, 1040, 1050])])
         self.assertEqual([c for c, _t in run.fetches], [1000 + 10 * i for i in range(10)])   # each exactly once
         self.assertEqual(len(entries), 10)
+        self.assertEqual(run.cleared, ['resume.bin'])
+
+    def test_a_jump_cuts_the_window_short_and_nothing_is_lost_or_read_twice(self):
+        run = Run(self.ee, one_per_cluster(10))
+        # the first window is 0..4500 (five clusters); the viewer jumps after three are in; the next
+        # window is where the viewer went, 7000..8500
+        ok, entries = run.go(spans=[(0, 4500), (7000, 8500)], moved_after=3)
+        self.assertTrue(ok)
+        fetched = [c for c, _t in run.fetches]
+        self.assertEqual(fetched[:3], [1000, 1010, 1020])            # the first window, cut after three
+        self.assertEqual(fetched[3:5], [1070, 1080])                 # the next one, where the viewer went
+        self.assertEqual(sorted(fetched), [1000 + 10 * i for i in range(10)])   # each exactly once
+        self.assertEqual(len(entries), 10)
+        self.assertEqual(run.shown[0], 3)                            # what was read is shown
+        self.assertEqual(run.saved[0], (3, [1000, 1010, 1020]))     # and saved
         self.assertEqual(run.cleared, ['resume.bin'])
 
     def test_a_window_starts_where_the_viewer_is_not_at_the_start_of_the_film(self):
