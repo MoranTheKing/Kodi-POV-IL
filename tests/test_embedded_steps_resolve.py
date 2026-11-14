@@ -98,7 +98,7 @@ def _load():
             sys.path.insert(0, str(ADDON))
             try:
                 from resources.lib import translate, kodi_utils, google_translate, embedded_extract  # noqa: F401
-                from resources.lib import subs_engine_bridge  # noqa: F401
+                from resources.lib import subs_engine_bridge, subsync  # noqa: F401
             finally:
                 sys.path.remove(str(ADDON))
             mods = dict((k, v) for k, v in sys.modules.items() if k in stubs or ours(k))
@@ -135,7 +135,8 @@ def until(what, seconds=5.0):
 class Job(object):
     """One embedded pick. `views`: the step translator answers. `whole`: the extraction comes back."""
 
-    def __init__(self, mods, views=True, whole=True, handler=True, fed=N, moved_on=False, folder=None):
+    def __init__(self, mods, views=True, whole=True, handler=True, fed=N, moved_on=False, folder=None,
+                 noindex=False, externals=None):
         self.mods = mods
         self.t = mods['resources.lib.translate']
         self.views, self.whole, self.handler, self.fed = views, whole, handler, fed
@@ -148,6 +149,16 @@ class Job(object):
         self.extract_kwargs = {}
         self.result = None
         self.saved = ''
+        # noindex: the stream's index has no subtitle lines (extract_srt says so in stats['why'])
+        self.noindex = noindex
+        self.externals = externals if externals is not None else [
+            {'release': 'Show.S01E01.1080p.WEB.h264-OTHER', 'language': 'en',
+             'payload': {'type': 'engine', 'filename': 'Show.S01E01.1080p.WEB.h264-OTHER', 'id': 'a'}},
+            {'release': RELEASE, 'language': 'en',
+             'payload': {'type': 'engine', 'filename': RELEASE, 'id': 'b'}},
+            {'release': RELEASE, 'language': 'fr',
+             'payload': {'type': 'engine', 'filename': RELEASE + '.fr', 'id': 'c'}}]
+        self.downloads = []
 
     def run(self):
         t, mods = self.t, self.mods
@@ -198,11 +209,17 @@ class Job(object):
         def extract_srt(url, **kw):
             # as embedded_extract.extract_srt drives its `steps`: the cue times, a window, what was read
             self.extract_kwargs = kw
+            if self.noindex:
+                kw['stats']['why'] = 'no_index'
+                if self.moved_on:
+                    self.current = False     # the viewer picked something else meanwhile
+                return None
             steps = kw.get('steps')
             progress = kw.get('progress_cb') or (lambda done, total: None)
             progress(5, N)                                       # the bar, before anything is shown
             if steps:
-                window, show, timeline = steps
+                window, show, timeline, moved = steps
+                self.moved = moved
                 timeline(list(STARTS))
                 self.timelines.append(list(STARTS))
                 self.spans.append(window())
@@ -214,6 +231,12 @@ class Job(object):
             if self.moved_on:
                 self.current = False         # the viewer picks another subtitle while the track is read
             return ENGLISH if self.whole else None
+
+        def download(payload):
+            self.downloads.append(dict(payload))
+            path = os.path.join(folder, 'external.en.srt')
+            Path(path).write_text(ENGLISH, encoding='utf-8')
+            return path
 
         def apply_subtitle_file(path, selection=None, **kw):
             Player.streams.append(path)
@@ -249,6 +272,10 @@ class Job(object):
             mock.patch.object(t, '_playing_video_url', lambda info: 'https://cdn.example/film.mkv'),
             mock.patch.object(mods['resources.lib.embedded_extract'], 'extract_srt', extract_srt),
             mock.patch.object(mods['resources.lib.subs_engine_bridge'], 'select_embedded', select_embedded),
+            mock.patch.object(mods['resources.lib.subs_engine_bridge'], 'download', download),
+            mock.patch.object(mods['resources.lib.subsync'], '_oracle_candidates',
+                              lambda info, **k: [dict(c) for c in self.externals]),
+            mock.patch.object(mods['resources.lib.subsync'], 'playing_release', lambda info: RELEASE),
             mock.patch.object(t, '_sync_hebrew_delivery', lambda info, path, **k: path),
             mock.patch.object(t, '_title_cast', lambda info, imdb, s, e: ([], 'Show', '2020')),
             mock.patch.object(t, '_gemini_rate_gate', lambda interval: None),
@@ -312,7 +339,10 @@ class EmbeddedPick(unittest.TestCase):
 
     def test_the_extraction_is_handed_the_steps_and_they_get_the_cue_times_and_a_window(self):
         job = self.job
-        self.assertEqual(len(job.extract_kwargs.get('steps') or ()), 3)
+        steps = job.extract_kwargs.get('steps') or ()
+        self.assertEqual(len(steps), 4)
+        # the 4th asks whether the viewer jumped out of the window being read
+        self.assertEqual(getattr(steps[3], '__func__', None), type(job.steps[0]).moved)
         self.assertEqual(job.timelines, [STARTS])
         self.assertEqual(job.spans, [(0, STARTS[50] + 1)])           # 2.5 minutes from the viewer's place
 
@@ -561,3 +591,74 @@ class OnPlayPick(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class NoIndex(unittest.TestCase):
+    """A file whose index has no entry for the subtitle lines: over a stream they cannot be found short of
+    reading the whole film (QA 14 Nov 2026: Inception 2010 HURTOM BDRip on TorBox; the pick ended in "could
+    not extract"). The owner: do not hide the row -- fix it. The external subtitle that best matches the
+    release is translated instead, as its own "AI translation" row would be."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mods = _load()
+
+    def test_the_external_subtitle_for_the_release_is_translated_instead(self):
+        job = Job(self.mods, views=False, whole=False, noindex=True).run()
+        self.assertEqual([d.get('filename') for d in job.downloads], [RELEASE])     # the best match, English
+        self.assertEqual(job.downloads[0].get('type'), 'engine_ai')
+        finals = job.of('final')
+        self.assertTrue(finals, job.log[-12:])
+        self.assertIn('שורה בעברית', finals[-1][2])
+        self.assertTrue(job.logged('cannot be read from the stream'))
+        self.assertFalse(job.logged('deferring to the external path'))
+
+    def test_the_picked_language_comes_first_then_english(self):
+        externals = [{'release': RELEASE, 'language': 'en', 'payload': {'type': 'engine', 'filename': 'EN', 'id': 'e'}},
+                     {'release': RELEASE, 'language': 'fr', 'payload': {'type': 'engine', 'filename': 'FR', 'id': 'f'}}]
+        job = Job(self.mods, views=False, whole=False, noindex=True, externals=externals)
+        job.run()
+        self.assertEqual([d.get('filename') for d in job.downloads], ['EN'])
+        job = Job(self.mods, views=False, whole=False, noindex=True, externals=externals[1:])
+        job.run()
+        self.assertEqual(job.downloads, [])                                  # no English: nothing to translate from
+        self.assertTrue(job.logged('deferring to the external path'))
+
+    def test_with_no_external_subtitle_it_ends_as_before(self):
+        job = Job(self.mods, views=False, whole=False, noindex=True, externals=[]).run()
+        self.assertEqual(job.downloads, [])
+        self.assertTrue(job.logged('deferring to the external path'))
+
+    def test_any_other_failure_ends_as_before(self):
+        # a reading given up (a provider pushing back, the viewer gone): not the case for an external
+        job = Job(self.mods, views=False, whole=False, noindex=False).run()
+        self.assertEqual(job.downloads, [])
+        self.assertTrue(job.logged('deferring to the external path'))
+
+class NoIndexChoice(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mods = _load()
+
+    def test_no_external_for_a_pick_already_replaced(self):
+        job = Job(self.mods, views=False, whole=False, noindex=True, moved_on=True).run()
+        self.assertEqual(job.downloads, [])
+        self.assertTrue(job.logged('deferring to the external path'))
+
+    def test_the_best_match_wins_across_the_picked_language_and_english(self):
+        t = self.mods['resources.lib.translate']
+        sub = self.mods['resources.lib.subsync']
+        rm = self.mods['resources.lib.release_match']
+        cands = [{'release': 'Film.2010.720p.HDTV-X', 'language': 'fr',
+                  'payload': {'type': 'engine', 'filename': 'FR-poor'}},
+                 {'release': RELEASE, 'language': 'en', 'payload': {'type': 'engine', 'filename': 'EN-exact'}},
+                 {'release': RELEASE, 'language': 'de', 'payload': {'type': 'engine', 'filename': 'DE-exact'}}]
+        with mock.patch.dict(sys.modules, self.mods), \
+                mock.patch.object(sub, '_oracle_candidates', lambda info, **k: cands), \
+                mock.patch.object(sub, 'playing_release', lambda info: RELEASE), \
+                mock.patch.object(rm, 'match_pct', lambda a, b: 100 if b == RELEASE else 20):
+            got = t._external_for_unreadable_embedded({}, 'fr')
+            tie = t._external_for_unreadable_embedded({}, 'en')
+        self.assertEqual((got['filename'], got['src_lang'], got['type']), ('EN-exact', 'en', 'engine_ai'))
+        self.assertEqual(tie['filename'], 'EN-exact')                 # German is neither language
