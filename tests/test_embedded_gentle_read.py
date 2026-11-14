@@ -135,6 +135,9 @@ class Gentle(unittest.TestCase):
             patch.object(self.ee, '_HTTP_REQ_PACE_S', 0.0),
             patch.object(self.ee, '_pace_memory_load', lambda url: None),
             patch.object(self.ee, '_pace_memory_save', lambda *a: None),
+            # The fixtures' clusters lie a few KB apart: with the shipped 1 KB windows every window joins
+            # into one range. 200 B keeps them apart, so the batches are batches.
+            patch.object(self.ee, '_BLOCK_READ_MULTI', 200),
         ]
         for p in self.patches:
             p.start()
@@ -324,8 +327,9 @@ class Gentle(unittest.TestCase):
         with net, patch.object(ee, '_read_cues', read_cues), \
                 patch.object(ee, '_extract_cues_http', lambda src, *a, **k: seen.append(src._piece) or False):
             ee.extract_srt(URL, lang='en', allow_http=True)
-        # the index itself in small pieces, the clusters after it in large ones
-        self.assertEqual(seen, [ee._HTTP_PIECE, ee._HTTP_PIECE_CLUSTERS])
+        # the index and the clusters in large pieces (0.3.83: Interstellar's 91-track Cues took 13 s of
+        # 256 KB pieces); only the head stays small
+        self.assertEqual(seen, [ee._HTTP_PIECE_CLUSTERS, ee._HTTP_PIECE_CLUSTERS])
 
     def test_a_head_cut_short_is_refused(self):
         blob, net = self.serve('attached.mkv', pad=4 * 1024 * 1024)
@@ -449,7 +453,8 @@ class Gentle(unittest.TestCase):
         # South Park S04 MULTI WEB 2160p (owner's log, 14 Nov 2026): the clusters' size VINT is 3 bytes in
         # most and 4 in some, so one learned prefix is a byte off for those -- 58 relearns and 161 reads
         # past the batch in QA. Here the learned prefix is made wrong before every batch: each cluster's
-        # own head, fetched in the batch, must still put every line in place without a relearn.
+        # own prefix, found inside its batch window (it starts at the shortest one a cluster can have),
+        # must still put every line in place without a relearn -- and without a head range (0.3.83).
         ee = self.ee
         real = ee._Source.prefetch
 
@@ -460,13 +465,18 @@ class Gentle(unittest.TestCase):
             local, got, logs = self.extract('attached.mkv', 'multipart')
         self.assertEqual(got, local)
         self.assertEqual(self.src._prefix_relearn, 0)
+        self.assertGreater(getattr(self.src, '_prefix_inferred', 0), 0)
         order = self.sessions[0].order
         self.assertEqual(order[order.index('multi') + 1:], [])
 
-    def test_a_block_at_the_start_of_its_cluster_shares_one_range_with_the_head(self):
+    def test_one_range_per_cluster_no_head(self):
+        # QA, 14 Nov 2026: on TorBox 'store' nodes a range costs ~40 ms of server time whatever its size
+        # (Fight Club: 10.3 MB -> 4.3 MB of windows, still 115 s). The 16-byte head ranges are gone.
         ee = self.ee
         self.extract('attached.mkv', 'multipart')
-        spans = self.sessions[0].multi[0]
+        spans = [s for m in self.sessions[0].multi for s in m]
+        self.assertTrue(spans)
+        self.assertFalse([s for s in spans if s[1] - s[0] + 1 == ee._CLUSTER_HEAD_PEEK], 'a head range was asked')
         starts = [a for a, _b in spans]
         self.assertEqual(starts, sorted(starts))
         self.assertTrue(all(b < c for (_a, b), (c, _d) in zip(spans, spans[1:])), 'ranges overlap')
@@ -688,8 +698,8 @@ class Gentle(unittest.TestCase):
         stats, logs = {}, []
         with patch.object(ee, '_new_session', lambda: Session(blob, None, 'multipart')):
             self.assertIsNone(ee.extract_srt(URL, lang='en', allow_http=True, stats=stats, log=logs.append))
-        self.assertEqual(stats.get('why'), 'not_mkv')
-        self.assertTrue(any('(MP4)' in m for m in logs), logs)
+        self.assertEqual(stats.get('why'), 'not_mkv')                      # an MP4 that cannot be read
+        self.assertTrue(any('MP4: no moov box' in m for m in logs), logs)
 
     def test_an_error_page_is_not_called_another_container(self):
         ee = self.ee
@@ -707,6 +717,62 @@ class Gentle(unittest.TestCase):
         with patch.object(ee, '_new_session', lambda: Session(b'', None, 'multipart')):
             self.assertIsNone(ee.extract_srt(URL, lang='en', allow_http=True, stats=stats))
         self.assertIsNone(stats.get('why'))
+
+    def test_batches_go_in_parallel_each_on_its_own_connection(self):
+        # QA, 14 Nov 2026: a batch of 200 ranges spends ~4-6 s on the server's seeks (Stranger Things 656
+        # lines 48 s, Fight Club 1,940 lines 115 s). Up to _MULTI_PARALLEL go at once; the first goes alone.
+        import threading
+        ee = self.ee
+        main, threads = threading.get_ident(), set()
+
+        def abort():
+            threads.add(threading.get_ident())
+            return False
+        blob, net = self.serve('attached.mkv', many='multipart')
+        local = ee.extract_srt(str(FIXTURES / 'attached.mkv'), lang='en')
+        outside = []
+        real_rs = ee._Source._read_session
+
+        def read_session(src, offset, size):
+            if src._multi is True:
+                outside.append(offset)          # a read the batches should have covered
+            return real_rs(src, offset, size)
+        with net, patch.object(ee, '_MULTI_RANGES', 2), patch.object(ee, '_MULTI_PARALLEL', 3), \
+                patch.object(ee._Source, '_read_session', read_session):
+            got = ee.extract_srt(URL, lang='en', allow_http=True, abort_cb=abort)
+        self.assertEqual(got, local)
+        self.assertEqual(outside, [])                                # the store kept every batch of a set
+        asked = [tuple(r) for s in self.sessions for m in s.multi for r in m]
+        asked += [(a, a + n - 1) for s in self.sessions for a, n in s.asked if n > 1]
+        self.assertEqual(len(asked), len(set(asked)), 'a range was asked twice')
+        with_batches = [s for s in self.sessions if s.multi]
+        self.assertGreater(len(with_batches), 1)                     # more than one connection carried batches
+        self.assertLessEqual(len(self.sessions), 4)                  # the main one + _MULTI_PARALLEL - 1
+        self.assertTrue(all(len(m) <= 2 for s in self.sessions for m in s.multi))
+        self.assertEqual(threads, {main})                            # the buffer gate: one thread only
+
+    def test_a_busy_answer_in_a_parallel_set_holds_the_batches(self):
+        ee = self.ee
+        blob = (FIXTURES / 'attached.mkv').read_bytes()
+        made = []
+
+        def new_session():
+            # the first connection serves batches; the extra ones answer 429
+            s = Session(blob, None, 'multipart' if not made else 'busy')
+            made.append(s)
+            return s
+        local = ee.extract_srt(str(FIXTURES / 'attached.mkv'), lang='en')
+        stats = {}
+        # no hold after the busy answer: the batches resume at once, so only the switch keeps the extra
+        # connections out of them
+        with patch.object(ee, '_new_session', new_session), patch.object(ee, '_MULTI_RANGES', 2), \
+                patch.object(ee, '_MULTI_PARALLEL', 3), patch.object(ee, '_MULTI_BUSY_HOLD_S', 0.0):
+            got = ee.extract_srt(URL, lang='en', allow_http=True, stats=stats)
+        self.assertEqual(got, local)                                  # finished, one range a request
+        self.assertGreater(stats.get('backoffs', 0), 0)
+        # review of 0.3.83: after one refused set, one batch at a time for the rest of the run -- the
+        # extra connections are not tried again
+        self.assertTrue(all(len(s.multi) <= 1 for s in made[1:]), [len(s.multi) for s in made])
 
     def test_join_spans(self):
         ee = self.ee
