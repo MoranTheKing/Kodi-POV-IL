@@ -20,6 +20,8 @@ import importlib.util
 import io
 import re
 import sys
+import os
+import time
 import types
 import unittest
 from pathlib import Path
@@ -718,18 +720,29 @@ class Gentle(unittest.TestCase):
             self.assertIsNone(ee.extract_srt(URL, lang='en', allow_http=True, stats=stats))
         self.assertIsNone(stats.get('why'))
 
-    def test_batches_go_in_parallel_each_on_its_own_connection(self):
-        # QA, 14 Nov 2026: a batch of 200 ranges spends ~4-6 s on the server's seeks (Stranger Things 656
-        # lines 48 s, Fight Club 1,940 lines 115 s). Up to _MULTI_PARALLEL go at once; the first goes alone.
+    # ---- a cold file: connections share small batches (0.3.84) ---------------
+
+    def shared(self):
+        """The patches that make the fixture a 'cold file on a measured host'."""
+        ee = self.ee
+        return [patch.object(ee, '_PARALLEL_HOSTS', ('cdn.example',)), patch.object(ee, '_COLD_RANGE_MS', 0.0),
+                patch.object(ee, '_MULTI_RANGES', 8), patch.object(ee, '_MULTI_SHARE_RANGES', 4),
+                patch.object(ee, '_MULTI_PARALLEL', 3)]
+
+    def test_a_cold_file_is_read_by_connections_sharing_small_batches(self):
+        # lab, 14 Nov 2026 (TorBox, files nobody had read): 1 connection 86-100 ms a range, 6 sharing batches
+        # of 50 -> 21 ms. The first batch goes alone (is the file cold?); the buffer gate is asked from the
+        # calling thread only.
         import threading
+        from contextlib import ExitStack
         ee = self.ee
         main, threads = threading.get_ident(), set()
 
         def abort():
             threads.add(threading.get_ident())
             return False
-        blob, net = self.serve('attached.mkv', many='multipart')
-        local = ee.extract_srt(str(FIXTURES / 'attached.mkv'), lang='en')
+        blob, net = self.serve('spaced.mkv', many='multipart')
+        local = ee.extract_srt(str(FIXTURES / 'spaced.mkv'), lang='en')
         outside = []
         real_rs = ee._Source._read_session
 
@@ -737,41 +750,162 @@ class Gentle(unittest.TestCase):
             if src._multi is True:
                 outside.append(offset)          # a read the batches should have covered
             return real_rs(src, offset, size)
-        with net, patch.object(ee, '_MULTI_RANGES', 2), patch.object(ee, '_MULTI_PARALLEL', 3), \
-                patch.object(ee._Source, '_read_session', read_session):
-            got = ee.extract_srt(URL, lang='en', allow_http=True, abort_cb=abort)
+        logs = []
+        real_pf = ee._Source.prefetch
+
+        def prefetch(src, spans, keep_from=None, sess=None, checked=False):
+            if checked:
+                time.sleep(0.05)                # a shared batch takes a moment, as a cold one does
+            return real_pf(src, spans, keep_from, sess, checked)
+        with ExitStack() as st:
+            st.enter_context(net)
+            for p_ in self.shared():
+                st.enter_context(p_)
+            st.enter_context(patch.object(ee._Source, '_read_session', read_session))
+            st.enter_context(patch.object(ee._Source, 'prefetch', prefetch))
+            got = ee.extract_srt(URL, lang='en', allow_http=True, abort_cb=abort, log=logs.append)
         self.assertEqual(got, local)
         self.assertEqual(outside, [])                                # the store kept every batch of a set
         asked = [tuple(r) for s in self.sessions for m in s.multi for r in m]
-        asked += [(a, a + n - 1) for s in self.sessions for a, n in s.asked if n > 1]
+        asked += [(a_, a_ + n - 1) for s in self.sessions for a_, n in s.asked if n > 1]
         self.assertEqual(len(asked), len(set(asked)), 'a range was asked twice')
         with_batches = [s for s in self.sessions if s.multi]
-        self.assertGreater(len(with_batches), 1)                     # more than one connection carried batches
-        self.assertLessEqual(len(self.sessions), 4)                  # the main one + _MULTI_PARALLEL - 1
-        self.assertTrue(all(len(m) <= 2 for s in self.sessions for m in s.multi))
+        self.assertEqual(len([s for s in self.sessions[1:] if s.multi]), 3)   # every sharer took batches
+        self.assertLessEqual(len(self.sessions), 4)                  # the main one + _MULTI_PARALLEL
+        shared_batches = [m for s in self.sessions[1:] for m in s.multi]
+        self.assertTrue(shared_batches and all(len(m) <= 4 for m in shared_batches))
         self.assertEqual(threads, {main})                            # the buffer gate: one thread only
+        self.assertTrue(any('connections share batches' in m for m in logs), logs)
 
-    def test_a_busy_answer_in_a_parallel_set_holds_the_batches(self):
+    def test_not_shared_on_a_host_it_was_not_measured_on_or_a_warm_file(self):
+        from contextlib import ExitStack
         ee = self.ee
-        blob = (FIXTURES / 'attached.mkv').read_bytes()
+        for name, value in (('_PARALLEL_HOSTS', ('tb-cdn.st',)), ('_COLD_RANGE_MS', 10 ** 9)):
+            with self.subTest(name):
+                self.sessions[:] = []
+                blob, net = self.serve('spaced.mkv', many='multipart')
+                with ExitStack() as st:
+                    st.enter_context(net)
+                    for p_ in self.shared():
+                        st.enter_context(p_)
+                    st.enter_context(patch.object(ee, name, value))
+                    got = ee.extract_srt(URL, lang='en', allow_http=True)
+                self.assertTrue(got)
+                self.assertEqual(len(self.sessions), 1)              # one connection, as before
+
+    def test_standing_aside_closes_every_connection_and_pauses_the_sharing(self):
+        # review of 0.3.84: the sharers' connections must not idle on the link while the player refills,
+        # and no shared set starts for a while after the player was short of data
+        ee = self.ee
+        blob, net = self.serve('spaced.mkv', many='multipart')
+        with net, patch.object(ee, '_PARALLEL_HOSTS', ('cdn.example',)), patch.object(ee, '_COLD_RANGE_MS', 0.0):
+            src = ee._Source(URL)
+            src._batch_sess = [ee._new_session(), ee._new_session()]
+            src._multi = True
+            self.assertEqual(src.parallel_now(), ee._MULTI_PARALLEL)
+            src.release_connection()
+            self.assertEqual([s.open for s in self.sessions], [False, False, False])
+            self.assertEqual(src.parallel_now(), 1)                     # just held: one connection
+            src._held_at -= ee._SHARE_AFTER_HOLD_S + 1
+            self.assertEqual(src.parallel_now(), ee._MULTI_PARALLEL)
+            fresh = ee._Source(URL)
+            fresh.release_connection()                                   # the wait before the first batch
+            self.assertEqual(fresh._held_at, 0.0)
+
+    def test_a_pass_starts_with_a_short_batch_where_sharing_is_possible(self):
+        # QA, 14 Nov 2026 (Pulp Fiction): the lines beside the viewer were warm, the next 119 cold -- one
+        # 11.9 s batch before the sharing began. A pass now shows what the file is like in a short batch.
+        from contextlib import ExitStack
+        ee = self.ee
+        blob, net = self.serve('spaced.mkv', many='multipart')
+        with ExitStack() as st:
+            st.enter_context(net)
+            for p_ in self.shared():
+                st.enter_context(p_)
+            st.enter_context(patch.object(ee, '_COLD_RANGE_MS', 10 ** 9))       # a warm file
+            st.enter_context(patch.object(ee, '_MULTI_RANGES', 16))
+            st.enter_context(patch.object(ee, '_MULTI_PROBE_RANGES', 3))
+            # two passes: the window beside the viewer (it proves batches are served), then the rest
+            windows = [(0, 30000), None]
+            steps = (lambda: windows.pop(0), lambda text: None, lambda starts: None)
+            import tempfile
+            resume = os.path.join(tempfile.mkdtemp(prefix='probe_'), 'resume.bin')
+            got = ee.extract_srt(URL, lang='en', allow_http=True, steps=steps, resume_path=resume)
+        self.assertEqual(got.count('-->'), 90)
+        sizes = [len(m) for m in self.sessions[0].multi]
+        self.assertLessEqual(sizes[1], 3, sizes)         # the second pass begins with the short batch
+        self.assertEqual(sizes[2], 16, sizes)            # warm: full batches after it
+
+    def test_the_gate_holds_every_new_request_while_it_waits(self):
+        # while the buffer gate waits (the player's buffer ran low) no connection sends a new request
+        from contextlib import ExitStack
+        ee = self.ee
+        blob, net = self.serve('spaced.mkv', many='multipart')
+        seen = {'waiting': False, 'during': 0, 'calls': 0, 'held': 0}
+        real_pf = ee._Source.prefetch
+
+        def prefetch(src, spans, keep_from=None, sess=None, checked=False):
+            if checked:
+                if seen['waiting']:
+                    seen['during'] += 1
+                time.sleep(0.15)                # a shared batch takes a moment, as a cold one does
+            return real_pf(src, spans, keep_from, sess, checked)
+
+        real_pm = ee._Source.prefetch_many
+
+        def prefetch_many(src, spans, keep_from=None):
+            seen['in_set'] = src.parallel_now() > 1
+            try:
+                return real_pm(src, spans, keep_from)
+            finally:
+                seen['in_set'] = False
+
+        def abort():
+            seen['calls'] += 1
+            if seen['held'] == 0 and seen.get('in_set'):
+                seen['held'] = 1                # the sharers are at work: the gate waits once
+                time.sleep(0.2)                 # what was in flight ends
+                seen['waiting'] = True
+                time.sleep(0.5)
+                seen['waiting'] = False
+            return False
+        with ExitStack() as st:
+            st.enter_context(net)
+            for p_ in self.shared():
+                st.enter_context(p_)
+            st.enter_context(patch.object(ee, '_MULTI_RANGES', 16))     # a set of 12 batches: 4 rounds
+            st.enter_context(patch.object(ee._Source, 'prefetch', prefetch))
+            st.enter_context(patch.object(ee._Source, 'prefetch_many', prefetch_many))
+            got = ee.extract_srt(URL, lang='en', allow_http=True, abort_cb=abort)
+        self.assertTrue(got)
+        self.assertEqual(seen['held'], 1)
+        self.assertEqual(seen['during'], 0)
+
+    def test_a_busy_answer_to_a_shared_batch_ends_the_sharing(self):
+        from contextlib import ExitStack
+        ee = self.ee
+        blob = (FIXTURES / 'spaced.mkv').read_bytes()
         made = []
 
         def new_session():
-            # the first connection serves batches; the extra ones answer 429
+            # the first connection serves batches; the sharers answer 429
             s = Session(blob, None, 'multipart' if not made else 'busy')
             made.append(s)
             return s
-        local = ee.extract_srt(str(FIXTURES / 'attached.mkv'), lang='en')
-        stats = {}
+        local = ee.extract_srt(str(FIXTURES / 'spaced.mkv'), lang='en')
+        stats, logs = {}, []
         # no hold after the busy answer: the batches resume at once, so only the switch keeps the extra
         # connections out of them
-        with patch.object(ee, '_new_session', new_session), patch.object(ee, '_MULTI_RANGES', 2), \
-                patch.object(ee, '_MULTI_PARALLEL', 3), patch.object(ee, '_MULTI_BUSY_HOLD_S', 0.0):
-            got = ee.extract_srt(URL, lang='en', allow_http=True, stats=stats)
-        self.assertEqual(got, local)                                  # finished, one range a request
+        with ExitStack() as st:
+            st.enter_context(patch.object(ee, '_new_session', new_session))
+            for p_ in self.shared():
+                st.enter_context(p_)
+            st.enter_context(patch.object(ee, '_MULTI_BUSY_HOLD_S', 0.0))
+            got = ee.extract_srt(URL, lang='en', allow_http=True, stats=stats, log=logs.append)
+        self.assertEqual(got, local)                                  # finished on one connection
         self.assertGreater(stats.get('backoffs', 0), 0)
-        # review of 0.3.83: after one refused set, one batch at a time for the rest of the run -- the
-        # extra connections are not tried again
+        self.assertTrue(any('one batch at a time from here' in m for m in logs), logs)
+        # review of 0.3.83: after one refused set the extra connections are not tried again
         self.assertTrue(all(len(s.multi) <= 1 for s in made[1:]), [len(s.multi) for s in made])
 
     def test_join_spans(self):
