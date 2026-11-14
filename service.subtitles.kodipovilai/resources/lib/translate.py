@@ -2900,6 +2900,20 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     kodi_utils.log('embedded: another extraction already running '
                                    '-- skipping to avoid doubling the debrid load',
                                    level='INFO')
+                    # Not a failure (QA, 14 Nov 2026: the pick on play had
+                    # started this very job, and picking its row -- marked
+                    # current -- ended in "could not extract, try another
+                    # subtitle"). Say it is under way; the picker's failure
+                    # toast reads this flag and stays quiet.
+                    if why is not None:
+                        why['reason'] = 'busy'
+                    _status('AI: תרגום מובנה כבר רץ ברקע — העברית תופיע '
+                            'כשיסתיים', time_ms=5000)
+                    try:
+                        _win.setProperty('povil.embedded_partial',
+                                         'busy@%.0f' % time.time())
+                    except Exception:
+                        pass
                     return None
             _win.setProperty(_ACTIVE, str(_now))
 
@@ -3653,6 +3667,14 @@ _STEPS_TRIES = 2
 # Requests in a row that brought nothing: stop asking (the full job follows
 # and has its own retries and fallbacks).
 _STEPS_GIVE_UP = 3
+# Requests the views may make for one pick: they come on top of the full
+# translation, which translates the same lines again. With the track read in
+# minutes they were up to +40% of a regular translation's requests (QA, 14 Nov
+# 2026: Interstellar 12 on 54 chunks, Fight Club 9 on 39, Game of Thrones 4 on
+# 10); read in seconds, two windows (~100 lines ahead of the viewer) carry the
+# picture until the full job's chunks arrive. A jump earns one more (moved()).
+# The owner: an embedded pick must not cost more quota than a regular one.
+_STEPS_MAX_REQUESTS = 2
 # A step's request is answered in seconds or not worth waiting for.
 _STEPS_TIMEOUT = 45
 # The whole track in before the first view's answer: how long after the
@@ -3821,6 +3843,7 @@ class _EmbeddedSteps(object):
         self.on_screen = False                 # the view is what the player shows
         self.windows = 0
         self.requests = 0
+        self._budget = _STEPS_MAX_REQUESTS     # requests the views may make
         self.handed_back = 0
 
     # -- the extractor's side
@@ -3922,6 +3945,8 @@ class _EmbeddedSteps(object):
                 return False
             self._asked_span = None
             self._cut = True
+            # the new place earns one view of its own (_STEPS_MAX_REQUESTS)
+            self._budget = max(self._budget, self.requests + 1)
         self._log('embedded steps: the viewer jumped out of the window being '
                   'read (to %s) -- cutting it short' % _ms_label(pos))
         return True
@@ -4050,7 +4075,7 @@ class _EmbeddedSteps(object):
 
     def _next_batch(self):
         with self._lock:
-            if self._frozen:
+            if self._frozen or self.requests >= self._budget:
                 return None
             pos = self._position()
             # The lines the viewer reaches next, wherever the reading started
