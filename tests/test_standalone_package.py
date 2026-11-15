@@ -84,8 +84,32 @@ class StandalonePackage(unittest.TestCase):
                          # imported inside a try: the guard above cannot see it missing
                          'resources/lib/gender_proofread.py',
                          # loaded by path from embedded_extract (0.3.83 shipped without it at first)
-                         'resources/lib/embedded_mp4.py'):
+                         'resources/lib/embedded_mp4.py',
+                         # the proofread's "ask again later" queue: left out from 0.3.75 to 0.3.85
+                         'resources/lib/gp_later.py'):
             self.assertIn(required, names)
+
+    def test_a_module_the_translation_code_imports_is_shipped(self):
+        # "Reached only inside a try" is right for the build's patchers that service.py starts, and wrong for
+        # the translation's own modules: translate.py imports gp_later inside a try (it must never raise),
+        # the standalone left the file out, and nothing failed -- the queue just never worked. So: a module
+        # of resources/lib that another shipped module of resources/lib imports is shipped too, unless its
+        # name is one of the build's (BUILDISH).
+        files = [r for r in shipped() if r.suffix == '.py' and r.parts[:2] == ('resources', 'lib')
+                 and len(r.parts) == 3]
+        mods = {'.'.join(r.with_suffix('').parts) for r in shipped() if r.suffix == '.py'}
+        missing = []
+        for rel in files:
+            tree = ast.parse((SRC / rel).read_text(encoding='utf-8', errors='replace'))
+            for node in ast.walk(tree):
+                for target in import_targets(node, 'resources.lib'):
+                    name = target.split('.')[-1] + '.py'
+                    if (target in mods or target == 'resources.lib' or target + '.__init__' in mods
+                            or BUILDISH.search(name)
+                            or not (SRC / 'resources' / 'lib' / name).is_file()):
+                        continue
+                    missing.append('%s -> %s' % (rel.name, name))
+        self.assertEqual(sorted(set(missing)), [])
 
     def test_modules_loaded_by_path_are_shipped(self):
         # embedded_extract loads its MP4 parser by file name, beside itself: no import scan sees that

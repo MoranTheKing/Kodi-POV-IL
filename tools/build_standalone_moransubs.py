@@ -66,7 +66,12 @@ STANDALONE_LIB_FILES = (
        "script_residual.py", "sdh_pool.py", "sdh_registry.py", "srt_wire.py",
        # loaded by path from embedded_extract (0.3.83: MP4 subtitles) -- an
        # import scan does not see it
-       "embedded_mp4.py"}
+       "embedded_mp4.py",
+       # the gender proofread's "ask again later" queue (0.3.75). translate.py
+       # imports it inside a try, so its absence raised nothing: for eleven
+       # versions the standalone never queued a proofread no model answered
+       # (found 15 Nov 2026 by someone reading the zip)
+       "gp_later.py"}
 )
 
 # default.py actions only the build has, and the helpers only they use.
