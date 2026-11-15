@@ -285,7 +285,7 @@ class WiringTests(unittest.TestCase):
         self.assertIn('raw_src = srt.merge_same_time_cues(raw_src)', text)
         self.assertIn('srt.drop_model_notes(b) for b in out_blocks', text)
         self.assertIn('_timing_src = _prepare_source(src_text, merge=False)', text)
-        self.assertIn('info, src_text, timing_text=_timing_src)', text)
+        self.assertIn('info, src_text, timing_text=_timing_src,', text)
         self.assertIn('srt.fold_stray_latin_letter(final)', text)
         self.assertIn('srt.drop_untranslated_sound_cues(final, src_text)', text)
         self.assertIn('script_residual.repair(', text)
