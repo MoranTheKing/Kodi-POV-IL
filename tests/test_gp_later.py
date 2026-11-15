@@ -205,9 +205,11 @@ class Base(unittest.TestCase):
             self.addCleanup(p.stop)
         self.models_left = True
         self.contributed = []
+        self.hydrogen_left = True      # after a Hebrew reference: its one model
         self.pooled_proofread = False
         for target, value in (
-                ('_gp_models_left', lambda: self.models_left),
+                ('_gp_models_left', lambda hebrew_ref=False: (
+                    self.hydrogen_left if hebrew_ref else self.models_left)),
                 ('_title_cast', lambda *a: ([], '', '')),
                 ('_pool_variant_proofread', lambda info, h, network=True: self.pooled_proofread)):
             p = mock.patch.object(translate, target, value)
@@ -293,7 +295,7 @@ class Opened(Base):
     """_proofread_opened queues a proofread 3.7 did not answer."""
 
     def run_opened(self, report, later):
-        def fake(blocks, src, key, model, cast, stopped, background=False, rounds=True):
+        def fake(blocks, src, key, model, cast, stopped, background=False, rounds=True, hebrew_ref=False):
             return blocks, report
         with mock.patch.object(translate, '_run_gender_proofread', fake):
             translate._proofread_opened(
@@ -321,6 +323,7 @@ class Tick(Base):
         self.add(copies=[self.copy])
         self.make_due()
         self.calls = []
+        self.hebrew = []
 
     def make_due(self, **kw):
         s = gp_later.load(self.queue)
@@ -335,8 +338,9 @@ class Tick(Base):
                 pass
 
     def tick(self, report, change=True):
-        def fake(blocks, src, key, model, cast, stopped, background=False, rounds=True):
+        def fake(blocks, src, key, model, cast, stopped, background=False, rounds=True, hebrew_ref=False):
             self.calls.append({'src': src, 'key': key, 'background': background, 'rounds': rounds})
+            self.hebrew.append(hebrew_ref)
             if change and report.get('model'):
                 blocks = list(blocks)
                 blocks[0] = blocks[0].replace('אתה בא?', 'את באה?')
@@ -445,7 +449,7 @@ class Tick(Base):
         other = os.path.join(self.dir, 'tt2.he.srt')
         shutil.copyfile(self.path, other)
 
-        def fake(blocks, src, key, model, cast, stopped, background=False, rounds=True):
+        def fake(blocks, src, key, model, cast, stopped, background=False, rounds=True, hebrew_ref=False):
             translate._gp_later_add({'why': 'busy'}, other, EN, {'imdb_id': 'tt2'})
             return blocks, {'why': 'busy', 'asked': True}
         with mock.patch.object(translate, '_run_gender_proofread', fake):
@@ -475,7 +479,7 @@ class Tick(Base):
     def test_review_counted_when_sent_refunded_when_not(self):
         seen = []
 
-        def fake(blocks, src, key, model, cast, stopped, background=False, rounds=True):
+        def fake(blocks, src, key, model, cast, stopped, background=False, rounds=True, hebrew_ref=False):
             s = gp_later.load(self.queue)
             e, = s['entries']
             seen.append((s['sent'], round(time.time() - s['last']), e['next'] - time.time() > H))
@@ -539,11 +543,28 @@ class Tick(Base):
         self.assertEqual(self.tick({'model': 'gemini-3.7-flash'}), '')
         self.assertEqual((self.calls, gp_later.load(self.queue)['entries']), ([], []))
 
-    def test_review_made_again_with_a_hebrew_reference_dropped(self):
+    def test_made_again_with_a_hebrew_reference_gemini_4_alone_is_asked(self):
+        # 0.3.88 (0.3.75-0.3.87 dropped it: no proofread after a Hebrew reference then)
         translate._gp_ref_mark(self.path, 'he')
-        self.assertEqual(self.tick({'model': 'gemini-3.7-flash'}), 'heref')
-        self.assertEqual((self.calls, gp_later.load(self.queue)['entries']), ([], []))
-        self.assertFalse([n for n in os.listdir(self.dir) if n.startswith('gpl_')])
+        self.assertEqual(self.tick({'model': 'gemini-4-hydrogen', 'applied': 1, 'asked': True}), 'answered')
+        self.assertEqual((len(self.calls), self.hebrew), (1, [True]))
+        self.assertEqual(gp_later.load(self.queue)['entries'], [])
+
+    def test_a_translation_with_another_reference_is_asked_the_whole_chain(self):
+        translate._gp_ref_mark(self.path, 'ar')
+        self.tick({'model': 'gemini-3.7-flash', 'applied': 1, 'asked': True})
+        self.assertEqual(self.hebrew, [False])
+
+    def test_gemini_4_out_of_quota_the_hebrew_one_waits_and_holds_nothing_up(self):
+        translate._gp_ref_mark(self.path, 'he')
+        self.hydrogen_left = False             # 3.7 has requests left: not for this one
+        before = time.time()
+        self.assertEqual(self.tick({'model': 'gemini-3.7-flash'}), 'quota')
+        s = gp_later.load(self.queue)
+        e, = s['entries']
+        self.assertEqual((self.calls, s.get('sent') or 0), ([], 0))    # nothing sent, nothing counted
+        self.assertGreaterEqual(e['next'], before + gp_later.GAP - 1)   # its turn comes round again
+        self.assertEqual(self.tick({'model': 'gemini-3.7-flash'}), '')  # and it is not picked meanwhile
 
     def test_review_a_pooled_variant_keeps_its_hash_for_that_rule(self):
         self.clear()
@@ -553,7 +574,8 @@ class Tick(Base):
         e, = gp_later.load(self.queue)['entries']
         self.assertEqual((e['ref_hash'], 'ref_hash' in e['share']), ('abc_ar', False))
         with mock.patch.object(translate, '_hebrew_subtitle_listed', lambda info: True):
-            self.assertEqual(self.tick({'model': 'gemini-3.7-flash'}), 'heref')
+            self.tick({'model': 'gemini-4-hydrogen', 'asked': True})
+        self.assertEqual(self.hebrew, [True])
 
 
     def test_review2_a_clock_gone_back_holds_it_and_keeps_it(self):
@@ -573,8 +595,8 @@ class Tick(Base):
 
     def test_review2_a_copy_made_again_with_a_hebrew_reference(self):
         translate._gp_ref_mark(self.copy, 'he')
-        self.assertEqual(self.tick({'model': 'gemini-3.7-flash'}), 'heref')
-        self.assertEqual(self.calls, [])
+        self.tick({'model': 'gemini-4-hydrogen', 'asked': True})
+        self.assertEqual(self.hebrew, [True])
 
 
 class Service(unittest.TestCase):

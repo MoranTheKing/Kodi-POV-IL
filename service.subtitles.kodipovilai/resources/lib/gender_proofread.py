@@ -49,6 +49,19 @@ import re
 # Not shown to be better than 3.7 (28-0-2 over 30 in 005): it is first
 # because it answers. The other Flash models stay out (002).
 MODELS = ('gemini-4-hydrogen', 'gemini-3.7-flash')
+# After a Hebrew gender reference: gemini-4-hydrogen alone (0.3.88). That
+# proofread had been off since 0.3.72 -- the models of then broke more lines
+# than they fixed there (12-15-3), 3.7 alone fixed 19 and broke 8 (004). Pre-
+# registered blind study 007 (15 Nov 2026, four of 004's episodes, the same
+# translations made with a Hebrew reference; two AI judges, the tester
+# audited two comparisons): gemini-4-hydrogen 13-3-3 on the 19 lines compared
+# (it changed 21 in four episodes), net +10 against a required +5, 3 of the
+# 16 decided lines broken (0.19 against a cap of 0.20) -- one comparison
+# short of the 20 planned, at the edge of the cap, and switched on by the
+# owner's word. 3.7 did not meet the rule there, so it is no fallback for
+# these translations: gemini-4-hydrogen busy or out of quota means the
+# service asks it again later (gp_later).
+HEBREW_REF_MODELS = ('gemini-4-hydrogen',)
 # A whole film took 3-6 minutes on these models.
 REQUEST_TIMEOUT = 900
 # No new model is asked after this many seconds: the viewer waits for the swap.

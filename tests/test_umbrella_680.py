@@ -128,10 +128,13 @@ class Hebrew(unittest.TestCase):
 
 class ReOffer(unittest.TestCase):
 
-    def test_a_stored_proofread_after_a_hebrew_reference_is_not_offered_again(self):
+    def test_an_old_proofread_after_a_hebrew_reference_is_not_offered_again(self):
+        # one of before 0.3.72, by the models of then; gemini-4-hydrogen's (0.3.88) is offered
         i = TRANSLATE_SRC.index('        # Proofread here before, its pool upload never went through')
-        block = TRANSLATE_SRC[i:i + 700]
-        self.assertIn('and not _gp_hebrew_ref(path, info if _gp_ref_tier(path, pooled_hash)', block)
+        block = TRANSLATE_SRC[i:i + 1000].replace('\r\n', '\n')
+        self.assertIn('_made_he = _gp_hebrew_ref(path, info if _gp_ref_tier(path, pooled_hash)', block)
+        self.assertIn("and not (_made_he and _gp_saved(path).get('model')\n"
+                      "                         not in _gp_models(True))):", block)
 
 
 if __name__ == '__main__':

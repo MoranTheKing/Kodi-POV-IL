@@ -71,7 +71,7 @@ class Base(unittest.TestCase):
             p = mock.patch.object(translate.kodi_utils, target, value)
             p.start()
             self.addCleanup(p.stop)
-        for target, value in (('_gp_models_left', lambda: True),
+        for target, value in (('_gp_models_left', lambda hebrew_ref=False: True),
                               ('_is_google_translated', lambda p: False)):
             p = mock.patch.object(translate, target, value)
             p.start()
@@ -93,7 +93,7 @@ class Due(Base):
         self.assertFalse(due(self.path, EN, cb))         # proofread before
         other = os.path.join(self.dir, 'marker')
         self.assertTrue(due(self.path, EN, cb, marker=other))
-        with mock.patch.object(translate, '_gp_models_left', lambda: False):
+        with mock.patch.object(translate, '_gp_models_left', lambda hebrew_ref=False: False):
             self.assertFalse(due(self.path, EN, cb, marker=other))
         with mock.patch.object(translate, '_is_google_translated', lambda p: True):
             self.assertFalse(due(self.path, EN, cb, marker=other))
@@ -141,7 +141,7 @@ class Opened(Base):
 
         self.background = []
 
-        def fake_proofread(blocks, src, key, model, cast, stopped, background=False):
+        def fake_proofread(blocks, src, key, model, cast, stopped, background=False, hebrew_ref=False):
             self.assertEqual(model, 'gemini-3.5-flash-lite')
             self.background.append(background)
             if change:
@@ -336,7 +336,7 @@ class Later(Base):
         self.assertEqual(len(self.fired(translate._encode_link(pooled))), 1)
         translate._gp_mark(translate._pool_gp_base('abcdef0123456789'))
         self.assertEqual(self.fired(translate._encode_link(pooled)), [])
-        with mock.patch.object(translate, '_gp_models_left', lambda: False):
+        with mock.patch.object(translate, '_gp_models_left', lambda hebrew_ref=False: False):
             self.assertEqual(self.fired(translate._encode_link(
                 {'type': 'engine_ai', 'filename': 'x'})), [])
         # the automatic translation on play: its own link, id adopted later
@@ -506,7 +506,7 @@ class LaterJobPlainTier(Base):
 
     def fake_opened(self, path, source_text, source_id, release, progressive_cb,
                     deliver, cancelled, info, share=None, shown_already=False, mark_path=None,
-                    later=None):
+                    later=None, hebrew_ref=False):
         self.opened.append({'path': path, 'source_id': source_id, 'shown_already': shown_already})
         if share is not None:
             share('fixed', {'model': 'gemini-3.7-flash', 'applied': 1})
