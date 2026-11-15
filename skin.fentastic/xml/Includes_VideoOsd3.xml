@@ -393,7 +393,7 @@
 						<align>center</align>
 						<texturenofocus>-</texturenofocus>
 						<texturefocus colordiffuse="button_focus">colors/white.png</texturefocus>
-						<label>[B]$LOCALIZE[700035][/B]</label>
+						<label>[B]$LOCALIZE[700054][/B]</label>
 						<!-- If current playing addon is Idan Plus -->
 						<visible>String.Contains(Player.Folderpath, plugin.video.idanplus)</visible>
 						<!-- If Kodi's video playlist has items -->
@@ -435,7 +435,7 @@
 						<visible>$EXP[SkinZoomToggle]</visible>
 						<include content="OSDButtonAdvanced">
 							<param name="texture" value="kodirdil/zoom/zoom-in-hand.png"/>
-							<param name="label">$LOCALIZE[700016]</param>
+							<param name="label">$LOCALIZE[700037]</param>
 							<param name="width">68</param>
 							<param name="height">62</param>
 							<param name="radiowidth">55</param>
@@ -449,7 +449,7 @@
 					<visible>$EXP[SkinZoomToggle]</visible>
 						<include content="OSDButtonAdvanced">
 							<param name="texture" value="kodirdil/zoom/zoom-out-hand.png"/>
-							<param name="label">$LOCALIZE[700017]</param>
+							<param name="label">$LOCALIZE[700038]</param>
 							<param name="width">68</param>
 							<param name="height">62</param>
 							<param name="radiowidth">55</param>

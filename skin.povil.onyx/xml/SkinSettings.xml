@@ -786,6 +786,7 @@
 					<radioposx>20</radioposx>
 				</control>
 				<control type="radiobutton" id="3706" description="UseExtInfo">
+					<visible>false</visible>
 					<include>POVIL_SkinSettingsButton</include>
 					<label>$LOCALIZE[31188]</label>
 					<onclick>Skin.ToggleSetting(UseExtInfo)</onclick>

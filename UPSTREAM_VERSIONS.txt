@@ -9,6 +9,6 @@
 plugin.video.pov: 6.11.03
 plugin.video.idanplus: 4.0.6
 skin.arctic.fuse.3: 3.4.22
-plugin.video.umbrella: 6.8.00
+plugin.video.umbrella: 6.8.01
 plugin.video.otaku: 5.3.4
 script.module.acctmgr: 1.2.1a

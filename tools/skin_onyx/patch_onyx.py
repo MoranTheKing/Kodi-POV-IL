@@ -154,6 +154,15 @@ EDITS = [
     ('Includes_Variables.xml', '\t<variable name="FrameColor"',
      '\t<variable name="POVIL_MusicPlayer" description="Music player; Hebrew puts the player first">\n\t\t<value condition="String.StartsWith(System.Language,Hebrew)">$LOCALIZE[14200] $LOCALIZE[249]</value>\n\t\t<value>$LOCALIZE[249] [LOWERCASE]$LOCALIZE[14200][/LOWERCASE]</value>\n\t</variable>\n'
      '\t<variable name="POVIL_VideoPlayer" description="Video player; Hebrew puts the player first">\n\t\t<value condition="String.StartsWith(System.Language,Hebrew)">$LOCALIZE[14200] $LOCALIZE[157]</value>\n\t\t<value>$LOCALIZE[157] [LOWERCASE]$LOCALIZE[14200][/LOWERCASE]</value>\n\t</variable>\n\t<variable name="FrameColor"', 'name="POVIL_MusicPlayer"'),
+    # Onyx's "extended info" switch brought its old info panel up with every seek and
+    # pause, over this skin's player (field report: "another player above and below");
+    # the seek bar is generated now and never reads it
+    ('SkinSettings.xml', '<control type="radiobutton" id="3706" description="UseExtInfo">',
+     '<control type="radiobutton" id="3706" description="UseExtInfo">\n\t\t\t\t\t<visible>false</visible>'),
+    # The clock of Onyx's own windows: top left, where the home's clock is; the top right is the title's
+    ('Includes.xml',
+     '\t\t\t\t<right>65</right>\n\t\t\t\t<width min="0" max="140">auto</width>\n\t\t\t\t<height>75</height>\n\t\t\t\t<align>right</align>',
+     '\t\t\t\t<left>90</left>\n\t\t\t\t<width min="0" max="140">auto</width>\n\t\t\t\t<height>75</height>\n\t\t\t\t<align>left</align>'),
     # Choice lists (Wizard, POV, Kodi): the item text on the right
     ('Includes_DialogSelect.xml', '<control type="label" description="Main Label">',
      '<control type="label" description="Main Label"><align>right</align><posx>96</posx>', '<align>right</align><posx>96</posx>'),

@@ -238,10 +238,10 @@
 		<control type="grouplist">
 				<visible>Skin.HasSetting(ShowClock) + !Skin.HasSetting(DebugInfo)</visible>
 				<visible>![Window.IsVisible(CustomFanart.xml) | Window.IsVisible(VideoFullScreen.xml) | Window.IsVisible(MusicVisualisation.xml) | Window.IsVisible(DialogExtendedProgressBar.xml) | Window.IsVisible(home) | [Window.IsVisible(videos) + [String.IsEqual(Container.ViewMode,תצוגת יוקרה) | String.IsEqual(Container.ViewMode,תצוגת פרקים)]]]</visible>
-				<right>65</right>
+				<left>90</left>
 				<width min="0" max="140">auto</width>
 				<height>75</height>
-				<align>right</align>
+				<align>left</align>
 				<aligny>center</aligny>
 				<itemgap>0</itemgap>
 				<orientation>horizontal</orientation>

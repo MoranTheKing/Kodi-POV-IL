@@ -136,7 +136,7 @@
 					<height>220</height>
 					<aligny>center</aligny>
 					<align>center</align>
-					<font>font35_title</font>
+					<font>font36_title</font>
 			</control>
 			<control type="textbox" id="1">
 				<animation type="Visible">
