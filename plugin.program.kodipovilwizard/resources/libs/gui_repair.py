@@ -71,6 +71,9 @@ def build_defaults():
     for node in root.findall("setting[@id='locale.language']"):
         root.remove(node)
         root.append(node)
+    # The Wizard's copy of the pack predates the subtitles without a box.
+    from resources.libs import subtitle_style
+    subtitle_style.apply_to(root)
     return root
 
 

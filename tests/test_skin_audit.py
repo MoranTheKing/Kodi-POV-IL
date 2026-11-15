@@ -37,6 +37,32 @@ class SkinAudit(unittest.TestCase):
         self.assertEqual(sorted(set(re.findall(r'\$VAR\[([^\],]+)', text)) - defined), [])
         self.assertNotIn('<label>Addons</label>', text)
 
+    def test_a_tap_on_the_picture_closes_the_player_controls_in_every_style(self):
+        # 15 Nov 2026, the owner on a phone: "if I press the middle while the player is open, it should
+        # close". Estuary, Old's native and simple players had the area; the rest did not.
+        def area_first(body, where):
+            first = re.search(r'<control type="(\w+)"[^>]*>(.*?)</control>', body, re.S)
+            self.assertIsNotNone(first, where)
+            self.assertEqual(first.group(1), 'button', where)
+            self.assertIn('<onclick>Action(close)</onclick>', first.group(2), where)
+            self.assertIn('<texturefocus />', first.group(2), where)
+            return first.group(2)
+
+        players = read(OLD / 'xml' / 'Includes_POVIL_Players.xml')
+        for n in '1234':
+            body = re.search(r'<include name="POVIL_Player_videosd%s">(.*?)\n\t</include>' % n, players, re.S).group(1)
+            area = area_first(body, 'Old videosd' + n)
+            if n != '3':
+                for tag in ('onup', 'ondown', 'onleft', 'onright'):
+                    self.assertIn('<%s>201</%s>' % (tag, tag), area, n)
+        area_first(read(OLD / 'xml' / 'Includes_POVIL_NativePlayer.xml'), 'Old native player')
+        osd = read(FEN / 'xml' / 'VideoOSD.xml')
+        area = area_first(osd[osd.index('<controls>'):], 'FENtastic')
+        for tag in ('onup', 'ondown', 'onleft', 'onright'):
+            self.assertIn('<%s>201</%s>' % (tag, tag), area)
+        self.assertIn('<defaultcontrol always="true">201</defaultcontrol>', osd)
+        area_first(read(ESTUARY / 'xml' / 'VideoOSD.xml').split('<controls>', 1)[1], 'Estuary')
+
     def test_skin_settings_are_in_hebrew(self):
         for skin in (OLD, FEN):
             with self.subTest(skin.name):

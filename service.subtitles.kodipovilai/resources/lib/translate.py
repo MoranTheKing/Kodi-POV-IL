@@ -3675,6 +3675,25 @@ _STEPS_GIVE_UP = 3
 # picture until the full job's chunks arrive. A jump earns one more (moved()).
 # The owner: an embedded pick must not cost more quota than a regular one.
 _STEPS_MAX_REQUESTS = 2
+# ...unless the track comes in a line a request. A TorBox "store" node
+# answers only the first range of many, so the reading goes at the pace the
+# provider tolerates for single requests: ~2.5 lines a second, thirteen
+# minutes for a film of 1,900 lines (field log, 15 Nov 2026, The Odyssey
+# 2160p). The two views are ~80 lines, six or seven minutes of film; after
+# them the viewer read the source language until the full job could start.
+# So while the reading still has at least _STEPS_SLOW_LEFT_S to go at the
+# rate measured, one more request may go out each time the Hebrew ahead of
+# the viewer is down to _STEPS_SLOW_LEAD_MS, at most _STEPS_SLOW_MAX for a
+# pick. Such a request carries _STEPS_SLOW_CHUNK lines, not _STEPS_CHUNK: a
+# request is what the quota counts, and fifty lines of dense dialogue are two
+# minutes of film -- in the QA Kodi (Fight Club, 15 Nov 2026) the rule fired
+# again 36 s after it had fired. A hundred lines are five to eight minutes:
+# one or two such requests for the thirteen minutes that film took to read.
+# A track read in seconds earns none.
+_STEPS_SLOW_LEFT_S = 60.0
+_STEPS_SLOW_LEAD_MS = 120 * 1000
+_STEPS_SLOW_MAX = 6
+_STEPS_SLOW_CHUNK = 100
 # A step's request is answered in seconds or not worth waiting for.
 _STEPS_TIMEOUT = 45
 # The whole track in before the first view's answer: how long after the
@@ -3793,7 +3812,8 @@ class _EmbeddedSteps(object):
     - when the viewer is about to reach a line not read while the reading
       goes on (a provider slower than the film, a jump ahead, a jump back to
       before the pick), `restore()` puts the embedded track back, the next
-      window starts there, and the view returns by the rule above;
+      window starts there (moved() cuts the one being read), and the view
+      returns by the rule above;
     - back_out() puts it back when the reading is given up.
 
     `translate(blocks, before)` returns {index: Hebrew text, or '' for a cue
@@ -3821,6 +3841,7 @@ class _EmbeddedSteps(object):
         self._read = set()                     # starts of every line fed
         self._covered = []                     # (from, until) of every window fed
         self._asked_span = None                # the window being read
+        self._asked_at_viewer = False          # ...from the viewer's own line
         self._cut = False                      # it was cut short by a jump
         self._read_before = 0                  # lines read when it was asked for
         self._moved_at = 0.0                   # moved(): asked at most 2x a second
@@ -3844,6 +3865,7 @@ class _EmbeddedSteps(object):
         self.windows = 0
         self.requests = 0
         self._budget = _STEPS_MAX_REQUESTS     # requests the views may make
+        self.slow_requests = 0                 # ...earned by a slow reading
         self.handed_back = 0
 
     # -- the extractor's side
@@ -3915,6 +3937,7 @@ class _EmbeddedSteps(object):
             count = sum(1 for c in cues[bisect.bisect_left(cues, low):last + 1]
                         if not self._is_read(c))
             self._asked_span = (low, mark)
+            self._asked_at_viewer = first == need
             self._read_before = len(self._read)
         self._mark, self._count, self._asked = mark, count, now
         self.windows += 1
@@ -3925,7 +3948,19 @@ class _EmbeddedSteps(object):
         has the viewer jumped where this window does not help -- before it or
         past its end, onto a line not read? Then the window is cut short and
         the next one starts from the viewer. Its span is not counted as read
-        (only the lines that came in are)."""
+        (only the lines that came in are).
+
+        Inside the window too, when it is one that carries on from lines read
+        earlier: nothing of a window is in the view before its end, and such
+        a window is as long as the provider allows -- on one that reads a
+        line a request, everything left ahead, five minutes and more (field
+        log, 15 Nov 2026: a jump ahead inside it, and the embedded track was
+        on screen until the viewer jumped again). Cut, it hands over what it
+        has read, and the next window is a small one from the viewer -- one
+        that is waited for, not cut (it was asked for at the viewer's own
+        line), so no window is cut twice for one place. Only a jump out of
+        the window earns a request; the lines at the new place inside it
+        are asked for by the rule for a slow reading (_earns_slow)."""
         span = self._asked_span
         if span is None or self._closed or not self._cues:
             return False
@@ -3937,7 +3972,8 @@ class _EmbeddedSteps(object):
         if pos is None:
             return False
         low, mark = span
-        if low <= pos <= mark:
+        inside = low <= pos <= mark
+        if inside and self._asked_at_viewer:
             return False
         with self._lock:
             need = self._need(pos)
@@ -3945,10 +3981,26 @@ class _EmbeddedSteps(object):
                 return False
             self._asked_span = None
             self._cut = True
-            # the new place earns one view of its own (_STEPS_MAX_REQUESTS)
-            self._budget = max(self._budget, self.requests + 1)
-        self._log('embedded steps: the viewer jumped out of the window being '
-                  'read (to %s) -- cutting it short' % _ms_label(pos))
+            if not inside:
+                # the new place earns one view of its own (_STEPS_MAX_REQUESTS).
+                # (A viewer who PLAYS past a window's end is "out" too; what
+                # keeps that from repeating is the window sizing -- a window
+                # asked for at the viewer's line is small and waited for --
+                # and LineARequest's slower-than-the-film test holds it to
+                # the ceiling.)
+                self._budget = max(self._budget, self.requests + 1)
+            # (A cut from inside earns nothing here: it needs no jump -- a
+            # viewer who plays on past the lines a slow provider has handed
+            # over is cut too, again and again, and each cut would have
+            # bought a request outside every ceiling; review of 0.3.85. The
+            # request for the new place is _earns_slow's, which counts.)
+        if inside:
+            self._log('embedded steps: the viewer is at a line the window '
+                      'being read has not handed over (at %s) -- cutting it '
+                      'short' % _ms_label(pos))
+        else:
+            self._log('embedded steps: the viewer jumped out of the window '
+                      'being read (to %s) -- cutting it short' % _ms_label(pos))
         return True
 
     # -- what was read (under _lock)
@@ -4073,9 +4125,31 @@ class _EmbeddedSteps(object):
 
     # -- the worker
 
+    def _earns_slow(self, pos, pending_start):
+        """Under _lock, with the budget spent: may one more request go out
+        (see _STEPS_SLOW_LEFT_S)? `pending_start`: the first line from the
+        viewer on that is read and has no Hebrew."""
+        if (pos is None or self._rate <= 0 or not self._cues
+                or self.slow_requests >= _STEPS_SLOW_MAX
+                or pending_start - pos > _STEPS_SLOW_LEAD_MS):
+            return False
+        left = sum(1 for c in self._cues if not self._is_read(c))
+        if left < self._rate * _STEPS_SLOW_LEFT_S:
+            return False              # the full job starts within the minute
+        self.slow_requests += 1
+        self._budget = self.requests + 1
+        self._log('embedded steps: {0} line(s) still to read at {1:.1f} a '
+                  'second, and the Hebrew ends {2} s ahead of the viewer -- '
+                  'one more request ({3} of {4})'.format(
+                      left, self._rate, max(0, pending_start - pos) // 1000,
+                      self.slow_requests, _STEPS_SLOW_MAX))
+        return True
+
     def _next_batch(self):
         with self._lock:
-            if self._frozen or self.requests >= self._budget:
+            if self._frozen or (self.requests >= self._budget and (
+                    self._rate <= 0
+                    or self.slow_requests >= _STEPS_SLOW_MAX)):
                 return None
             pos = self._position()
             # The lines the viewer reaches next, wherever the reading started
@@ -4090,7 +4164,12 @@ class _EmbeddedSteps(object):
                        and (pos is None or s >= pos - _STEPS_BEHIND_MS)]
             if not pending:
                 return None
-            take = pending[:_STEPS_CHUNK]
+            size = _STEPS_CHUNK
+            if self.requests >= self._budget:
+                if not self._earns_slow(pos, self._starts[pending[0]]):
+                    return None
+                size = _STEPS_SLOW_CHUNK
+            take = pending[:size]
             before = [srt.block_text_only(b)
                       for b in self._blocks[max(0, take[0] - 3):take[0]]]
             # a request is about to go out: settle() waits from here (under

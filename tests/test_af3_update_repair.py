@@ -206,11 +206,14 @@ class MoranSubsRepairScript(unittest.TestCase):
         lib = types.SimpleNamespace(
             kodi_utils=types.SimpleNamespace(log=lambda msg: calls.append(('log', msg))),
             af3_dialog_subtitles_patcher=types.SimpleNamespace(ensure_patched=lambda: 'already_patched'),
+            af3_osd_tap_close_patcher=types.SimpleNamespace(
+                ensure_patched=lambda: calls.append('tap_close') or 'patched'),
             af3_home_patcher=home,
             pov_reload=types.SimpleNamespace(wait_until_settled=lambda timeout: settled))
         mods = {'xbmc': xbmc, 'xbmcgui': types.SimpleNamespace(Window=lambda n: window),
                 'resources': types.SimpleNamespace(lib=lib), 'resources.lib': lib}
-        for name in ('kodi_utils', 'af3_dialog_subtitles_patcher', 'af3_home_patcher', 'pov_reload'):
+        for name in ('kodi_utils', 'af3_dialog_subtitles_patcher', 'af3_osd_tap_close_patcher', 'af3_home_patcher',
+                     'pov_reload'):
             mods['resources.lib.' + name] = getattr(lib, name)
         import time
         with patch.dict(sys.modules, mods), patch.object(sys, 'argv', ['repair_af3.py', 'kodipovil.af3_repair.x']), \
@@ -224,7 +227,7 @@ class MoranSubsRepairScript(unittest.TestCase):
         good = set(re.findall(r"'([a-z_]+)'", source[source.index('GOOD = {'):source.index('}', source.index('GOOD = {'))]))
         transient = {'read_failed', 'write_failed', 'no_kodi', 'rebuild_deferred_pov_cycling',
                      'rebuild_deferred_quick_update_notice', ''}
-        for name in ('af3_dialog_subtitles_patcher.py', 'af3_home_patcher.py'):
+        for name in ('af3_dialog_subtitles_patcher.py', 'af3_osd_tap_close_patcher.py', 'af3_home_patcher.py'):
             text = (MS / 'resources/lib' / name).read_text('utf-8')
             body = text[text.index('def ensure_patched'):]
             statuses = set(re.findall(r"return '([a-z_]*)'", body.split('\ndef ')[0]))
