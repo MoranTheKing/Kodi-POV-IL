@@ -1,4 +1,8 @@
-"""No gender proofread after a Hebrew gender reference (0.3.72).
+"""After a Hebrew gender reference gemini-4-hydrogen alone proofreads (0.3.88; no proofread at all from
+0.3.72 to 0.3.87). Blind study 007 (15 Nov 2026): 13-3-3 on such translations, where the models of
+0.3.72's day had 12-15-3 and gemini-3.7-flash alone 19-8-3 -- so 3.7 is no fallback there.
+
+What 0.3.72 found, and how a translation says which reference it had:
 
 Two blind studies on the same eight TV episodes (4 Nov 2026): with a Hebrew
 subtitle as the gender reference the proofread broke more lines than it fixed
@@ -62,7 +66,13 @@ class HebrewReference(unittest.TestCase):
             p = mock.patch.object(translate.kodi_utils, target, value)
             p.start()
             self.addCleanup(p.stop)
-        for target, value in (('_gp_models_left', lambda: True),
+        self.left = {True: True, False: True}       # quota left: gemini-4-hydrogen alone / the chain
+        self.asked = []
+
+        def models_left(hebrew_ref=False):
+            self.asked.append(hebrew_ref)
+            return self.left[hebrew_ref]
+        for target, value in (('_gp_models_left', models_left),
                               ('_is_google_translated', lambda p: False)):
             p = mock.patch.object(translate, target, value)
             p.start()
@@ -75,14 +85,24 @@ class HebrewReference(unittest.TestCase):
     def due(self, info=INFO):
         return translate._proofread_due(self.path, EN, object(), info=info)
 
-    def test_made_here_with_a_hebrew_reference_is_not_due(self):
+    def test_made_here_with_a_hebrew_reference_is_due_while_gemini_4_has_quota(self):
         translate._gp_ref_mark(self.path, 'he')
+        self.assertTrue(self.due())
+        self.assertEqual(self.asked, [True])
+        # ...and not once it is out of today's requests, whatever 3.7 has left
+        self.left = {True: False, False: True}
         self.assertFalse(self.due())
+
+    def test_the_models_for_it(self):
+        self.assertEqual(translate._gp_models(True), ('gemini-4-hydrogen',))
+        self.assertEqual(translate._gp_models(False), ('gemini-4-hydrogen', 'gemini-3.7-flash'))
+        self.assertEqual(translate._gp_models(), translate._gp_models(False))
 
     def test_made_here_with_another_reference_or_none_is_due(self):
         for lang in ('ar', 'hi', ''):
             translate._gp_ref_mark(self.path, lang)
             self.assertTrue(self.due(), lang)
+        self.assertEqual(self.asked, [False, False, False])     # the whole chain
         with open(self.path + '.gpref', encoding='utf-8') as f:
             self.assertEqual(f.read(), '-')
 
@@ -97,6 +117,9 @@ class HebrewReference(unittest.TestCase):
         self.listed = [ENGLISH]
         self.assertTrue(self.due())
         self.listed = [ENGLISH, HUMAN_HE]
+        self.assertTrue(self.due())
+        self.assertEqual(self.asked, [False, True])
+        self.left = {True: False, False: True}
         self.assertFalse(self.due())
 
     def test_a_machine_hebrew_subtitle_is_not_a_reference(self):
@@ -145,7 +168,7 @@ class HebrewReference(unittest.TestCase):
 
 class FreshTranslation(unittest.TestCase):
     """resolve(): the saved translation records its reference, and the
-    proofread on the live path skips a Hebrew one."""
+    proofread on the live path is told of a Hebrew one."""
 
     def test_the_reference_is_recorded_beside_both_slots(self):
         save = TRANSLATE_SRC.index('    cache.save_text(translated, final)\n')
@@ -154,16 +177,21 @@ class FreshTranslation(unittest.TestCase):
         self.assertIn('_gp_ref_mark(translated, _gp_ref)', after)
         self.assertIn('_gp_ref_mark(_content_slot, _gp_ref)', after)
 
-    def test_the_live_proofread_skips_a_hebrew_reference(self):
-        self.assertIn("if (progressive_cb is not None and _gp_ref != 'he'\n"
-                      "            and kodi_utils.get_bool('gender_proofread', True)):",
-                      TRANSLATE_SRC.replace('\r\n', '\n'))
+    def test_the_live_proofread_runs_after_a_hebrew_reference_and_says_so(self):
+        src = TRANSLATE_SRC.replace('\r\n', '\n')
+        self.assertNotIn("_gp_ref != 'he'", src)
+        self.assertIn("    if (progressive_cb is not None\n"
+                      "            and kodi_utils.get_bool('gender_proofread', True)):", src)
+        fn = src[src.index('    def _proofread_gender(blocks):'):]
+        self.assertIn("hebrew_ref=(_gp_ref == 'he'))", fn[:600])
 
     def test_telemetry_says_why(self):
         src = TRANSLATE_SRC.replace('\r\n', '\n')
         note = src.index('def _gp_event_note(')
-        self.assertIn("if _gp_ref == 'he':\n                return 'heref'",
-                      src[note:note + 1200])
+        self.assertNotIn("'heref'", src[note:note + 1400])
+        self.assertIn("                if _gp_ref == 'he':\n"
+                      "                    return 'later' if _gp_models_left(True) else 'quota'\n",
+                      src[note:note + 1400])
 
     def test_every_opened_translation_check_gets_the_title_when_it_had_a_reference(self):
         src = TRANSLATE_SRC.replace('\r\n', '\n')

@@ -2658,6 +2658,21 @@ def _timeline_origin(src, seg_start, scale_ms, log):
 
 
 # ---- public API -------------------------------------------------------------
+def _track_rows(tracks):
+    """probe_tracks()'s rows for a parsed head's tracks."""
+    out = []
+    for t in _sub_tracks(tracks):
+        out.append({'num': t['num'], 'codec': t['codec'],
+                    'lang': (t['lang'] or '').lower(),
+                    'forced': bool(t['forced']),
+                    'is_text': _is_text_codec(t['codec']),
+                    'name': t.get('name') or '',
+                    'sdh': _track_is_sdh(t),
+                    'signs': _track_is_signs(t),
+                    'lang_explicit': bool(t.get('lang_explicit', True))})
+    return out
+
+
 def probe_tracks(url_or_path, head_bytes=DEFAULT_HEAD_BYTES, log=None):
     """Return the embedded subtitle tracks as
         [{'num','codec','lang','forced','is_text','name','sdh','signs',
@@ -2670,17 +2685,7 @@ def probe_tracks(url_or_path, head_bytes=DEFAULT_HEAD_BYTES, log=None):
         if not src.total:
             return []
         _seg, _scale, tracks, _seeks = _parse_head(src, head_bytes, _log)
-        out = []
-        for t in _sub_tracks(tracks):
-            out.append({'num': t['num'], 'codec': t['codec'],
-                        'lang': (t['lang'] or '').lower(),
-                        'forced': bool(t['forced']),
-                        'is_text': _is_text_codec(t['codec']),
-                        'name': t.get('name') or '',
-                        'sdh': _track_is_sdh(t),
-                        'signs': _track_is_signs(t),
-                        'lang_explicit': bool(t.get('lang_explicit', True))})
-        return out
+        return _track_rows(tracks)
     except Exception as e:
         _log('probe_tracks failed: %s' % e)
         return []
@@ -3078,8 +3083,20 @@ def extract_srt(url_or_path, track_num=None, lang=None,
             if (got is None and src._stats is not None
                     and not src._stats.get('why')):
                 src._stats['why'] = 'not_mkv'
+            if src._stats is not None:
+                # an MP4's other tracks are no reference (probe_tracks reads
+                # Matroska only): said here, so nothing reads the head again
+                src._stats['tracks'] = []
             return got
         subs = _sub_tracks(tracks)
+        if src._stats is not None:
+            # the file's subtitle tracks, for a caller that would otherwise
+            # read the head a second time to list them (the gender reference
+            # from another track: translate._embedded_reference)
+            try:
+                src._stats['tracks'] = _track_rows(tracks)
+            except Exception:
+                pass
         if not subs:
             return None
         # We translate THIS track's own text, so prefer an SDH track: it carries

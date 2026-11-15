@@ -168,6 +168,38 @@ class Request(unittest.TestCase):
         exc.answered = True
         return exc
 
+    def test_after_a_hebrew_reference_gemini_4_alone_is_asked(self):
+        # 0.3.88, blind study 007; 3.7 failed the rule there (004), so a busy gemini-4-hydrogen is not
+        # followed by another model -- in the job's later rounds either
+        gem = translate.gemini
+        H = 'gemini-4-hydrogen'
+        for background in (False, True):
+            asked = []
+
+            def generate(api_key, model, prompt, **kw):
+                asked.append(model)
+                raise gem.OverloadError('503')
+            clock = itertools.count(0, 7)
+            with mock.patch.object(gem, 'generate', generate), \
+                    mock.patch.object(translate.time, 'monotonic', lambda: next(clock)), \
+                    mock.patch.object(translate.time, 'sleep', lambda s: None):
+                _blocks, report = translate._run_gender_proofread(
+                    translate.srt.parse_blocks(HE), EN, 'k', 'gemini-3.5-flash-lite', [],
+                    lambda: False, background=background, hebrew_ref=True)
+            self.assertTrue(asked, background)
+            self.assertEqual(set(asked), {H}, background)
+            self.assertEqual((report['model'], report['why'], report['tried'][0]), ('', 'busy', H))
+        asked = []
+
+        def answers(api_key, model, prompt, **kw):
+            asked.append(model)
+            return '1|את באה?'
+        with mock.patch.object(gem, 'generate', answers):
+            _blocks, report = translate._run_gender_proofread(
+                translate.srt.parse_blocks(HE), EN, 'k', 'gemini-3.5-flash-lite', [],
+                lambda: False, hebrew_ref=True)
+        self.assertEqual((asked, report['model'], report['applied']), ([H], H, 1))
+
     def test_a_reply_of_no_use_ends_it_at_one_request(self):
         gem = translate.gemini
         for exc in (gem.FilteredResponse('blocked'), gem.TruncatedResponse('cut'),
@@ -348,7 +380,8 @@ class Markers(unittest.TestCase):
 
     def test_the_fresh_path_holds_it_as_an_opened_one_does(self):
         src = (LIB / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
-        run = src[src.index("    if (progressive_cb is not None and _gp_ref != 'he'\n"):]
+        run = src[src.index("    if (progressive_cb is not None\n"
+                        "            and kodi_utils.get_bool('gender_proofread', True)):\n"):]
         run = run[:run.index('    _emit(True)\n')]
         mark = run.index('            _gp_try_mark(_slot, True)')
         ask = run.index('_proofed = _proofread_gender(_proof_blocks)')
