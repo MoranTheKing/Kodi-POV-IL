@@ -1,3 +1,11 @@
+1.0.33
+- Netflix-style player: the next and previous tiles use the fanart or the landscape picture again -- six conditions ended with "]" where ")" belongs, and Kodi reads such a condition as false.
+- Extended info, trailer and season windows, and the Netflix-style player's lists: the focused button has its plate (masks/menu.png was named and never shipped, so the focused text was dark on a dark screen).
+- Simple player: the Idan Plus episode-list button has its caption; the zoom buttons say IN and OUT (they showed "Episode" and "Reload skin").
+- Skin settings: categories and rows in Hebrew (47 labels were hardcoded English).
+- The "stop winding" button of the advanced player shows its other picture while winding (a typo in the condition).
+- Sixteen skin strings that had no Hebrew are translated.
+
 1.0.32
 - The player's season-episodes button is back for Israeli VOD (Kan 11, Keshet 12, Reshet 13 through Idan Plus): its list now comes from Idan Plus's saved season (the episodes Idan Plus listed for that season), and an episode picked there plays through Idan Plus. POV's list stays for every episode with a TMDb id.
 

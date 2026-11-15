@@ -184,8 +184,8 @@
 		</font>
 		<font>
 			<name>Mono30</name>
-			<filename>NotoMono-Regular.ttf</filename>
-			<size>30</size>
+			<filename>Heebo-Regular.ttf</filename>
+			<size>28</size>
 		</font>
 	</fontset>
 	<!-- Kodi's own arial.ttf: for titles in scripts Heebo does not cover (Settings > Interface > Skin > Fonts). -->
@@ -380,8 +380,8 @@
 		</font>
 		<font>
 			<name>Mono30</name>
-			<filename>NotoMono-Regular.ttf</filename>
-			<size>30</size>
+			<filename>arial.ttf</filename>
+			<size>27</size>
 		</font>
 	</fontset>
 </fonts>

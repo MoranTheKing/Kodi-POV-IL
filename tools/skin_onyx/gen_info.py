@@ -56,8 +56,8 @@ def gen():
     x(3, '<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture>povil/ambient.jpg</texture></control>')
     x(3, '<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height>'
          '<texture background="true">$INFO[ListItem.Art(fanart)]</texture><aspectratio>scale</aspectratio><fadetime>300</fadetime></control>')
-    for left, top, w, h, tex, diffuse in ((0, 0, 1920, 1080, 'white', 'A0000000'), (420, 0, 1500, 1080, 'grad_right', ''),
-                                          (0, 380, 1920, 700, 'grad_bottom', ''), (0, 0, 1920, 1080, 'vignette', '')):
+    for left, top, w, h, tex, diffuse in ((0, 0, 1920, 1080, 'white', 'A0000000'), (420, -160, 1500, 1400, 'grad_right', ''),
+                                          (-320, 380, 2560, 700, 'grad_bottom', ''), (0, 0, 1920, 1080, 'vignette', '')):
         x(3, '<control type="image"><left>%d</left><top>%d</top><width>%d</width><height>%d</height>'
              '<texture%s>povil/%s.png</texture></control>' % (left, top, w, h, (' colordiffuse="%s"' % diffuse) if diffuse else '', tex))
     # Poster (or episode still), left
