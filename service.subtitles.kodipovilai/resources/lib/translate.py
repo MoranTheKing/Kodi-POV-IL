@@ -2821,7 +2821,7 @@ _EMBEDDED_TEXT_ORDER = ('en', 'es', 'de', 'fr', 'pt')
 
 def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                           progress_cb=None, allow_http=True, steps=None,
-                          cancelled=None, why=None):
+                          cancelled=None, why=None, reference=None):
     """Extract the playing file's embedded `src_lang` subtitle track to a temp
     SRT and return its path, or None. `deadline_s` bounds the extraction (default
     900s). Every current caller runs in the BACKGROUND -- the auto-on-play thread
@@ -2843,8 +2843,17 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
     'no_text' when `src_lang`'s subtitle in this file is a picture (PGS) and
     the file has no other text subtitle; and 'lang_used' as soon as the track
     is chosen -- another text track's, in _EMBEDDED_TEXT_ORDER, when
-    `src_lang`'s is a picture."""
+    `src_lang`'s is a picture.
+    `reference(stats)`, if given: the track is read as a GENDER REFERENCE for
+    a translation (_embedded_reference), not as a subtitle the viewer picked
+    -- nothing is said on screen, no "stopped at N%" flag is left for a
+    picker, and the reading ends as soon as reference(stats) is true (a
+    provider too slow for a reference to be worth its requests)."""
     try:
+        # (a local name on purpose: every toast below, in the nested
+        # functions too, goes through it)
+        _status = ((lambda *a, **k: None) if reference is not None
+                   else globals()['_status'])
         url = _playing_video_url(info)
         if not url:
             kodi_utils.log('embedded: no probeable playing url', level='INFO')
@@ -2910,8 +2919,9 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     _status('AI: תרגום מובנה כבר רץ ברקע — העברית תופיע '
                             'כשיסתיים', time_ms=5000)
                     try:
-                        _win.setProperty('povil.embedded_partial',
-                                         'busy@%.0f' % time.time())
+                        if reference is None:
+                            _win.setProperty('povil.embedded_partial',
+                                             'busy@%.0f' % time.time())
                     except Exception:
                         pass
                     return None
@@ -2979,6 +2989,8 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # exactly when the crawl continues and the pace decays.
                 if (_xstats.get('pace') or 0.0) >= _RESUME_ABORT_PACE_S:
                     _hot['at'] = _tt.time()
+                if reference is not None and reference(_xstats):
+                    return True
                 p = _x.Player()
                 if not p.isPlayingVideo():
                     return True
@@ -3444,8 +3456,9 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # start over -- exactly today's behaviour. Local files skip it; a local
         # pass is a single cheap sequential walk with nothing to carry.
         try:
-            import xbmcgui as _g0
-            _g0.Window(10000).clearProperty('povil.embedded_partial')
+            if reference is None:
+                import xbmcgui as _g0
+                _g0.Window(10000).clearProperty('povil.embedded_partial')
         except Exception:
             pass
         _resume = None
@@ -3583,7 +3596,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # flag to the same condition as the message keeps the two
                 # honest, and the timestamp bounds anything that still slips
                 # through -- a picker consumes it within seconds, never later.
-                if not _QUIET:
+                if not _QUIET and reference is None:
                     try:
                         import time as _tt
                         import xbmcgui as _g
@@ -3609,6 +3622,106 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         kodi_utils.log('embedded extract failed: {0}'.format(e),
                        level='WARNING')
         return None
+
+
+# --- A gender reference from inside the playing file ------------------------
+#
+# 15 Nov 2026, the pool's own numbers (tr_events, 14 days, 1,079 AI
+# translations): 343 had no gender reference, 267 of them because no provider
+# had a subtitle in any reference language at all -- fresh episodes and titles
+# nobody subtitled. 187 of the 343 were translated from an EMBEDDED track, and
+# a file that carries an English text track very often carries Spanish,
+# Portuguese, Arabic, French ... beside it: human subtitles of the same cut,
+# on the same clock. They are read like the source track was (same extractor,
+# same guards for the player), one track, quietly, and only where the
+# provider serves a track in seconds: a reading that would take longer than
+# _EMB_REF_BUDGET_S in all is given up after _EMB_REF_PROBE_S.
+#
+# OFF unless the setting says otherwise: a reference changes what the
+# translation says, so it ships on only after a blind comparison (the owner's
+# rule; study in blind-ab-studies).
+_EMB_REF_SETTING = 'embedded_reference'
+_EMB_REF_DEFAULT = False
+_EMB_REF_DEADLINE_S = 120.0
+_EMB_REF_PROBE_S = 15.0
+_EMB_REF_BUDGET_S = 90.0
+
+
+def _embedded_reference(info, source_lang, cancelled=None):
+    """(tracks, read) for arabic_gender.begin(embedded=...), or None when the
+    playing file may not be read for a reference (the setting, the embedded
+    mode, no direct stream). tracks() lists the file's text subtitle tracks
+    that are not `source_lang`'s; read(track) returns one as SRT text or
+    None. Never raises."""
+    try:
+        if not kodi_utils.get_bool(_EMB_REF_SETTING, _EMB_REF_DEFAULT):
+            return None
+        policy = _embedded_translation_policy()
+        url = _playing_video_url(info)
+        if not url or not policy.get('enabled'):
+            return None
+        remote = '://' in url
+        if remote and not policy.get('allow_http'):
+            return None
+        from . import embedded_extract
+        own = embedded_extract._lang_key(source_lang)
+    except Exception:
+        return None
+
+    def tracks():
+        try:
+            found = embedded_extract.probe_tracks(
+                url, log=lambda m: kodi_utils.log('embedded_extract: ' + m,
+                                                  level='INFO'))
+        except Exception:
+            found = []
+        return [t for t in found
+                if t.get('is_text') and not t.get('forced')
+                and not t.get('signs')
+                and embedded_extract._lang_key(t.get('lang')) != own]
+
+    slow = {'said': False}
+
+    def read(track):
+        if slow['said']:
+            # the provider's pace, not the track's: the next language of the
+            # same file would be given up the same way, 15 s later (QA Kodi,
+            # 15 Nov 2026: French, then Italian)
+            return None
+        started = time.monotonic()
+
+        def too_slow(stats):
+            spent = time.monotonic() - started
+            if spent < _EMB_REF_PROBE_S:
+                return False
+            done, total = stats.get('done') or 0, stats.get('total') or 0
+            if not done or not total:
+                late = spent >= 2 * _EMB_REF_PROBE_S
+            else:
+                late = spent * total / done > _EMB_REF_BUDGET_S
+            if late and not slow['said']:
+                slow['said'] = True
+                kodi_utils.log(
+                    'embedded reference: {0} of {1} line(s) of the {2} track '
+                    'in {3:.0f}s -- too slow here for a reference, the '
+                    'other tracks of the file are not tried'.format(
+                        done, total or '?', track.get('lang'), spent),
+                    level='INFO')
+            return late
+
+        try:
+            path = _extract_embedded_srt(
+                info, embedded_extract._lang_key(track.get('lang')),
+                track_num=track.get('num'), deadline_s=_EMB_REF_DEADLINE_S,
+                allow_http=True, cancelled=cancelled, reference=too_slow)
+            if path and os.path.isfile(path):
+                with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                    return f.read()
+        except Exception as e:
+            kodi_utils.log('embedded reference: {0}'.format(e), level='INFO')
+        return None
+
+    return tracks, read
 
 
 # --- An embedded track shown in steps while it is still being read ---------
@@ -7247,11 +7360,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                            (info.get('title') or imdb_id or '?')), level='INFO')
         try:
             from . import arabic_gender
+            _emb_ref = _embedded_reference(
+                info, source_lang, cancelled=_translation_cancelled)
             if _timing_src:
                 plan, _diag0 = arabic_gender.begin(
-                    info, src_text, timing_text=_timing_src)
+                    info, src_text, timing_text=_timing_src,
+                    embedded=_emb_ref)
             else:
-                plan, _diag0 = arabic_gender.begin(info, src_text)
+                plan, _diag0 = arabic_gender.begin(
+                    info, src_text, embedded=_emb_ref)
             _ref_plan[0] = plan
             if plan is not None and _ref_ensure(0):
                 # primary reference pulled (same single-download cost as before);
