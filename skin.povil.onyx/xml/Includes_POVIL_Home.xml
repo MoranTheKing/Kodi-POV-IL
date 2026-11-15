@@ -1797,7 +1797,35 @@
 		<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.Season,עונה , · ]$INFO[VideoPlayer.Episode,פרק ]$INFO[VideoPlayer.Title,  ·  ]</value>
 		<value condition="VideoPlayer.HasEpg">$INFO[VideoPlayer.Title]</value>
 	</variable>
+	<variable name="POVIL_OSD_Time">
+		<value condition="Player.Seeking + !String.IsEmpty(Player.SeekStepSize)">$INFO[Player.SeekTime]   [COLOR povil_gold]$INFO[Player.SeekStepSize][/COLOR]</value>
+		<value condition="!String.IsEmpty(Player.SeekNumeric)">$INFO[Player.SeekNumeric]</value>
+		<value condition="Player.HasPerformedSeek(3) + !String.IsEmpty(Player.SeekOffset)">$INFO[Player.Time]   [COLOR povil_gold]$INFO[Player.SeekOffset][/COLOR]</value>
+		<value>$INFO[Player.Time]</value>
+	</variable>
+	<variable name="POVIL_OSD_State">
+		<value condition="Player.Forwarding">הרצה קדימה ×$INFO[Player.PlaySpeed]</value>
+		<value condition="Player.Rewinding">הרצה אחורה ×$INFO[Player.PlaySpeed]</value>
+		<value condition="Player.Paused + Player.Caching">טוען...</value>
+		<value condition="Player.Paused">מושהה</value>
+	</variable>
+	<variable name="POVIL_OSD_File">
+		<value>$INFO[VideoPlayer.VideoResolution,,p]$INFO[VideoPlayer.VideoCodec,  •  [UPPERCASE],[/UPPERCASE]]$INFO[VideoPlayer.HdrType,  •  [UPPERCASE],[/UPPERCASE]]$INFO[VideoPlayer.AudioCodec,  •  [UPPERCASE],[/UPPERCASE]]$VAR[POVIL_OSD_Channels, ]</value>
+	</variable>
+	<variable name="POVIL_OSD_Channels">
+		<value condition="String.IsEqual(VideoPlayer.AudioChannels,1)">מונו</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioChannels,2)">סטריאו</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioChannels,3)">2.1</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioChannels,4)">4.0</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioChannels,5)">5.0</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioChannels,6)">5.1</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioChannels,7)">6.1</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioChannels,8)">7.1</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioChannels,10)">9.1</value>
+		<value>$INFO[VideoPlayer.AudioChannels]</value>
+	</variable>
 	<variable name="POVIL_OSD_Focused">
+		<value condition="Control.HasFocus(7001)">ימינה ושמאלה מדלגים · לחיצות רצופות מדלגות רחוק יותר · אישור משהה</value>
 		<value condition="Control.HasFocus(7010)">עצירה</value>
 		<value condition="Control.HasFocus(7011)">מידע</value>
 		<value condition="Control.HasFocus(7012)">הגדרות וידאו</value>
@@ -1830,4 +1858,20 @@
 		<value>$LOCALIZE[208]</value>
 	</variable>
 	<!-- POVIL INFO END -->
+	<!-- POVIL SETTINGS BEGIN -->
+	<variable name="POVIL_SettingsHint">
+		<value condition="Control.HasFocus(9100)">$LOCALIZE[22080] $LOCALIZE[166]. $LOCALIZE[14090]. $LOCALIZE[14081]. $LOCALIZE[24008]</value>
+		<value condition="Control.HasFocus(9101)">$LOCALIZE[20077]. $LOCALIZE[33063]. $LOCALIZE[111].</value>
+		<value condition="Control.HasFocus(9102)">$LOCALIZE[14022]. $LOCALIZE[14086]. $LOCALIZE[14081]. $LOCALIZE[24012]. $LOCALIZE[14087]</value>
+		<value condition="Control.HasFocus(9103)">$LOCALIZE[21359] $LOCALIZE[21364]. $LOCALIZE[21365].</value>
+		<value condition="Control.HasFocus(9104)">$LOCALIZE[14036]. $LOCALIZE[1200]. $LOCALIZE[798].</value>
+		<value condition="Control.HasFocus(9105)">$LOCALIZE[21373]. $LOCALIZE[337]. $LOCALIZE[14094]. $LOCALIZE[14095]. $LOCALIZE[14092]. $LOCALIZE[20100].</value>
+		<value condition="Control.HasFocus(9106)">$LOCALIZE[19069]. $LOCALIZE[264]. $LOCALIZE[14095]. $LOCALIZE[19259].</value>
+		<value condition="Control.HasFocus(9107)">$LOCALIZE[24033]. $LOCALIZE[24022]. $LOCALIZE[24021]. $LOCALIZE[24034]. $LOCALIZE[25000].</value>
+		<value condition="Control.HasFocus(9108)">$LOCALIZE[20096]. $LOCALIZE[20100]. $LOCALIZE[20115].</value>
+		<value condition="Control.HasFocus(9109)">$LOCALIZE[744]. $LOCALIZE[115]. $LOCALIZE[116]. $LOCALIZE[117]. $LOCALIZE[118].</value>
+		<value condition="Control.HasFocus(9110)">$LOCALIZE[154]. $LOCALIZE[705]. $LOCALIZE[1212]. $LOCALIZE[13281].</value>
+		<value condition="Control.HasFocus(9111)">$LOCALIZE[35203]. $LOCALIZE[35253].</value>
+	</variable>
+	<!-- POVIL SETTINGS END -->
 </includes>

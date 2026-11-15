@@ -815,7 +815,7 @@ def gen_home():
     x(1, '<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/profile_bootstrap.py)</onload>')
     # Onyx's one-time defaults (used by its other windows)
     for line in ('Skin.SetBool(ShowClock)', 'Skin.SetString(shutdown,quit)', 'Skin.SetBool(LibUpdateOff)',
-                 'Skin.SetBool(UseExtInfo)', 'Skin.SetString(AutoCloseTimeVideoOSD,4)', 'Skin.SetBool(_ShowWatched)',
+                 'Skin.SetString(AutoCloseTimeVideoOSD,4)', 'Skin.SetBool(_ShowWatched)',
                  'Skin.SetBool(_ShowUnwatched)', 'Skin.SetBool(NoFocusBox)', 'Skin.SetBool(TintFrame)',
                  'Skin.SetBool(OnyxFirstRun)'):
         x(1, '<onload condition="!Skin.HasSetting(OnyxFirstRun)">%s</onload>' % line)
@@ -851,9 +851,11 @@ def backdrop(x, d):
     x(d + 1, '<aspectratio>scale</aspectratio><fadetime>420</fadetime>')
     x(d, '</control>')
     ambient(x, d)
-    for desc, l, t, w, h, tex in (('hero shade', 520, 0, 1400, 1080, 'povil/grad_right.png'),
-                                  ('rows shade', 0, 330, 1920, 750, 'povil/grad_bottom.png'),
-                                  ('top shade', 0, 0, 1920, 240, 'povil/grad_top.png'),
+    # a shade only 8 pixels across fades out over its last half pixel at both ends
+    # (120 screen pixels when stretched over the screen): each is drawn past the screen's edges
+    for desc, l, t, w, h, tex in (('hero shade', 520, -160, 1400, 1400, 'povil/grad_right.png'),
+                                  ('rows shade', -320, 330, 2560, 750, 'povil/grad_bottom.png'),
+                                  ('top shade', -320, 0, 2560, 240, 'povil/grad_top.png'),
                                   ('vignette', 0, 0, 1920, 1080, 'povil/vignette.png')):
         x(d, '<control type="image" description="%s">' % desc)
         x(d + 1, '<left>%d</left><top>%d</top><width>%d</width><height>%d</height>' % (l, t, w, h))

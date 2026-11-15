@@ -404,7 +404,7 @@
 		<param name="actiononclick">PlayerControl(Play)</param>
 		<param name="labelseektime">עצור הרצה $VAR[SeekRewindForwardTime]</param>
 		<param name="altlabel">עצור הרצה $VAR[SeekRewindForwardTime]</param>
-		<param name="alttexturevisible">PPlayer.Forwarding</param>
+		<param name="alttexturevisible">Player.Forwarding</param>
 		<param name="visible">Player.Forwarding</param>
 	</include>
 	<include content="_PoweredSeekTime">

@@ -15,7 +15,6 @@
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetBool(ShowClock)</onload>
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetString(shutdown,quit)</onload>
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetBool(LibUpdateOff)</onload>
-	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetBool(UseExtInfo)</onload>
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetString(AutoCloseTimeVideoOSD,4)</onload>
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetBool(_ShowWatched)</onload>
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetBool(_ShowUnwatched)</onload>
@@ -79,15 +78,15 @@
 		<control type="label" id="9803"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_HeroAmbientFile]</label></control>
 		<control type="label" id="9804"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_HeroAmbientPng]</label></control>
 		<control type="image" description="hero shade">
-			<left>520</left><top>0</top><width>1400</width><height>1080</height>
+			<left>520</left><top>-160</top><width>1400</width><height>1400</height>
 			<texture>povil/grad_right.png</texture>
 		</control>
 		<control type="image" description="rows shade">
-			<left>0</left><top>330</top><width>1920</width><height>750</height>
+			<left>-320</left><top>330</top><width>2560</width><height>750</height>
 			<texture>povil/grad_bottom.png</texture>
 		</control>
 		<control type="image" description="top shade">
-			<left>0</left><top>0</top><width>1920</width><height>240</height>
+			<left>-320</left><top>0</top><width>2560</width><height>240</height>
 			<texture>povil/grad_top.png</texture>
 		</control>
 		<control type="image" description="vignette">
