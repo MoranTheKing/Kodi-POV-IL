@@ -6,7 +6,10 @@ embedded track. A file with an English text track often carries Spanish, Arabic,
 on the same clock. They join the reference candidates (arabic_gender.begin(embedded=)), read through the
 same guarded extraction as the source track, quietly (translate._extract_embedded_srt(reference=)).
 
-Kept OFF by a setting until a blind comparison says it helps (the owner's rule)."""
+Blind study 008 (15 Nov 2026): a Spanish track of the file against no reference, 8-10-2 -- no gain. So
+since 0.3.88 only an ARABIC track is a reference (the owner's word; _EMBEDDED_REF_LANGS), and only for a
+translation made from the file's own track. The mechanics below are exercised on every chain language
+(Candidates opens _EMBEDDED_REF_LANGS to the whole chain); Shipped pins what is on."""
 import os
 import shutil
 import sys
@@ -37,9 +40,12 @@ class Candidates(unittest.TestCase):
         cls.ag = win.MODS['resources.lib.arabic_gender']
         cls.base = win.cues(4242)
         cls.source = win.srt(cls.base, 'Source line')
+        cls.langs = mock.patch.object(cls.ag, '_EMBEDDED_REF_LANGS', cls.ag._REF_CHAIN)
+        cls.langs.start()
 
     @classmethod
     def tearDownClass(cls):
+        cls.langs.stop()
         cls.mods.stop()
 
     def embedded(self, tracks, texts=None, read_log=None):
@@ -102,13 +108,25 @@ class Candidates(unittest.TestCase):
             self.assertIsNone(plan)
             self.assertEqual(diag, {'reason': 'no_arabic', 'cands': 0})
 
-    def test_arabic_inside_the_file_first_the_rest_between_the_providers_tiers(self):
+    def test_a_track_of_the_file_takes_its_languages_turn_before_the_providers_own(self):
+        # a provider's Hebrew first, as ever; then the file's Arabic, then the providers' Arabic
         provider = [{'language': 'he', '_engine_kind': 'human_he', 'link': 'h1'}, {'language': 'ar', 'link': 'a1'},
                     {'language': 'es', 'link': 's1'}, {'language': 'ru', 'link': 'r1'}]
         plan, _d = self.begin(self.embedded([track(5, 'spa'), track(6, 'ara'), track(7, 'fre')]), provider)
         order = [(lang, bool(c.get('_embedded'))) for lang, c in plan._ordered]
-        self.assertEqual(order, [('ar', True), ('he', False), ('ar', False),
-                                 ('es', True), ('fr', True), ('es', False), ('ru', False)])
+        self.assertEqual(order, [('he', False), ('ar', True), ('ar', False),
+                                 ('es', True), ('es', False), ('ru', False), ('fr', True)])
+        # deeper rounds are the providers' alone
+        provider = [{'language': 'he', '_engine_kind': 'human_he', 'link': 'h%d' % i} for i in range(3)]
+        provider += [{'language': 'ar', 'link': 'a%d' % i} for i in range(2)]
+        plan, _d = self.begin(self.embedded([track(6, 'ara')]), provider)
+        self.assertEqual([(lang, bool(c.get('_embedded'))) for lang, c in plan._ordered],
+                         [('he', False), ('ar', True), ('ar', False), ('he', False), ('ar', False),
+                          ('he', False)])
+        # no provider has Arabic: the file's track still comes after the first Hebrew
+        plan, _d = self.begin(self.embedded([track(6, 'ara')]), provider[:3])
+        self.assertEqual([(lang, bool(c.get('_embedded'))) for lang, c in plan._ordered],
+                         [('he', False), ('ar', True), ('he', False), ('he', False)])
 
     def test_a_track_that_cannot_be_read_gives_way_to_the_next_candidate(self):
         provider = [{'language': 'es', 'link': 's1'}]
@@ -143,10 +161,96 @@ class Candidates(unittest.TestCase):
         plan.next()
         self.assertEqual((plan._downloads, plan._active_elapsed), (0, 0.0))
 
+    def fallbacks(self, good=()):
+        """A plan whose Arabic aligns and whose nine second-tier candidates do not, but for `good`."""
+        provider = [{'language': 'ar', 'link': 'ar1'}] + [
+            {'language': lang, 'link': lang + '1'} for lang in ('es', 'ru', 'pt', 'pl', 'uk', 'fr', 'it', 'cs', 'ro')]
+        ref, other = win.srt(self.base, 'Ref line'), win.srt(win.cues(99), 'Other')
+        plan, _d = self.begin(None, provider)
+        downloads = []
+
+        def fetch(c):
+            downloads.append(c['link'])
+            return ref if c['link'] == 'ar1' or c['link'] in good else other
+        return plan, downloads, mock.patch.object(self.ag, '_download_candidate', fetch)
+
+    def test_a_fallback_reference_is_looked_for_briefly(self):
+        # QA Kodi, 16 Nov 2026: with the first reference in hand, a blocked chunk had 33 subtitles downloaded and
+        # refused over 40 s -- every candidate left
+        plan, downloads, fetch = self.fallbacks()
+        with fetch:
+            self.assertEqual(plan.next()[0], 'ar')
+            self.assertEqual(plan.next(max_tries=3), (None, None))
+            self.assertEqual(downloads, ['ar1', 'es1', 'ru1', 'pt1'])
+            # nothing is lost by the bound: an unbounded call goes on from there
+            self.assertEqual(plan.next(), (None, None))
+            self.assertEqual(len(downloads), 10)
+
+    def test_a_fallback_that_aligns_within_the_bound_is_taken(self):
+        plan, downloads, fetch = self.fallbacks(good=('ru1',))
+        with fetch:
+            self.assertEqual(plan.next()[0], 'ar')
+            lang, mapping = plan.next(max_tries=3, max_seconds=15.0)
+            self.assertEqual((lang, downloads), ('ru', ['ar1', 'es1', 'ru1']))
+            self.assertTrue(mapping)
+
+    def test_a_fallback_is_given_up_by_the_clock_too(self):
+        plan, downloads, fetch = self.fallbacks()
+        with fetch:
+            self.assertEqual(plan.next()[0], 'ar')
+            clock = iter(range(0, 100000, 4))                 # every look at the clock is 4 s on
+            with mock.patch.object(self.ag.time, 'monotonic', lambda: next(clock)):
+                self.assertEqual(plan.next(max_seconds=15.0), (None, None))
+            self.assertLess(len(downloads), 6)                # not the nine that were left
+            self.assertGreater(len(downloads), 1)
+
+    def test_the_translation_asks_for_a_fallback_briefly_and_once(self):
+        src = (gate.ADDON / 'resources' / 'lib' / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        fn = src[src.index('    def _ref_ensure(level):'):src.index('    def _pool_key(base_hash):')]
+        self.assertIn('                    if _ref_stack:\n'
+                      '                        lang, mp = plan.next(max_tries=_REF_FALLBACK_TRIES,\n'
+                      '                                             max_seconds=_REF_FALLBACK_SECONDS)\n'
+                      '                    else:\n'
+                      '                        lang, mp = plan.next()\n', fn)
+        self.assertIn('                    if _ref_stack:\n'
+                      '                        _ref_plan[0] = None    # no later chunk looks again\n', fn)
+        self.assertIn('    _REF_FALLBACK_TRIES = 6\n    _REF_FALLBACK_SECONDS = 15.0\n', src)
+
     def test_a_track_of_another_film_is_refused_like_any_candidate(self):
         other = win.srt(win.cues(99), 'Other')
         plan, _d = self.begin(self.embedded([track(6, 'ara')], {6: other}), [])
         self.assertEqual(plan.next(), (None, None))
+
+
+class Shipped(unittest.TestCase):
+    """What is on in 0.3.88: an Arabic track, for a translation made from the file's own track."""
+
+    def setUp(self):
+        self.mods = mock.patch.dict(sys.modules, win.MODS)
+        self.mods.start()
+        self.addCleanup(self.mods.stop)
+        self.ag = win.MODS['resources.lib.arabic_gender']
+
+    def test_only_an_arabic_track(self):
+        self.assertEqual(self.ag._EMBEDDED_REF_LANGS, ('ar',))
+        tracks = [track(3, 'spa'), track(4, 'rus'), track(5, 'fre'), track(6, 'ara', 'Arabic (SDH)', sdh=True),
+                  track(7, 'ara'), track(8, 'por'), track(9, 'heb')]
+        got = self.ag._embedded_candidates(((lambda: tracks), (lambda t: None)))
+        self.assertEqual([lang for lang, _c in got], ['ar'])
+        self.assertIn('#7', got[0][1]['filename'])
+        self.assertEqual(self.ag._embedded_candidates(((lambda: tracks[:3]), (lambda t: None))), [])
+
+    def test_a_file_with_spanish_only_is_as_before(self):
+        with mock.patch.object(self.ag, '_reference_candidates', lambda info: []):
+            plan, diag = self.ag.begin({'imdb_id': 'tt1'}, win.srt(win.cues(4242), 'Source line'),
+                                       embedded=((lambda: [track(5, 'spa')]), (lambda t: None)))
+        self.assertIsNone(plan)
+        self.assertEqual(diag, {'reason': 'no_arabic', 'cands': 0})
+
+    def test_only_a_translation_made_from_the_files_own_track_asks_the_file(self):
+        src = (gate.ADDON / 'resources' / 'lib' / 'translate.py').read_text(encoding='utf-8')
+        self.assertIn("                if payload.get('embedded') else None)", src.replace('\r\n', '\n'))
+        self.assertTrue(gate.MODS['resources.lib.translate']._EMB_REF_DEFAULT)
 
 
 class Reading(unittest.TestCase):
@@ -168,12 +272,12 @@ class Reading(unittest.TestCase):
                 mock.patch.object(self.t, '_playing_video_url', lambda info: url):
             return self.t._embedded_reference({}, source_lang)
 
-    def test_off_unless_the_setting_is_on(self):
-        self.assertFalse(self.t._EMB_REF_DEFAULT)           # until the blind comparison is in
+    def test_on_unless_the_setting_says_no(self):
+        self.assertTrue(self.t._EMB_REF_DEFAULT)            # 0.3.88
         self.settings = {}
-        self.assertIsNone(self.source())
-        self.settings = {'embedded_reference': True}
         self.assertIsNotNone(self.source())
+        self.settings = {'embedded_reference': False}
+        self.assertIsNone(self.source())
 
     def test_not_where_the_file_may_not_be_read(self):
         self.policy = {'enabled': False, 'allow_http': True}
@@ -192,6 +296,36 @@ class Reading(unittest.TestCase):
         with mock.patch.dict(sys.modules, dict(gate.MODS)), \
                 mock.patch.object(self.ee, 'probe_tracks', lambda url, log=None: list(self.tracks)):
             self.assertEqual([t['num'] for t in tracks()], [2, 7])
+
+    def test_the_tracks_the_extraction_parsed_are_used_and_the_head_is_not_read_again(self):
+        # review, 0.3.88: probe_tracks is a 2 MB request beside the player, for a file that mostly has no Arabic
+        probes = []
+
+        def probe(url, log=None):
+            probes.append(url)
+            return list(self.tracks)
+        self.t._EMB_TRACKS.clear()
+        self.addCleanup(self.t._EMB_TRACKS.clear)
+        tracks, _read = self.source()
+        with mock.patch.dict(sys.modules, dict(gate.MODS)), mock.patch.object(self.ee, 'probe_tracks', probe):
+            self.assertEqual([t['num'] for t in tracks()], [3, 7])
+            self.assertEqual(probes, [gate.URL])                    # nothing remembered: the head is read
+            self.t._remember_tracks(gate.URL, [track(2, 'eng'), track(9, 'ara')])
+            self.assertEqual([t['num'] for t in tracks()], [9])
+            self.assertEqual(len(probes), 1)                        # remembered: not read again
+            self.t._remember_tracks('https://cdn.example/other.mkv', [track(2, 'eng')])
+            self.assertEqual([t['num'] for t in tracks()], [9])     # another file's list is not this one's
+        for i in range(4):
+            self.t._remember_tracks('u%d' % i, [])
+        self.assertEqual(len(self.t._EMB_TRACKS), self.t._EMB_TRACKS_KEEP)
+
+    def test_an_extraction_hands_its_track_list_over(self):
+        # the real extract_srt on a local Matroska file notes the tracks it parsed in stats
+        src = (gate.ADDON / 'resources' / 'lib' / 'embedded_extract.py').read_text(encoding='utf-8')
+        self.assertIn("src._stats['tracks'] = _track_rows(tracks)", src)
+        tr = (gate.ADDON / 'resources' / 'lib' / 'translate.py').read_text(encoding='utf-8').replace('\r\n', '\n')
+        self.assertIn("        if reference is None and isinstance(_xstats.get('tracks'), list):\n"
+                      "            _remember_tracks(url, _xstats['tracks'])\n", tr)
 
     def read_with(self, world, n_requests=30, total=600, per_request=20):
         """read(track) through the REAL _extract_embedded_srt; the stream read is a loop that asks the abort
