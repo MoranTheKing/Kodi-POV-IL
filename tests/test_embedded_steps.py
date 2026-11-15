@@ -1297,6 +1297,275 @@ class OnPlay(unittest.TestCase):
         self.assertIsNone(screen.handler())
 
 
+class LineARequest(unittest.TestCase):
+    """A provider that hands the track over a line a request (field log, 15 Nov 2026: The Odyssey 2160p on a
+    TorBox "store" node, which answers only the first range of many -- 1,909 lines, ~2.4 a second, picked at
+    minute 80). The REAL _EmbeddedSteps with its real budget, its worker and a model that answers at once,
+    and the REAL _extract_in_windows; the network pass is a clock, as in OnScreen. Counted: what the viewer
+    has on screen for every line reached while the track is read -- Hebrew, the source language (a line of
+    the view not translated, or the embedded track), or nothing."""
+
+    FILM = [int(2000 + i * 5340) for i in range(1909)]        # 170 minutes, a line every 5.3 s
+    A_LINE = 0.41                                             # seconds to read one (614 requests in 251 s)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.t = load_translate()
+        cls.ee = windows.load()
+
+    def simulate(self, cues, per_cue_s, at_ms=0, seeks=(), old=False, stop_after=None):
+        t, ee = self.t, self.ee
+        clock = {'s': 0.0}
+        seeks = sorted(seeks)
+
+        def position():
+            base_t, base_ms = 0.0, at_ms
+            for when, to_ms in seeks:
+                if when <= clock['s']:
+                    base_t, base_ms = when, to_ms
+            return int(base_ms + (clock['s'] - base_t) * 1000)
+
+        shown = {'hebrew': set(), 'source': set()}
+        logged = []
+
+        def show(text):
+            hebrew, source = set(), set()
+            for block in t.srt.parse_blocks(text):
+                (hebrew if t._has_hebrew(t.srt.block_text_only(block)) else source).add(t._srt_start_ms(block))
+            shown['hebrew'], shown['source'] = hebrew, source
+
+        model = lambda blocks, before: dict((i, 'שורה') for i in range(len(blocks)))
+        steps = t._EmbeddedSteps(position, model, show, restore=lambda: None, log=logged.append,
+                                 clock=lambda: clock['s'])
+        self.addCleanup(steps.finish)
+        if old:
+            # 0.3.84: a window is cut only by a jump out of it, and two requests are all there is
+            steps._earns_slow = lambda pos, start: False
+            asked = steps.window
+
+            def window():
+                span = asked()
+                steps._asked_at_viewer = True
+                return span
+            steps.window = window
+        positions = [(1000 + 10 * i, 5, ms) for i, ms in enumerate(cues)]
+        done = set()
+        tally = {'hebrew': 0, 'source': 0, 'nothing': 0, 'source_after_seek': 0, 'longest_source_s': 0.0}
+        state = {'checked': 0.0, 'source_since': None}
+
+        def worker_looks():
+            if steps._thread is not None:
+                steps._wake.set()
+                until(lambda: not steps._wake.is_set() and steps._idle.is_set(), 2.0)
+
+        def advance(seconds):
+            end = clock['s'] + seconds
+            while clock['s'] < end:
+                step = min(0.5, end - clock['s'])
+                before = position()
+                clock['s'] += step
+                after = position()
+                crossed = any(clock['s'] - step < when <= clock['s'] for when, _to in seeks)
+                if after >= before and not crossed:
+                    for ms in cues:
+                        if before < ms <= after:
+                            if steps.on_screen and ms in shown['hebrew']:
+                                tally['hebrew'] += 1
+                                state['source_since'] = None
+                            elif steps.on_screen and ms not in shown['source']:
+                                tally['nothing'] += 1
+                            else:
+                                tally['source'] += 1
+                                if seeks and clock['s'] > seeks[0][0]:
+                                    tally['source_after_seek'] += 1
+                                if state['source_since'] is None:
+                                    state['source_since'] = clock['s']
+                                tally['longest_source_s'] = max(tally['longest_source_s'],
+                                                                clock['s'] - state['source_since'])
+                if clock['s'] - state['checked'] >= 2.0:
+                    state['checked'] = clock['s']
+                    steps.check()
+                    worker_looks()
+
+        class Over(Exception):
+            pass
+
+        def http(src, part, entries, want, deadline_s, t0, abort_cb, log, progress_cb, finished, scan,
+                 moved_cb=None):
+            for cpos, _rel, _ms in part:
+                if cpos not in finished:
+                    if moved_cb is not None and moved_cb():
+                        return ee._MOVED
+                    if stop_after is not None and clock['s'] >= stop_after:
+                        raise Over()
+                    advance(per_cue_s)
+                    finished.add(cpos)
+            return True
+
+        def feed():
+            read = sorted(ms for cpos, _rel, ms in positions if cpos in done)
+            steps.feed('\n\n'.join(cue(i + 1, ms, 'Line.') for i, ms in enumerate(read)) + '\n')
+            until(lambda: steps._thread is not None)
+            worker_looks()
+            worker_looks()
+
+        try:
+            with patch.object(t, '_STEPS_WATCH_S', 3600.0), patch.object(ee, '_extract_cues_http', http):
+                ee._extract_in_windows(windows.Source(), positions, [], 3, 900.0, 0.0, None, lambda m: None, None,
+                                       done, set(), (steps.window, feed, steps.timeline, steps.moved),
+                                       lambda: None)
+                http(None, positions, None, None, None, None, None, None, None, done, None)   # the complete pass
+        except Over:
+            pass
+        tally['requests'], tally['slow'], tally['took_s'] = steps.requests, steps.slow_requests, clock['s']
+        tally['log'] = logged
+        steps.finish()
+        return tally
+
+    def test_the_viewer_keeps_hebrew_for_the_thirteen_minutes_the_reading_takes(self):
+        # no jump: before, the two views (~80 lines) ran out after six or seven minutes of film and the
+        # viewer read English for the rest of the reading
+        old = self.simulate(self.FILM, self.A_LINE, at_ms=80 * 60000, old=True)
+        new = self.simulate(self.FILM, self.A_LINE, at_ms=80 * 60000)
+        self.assertGreater(old['took_s'], 12 * 60)                         # thirteen minutes of reading
+        self.assertEqual(old['requests'], 2)
+        self.assertGreater(old['source'], 50, old)                         # measured: 71 lines in English
+        self.assertGreater(old['longest_source_s'], 300, old)              # ...six minutes on end
+        self.assertLessEqual(new['source'], 6, new)                        # ...2: the first seconds
+        self.assertEqual(new['nothing'], 0, new)
+        self.assertLessEqual(new['slow'], 2, new)                          # for one request more (100 lines), on ~39 chunks
+        self.assertEqual(new['requests'], 2 + new['slow'])
+
+    def test_a_jump_ahead_inside_the_window_being_read_brings_hebrew_back_in_half_a_minute(self):
+        # the field log: 200 s after the pick, while everything left ahead is read as one window, the
+        # viewer jumps ahead -- inside that window, past the lines the view has (here from minute 83 to
+        # minute 110). Measured: 68 lines in English after the jump (six minutes), then 0 (the model
+        # here answers at once; a real answer takes ~10 s more)
+        jump = dict(at_ms=80 * 60000, seeks=[(200.0, 110 * 60000)], stop_after=560.0)
+        old = self.simulate(self.FILM, self.A_LINE, old=True, **jump)
+        new = self.simulate(self.FILM, self.A_LINE, **jump)
+        self.assertGreater(old['longest_source_s'], 300, old)              # English until the window ended
+        self.assertGreater(old['source_after_seek'], 50, old)
+        self.assertLessEqual(new['longest_source_s'], 35, new)
+        self.assertLessEqual(new['source_after_seek'], 3, new)
+        self.assertTrue(any('has not handed over' in line for line in new['log']), new['log'])
+        self.assertEqual(new['nothing'], 0, new)
+
+    def test_a_track_read_in_seconds_earns_no_request(self):
+        # many ranges a request: 1,909 lines in ~20 s -- the two views are all that is asked, as before
+        new = self.simulate(self.FILM, 0.01, at_ms=80 * 60000)
+        self.assertEqual(new['slow'], 0, new)
+        self.assertLessEqual(new['requests'], 2)
+
+    def test_a_window_asked_for_at_the_viewers_own_line_is_never_cut_from_inside(self):
+        # ...or a provider slower than the film would have every window cut as it starts
+        t = self.t
+        place = {'ms': 30 * 60000}
+        now = {'s': 1000.0}
+        steps = t._EmbeddedSteps(lambda: place['ms'], None, [].append, clock=lambda: now['s'])
+        self.addCleanup(steps.finish)
+        steps.timeline(every(3.0, 100))
+        self.assertTrue(steps.window())                                # nothing read: from the viewer
+        for _ in range(20):
+            now['s'] += 1.0
+            place['ms'] += 1000
+            self.assertFalse(steps.moved())
+
+    def test_a_window_that_carries_on_is_cut_once_and_the_next_is_from_the_viewer(self):
+        t = self.t
+        place = {'ms': 30 * 60000}
+        now = {'s': 1000.0}
+        cues = every(3.0, 100)
+        steps = t._EmbeddedSteps(lambda: place['ms'], None, [].append, clock=lambda: now['s'])
+        self.addCleanup(steps.finish)
+        steps.timeline(cues)
+        steps.window()
+        steps.feed('')
+        now['s'] += 60
+        place['ms'] += 60000
+        low, mark = steps.window()                                     # carries on from the lines read
+        self.assertFalse(steps._asked_at_viewer)
+        now['s'] += 1
+        self.assertFalse(steps.moved())                                # the viewer is on lines read
+        place['ms'] = mark - 6000                                      # a jump ahead, inside the window
+        self.assertTrue(low <= place['ms'] <= mark)
+        now['s'] += 1
+        steps.requests = 2                                             # the two views were spent
+        self.assertTrue(steps.moved())
+        self.assertEqual(steps._budget, t._STEPS_MAX_REQUESTS)         # a cut from inside earns no request
+        steps.feed('')                                                 # what the cut window had read: nothing
+        low, mark = steps.window()
+        self.assertEqual(low, place['ms'] - 15000)
+        self.assertTrue(steps._asked_at_viewer)
+        now['s'] += 1
+        self.assertFalse(steps.moved())
+
+    def test_a_provider_slower_than_the_film_never_asks_for_more_than_the_ceiling(self):
+        # review of 0.3.85: every cut from inside a window bought a request, and such a cut needs no jump --
+        # a viewer playing past what a slow provider has handed over is cut again and again. A line every
+        # 5.3 s read at 6 s a line (slower than the film) and at 4 s a line (barely faster), no jumps,
+        # twenty-five minutes
+        t = self.t
+        for a_line in (6.0, 4.0):
+            got = self.simulate(self.FILM, a_line, at_ms=80 * 60000, stop_after=1500.0)
+            self.assertLessEqual(got['requests'], t._STEPS_MAX_REQUESTS + t._STEPS_SLOW_MAX, (a_line, got['requests']))
+            self.assertEqual(got['nothing'], 0, a_line)
+
+    def test_jumps_inside_the_window_earn_nothing_beyond_the_ceiling(self):
+        # ten jumps ahead inside the long window, a minute apart
+        t = self.t
+        seeks = [(200.0 + 60 * n, (100 + 5 * n) * 60000) for n in range(10)]
+        got = self.simulate(self.FILM, self.A_LINE, at_ms=80 * 60000, seeks=seeks, stop_after=840.0)
+        self.assertLessEqual(got['requests'], t._STEPS_MAX_REQUESTS + t._STEPS_SLOW_MAX, got['requests'])
+
+    def test_one_more_request_only_when_the_hebrew_is_about_to_end_and_the_reading_is_not(self):
+        t = self.t
+        place = {'ms': 0}
+        model = Model()
+        logged = []
+        steps = t._EmbeddedSteps(lambda: place['ms'], model, [].append, log=logged.append, clock=lambda: 1000.0)
+        self.addCleanup(steps.finish)
+        steps.timeline([i * 3000 for i in range(2000)])                # a line every 3 s, 100 minutes
+        steps._rate = 2.5                                              # lines a second, as measured
+        steps.feed(english(300))                                       # the first 15 minutes are read
+        self.assertTrue(until(lambda: len(model.asked) == 2))
+        time.sleep(0.3)
+        self.assertEqual(len(model.asked), 2)                          # 100 lines = 5 minutes of Hebrew ahead
+        place['ms'] = 100 * 3000 - 121000                              # the Hebrew ends 121 s ahead
+        steps._wake.set()
+        time.sleep(0.3)
+        self.assertEqual(len(model.asked), 2)
+        place['ms'] = 100 * 3000 - 119000                              # ...119 s
+        steps._wake.set()
+        self.assertTrue(until(lambda: len(model.asked) == 3))
+        self.assertEqual((steps.slow_requests, steps.requests), (1, 3))
+        self.assertEqual([len(asked) for asked in model.asked], [50, 50, 100])       # a request is what the quota counts
+        self.assertTrue(any('one more request (1 of 6)' in line for line in logged), logged)
+        # the reading about to end (under a minute of lines left): the full job is next, nothing more is asked
+        steps._rate = 100.0
+        place['ms'] = 200 * 3000 - 10000
+        steps._wake.set()
+        time.sleep(0.3)
+        self.assertEqual(len(model.asked), 3)
+
+    def test_no_more_than_six_such_requests_for_a_pick(self):
+        t = self.t
+        place = {'ms': 0}
+        model = Model()
+        steps = t._EmbeddedSteps(lambda: place['ms'], model, [].append, clock=lambda: 1000.0)
+        self.addCleanup(steps.finish)
+        steps.timeline([i * 3000 for i in range(2000)])
+        steps._rate = 2.5
+        steps.feed(english(1200))
+        self.assertTrue(until(lambda: len(model.asked) == 2))
+        for n in range(3, 12):
+            place['ms'] = (100 + 100 * (n - 3)) * 3000 - 60000         # a minute before the Hebrew ends
+            steps._wake.set()
+            until(lambda: len(model.asked) == n, 0.5)
+        self.assertEqual(steps.slow_requests, t._STEPS_SLOW_MAX)
+        self.assertEqual(len(model.asked), 2 + t._STEPS_SLOW_MAX)
+
+
 if __name__ == '__main__':
     unittest.main()
 

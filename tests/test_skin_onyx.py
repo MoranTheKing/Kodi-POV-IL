@@ -243,6 +243,32 @@ class GeneratedXmlTests(unittest.TestCase):
         info = next(c for c in osd.iter('control') if c.get('id') == '7011')
         self.assertEqual([n.text for n in info.findall('onclick')], ['Dialog.Close(VideoOSD,true)', 'Action(Info)'])
 
+    def test_a_tap_on_the_picture_closes_the_controls(self):
+        # the owner, on a phone: "if I press the middle while the player is open, it should close"
+        osd = ET.parse(XML / 'VideoOSD.xml').getroot()
+        controls = list(osd.iter('control'))
+        area = next(c for c in controls if c.get('id') == '7005')
+        self.assertEqual(area.get('type'), 'button')
+        self.assertEqual([n.text for n in area.findall('onclick')], ['Dialog.Close(VideoOSD)'])
+        self.assertFalse(area.findtext('texturefocus') or area.findtext('texturenofocus'))
+        # every button is drawn after it, so each takes its own taps
+        at = controls.index(area)
+        for c in controls:
+            if c.get('type') in ('button', 'togglebutton', 'slider', 'grouplist') and c is not area:
+                self.assertGreater(controls.index(c), at, c.get('id'))
+        # between the title block and the clock line, clear of both
+        top, height = int(area.findtext('top')), int(area.findtext('height'))
+        self.assertGreaterEqual(top, 288)
+        self.assertLessEqual(top + height, 812)
+        self.assertGreaterEqual(height, 400)
+        # no key leads to it, and every arrow from it goes back to the buttons
+        for c in controls:
+            if c is not area:
+                for tag in ('onup', 'ondown', 'onleft', 'onright'):
+                    self.assertNotIn('7005', [n.text for n in c.findall(tag)], c.get('id'))
+        self.assertEqual([area.findtext(t) for t in ('onup', 'ondown', 'onleft', 'onright')], ['7000'] * 4)
+        self.assertEqual(osd.findtext('defaultcontrol'), '7003')
+
     def test_kodi_settings_rows_show_their_switches_and_values(self):
         for name in ('SettingsCategory.xml', 'DialogSettings.xml', 'DialogAddonSettings.xml'):
             with self.subTest(name):

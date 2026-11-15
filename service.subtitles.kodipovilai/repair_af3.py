@@ -115,6 +115,11 @@ def repair(monitor, window):
     except Exception:
         results['af3_dialog_subtitles_patcher'] = 'failed'
     try:
+        from resources.lib import af3_osd_tap_close_patcher
+        results['af3_osd_tap_close_patcher'] = af3_osd_tap_close_patcher.ensure_patched()
+    except Exception:
+        results['af3_osd_tap_close_patcher'] = 'failed'
+    try:
         from resources.lib import af3_home_patcher
         status = af3_home_patcher.ensure_patched()
         if status.startswith('rebuild_deferred'):

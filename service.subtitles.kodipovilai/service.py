@@ -2499,6 +2499,20 @@ def _maybe_patch_af3_dialog_subtitles():
                 '{0}'.format(e), level='WARNING')
         except Exception:
             pass
+    # The same skin's player: a tap on the picture closes the controls
+    # (0.3.85; its own try -- one AF3 file failing must not skip the other).
+    try:
+        from resources.lib import af3_osd_tap_close_patcher
+        status = af3_osd_tap_close_patcher.ensure_patched()
+        if status not in ('no_file', 'already_patched', 'patched'):
+            kodi_utils.log('af3_osd_tap_close_patcher: ' + status,
+                           level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('af3_osd_tap_close_patcher failed: '
+                           '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
 def _maybe_patch_hub_search():
     """Restore the search button on Estuary, FENtastic and NOX at boot.
 
