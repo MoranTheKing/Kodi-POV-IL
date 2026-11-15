@@ -434,9 +434,9 @@
 	</variable>
 
 	<variable name="texturenextimage">
-	<value condition="!String.IsEmpty(Player.offset(1).Art(fanart)]">$INFO[Player.offset(1).Art(fanart)]</value>
-	<value condition="!String.IsEmpty(Player.offset(1).Art(landscape)]">$INFO[Player.offset(1).Art(landscape)]</value>
-	<value condition="!String.IsEmpty(VideoPlayer.offset(1).Cover]">$INFO[VideoPlayer.offset(1).Cover]</value>
+	<value condition="!String.IsEmpty(Player.offset(1).Art(fanart))">$INFO[Player.offset(1).Art(fanart)]</value>
+	<value condition="!String.IsEmpty(Player.offset(1).Art(landscape))">$INFO[Player.offset(1).Art(landscape)]</value>
+	<value condition="!String.IsEmpty(VideoPlayer.offset(1).Cover)">$INFO[VideoPlayer.offset(1).Cover]</value>
 	<value>$INFO[VideoPlayer.offset(1).Cover]</value>
 	</variable>
 	
@@ -475,9 +475,9 @@
 	</variable>
 	
 	<variable name="texturepreviousimage">
-	<value condition="!String.IsEmpty(Player.offset(-1).Art(fanart)]">$INFO[Player.offset(-1).Art(fanart)]</value>
-	<value condition="!String.IsEmpty(Player.offset(-1).Art(landscape)]">$INFO[Player.offset(-1).Art(landscape)]</value>
-	<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Cover]">$INFO[VideoPlayer.offset(-1).Cover]</value>
+	<value condition="!String.IsEmpty(Player.offset(-1).Art(fanart))">$INFO[Player.offset(-1).Art(fanart)]</value>
+	<value condition="!String.IsEmpty(Player.offset(-1).Art(landscape))">$INFO[Player.offset(-1).Art(landscape)]</value>
+	<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Cover)">$INFO[VideoPlayer.offset(-1).Cover]</value>
 	<value>$INFO[VideoPlayer.offset(-1).Cover]</value>
 	</variable>
 
@@ -1609,7 +1609,7 @@
 	</variable>
 
 	<variable name="_Fix_TMDB_ID">
-		<value condition="!String.IsEmpty(VideoPlayer.UniqueID(tmdb)">$INFO[VideoPlayer.UniqueID(tmdb)]</value>
+		<value condition="!String.IsEmpty(VideoPlayer.UniqueID(tmdb))">$INFO[VideoPlayer.UniqueID(tmdb)]</value>
 		<value condition="!String.IsEmpty(VideoPlayer.IMDBNumber)">$INFO[VideoPlayer.IMDBNumber]</value>
 	</variable>
 

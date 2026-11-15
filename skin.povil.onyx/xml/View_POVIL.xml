@@ -47,9 +47,9 @@
 			<visible>Control.IsVisible(51)</visible>
 			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture>povil/ambient.jpg</texture></control>
 			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture background="true">$VAR[POVIL_V_Fanart]</texture><aspectratio>scale</aspectratio><fadetime>420</fadetime></control>
-			<control type="image"><left>520</left><top>0</top><width>1400</width><height>1080</height><texture>povil/grad_right.png</texture></control>
-			<control type="image"><left>0</left><top>330</top><width>1920</width><height>750</height><texture>povil/grad_bottom.png</texture></control>
-			<control type="image"><left>0</left><top>0</top><width>1920</width><height>240</height><texture>povil/grad_top.png</texture></control>
+			<control type="image"><left>520</left><top>-160</top><width>1400</width><height>1400</height><texture>povil/grad_right.png</texture></control>
+			<control type="image"><left>-320</left><top>330</top><width>2560</width><height>750</height><texture>povil/grad_bottom.png</texture></control>
+			<control type="image"><left>-320</left><top>0</top><width>2560</width><height>240</height><texture>povil/grad_top.png</texture></control>
 			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture>povil/vignette.png</texture></control>
 			<control type="label"><left>730</left><top>34</top><width>1100</width><height>56</height><font>povil_menu</font><textcolor>povil_white</textcolor><align>right</align><aligny>center</aligny><label>$VAR[POVIL_V_Header]</label></control>
 			<control type="image"><left>1786</left><top>92</top><width>44</width><height>4</height><texture colordiffuse="povil_gold">povil/underline.png</texture></control>
@@ -110,9 +110,9 @@
 			<visible>Control.IsVisible(55)</visible>
 			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture>povil/ambient.jpg</texture></control>
 			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture background="true">$VAR[POVIL_V_Fanart]</texture><aspectratio>scale</aspectratio><fadetime>420</fadetime></control>
-			<control type="image"><left>520</left><top>0</top><width>1400</width><height>1080</height><texture>povil/grad_right.png</texture></control>
-			<control type="image"><left>0</left><top>330</top><width>1920</width><height>750</height><texture>povil/grad_bottom.png</texture></control>
-			<control type="image"><left>0</left><top>0</top><width>1920</width><height>240</height><texture>povil/grad_top.png</texture></control>
+			<control type="image"><left>520</left><top>-160</top><width>1400</width><height>1400</height><texture>povil/grad_right.png</texture></control>
+			<control type="image"><left>-320</left><top>330</top><width>2560</width><height>750</height><texture>povil/grad_bottom.png</texture></control>
+			<control type="image"><left>-320</left><top>0</top><width>2560</width><height>240</height><texture>povil/grad_top.png</texture></control>
 			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture>povil/vignette.png</texture></control>
 			<control type="label"><left>730</left><top>34</top><width>1100</width><height>56</height><font>povil_menu</font><textcolor>povil_white</textcolor><align>right</align><aligny>center</aligny><label>$VAR[POVIL_V_Header]</label></control>
 			<control type="image"><left>1786</left><top>92</top><width>44</width><height>4</height><texture colordiffuse="povil_gold">povil/underline.png</texture></control>

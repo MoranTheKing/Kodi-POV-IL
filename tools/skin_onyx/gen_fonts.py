@@ -31,14 +31,15 @@ def block(name, fn, size, style=''):
     return s
 for n, fn, sz in FONTS:
     out += block(n, fn, sz)
-out += block('Mono30', 'NotoMono-Regular.ttf', 30)
+# Onyx's system information lines: NotoMono has no Hebrew (every Hebrew letter was an empty box)
+out += block('Mono30', R, 28)
 out += ['\t</fontset>',
         '\t<!-- Kodi\'s own arial.ttf: for titles in scripts Heebo does not cover (Settings > Interface > Skin > Fonts). -->',
         '\t<fontset id="Arial" unicode="true">']
 for n, fn, sz in FONTS:
     a, st = ARIAL[fn]
     out += block(n, a, sz - 1, st)
-out += block('Mono30', 'NotoMono-Regular.ttf', 30)
+out += block('Mono30', 'arial.ttf', 27)
 out += ['\t</fontset>', '</fonts>', '']
 open(OUT, 'w', encoding='utf-8', newline='\n').write('\n'.join(out))
 print('fonts', len(FONTS) + 1)

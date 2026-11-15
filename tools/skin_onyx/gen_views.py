@@ -78,8 +78,8 @@ def view(x, vid, label, layout):
     x(3, '<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture>povil/ambient.jpg</texture></control>')
     x(3, '<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height>'
          '<texture background="true">$VAR[POVIL_V_Fanart]</texture><aspectratio>scale</aspectratio><fadetime>420</fadetime></control>')
-    for left, top, w, h, tex in ((520, 0, 1400, 1080, 'grad_right'), (0, 330, 1920, 750, 'grad_bottom'),
-                                 (0, 0, 1920, 240, 'grad_top'), (0, 0, 1920, 1080, 'vignette')):
+    for left, top, w, h, tex in ((520, -160, 1400, 1400, 'grad_right'), (-320, 330, 2560, 750, 'grad_bottom'),
+                                 (-320, 0, 2560, 240, 'grad_top'), (0, 0, 1920, 1080, 'vignette')):
         x(3, '<control type="image"><left>%d</left><top>%d</top><width>%d</width><height>%d</height>'
              '<texture>povil/%s.png</texture></control>' % (left, top, w, h, tex))
     # Folder name (top right) and clock (top left)

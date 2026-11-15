@@ -185,6 +185,116 @@ class GeneratedXmlTests(unittest.TestCase):
         self.assertTrue(all(c.get('id') for c in children))
         self.assertIn('7024', [c.get('id') for c in children])
 
+    def test_the_timeline_takes_the_focus_and_seeks(self):
+        # field report: "only 30-second jumps, no real seeking as in the other players"
+        osd = ET.parse(XML / 'VideoOSD.xml').getroot()
+        row = next(c for c in osd.iter('control') if c.get('id') == '7000')
+        self.assertEqual(row.findtext('onup'), '7001')
+        stop = next(c for c in osd.iter('control') if c.get('id') == '7001')
+        self.assertEqual((stop.findtext('onleft'), stop.findtext('onright'), stop.findtext('ondown')),
+                         ('StepBack', 'StepForward', '7000'))
+        self.assertLess(int(stop.findtext('left')), 0, 'off the picture: a finger on the timeline must reach the dot, not this stop')
+        sliders = [c for c in osd.iter('control') if c.get('type') == 'slider']
+        drag = [c for c in sliders if c.findtext('action') == 'seek']
+        self.assertEqual(len(drag), 1)
+        self.assertIsNone(drag[0].get('id'), 'no id: the keys never land on it')
+        # a slider scales its dot by the bar picture's height: both use the same picture
+        for c in sliders:
+            self.assertEqual(c.findtext('texturesliderbar'), c.findtext('textureslidernib'))
+
+    def test_the_picture_never_shows_two_players(self):
+        # field report: after a skip, "another player" stayed above and below when the controls closed
+        bar = (XML / 'DialogSeekBar.xml').read_text(encoding='utf-8')
+        self.assertNotIn('UseExtInfo', bar)
+        self.assertNotIn('<onload', bar)
+        root = ET.fromstring(bar.encode('utf-8'))
+        shown = [v.text for v in root.findall('visible')]
+        self.assertIn('[Player.HasPerformedSeek(3) + !Skin.TimerIsRunning(povil_osd_closed)]', shown[0])
+        self.assertNotIn('Player.SeekOffset', shown[0], 'Kodi keeps the last seek offset for good: it must not hold the bar up')
+        self.assertIn('Window.IsActive(videoosd)', shown[1])
+        self.assertTrue(shown[1].startswith('!['))
+        self.assertIn('!Player.ShowInfo', shown[2])
+        osd = ET.parse(XML / 'VideoOSD.xml').getroot()
+        self.assertIn('Skin.TimerStart(povil_osd_closed)', [n.text for n in osd.findall('onunload')])
+        timers = {t.findtext('name'): t for t in ET.parse(XML / 'Timers.xml').getroot().findall('timer')}
+        self.assertIn('Skin.TimerElapsedSecs(povil_osd_closed),4', timers['povil_osd_closed'].findtext('stop'))
+        self.assertEqual(timers['povil_pause'].findtext('start'), 'Player.Paused')
+        self.assertNotIn('UseExtInfo', (XML / 'Home.xml').read_text(encoding='utf-8'))
+        # the timeline is drawn the same in the controls, the seek bar and the info panel
+        tops = set()
+        for name in ('VideoOSD.xml', 'DialogSeekBar.xml', 'VideoFullScreen.xml'):
+            text = (XML / name).read_text(encoding='utf-8')
+            found = re.findall(r'<left>90</left><top>(\d+)</top>\s*<visible>!String.IsEmpty\(Player.Duration\)</visible>', text)
+            self.assertEqual(len(found), 1, name)
+            tops.update(found)
+        self.assertEqual(tops, {'866'})
+
+    def test_every_control_of_the_picture_window_has_an_id(self):
+        # Kodi hides "control 0" of the fullscreen window (its view mode line), and a control with no id is control 0
+        full = ET.parse(XML / 'VideoFullScreen.xml').getroot()
+        controls = list(full.iter('control'))
+        self.assertGreater(len(controls), 20)
+        self.assertEqual([c.get('type') for c in controls if not c.get('id')], [])
+        self.assertEqual([c.get('id') for c in controls if c.get('id') == '0'], ['0'])
+
+    def test_the_info_button_closes_the_controls_at_once(self):
+        # Kodi drops an action sent while a dialog's closing animation runs
+        osd = ET.parse(XML / 'VideoOSD.xml').getroot()
+        info = next(c for c in osd.iter('control') if c.get('id') == '7011')
+        self.assertEqual([n.text for n in info.findall('onclick')], ['Dialog.Close(VideoOSD,true)', 'Action(Info)'])
+
+    def test_kodi_settings_rows_show_their_switches_and_values(self):
+        for name in ('SettingsCategory.xml', 'DialogSettings.xml', 'DialogAddonSettings.xml'):
+            with self.subTest(name):
+                root = ET.parse(XML / name).getroot()
+                by_id = {c.get('id'): c for c in root.iter('control') if c.get('id')}
+                for cid, kind in (('5', 'grouplist'), ('7', 'button'), ('8', 'radiobutton'), ('9', 'spincontrolex'),
+                                  ('11', 'image'), ('12', 'edit'), ('13', 'sliderex'), ('14', 'label'), ('15', 'colorbutton')):
+                    self.assertEqual(by_id[cid].get('type'), kind, cid)
+                radio = by_id['8']
+                for tag in ('textureradioonfocus', 'textureradioonnofocus', 'textureradioofffocus', 'textureradiooffnofocus'):
+                    self.assertTrue((SKIN / 'media' / radio.findtext(tag)).is_file(), tag)
+                self.assertNotEqual(radio.findtext('textureradioonnofocus'), radio.findtext('textureradiooffnofocus'),
+                                    'Onyx drew nothing for a switch that is off')
+                # Kodi draws a setting's value at the row's right end: every row keeps its name on the left
+                for cid in ('7', '8', '9', '12', '13'):
+                    self.assertEqual(by_id[cid].findtext('align'), 'left', cid)
+        for name in ('SettingsCategory.xml', 'DialogAddonSettings.xml'):
+            root = ET.parse(XML / name).getroot()
+            by_id = {c.get('id'): c for c in root.iter('control') if c.get('id')}
+            self.assertGreater(int(by_id['3'].findtext('left')), int(by_id['5'].findtext('left')) + int(by_id['5'].findtext('width')),
+                               'the categories are on the right')
+            self.assertEqual((by_id['5'].findtext('onright'), by_id['3'].findtext('onleft')), ('3', '5'))
+            self.assertEqual(by_id['10'].findtext('align'), 'right')
+        card = ET.parse(XML / 'DialogSettings.xml').getroot()
+        buttons = next(c for c in card.iter('control') if c.get('id') == '9000')
+        self.assertEqual([c.get('id') for c in buttons if c.tag == 'control'], ['30', '29', '28'], 'OK is the rightmost')
+
+    def test_settings_home_tiles_reach_each_other(self):
+        root = ET.parse(XML / 'Settings.xml').getroot()
+        tiles = {c.get('id'): c for c in root.iter('control') if c.get('type') == 'button'}
+        self.assertIn(root.findtext('defaultcontrol'), tiles)
+        self.assertGreaterEqual(len(tiles), 13)
+        reached = set()
+        for tid, tile in tiles.items():
+            for tag in ('onleft', 'onright', 'onup', 'ondown'):
+                for move in tile.findall(tag):
+                    self.assertIn(move.text, tiles, '%s %s' % (tid, tag))
+                    reached.add(move.text)
+        self.assertEqual(sorted(set(tiles) - reached), [], 'a tile no move leads to')
+        first = tiles[root.findtext('defaultcontrol')]
+        self.assertIsNone(first.find('onright'), 'the first tile is the rightmost')
+        self.assertIsNotNone(first.find('onleft'))
+        icons = set(re.findall(r'settings/[a-z]+\.png', (XML / 'Settings.xml').read_text(encoding='utf-8')))
+        self.assertGreaterEqual(len(icons), 13)
+
+    def test_system_information_is_readable_in_hebrew(self):
+        # NotoMono has no Hebrew: every Hebrew letter of the system information lines was an empty box
+        fonts = ET.parse(XML / 'Font.xml').getroot()
+        for fontset in fonts.findall('fontset'):
+            mono = fontset.find("font[name='Mono30']")
+            self.assertNotIn('Mono', mono.findtext('filename'))
+
     def test_the_users_own_live_tv_has_a_chip_and_a_row(self):
         # field report: IPTV set up under Nox "disappeared" in Onyx
         home = ET.parse(XML / 'Home.xml').getroot()
@@ -253,12 +363,15 @@ class GeneratedXmlTests(unittest.TestCase):
         try:
             copy = tmp / 'skin.povil.onyx'
             shutil.copytree(SKIN, copy)
-            for script in ('gen_strings.py', 'patch_onyx.py', 'gen_home.py', 'gen_views.py', 'gen_osd.py', 'gen_info.py', 'gen_dialogs.py'):
+            for script in ('gen_strings.py', 'patch_onyx.py', 'gen_home.py', 'gen_views.py', 'gen_osd.py', 'gen_info.py', 'gen_dialogs.py',
+                           'gen_settings.py'):
                 subprocess.run([sys.executable, str(TOOLS / script), str(copy)], cwd=str(TOOLS), check=True,
                                stdout=subprocess.DEVNULL)
             for rel in ('xml/Home.xml', 'xml/Includes_POVIL_Home.xml', 'xml/View_POVIL.xml', 'xml/VideoOSD.xml',
                         'xml/DialogVideoInfo.xml', 'xml/Timers.xml', 'xml/DialogKeyboard.xml',
                         'xml/DialogButtonMenu.xml', 'xml/DialogBusy.xml', 'xml/DialogNotification.xml', 'xml/DialogConfirm.xml',
+                        'xml/DialogSeekBar.xml', 'xml/VideoFullScreen.xml', 'xml/Settings.xml', 'xml/SettingsCategory.xml',
+                        'xml/DialogSettings.xml', 'xml/DialogAddonSettings.xml', 'xml/SkinSettings.xml', 'xml/Includes.xml',
                         'language/resource.language.he_il/strings.po'):
                 with self.subTest(rel):
                     self.assertEqual((copy / rel).read_bytes(), (SKIN / rel).read_bytes())

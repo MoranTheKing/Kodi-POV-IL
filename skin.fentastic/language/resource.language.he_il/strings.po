@@ -183,7 +183,7 @@ msgstr "פריטים"
 
 msgctxt "#31037"
 msgid "Selected track"
-msgstr ""
+msgstr "הרצועה שנבחרה"
 
 msgctxt "#31038"
 msgid "Rewind"
@@ -231,11 +231,11 @@ msgstr "מבוסס אריאל"
 
 msgctxt "#31054"
 msgid "Press [B]Left[/B] to step back, or [B]Right[/B] to step forward"
-msgstr ""
+msgstr "לחץ [B]שמאלה[/B] לצעד אחורה, או [B]ימינה[/B] לצעד קדימה"
 
 msgctxt "#31055"
 msgid "Press [B]Right[/B] to frame advance"
-msgstr ""
+msgstr "לחץ [B]ימינה[/B] להתקדמות פריים"
 
 msgctxt "#31056"
 msgid "Go to playlist"
@@ -299,7 +299,7 @@ msgstr "אפשרויות כיבוי"
 
 msgctxt "#31073"
 msgid "Total length"
-msgstr ""
+msgstr "אורך כולל"
 
 msgctxt "#31074"
 msgid "Total duration"
@@ -420,7 +420,7 @@ msgstr "חפש ביו-טיוב"
 
 msgctxt "#31115"
 msgid "Toggle subtitle"
-msgstr ""
+msgstr "הפעלה או כיבוי של הכתוביות"
 
 msgctxt "#31116"
 msgid "Remove this main menu item"
@@ -496,7 +496,7 @@ msgstr "נותר"
 
 msgctxt "#31135"
 msgid "Binary"
-msgstr ""
+msgstr "בינארי"
 
 msgctxt "#31136"
 msgid "Click here to see latest changes..."
@@ -548,7 +548,7 @@ msgstr "בקולנוע"
 
 msgctxt "#31147"
 msgid "In cinemas soon"
-msgstr ""
+msgstr "בקרוב בקולנוע"
 
 msgctxt "#31148"
 msgid "Categories"
@@ -560,7 +560,7 @@ msgstr "בחר חבילת סגנונות פאנארט"
 
 msgctxt "#31150"
 msgid "Origin"
-msgstr ""
+msgstr "מקור"
 
 msgctxt "#31151"
 msgid "Unwatched music videos"
@@ -637,47 +637,47 @@ msgstr "הנפשת הרקע"
 #. Label of a setting
 msgctxt "#31168"
 msgid "Show posters instead of thumbs for musicvideos"
-msgstr ""
+msgstr "הצגת פוסטרים במקום תמונות ממוזערות לקליפים"
 
 #. Description label for skin settings area
 msgctxt "#31169"
 msgid "Artwork related settings."
-msgstr ""
+msgstr "הגדרות תמונות."
 
 #. Label for OSD settings category
 msgctxt "#31170"
 msgid "On screen display"
-msgstr ""
+msgstr "תפריט הנגן"
 
 #. Helper text for the label of OSD settings category
 msgctxt "#31171"
 msgid "On screen display (OSD) related settings"
-msgstr ""
+msgstr "הגדרות תפריט הנגן"
 
 #. Setting Automatically close video OSD
 msgctxt "#31172"
 msgid "Automatically close video OSD"
-msgstr ""
+msgstr "סגירה אוטומטית של תפריט הנגן"
 
 #. Setting auto close time for video osd
 msgctxt "#31173"
 msgid "Video OSD autoclose time (seconds)"
-msgstr ""
+msgstr "זמן עד הסגירה האוטומטית של תפריט הנגן (שניות)"
 
 #. Setting to control what happens when clicking a music album on the home screen
 msgctxt "#31174"
 msgid "Default select action for albums on the home screen"
-msgstr ""
+msgstr "פעולת ברירת המחדל בבחירת אלבום במסך הבית"
 
 #. Setting to control what happens when clicking a TV show on the home screen
 msgctxt "#31175"
 msgid "Default select action for TV shows on the home screen"
-msgstr ""
+msgstr "פעולת ברירת המחדל בבחירת סדרה במסך הבית"
 
 #. Setting to control what happens when clicking a movie set on the home screen
 msgctxt "#31176"
 msgid "Default select action for movie sets on the home screen"
-msgstr ""
+msgstr "פעולת ברירת המחדל בבחירת אוסף סרטים במסך הבית"
 
 # empty strings from id 31170 to 31599
 #. Label to show the video codec name
@@ -698,7 +698,7 @@ msgstr "יחס וידאו"
 #. Label to show the video bitrate
 msgctxt "#31603"
 msgid "Video bitrate"
-msgstr ""
+msgstr "קצב נתוני הווידאו"
 
 #. Label to show the audio codec name
 msgctxt "#31604"
@@ -713,7 +713,7 @@ msgstr "ערוצי אודיו"
 #. Label to show the audio bitrate
 msgctxt "#31606"
 msgid "Audio bitrate"
-msgstr ""
+msgstr "קצב נתוני השמע"
 
 #. Label to show the screen resolution
 msgctxt "#31607"
@@ -723,7 +723,7 @@ msgstr "אבחנת מסך"
 #. Label to show the system rendering speed
 msgctxt "#31608"
 msgid "System rendering speed"
-msgstr ""
+msgstr "מהירות הרינדור של המערכת"
 
 #. Label to show the system CPU usage
 msgctxt "#31609"
