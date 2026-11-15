@@ -1,3 +1,6 @@
+1.0.34
+- Player: a tap or a click on the picture closes the controls, in all four player styles (the skin had no such area). Any arrow from it goes back to the buttons.
+
 1.0.33
 - Netflix-style player: the next and previous tiles use the fanart or the landscape picture again -- six conditions ended with "]" where ")" belongs, and Kodi reads such a condition as false.
 - Extended info, trailer and season windows, and the Netflix-style player's lists: the focused button has its plate (masks/menu.png was named and never shipped, so the focused text was dark on a dark screen).

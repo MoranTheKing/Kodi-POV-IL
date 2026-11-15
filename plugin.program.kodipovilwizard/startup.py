@@ -982,6 +982,16 @@ def _host_watch():
 
 _start_watch('POVILHostPatchWatch', _host_watch)
 
+# KODI-POV-IL - the build's subtitles without the box behind them: a device
+# whose background and border settings are still the ones the build shipped
+# gets the outline (once per profile; see subtitle_style.py).
+try:
+    if CONFIG.get_setting('buildname'):
+        from resources.libs import subtitle_style
+        subtitle_style.migrate()
+except Exception as _subtitle_style_err:
+    logging.log('[Subtitle style] skipped: {0}'.format(_subtitle_style_err), level=xbmc.LOGWARNING)
+
 # KODI-POV-IL - Kodi's own settings back at Kodi's defaults (English, Estuary,
 # 12-hour clock: field report 28 Oct 2026): offer the build's settings back.
 # Last, so an unanswered question holds nothing else up; never on a kids
