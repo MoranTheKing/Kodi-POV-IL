@@ -27,6 +27,8 @@ NOT_LIVE_SOURCE = ('!String.Contains(Player.Folderpath,plugin.video.idanplus) + 
                    ' + !String.Contains(Player.Folderpath,plugin.video.flashstream)')
 ROW, TIMELINE = 7000, 7001
 TIMELINE_TOP = 866
+# the picture between the title block (ends at 288) and the clock line (812): see gen()
+TAP_CLOSE, TAP_TOP, TAP_BOTTOM = 7005, 300, 800
 # (id, icon, Hebrew name, onclick list, visible) left to right; None = a gap between groups
 BUTTONS = [
     (7010, 'stop', 'עצירה', ['PlayerControl(Stop)'], ''),
@@ -156,6 +158,16 @@ def gen():
          'Window.IsVisible(osdvideosettings) | Window.IsVisible(osdaudiosettings) | Window.IsVisible(videobookmarks)">Conditional</animation>')
     x(3, '<control type="image"><left>-320</left><top>0</top><width>2560</width><height>330</height><texture>povil/grad_top.png</texture></control>')
     x(3, '<control type="image"><left>-320</left><top>520</top><width>2560</width><height>560</height><texture>povil/grad_bottom.png</texture></control>')
+    # A tap (or a click) on the picture between the title and the controls closes them
+    # (the owner, on a phone: "if I press the middle while the player is open, it should
+    # close"). Kodi only ever opens the controls from a click on the picture. The first
+    # control, so every button drawn after it takes its own taps; no key leads here,
+    # and any arrow from it goes back to the row.
+    x(3, '<control type="button" id="%d"><left>0</left><top>%d</top><width>1920</width><height>%d</height>'
+         '<texturefocus></texturefocus><texturenofocus></texturenofocus><label></label>'
+         '<onclick>Dialog.Close(VideoOSD)</onclick>'
+         '<onup>%d</onup><ondown>%d</ondown><onleft>%d</onleft><onright>%d</onright></control>'
+         % (TAP_CLOSE, TAP_TOP, TAP_BOTTOM - TAP_TOP, ROW, ROW, ROW, ROW))
     title_block(x, 3)
     # Clock and end time
     x(3, '<control type="label"><left>%d</left><top>812</top><width>900</width><height>40</height><font>povil_meta</font>'

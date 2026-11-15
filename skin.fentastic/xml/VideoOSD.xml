@@ -13,6 +13,20 @@
 	<!-- <param name="onfocus">SetFocus(201)</param> -->
 	<!-- </include> -->
 	
+	<control type="button" id="9871">
+		<description>background close area (a tap or a click on the picture closes the controls)</description>
+		<left>0</left>
+		<top>0</top>
+		<width>100%</width>
+		<bottom>280</bottom>
+		<texturefocus />
+		<texturenofocus />
+		<onclick>Action(close)</onclick>
+		<onup>201</onup>
+		<ondown>201</ondown>
+		<onleft>201</onleft>
+		<onright>201</onright>
+	</control>
 	<control type="group">
 	<include condition="String.IsEqual(Skin.String(__chooseplayer),__advancedplayer)">videosd1</include> <!--נגן מתקדם -->
 	<include condition="String.IsEqual(Skin.String(__chooseplayer),__netflixplayer)">videosd2</include> <!-- נגן נטפליקס -->

@@ -81,6 +81,12 @@ class GuiRepairTests(unittest.TestCase):
         patcher = mock.patch.dict(sys.modules, modules)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # the real module: the pack's subtitle look is read through it (0.4.99)
+        spec = importlib.util.spec_from_file_location('resources.libs.subtitle_style',
+                                                      ROOT / 'resources/libs/subtitle_style.py')
+        libs.subtitle_style = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(libs.subtitle_style)
+        sys.modules['resources.libs.subtitle_style'] = libs.subtitle_style
         spec = importlib.util.spec_from_file_location('gui_repair_t', SOURCE)
         self.mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.mod)
@@ -96,6 +102,14 @@ class GuiRepairTests(unittest.TestCase):
             self.assertNotIn(device_id, ids)
         self.assertFalse([i for i in ids if i.startswith('audiooutput.')])
         self.assertEqual('locale.language', root.findall('setting')[-1].get('id'))
+
+    def test_the_build_defaults_have_the_subtitles_without_the_box(self):
+        # the Wizard's copy of the pack still carries the box (it is immutable); a restore must not bring it back
+        root = self.mod.build_defaults()
+        for key, value in (('subtitles.backgroundtype', '0'), ('subtitles.bordersize', '25')):
+            node = root.find("setting[@id='%s']" % key)
+            self.assertEqual(value, node.text)
+            self.assertIsNone(node.get('default'))
 
     # --- detection ---------------------------------------------------------
     def test_english_with_a_foreign_region_looks_reset(self):

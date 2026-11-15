@@ -179,10 +179,10 @@
     <setting id="subtitles.style">1</setting>
     <setting id="subtitles.colorpick" default="true">FFFFFFFF</setting>
     <setting id="subtitles.opacity">90</setting>
-    <setting id="subtitles.bordersize">41</setting>
+    <setting id="subtitles.bordersize">25</setting>
     <setting id="subtitles.bordercolorpick" default="true">FF000000</setting>
     <setting id="subtitles.blur" default="true">0</setting>
-    <setting id="subtitles.backgroundtype">2</setting>
+    <setting id="subtitles.backgroundtype">0</setting>
     <setting id="subtitles.bgcolorpick" default="true">FF000000</setting>
     <setting id="subtitles.bgopacity">35</setting>
     <setting id="subtitles.shadowcolor" default="true">FF000000</setting>
