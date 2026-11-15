@@ -2660,7 +2660,8 @@ def _timeline_origin(src, seg_start, scale_ms, log):
 # ---- public API -------------------------------------------------------------
 def probe_tracks(url_or_path, head_bytes=DEFAULT_HEAD_BYTES, log=None):
     """Return the embedded subtitle tracks as
-        [{'num','codec','lang','forced','is_text'}, ...]
+        [{'num','codec','lang','forced','is_text','name','sdh','signs',
+          'lang_explicit'}, ...]
     or [] when the file isn't Matroska / has none / can't be read. Cheap: reads
     only the head. Never raises."""
     _log = log or _noop
@@ -2674,7 +2675,11 @@ def probe_tracks(url_or_path, head_bytes=DEFAULT_HEAD_BYTES, log=None):
             out.append({'num': t['num'], 'codec': t['codec'],
                         'lang': (t['lang'] or '').lower(),
                         'forced': bool(t['forced']),
-                        'is_text': _is_text_codec(t['codec'])})
+                        'is_text': _is_text_codec(t['codec']),
+                        'name': t.get('name') or '',
+                        'sdh': _track_is_sdh(t),
+                        'signs': _track_is_signs(t),
+                        'lang_explicit': bool(t.get('lang_explicit', True))})
         return out
     except Exception as e:
         _log('probe_tracks failed: %s' % e)

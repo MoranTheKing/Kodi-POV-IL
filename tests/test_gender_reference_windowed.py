@@ -168,6 +168,31 @@ class Windowed(unittest.TestCase):
             mapping, diag = self.ag.align_one(self.source, self.blocks, other)
             self.assertIsNone(mapping, (seed, diag))
 
+    def test_a_cue_with_no_duration_does_not_cost_the_reference(self):
+        # providers' files carry a zero-length cue now and then (Survivor
+        # S04E12: two of four candidates refused at "non-positive cue duration
+        # at cue 372"); one in the source refused every candidate
+        ref = shifted(self.base, [(0, 2000)])
+        broken = list(ref)
+        broken[200] = (ref[200][0], ref[200][0])
+        mapping, diag = self.ag.align_one(self.source, self.blocks, srt(broken, 'Ref line'))
+        self.assertIsNotNone(mapping, diag)
+        self.assertTrue(diag.startswith('gate OK'), diag)
+        self.assertNotIn(201, mapping)              # the cue that shows nothing hints nothing
+        self.assertGreaterEqual(len(mapping), len(self.base) - 2)
+        self.assertEqual(self.right_share(mapping), 1.0)
+        source = list(self.base)
+        source[5] = (source[5][0], source[5][0])
+        text = srt(source, 'Source line')
+        mapping, diag = self.ag.align_one(text, text.strip().split('\n\n'), srt(ref, 'Ref line'))
+        self.assertIsNotNone(mapping, diag)
+        self.assertGreaterEqual(self.right_share(mapping), 0.99, diag)
+
+    def test_a_reference_of_no_durations_is_still_refused(self):
+        dead = [(a, a) for a, _b in shifted(self.base, [(0, 2000)])]
+        mapping, diag = self.ag.align_one(self.source, self.blocks, srt(dead, 'Ref line'))
+        self.assertIsNone(mapping, diag)
+
     def test_a_clean_pair_stays_on_the_gate(self):
         mapping, diag = self.ag.align_one(
             self.source, self.blocks, srt(shifted(self.base, [(0, 2000)]), 'Ref line'))
