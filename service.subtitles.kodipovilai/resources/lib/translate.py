@@ -3568,6 +3568,8 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     pass
         if why is not None and _xstats.get('why'):
             why['reason'] = _xstats.get('why')
+        if reference is None and isinstance(_xstats.get('tracks'), list):
+            _remember_tracks(url, _xstats['tracks'])
         if not srt_text or srt_text.count('-->') < 3:
             # Say WHICH of the two this was. "Could not extract -- try another
             # subtitle" is wrong and actively harmful when the pass actually
@@ -3637,11 +3639,32 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
 # provider serves a track in seconds: a reading that would take longer than
 # _EMB_REF_BUDGET_S in all is given up after _EMB_REF_PROBE_S.
 #
-# OFF unless the setting says otherwise: a reference changes what the
-# translation says, so it ships on only after a blind comparison (the owner's
-# rule; study in blind-ab-studies).
+# Blind study 008 (15 Nov 2026): a Spanish track of the file as the reference
+# against no reference, 8-10-2 -- no gain, so second-tier tracks stay out
+# (arabic_gender._EMBEDDED_REF_LANGS). ON since 0.3.88 for an ARABIC track,
+# by the owner's word without a study of its own (Arabic is the foreign
+# oracle the reference was measured on; the file's track is on the file's
+# clock), and only for a translation made from the file's own track -- that
+# job reads the stream already; any other translation asks the playing file
+# nothing. The setting (no row in the settings screen) turns it off.
 _EMB_REF_SETTING = 'embedded_reference'
-_EMB_REF_DEFAULT = False
+_EMB_REF_DEFAULT = True
+# The subtitle tracks of the file a source track was just extracted from,
+# as its extraction parsed them: the reference asks no second read of the
+# file's head (2 MB in one request, beside the player) to learn whether an
+# Arabic track is there -- for most files it is not (review, 0.3.88).
+_EMB_TRACKS = {}
+_EMB_TRACKS_KEEP = 2
+
+
+def _remember_tracks(url, tracks):
+    try:
+        _EMB_TRACKS.pop(url, None)
+        _EMB_TRACKS[url] = [dict(t) for t in tracks if isinstance(t, dict)]
+        while len(_EMB_TRACKS) > _EMB_TRACKS_KEEP:
+            _EMB_TRACKS.pop(next(iter(_EMB_TRACKS)))
+    except Exception:
+        pass
 _EMB_REF_DEADLINE_S = 120.0
 _EMB_REF_PROBE_S = 15.0
 _EMB_REF_BUDGET_S = 90.0
@@ -3669,12 +3692,16 @@ def _embedded_reference(info, source_lang, cancelled=None):
         return None
 
     def tracks():
-        try:
-            found = embedded_extract.probe_tracks(
-                url, log=lambda m: kodi_utils.log('embedded_extract: ' + m,
-                                                  level='INFO'))
-        except Exception:
-            found = []
+        found = _EMB_TRACKS.get(url)
+        if found is None:
+            # no extraction of this file in this process (an external
+            # subtitle laid on the track's cue times): the head is read
+            try:
+                found = embedded_extract.probe_tracks(
+                    url, log=lambda m: kodi_utils.log('embedded_extract: ' + m,
+                                                      level='INFO'))
+            except Exception:
+                found = []
         return [t for t in found
                 if t.get('is_text') and not t.get('forced')
                 and not t.get('signs')
@@ -4804,6 +4831,10 @@ def _gp_saved(path):
 # last search found a human Hebrew subtitle: the reference search takes
 # Hebrew first (an Arabic one may still have won when the Hebrew did not
 # align; the search cannot tell).
+# Since 0.3.88 such a translation IS proofread, by gemini-4-hydrogen alone
+# (gender_proofread.HEBREW_REF_MODELS; blind study 007: 13-3-3 where the
+# models above had 12-15-3 and 19-8-3). What is asked here is therefore no
+# longer "proofread or not" but "which models" (_gp_models).
 
 def _gp_ref_marker(path):
     return path + '.gpref'
@@ -4919,12 +4950,20 @@ def _gp_settle(markers, report, stopped):
             _gp_try_mark(m, False)
 
 
-def _gp_models_left():
-    """Whether a proofread model still has quota today."""
+def _gp_models(hebrew_ref=False):
+    """The proofread's models for a translation: gemini-4-hydrogen alone for
+    one made with a Hebrew gender reference."""
+    from . import gender_proofread
+    return (gender_proofread.HEBREW_REF_MODELS if hebrew_ref
+            else gender_proofread.MODELS)
+
+
+def _gp_models_left(hebrew_ref=False):
+    """Whether a proofread model (_gp_models) still has quota today."""
     try:
         from . import gender_proofread
         return any(not gender_proofread.exhausted_today(m, kodi_utils)
-                   for m in gender_proofread.MODELS)
+                   for m in _gp_models(hebrew_ref))
     except Exception:
         return False
 
@@ -4934,8 +4973,9 @@ def _proofread_due(path, source_text, progressive_cb, marker=None,
     """Whether an opened translation gets the proofread now: from the list
     (a live preview to swap in), the setting on, a key, not proofread before
     (`marker`, else `path`), AI-made (not Google, not a Hebrew source passed
-    through), not made with a Hebrew gender reference (`info`: the title, for
-    one of unknown origin made with a reference) and a model with quota left. `source_text` None:
+    through) and a model with quota left -- gemini-4-hydrogen alone for one
+    made with a Hebrew gender reference (`info`: the title, for one of
+    unknown origin made with a reference). `source_text` None:
     all of it but the source (before looking for one). `held`: the
     in-progress marker is the caller's own, or not a reason here."""
     try:
@@ -4950,9 +4990,7 @@ def _proofread_due(path, source_text, progressive_cb, marker=None,
                          and not _is_mostly_hebrew(source_text, min_ratio=0.60)))):
             return False
         if _gp_hebrew_ref(path, info):
-            kodi_utils.log('gender proofread: not run -- this translation was '
-                           'made with a Hebrew reference', level='INFO')
-            return False
+            return bool(_gp_models_left(True))
         return bool(_gp_models_left())
     except Exception:
         return False
@@ -5021,16 +5059,18 @@ _GP_JOB_BUDGET = 1800
 
 
 def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
-                          background=False, rounds=True):
+                          background=False, rounds=True, hebrew_ref=False):
     """(blocks with gender_proofread's corrections applied, report). The
     blocks come back as they are when no model answers. `src_text` is the
     prepared source the blocks were translated from; `model` the translator's
     (the usage counter holds that one only). `background`: nothing waits for
     it (_GP_BUSY_WAIT). `rounds` False: one request a model, no busy rounds
-    (gp_later's ask again). Never raises."""
+    (gp_later's ask again). `hebrew_ref`: the translation was made with a
+    Hebrew gender reference (_gp_models). Never raises."""
     report = {}
     try:
         from . import gender_proofread
+        _models = _gp_models(hebrew_ref)
         # no new model after this: a viewer waits for the swap (a background
         # proofread has longer)
         _start = time.monotonic()
@@ -5109,10 +5149,10 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
                   and (c.get('character') or c.get('name'))
                   and c.get('gender') in ('female', 'male')]
         new_texts, report = gender_proofread.proofread(
-            sources, texts, _request, models=gender_proofread.MODELS,
+            sources, texts, _request, models=_models,
             cast=people, cancelled=stopped)
         _wait, _rounds = _GP_BUSY_WAIT, 1
-        _turn = list(reversed(gender_proofread.MODELS))
+        _turn = list(reversed(_models))
         while (background and rounds and _rounds <= _GP_BUSY_ROUNDS
                and not report.get('model') and not report.get('spent')
                and not set(_fails) - {'busy', 'quota', 'error'}
@@ -5231,7 +5271,7 @@ def _title_cast(info, imdb_id, season, episode):
 
 def _proofread_opened(path, source_text, source_id, release, progressive_cb,
                       deliver, cancelled, info, share=None, shown_already=False,
-                      mark_path=None, later=None):
+                      mark_path=None, later=None, hebrew_ref=False):
     """An older AI translation opened from the list, proofread once.
 
     `path` is the Hebrew file, corrected in place; `deliver(path)` returns the
@@ -5281,7 +5321,8 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
         blocks = srt.parse_blocks(cache.load_text(path) or '')
         proofed, report = _run_gender_proofread(
             blocks, source_text, kodi_utils.get_setting('api_key', '') or '',
-            model, cast, stopped, background=shown_already)
+            model, cast, stopped, background=shown_already,
+            hebrew_ref=hebrew_ref)
         final = None
         if proofed != blocks:
             final = srt.stitch_blocks(proofed)
@@ -5477,17 +5518,21 @@ def gp_later_tick(should_cancel=None):
         marker, path = entry['marker'], entry['path']
         info = entry.get('info') or {}
         share = entry.get('share') or None
-        # 2. outside the lock: the Hebrew-reference rule again (0.3.72: the
-        # file may have been made again since), and someone else's proofread
-        # in the pool (asked only with the pool in use, as the list does)
+        # 2. outside the lock: the Hebrew-reference rule again (the file may
+        # have been made again since: gemini-4-hydrogen alone then, 0.3.88),
+        # and someone else's proofread in the pool (asked only with the pool
+        # in use, as the list does)
         drop = ''
-        if (_gp_hebrew_ref(path, info if _gp_ref_tier(path, entry.get('ref_hash')) else None)
-                or any(_gp_hebrew_ref(c) for c in entry.get('copies') or []
-                       if c and os.path.isfile(c))):
-            drop = 'heref'
-        elif (share and pool is not None and pool.use_enabled()
-              and _pool_variant_proofread(info, share['hash'])):
+        hebrew = bool(
+            _gp_hebrew_ref(path, info if _gp_ref_tier(path, entry.get('ref_hash')) else None)
+            or any(_gp_hebrew_ref(c) for c in entry.get('copies') or []
+                   if c and os.path.isfile(c)))
+        if (share and pool is not None and pool.use_enabled()
+                and _pool_variant_proofread(info, share['hash'])):
             drop = 'pooled'     # the next open from the list takes theirs
+        # its one model out of today's quota while another has some: it
+        # waits its turn again and the queue's other entries are not held up
+        wait = hebrew and not drop and not _gp_models_left(True)
 
         # 3. under the lock: dropped, or claimed -- the request counts now
         def settle(state):
@@ -5497,6 +5542,9 @@ def gp_later_tick(should_cancel=None):
             if drop:
                 gp_later.remove(state, marker)
                 return drop, True
+            if wait:
+                gp_later.hold(mine, time.time())
+                return 'quota', True
             t = time.time()
             if (mine.get('next') or 0) > t or not gp_later.can_send(state, t, today):
                 return '', False
@@ -5526,7 +5574,7 @@ def gp_later_tick(should_cancel=None):
                 _gp_try_mark(m, True)
             proofed, report = _run_gender_proofread(
                 blocks, source_text, api_key, model, cast, stopped,
-                background=True, rounds=False)
+                background=True, rounds=False, hebrew_ref=hebrew)
             _gp_settle(markers, report, stopped)
             if report.get('model'):
                 final = srt.stitch_blocks(proofed) if proofed != blocks else None
@@ -6188,7 +6236,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     later={'hash': _phash, 'lang': _psrc or 'en',
                            'release': payload.get('release') or '',
                            'kind': ('ai_emb' if _pkind == 'ai_emb' else 'ai'),
-                           'ref_hash': _phash})
+                           'ref_hash': _phash},
+                    hebrew_ref=_gp_hebrew_ref(_praw, _gp_info))
             if not os.path.isfile(_praw):
                 with open(_praw, 'w', encoding='utf-8') as f:
                     f.write(text)
@@ -6706,6 +6755,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # per-line gender instead of falling straight to English-only.
     _ref_stack = []            # [(lang, {entry_number: reference_line}), ...]
     _ref_plan = [None]         # arabic_gender.ReferencePlan (boxed for the closure)
+    # A fallback reference for a blocked chunk is looked for briefly, and once.
+    # The search went on through every candidate left, up to the providers'
+    # whole budget (60 s of downloads), for each blocked chunk in turn: QA
+    # Kodi, 16 Nov 2026 -- the first reference in hand after 5 s; a chunk was
+    # blocked 25 s later, and 33 subtitles were downloaded and refused over
+    # the next 40 s while it waited. The next language's best match aligns in
+    # its first tries or the title's subtitles are another cut; a chunk that
+    # gets no fallback is isolated line by line, as before.
+    _REF_FALLBACK_TRIES = 6
+    _REF_FALLBACK_SECONDS = 15.0
     _ref_lock = threading.Lock()
 
     def _ref_ensure(level):
@@ -6733,10 +6792,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         try:
             while len(_ref_stack) <= level:
                 try:
-                    lang, mp = plan.next()
+                    if _ref_stack:
+                        lang, mp = plan.next(max_tries=_REF_FALLBACK_TRIES,
+                                             max_seconds=_REF_FALLBACK_SECONDS)
+                    else:
+                        lang, mp = plan.next()
                 except Exception:
                     lang, mp = None, None
                 if mp is None:
+                    if _ref_stack:
+                        _ref_plan[0] = None    # no later chunk looks again
                     return False
                 _ref_stack.append((lang or 'ar', mp))
                 if len(_ref_stack) > 1:
@@ -6788,12 +6853,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
 
         # Proofread here before, its pool upload never went through (the
         # worker answered 502): offered again, with no new request -- not
-        # one made with a Hebrew reference (proofread before 0.3.72).
+        # one made with a Hebrew reference and proofread before 0.3.72 by
+        # the models of then (gemini-4-hydrogen's proofread of one, 0.3.88,
+        # is offered like any other).
+        _made_he = _gp_hebrew_ref(path, info if _gp_ref_tier(path, pooled_hash)
+                                  else None)
         if (_gp_done(path) and source_text and pool is not None
                 and pool.share_enabled()
                 and not pool.was_contributed(_gp_marker(path))
-                and not _gp_hebrew_ref(path, info if _gp_ref_tier(path, pooled_hash)
-                                       else None)):
+                and not (_made_he and _gp_saved(path).get('model')
+                         not in _gp_models(True))):
             pool_hash = held_hash()
             if pool_hash:
                 share_to(pool_hash)(cache.load_text(path) or '', _gp_saved(path))
@@ -6838,7 +6907,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                          'release': _release_override or '',
                                          'kind': _pool_kind,
                                          'ref_hash': pooled_hash}
-                                        if pool_hash else None))
+                                        if pool_hash else None),
+                                 hebrew_ref=_made_he)
 
     # Respect the user's preferred subtitle language: if they've chosen a
     # specific non-Hebrew language (e.g. English) DON'T force an AI Hebrew
@@ -7360,8 +7430,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                            (info.get('title') or imdb_id or '?')), level='INFO')
         try:
             from . import arabic_gender
-            _emb_ref = _embedded_reference(
+            _emb_ref = (_embedded_reference(
                 info, source_lang, cancelled=_translation_cancelled)
+                if payload.get('embedded') else None)
             if _timing_src:
                 plan, _diag0 = arabic_gender.begin(
                     info, src_text, timing_text=_timing_src,
@@ -7459,10 +7530,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 return ''
             if not kodi_utils.get_bool('gender_proofread', True):
                 return 'off'
-            if _gp_ref == 'he':
-                return 'heref'
             if progressive_cb is None:
                 # the job proofread_later starts asks only a model with quota
+                # (after a Hebrew reference: gemini-4-hydrogen alone)
+                if _gp_ref == 'he':
+                    return 'later' if _gp_models_left(True) else 'quota'
                 return 'later' if _gp_models_left() else 'quota'
             return _gp_report.get('why') or ''
         except Exception:
@@ -9232,7 +9304,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         as they are when no model answers. Never raises."""
         proofed, report = _run_gender_proofread(
             blocks, src_text, api_key, model, cast,
-            _proofread_stopper(_progressive_source_id, _translation_cancelled))
+            _proofread_stopper(_progressive_source_id, _translation_cancelled),
+            hebrew_ref=(_gp_ref == 'he'))
         _gp_report.update(report or {})
         return proofed
 
@@ -9427,10 +9500,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # runs on the file already saved, so a stop or a crash in those minutes
     # keeps this translation; what it corrects is saved over it and goes out
     # with 'done' below, and to the pool.
-    if _gp_ref == 'he' and progressive_cb is not None:
-        kodi_utils.log('gender proofread: not run -- translated with a Hebrew '
-                       'reference', level='INFO')
-    if (progressive_cb is not None and _gp_ref != 'he'
+    if (progressive_cb is not None
             and kodi_utils.get_bool('gender_proofread', True)):
         try:
             progressive_cb('chunk_ready', {

@@ -878,10 +878,18 @@ _EMBEDDED_MT_NAME = re.compile(
     r'deepl|ai|translated)(?![a-z])', re.I)
 
 
+# The languages a track of the playing file may be a reference in. Arabic
+# only (0.3.88, the owner's word): blind study 008 found no gain from a
+# Spanish track of the file against no reference (8-10-2), so the second
+# tier stays out; Arabic is the foreign oracle this feature was built and
+# measured on, and the file's own track is on the file's own clock.
+_EMBEDDED_REF_LANGS = ('ar',)
+
+
 def _embedded_candidates(embedded):
     """[(lang, candidate), ...] -- the playing file's own subtitle tracks in
-    chain languages, one a language (a plain track before an SDH one), in
-    chain order. `embedded` is translate._embedded_reference()'s (tracks,
+    the languages of _EMBEDDED_REF_LANGS, one a language (a plain track before
+    an SDH one), in chain order. `embedded` is translate._embedded_reference()'s (tracks,
     read) or None. Hebrew is left out: a file with a whole human Hebrew track
     is not being translated, and a Hebrew track that is there anyway is one
     nobody could vouch for. Never raises."""
@@ -897,7 +905,8 @@ def _embedded_candidates(embedded):
             for sep in ('-', '_'):
                 code = code.split(sep, 1)[0]
             lang = _ALIAS_TO_CHAIN.get(code)
-            if not lang or lang == 'he' or not t.get('lang_explicit', True):
+            if (not lang or lang == 'he' or lang not in _EMBEDDED_REF_LANGS
+                    or not t.get('lang_explicit', True)):
                 continue
             rank = (bool(t.get('sdh')), t.get('num') or 0)
             if lang not in best or rank < best[lang][0]:
@@ -975,13 +984,25 @@ class ReferencePlan(object):
         #                              WINNER right after a successful next(), or
         #                              the last rejection once the chain is dry
 
-    def next(self):
+    def next(self, max_tries=None, max_seconds=None):
         """Return (lang, map) for the next chain language that aligns, or
-        (None, None) when the chain / download budget is exhausted."""
+        (None, None) when the chain / download budget is exhausted.
+        `max_tries` / `max_seconds`: this call gives up, with nothing lost,
+        after that many providers' subtitles or that long (a fallback for
+        one blocked chunk; the first reference is looked for without them)."""
         try:
             with self._lock:
+                tries, began = 0, time.monotonic()
                 while self._pos < len(self._ordered):
                     lang, cand = self._ordered[self._pos]
+                    if (lang not in self._used and not cand.get('_embedded') and (
+                            (max_tries is not None and tries >= max_tries)
+                            or (max_seconds is not None
+                                and time.monotonic() - began >= max_seconds))):
+                        _log('no other reference aligned in {0} subtitle(s) / '
+                             '{1:.0f}s -- not looked for further'.format(
+                                 tries, time.monotonic() - began))
+                        return None, None
                     # The two budgets are the providers': a track of the
                     # playing file costs no provider request and has its own
                     # bound (translate._embedded_reference), so one that
@@ -1013,6 +1034,7 @@ class ReferencePlan(object):
                         ref_text = _download_candidate(cand)  # lazy fetch
                         if not embedded:
                             self._downloads += 1
+                            tries += 1
                         if not ref_text:
                             continue
                         try:
@@ -1749,11 +1771,11 @@ def begin(info, src_text, timing_text=None, embedded=None):
     plan.next() to pull the primary (and, later, fallback) references. Fully
     guarded; never raises.
     `embedded` (translate._embedded_reference): the playing file's own tracks
-    in chain languages join the candidates -- Arabic before the providers'
-    first tier, the rest between the providers' first tier and their second:
-    a track of the file is on the file's own clock and needs no provider, but
-    a human Hebrew or Arabic subtitle that aligns is still the better oracle
-    than an embedded Spanish one."""
+    (_embedded_candidates: Arabic) join the candidates, each in its
+    language's own turn of its tier's first round, before the providers'
+    first subtitle in that language: a provider's Hebrew is tried first as
+    before, then the file's Arabic track -- on the file's own clock, no
+    provider asked -- then the providers' Arabic."""
     try:
         from resources.lib import srt as _srt
         src_blocks = _srt.parse_blocks(src_text)
@@ -1821,13 +1843,14 @@ def begin(info, src_text, timing_text=None, embedded=None):
     inside = _embedded_candidates(embedded)
     ordered = []
     for tier in _REF_TIERS:
-        ordered.extend(pair for pair in inside if pair[0] in tier)
+        own = dict(pair for pair in inside if pair[0] in tier)
         depth = max([len(by_lang.get(l, ())) for l in tier] or [0])
-        ordered.extend(
-            (lang, by_lang[lang][i])
-            for i in range(depth)
-            for lang in tier
-            if i < len(by_lang.get(lang, ())))
+        for i in range(max(depth, 1 if own else 0)):
+            for lang in tier:
+                if i == 0 and lang in own:
+                    ordered.append((lang, own[lang]))
+                if i < len(by_lang.get(lang, ())):
+                    ordered.append((lang, by_lang[lang][i]))
     if inside:
         _log('reference candidates inside the playing file: {0}'.format(
             ', '.join('{0} ({1})'.format(lang, c['filename'])
