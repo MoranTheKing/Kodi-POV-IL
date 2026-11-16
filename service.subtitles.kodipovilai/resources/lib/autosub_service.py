@@ -948,6 +948,29 @@ def snapshot_on_play():
             pass
 
 
+def playback_over():
+    """A playback ended and nothing plays after it: forget the file, so that
+    playing it again is a new viewing and gets its automatic subtitle.
+
+    STATE['last_file'] is there because onAVStarted can fire more than once
+    for one playback; it was never cleared, so a file played twice in a row
+    -- stopped and started again, or picked again from the list -- got no
+    automatic subtitle the second time, and nothing in the log said why
+    (QA Kodi, 16 Nov 2026: a file with only an embedded English track had its
+    Hebrew on screen 10 s after the first start and nothing at all after the
+    second). Not when another file is already playing: that playback's own
+    run has set last_file, and clearing it would let a repeated onAVStarted
+    search again over a subtitle the viewer chose. Never raises."""
+    try:
+        if xbmc.Player().isPlaying():
+            return False
+    except Exception:
+        return False
+    with _STATE_LOCK:
+        STATE['last_file'] = None
+    return True
+
+
 if xbmc is not None:
     class AutoSubPlayer(xbmc.Player):
         def onAVStarted(self):
@@ -966,6 +989,14 @@ if xbmc is not None:
                 threading.Thread(target=autosub_on_play, daemon=True).start()
             except Exception:
                 pass
+        def onPlayBackStopped(self):
+            playback_over()
+
+        def onPlayBackEnded(self):
+            playback_over()
+
+        def onPlayBackError(self):
+            playback_over()
 
 
 def start_if_enabled():
