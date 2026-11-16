@@ -1,9 +1,9 @@
 {
   "id": "plugin.video.umbrella",
-  "version": "6.8.01",
-  "filename": "plugin.video.umbrella-6.8.01.zip",
-  "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.umbrella-6.8.01.zip",
-  "size": 14249834,
-  "sha256": "b2aead01642301b561632e4f57f76b7307e113c0d380aa5bc674f5c913d9ea63",
-  "upstream_zip": "https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/omega/zips/plugin.video.umbrella/plugin.video.umbrella-6.8.01.zip"
+  "version": "6.8.02",
+  "filename": "plugin.video.umbrella-6.8.02.zip",
+  "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/official-plugin.video.umbrella-6.8.02.zip",
+  "size": 14249945,
+  "sha256": "30a437e8cf87f92447305e31f9b943f2c623c4e494010a89f283dce78782a5a5",
+  "upstream_zip": "https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/omega/zips/plugin.video.umbrella/plugin.video.umbrella-6.8.02.zip"
 }
