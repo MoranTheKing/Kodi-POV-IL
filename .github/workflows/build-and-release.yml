@@ -212,11 +212,26 @@ jobs:
               --target main
           fi
 
+          # GitHub sometimes answers a read that follows a write with a
+          # passing "release not found" (17 Nov 2026: the download right
+          # after an upload failed the build while the release and the
+          # asset were both there). A read is asked again; an upload is
+          # not, since a second one would meet the first one's asset.
+          again() {
+            local try=0
+            until "$@"; do
+              try=$((try + 1))
+              if [ "$try" -ge 4 ]; then return 1; fi
+              echo "retry $try: $*" >&2
+              sleep $((try * 10))
+            done
+          }
+
           # A versioned filename is immutable. If code changed without a
           # version bump, fail instead of silently replacing an asset that an
           # existing manifest (or rollback) already references.
           mkdir -p dist-verify
-          ASSETS=$(gh release view "$TAG" --json assets -q '.assets[].name')
+          ASSETS=$(again gh release view "$TAG" --json assets -q '.assets[].name')
           # A host-pin-only change builds no add-on zip; an unmatched glob
           # must mean "nothing to publish", not a literal 'dist/*.zip'.
           shopt -s nullglob
@@ -224,14 +239,14 @@ jobs:
             name=$(basename "$file")
             case "$name" in *-latest.zip) continue ;; esac
             if printf '%s\n' "$ASSETS" | grep -Fxq "$name"; then
-              gh release download "$TAG" -p "$name" -D dist-verify
+              again gh release download "$TAG" -p "$name" -D dist-verify --clobber
               if ! cmp -s "$file" "dist-verify/$name"; then
                 echo "ERROR: immutable release asset $name has different bytes; bump its version" >&2
                 exit 1
               fi
             else
               gh release upload "$TAG" "$file"
-              gh release download "$TAG" -p "$name" -D dist-verify
+              again gh release download "$TAG" -p "$name" -D dist-verify --clobber
               cmp "$file" "dist-verify/$name"
             fi
           done
