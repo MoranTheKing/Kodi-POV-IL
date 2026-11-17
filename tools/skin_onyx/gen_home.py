@@ -40,6 +40,17 @@ def pov_tv(action, **kw):
     return POV + '?' + q
 
 
+# A row of the viewer's own saved titles is asked again the moment one is added or removed: its address
+# carries this home-window property, which the Wizard's two toggle hooks in POV set (POV's own favourites,
+# and the Trakt / MDBList / TMDb list manager). A changed address reloads that row alone; the ping that
+# reloads every row (UpdateLibrary) once crashed Kodi beside Container.Refresh, and is not used here.
+LISTS_TOKEN = '&povil_t=$INFO[Window(home).Property(povil.lists.t)]'
+
+
+def personal(path):
+    return path + LISTS_TOKEN
+
+
 def pov_mode(mode, **kw):
     return POV + '?' + '&'.join(['mode=' + mode] + ['%s=%s' % kv for kv in kw.items()])
 
@@ -145,10 +156,10 @@ TABS = [
          # (t= set when the home comes back from Kodi's favourites window, where a
          # favourite is renamed or moved without changing the count)
          rows=[('המועדפים שלי', WIZARD + '?mode=favourites_row&r=$INFO[Container(%d).NumItems]&t=$INFO[Window(home).Property(povil.fav.t)]' % FAV_COUNT, 'square', True),
-               ('סרטים שמורים', pov_movies('favorites_movies'), 'poster', True),
-               ('סדרות שמורות', pov_tv('favorites_tvshows'), 'poster', True),
-               ('הסרטים שלי (MDBList)', pov_movies('mdblist_my_movies'), 'poster', True),
-               ('הסדרות שלי (MDBList)', pov_tv('mdblist_my_tvshows'), 'poster', True)],
+               ('סרטים שמורים', personal(pov_movies('favorites_movies')), 'poster', True),
+               ('סדרות שמורות', personal(pov_tv('favorites_tvshows')), 'poster', True),
+               ('הסרטים שלי (MDBList)', personal(pov_movies('mdblist_my_movies')), 'poster', True),
+               ('הסדרות שלי (MDBList)', personal(pov_tv('mdblist_my_tvshows')), 'poster', True)],
          # MDBList's chips once its rows have items (a connected account): no
          # settings read on every frame
          # POV's own saved lists first: they need no account (asked for by a viewer: the chips named
