@@ -778,7 +778,7 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/dialogs.py",
-        "marker": "# WIZARD_FAV_REFRESH_DIALOG_v3",
+        "marker": "# WIZARD_FAV_REFRESH_DIALOG_v4",
         "anchor": "if refresh: container_refresh()",
         # POV 6.10.06 was republished (same version) with dialogs.py
         # importing `kodi_utils as ku`; a fresh install stopped on this
@@ -787,6 +787,10 @@ PATCH_CONFIG = [
         "action": "prepend_before",
         "hook": (
             "\trefresh = 'search' not in (__import__('xbmc').getInfoLabel('Container.FolderPath') or '').lower()\n"
+            # v4: the home's rows of saved titles carry this property in their
+            # address (Onyx), so a change reloads them at once -- Container.Refresh
+            # reaches the open list only, and on the home screen nothing.
+            "\t__import__('xbmcgui').Window(10000).setProperty('povil.lists.t', str(__import__('time').time()))\n"
         )
     },
     {

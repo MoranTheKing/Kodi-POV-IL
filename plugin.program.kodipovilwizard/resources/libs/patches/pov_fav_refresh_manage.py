@@ -19,6 +19,14 @@ def run(local_vars):
         # 1. Execute the original upstream toggle logic safely
         toggle_result = self_obj.execute_toggle(choice, action_add)
 
+        # The home's rows of saved titles (Onyx) carry this property in their
+        # address: changing it reloads those rows alone, at once.
+        try:
+            import time, xbmcgui
+            xbmcgui.Window(10000).setProperty('povil.lists.t', str(time.time()))
+        except Exception:
+            pass
+
         # 2. GUARD: Do not refresh if the current container is a search result.
         # Re-fetching a search query re-entrantly from a toggle crashes the screen.
         folder_path = xbmc.getInfoLabel('Container.FolderPath') or ''
