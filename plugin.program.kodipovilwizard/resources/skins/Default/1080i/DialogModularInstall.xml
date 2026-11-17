@@ -17,14 +17,15 @@
             <posx>0</posx><posy>22</posy><width>1200</width><height>44</height>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFFFD200</textcolor>
-            <label>[B]מתקין את הבילד[/B]</label>
+            <!-- the panel carries the build's logo in this very place: a heading here was written over it -->
+            <label></label>
         </control>
         <control type="label" id="201">
             <description>subheader</description>
             <posx>0</posx><posy>62</posy><width>1200</width><height>24</height>
             <font>font10</font><align>center</align><aligny>center</aligny>
             <textcolor>FF9A9A9A</textcolor>
-            <label>הורדות במקביל · התקנה אחת בכל פעם</label>
+            <label>מתקין את הבילד · הורדות במקביל, התקנה אחת בכל פעם</label>
         </control>
         <!-- ROW 0 -->
         <control type="group" id="1000">

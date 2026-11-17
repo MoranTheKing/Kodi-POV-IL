@@ -103,6 +103,14 @@ EDITS = [
      '\t\t\t\t\t\t</control>\n\t\t\t\t\t\t<control type="label" description="Keyboard language"><left>0</left><top>312</top><width>330</width><height>72</height><font>size20</font><align>center</align><aligny>center</aligny><textcolor>povil_white</textcolor><label>$VAR[POVIL_KbLang]</label><visible>!Control.HasFocus(309)</visible></control>\n\t\t\t\t\t\t<control type="label" description="Keyboard language"><left>0</left><top>312</top><width>330</width><height>72</height><font>size20</font><align>center</align><aligny>center</aligny><textcolor>povil_ink</textcolor><label>$VAR[POVIL_KbLang]</label><visible>Control.HasFocus(309)</visible></control>\n\t\t\t\t\t</control>\n\t\t\t\t</control>\n\t\t\t</control>\n\t\t</control>\n\t\t<control type="list" id="9010"', 'description="Keyboard language"'),
     ('Includes_Variables.xml', '\t<variable name="FrameColor"',
      '\t<variable name="POVIL_KbLang" description="The keyboard layout button, in Hebrew">\n\t\t<value condition="String.Contains(Control.GetLabel(309),Hebrew)">מקלדת: עברית</value>\n\t\t<value condition="String.Contains(Control.GetLabel(309),English)">מקלדת: אנגלית</value>\n\t\t<value>$INFO[Control.GetLabel(309)]</value>\n\t</variable>\n\t<variable name="FrameColor"', 'name="POVIL_KbLang"'),
+    # A page is dark, not black (field report: "Kodi's settings and the skin are less lit than another
+    # skin"): every full page without art was pure black with plates five percent above it, which a
+    # television shows as one black surface. A faint veil over the page's background lifts it.
+    ('Includes.xml',
+     '\t\t<include>WeatherBackground</include>' + NL + '\t\t<include>DiffuseBG</include>' + NL + '\t</include>',
+     '\t\t<include>WeatherBackground</include>' + NL + '\t\t<include>DiffuseBG</include>' + NL +
+     '\t\t<control type="image" description="POVIL: a page is dark, not black"><visible>!$EXP[BGvideoPlaying]</visible><include>Dimensions_Fullscreen</include>'
+     '<texture colordiffuse="17F5F2EC">povil/white.png</texture></control>' + NL + '\t</include>'),
     # The skin settings, right to left (skin_settings_rtl): the shared SkinSettingsButton
     # stays as it is for add-on settings, where Kodi fills both labels itself.
     ('Includes.xml', '	<include name="DimBG">',

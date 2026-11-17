@@ -355,6 +355,7 @@
 		</control>
 		<include>WeatherBackground</include>
 		<include>DiffuseBG</include>
+		<control type="image" description="POVIL: a page is dark, not black"><visible>!$EXP[BGvideoPlaying]</visible><include>Dimensions_Fullscreen</include><texture colordiffuse="17F5F2EC">povil/white.png</texture></control>
 	</include>
 	<include name="MiniBackground">
 		<control type="image" description="Default BG">
