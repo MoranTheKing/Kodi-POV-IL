@@ -249,12 +249,48 @@ def _patch_file(path, replacements, label):
     return 'patched'
 
 
+DISCOVER_OFF_MARK = '_af3_search_discover_off_v1'
+
+
+def _uses_multisearch(c1105):
+    """Arctic Fuse 3 3.5+: window 1105 only starts SkinVariables' multisearch;
+    the discover grid this patcher repointed is gone."""
+    try:
+        with open(c1105, 'r', encoding='utf-8') as f:
+            return 'run_multisearch' in f.read()
+    except Exception:
+        return False
+
+
+def _multisearch_discover_off():
+    """The new search adds TMDbHelper "discover" sources beside the rows --
+    English TMDb lists that do not open through the build's add-on, the very
+    thing the old grid edit replaced. The skin has its own switch for them
+    (Skin settings > Search); turn them off once, while Arctic Fuse 3 is the
+    running skin (a skin setting belongs to the running skin). A user who
+    turns them back on keeps them."""
+    try:
+        import xbmc
+        if kodi_utils is None or xbmc.getSkinDir() != AF3_SKIN_ID:
+            return
+        if kodi_utils.get_setting(DISCOVER_OFF_MARK):
+            return
+        xbmc.executebuiltin('Skin.SetBool(HomeSwitcher.Search.DisableDiscover)')
+        kodi_utils.set_setting(DISCOVER_OFF_MARK, '1')
+        _log('multisearch: TMDb discover sources turned off (once)', 'INFO')
+    except Exception:
+        pass
+
+
 def ensure_patched():
     """Returns a short summary. Never raises."""
     c1105 = _path(CUSTOM_1105_REL)
     incsrch = _path(INCLUDES_SEARCH_REL)
     if not c1105 and not incsrch:
         return 'no_af3'
+    if c1105 and _uses_multisearch(c1105):
+        _multisearch_discover_off()
+        return 'upstream'
 
     results = []
     if c1105:

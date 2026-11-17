@@ -154,6 +154,25 @@ jobs:
             esac
             read -r _ OLD NEW ZIP <<< "$OUT"
             NAME=$(basename "$ZIP")
+            if [ "$ADDON" = "pov" ]; then
+              # MoranSubs edits POV's files too: its patchers must fit the
+              # official zip before the pin moves (Umbrella's are checked
+              # inside the pin script).
+              rm -rf "$RUNNER_TEMP/pov-moransubs"
+              mkdir -p "$RUNNER_TEMP/pov-moransubs"
+              python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])'                 "$ZIP" "$RUNNER_TEMP/pov-moransubs"
+              AUDIT=$(python3 -I .github/scripts/moransubs_host_audit.py service.subtitles.kodipovilai                         plugin.video.pov "$RUNNER_TEMP/pov-moransubs/plugin.video.pov" | tail -n 1)
+              echo "$AUDIT"
+              if ! printf '%s' "$AUDIT" | python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin)["ok"] else 1)'; then
+                TITLE="POV $NEW: migration pin NOT moved (patches need attention)"
+                if gh issue list --repo "$REPO_SLUG" --state open --search "in:title \"$TITLE\""                      --json title --jq 'length' | grep -qv '^0$'; then
+                  echo "Issue already open."
+                else
+                  gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" --title "$TITLE"                     --body "The Wizard's hooks fit the official POV $NEW, but MoranSubs' own POV patchers do not: $AUDIT Fix the patcher named there (service.subtitles.kodipovilai/resources/lib), release MoranSubs, and the pin moves on the next run."
+                fi
+                exit 0
+              fi
+            fi
             # gen_manifest.py treats dist/<id>-<version>.zip as freshly built;
             # the clone tracks old package zips there. Start empty, as the
             # release workflow does: every module and the config carry over
@@ -176,20 +195,14 @@ jobs:
             git add "$PIN" UPSTREAM_VERSIONS.txt manifest.json
             git commit -m "chore($ADDON): move the verified $LABEL pin to $NEW [skip ci]"
             git push origin HEAD:main
-            if [ "$ADDON" = "umbrella" ]; then
-              TODO="- real Kodi QA on the new Umbrella (kids profiles, Hebrew UI, sources); MoranSubs' Umbrella patchers were run on it automatically (every one fits, idempotent)."
-            else
-              TODO="- the MoranSubs POV host patchers (service.subtitles.kodipovilai/resources/lib/pov_*_patcher.py and others that edit POV);
-            - real Kodi QA on the new POV."
-            fi
-            gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" \
-              --title "$LABEL $NEW: verified pin moved automatically ($OLD -> $NEW)" \
-              --body "$OUT
-
-            Verified automatically: the official zip is $LABEL $NEW, and every enabled Wizard patch applies to it (nothing missing, idempotent); for POV also that its files use the session module only in the shapes the Wizard's shared-HTTP proxy imitates; for Umbrella also that every MoranSubs Umbrella patcher applies and settles. The Wizard installs $LABEL $NEW on devices at their next update check.
-
-            NOT verified -- still to do by hand:
-            $TODO"
+            # The pin moved on proof -- the Wizard's hooks and MoranSubs' own
+            # patchers fit the official zip -- so nobody has anything to do
+            # and no issue is opened. An open "NOT moved" issue of this add-on
+            # is answered by the move.
+            echo "$LABEL pin moved: $OLD -> $NEW"
+            for NUMBER in $(gh issue list --repo "$REPO_SLUG" --state open --search "in:title \"NOT moved\""                               --json number,title --jq ".[] | select(.title | startswith(\"$LABEL \")) | .number"); do
+              gh issue close "$NUMBER" --repo "$REPO_SLUG"                 --comment "The pin moved to $LABEL $NEW (verified automatically); closing."
+            done
           )
           RC=$?
           set -e
@@ -197,12 +210,17 @@ jobs:
           done
           exit $FAILED
 
+  # Arctic Fuse 3, Idan Plus and Account Manager update themselves on devices.
+  # Run the build's patches on the newest published version of each: one issue
+  # per add-on stays open only while something does not fit, and is closed
+  # here when it fits again. Until 17 Nov 2026 every new version opened an
+  # issue that asked a person to re-run the patchers; nothing ran them.
   check:
     needs: pov-pin
-    if: always()
+    if: always() && github.repository == 'MoranTheKing/Kodi-POV-IL'
     runs-on: ubuntu-latest
     steps:
-      - name: Compare upstream repositories with the verified versions
+      - name: Run the build's patches on the newest upstream versions
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO_SLUG: ${{ github.repository }}
@@ -211,25 +229,10 @@ jobs:
           git clone --depth 1 --filter=blob:none --sparse \
             "https://github.com/${REPO_SLUG}.git" repo
           cd repo
-          git sparse-checkout set --no-cone /tools/check_upstream_addons.py /UPSTREAM_VERSIONS.txt
-          CHANGES=$(python3 tools/check_upstream_addons.py UPSTREAM_VERSIONS.txt)
-          if [ -z "$CHANGES" ]; then
-            echo "All watched add-ons match UPSTREAM_VERSIONS.txt."
-            exit 0
-          fi
-          echo "$CHANGES"
-
-          TITLE="Upstream add-on update: $(printf '%s' "$CHANGES" | sed 's/: .* -> / /' | paste -sd ',' - | sed 's/,/, /g')"
-          if gh issue list --repo "$REPO_SLUG" --state open --search "in:title \"$TITLE\"" \
-               --json title --jq 'length' | grep -qv '^0$'; then
-            echo "Issue \"$TITLE\" already open; skipping."
-            exit 0
-          fi
-          BODY=$(printf '%s\n\n%s\n\n%s' \
-            "New upstream versions (verified -> published):" \
-            "$CHANGES" \
-            "Devices install these from the developers' repositories. Re-run the wizard patch engine and the MoranSubs host patchers against the new version, fix any moved anchor, then update UPSTREAM_VERSIONS.txt.")
-          gh issue create --repo "$REPO_SLUG" --assignee "${{ github.repository_owner }}" --title "$TITLE" --body "$BODY"
+          git sparse-checkout set --no-cone /tools/check_upstream_addons.py \
+            /.github/scripts/upstream_audit.py /.github/scripts/moransubs_host_audit.py \
+            /plugin.program.kodipovilwizard/ /service.subtitles.kodipovilai/
+          python3 .github/scripts/upstream_audit.py --issues "$REPO_SLUG" "${{ github.repository_owner }}"
 
   # A version compare cannot see a POV replaced under the same version (field
   # 20 Oct 2026: 6.10.06 republished with dialogs.py importing kodi_utils as
