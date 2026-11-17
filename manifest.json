@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-11-17T09:08:05Z",
+  "generated": "2026-11-17T13:34:40Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -24,12 +24,12 @@
     "upstream_zip": "https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/omega/zips/plugin.video.umbrella/plugin.video.umbrella-6.8.02.zip"
   },
   "config": {
-    "config_version": "2.0.11",
-    "filename": "config-2.0.11.zip",
-    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/config-2.0.11.zip",
-    "size": 33362,
-    "sha256": "d4882558ef02e51ba4872c732c9fc4e473d55ddb2085798fe9a34aa4f6fc39c2",
-    "updated": "2026-11-15T18:24:02Z"
+    "config_version": "2.0.12",
+    "filename": "config-2.0.12.zip",
+    "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/config-2.0.12.zip",
+    "size": 33363,
+    "sha256": "550b8e61943ed0e1a9f30c9f584baa09d14157db4093d3efd6d18d76adb8c927",
+    "updated": "2026-11-17T13:34:40Z"
   },
   "addons": {
     "plugin.program.autocompletion": {
@@ -46,13 +46,13 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.4.99",
+      "version": "0.5.0",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.4.99.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.99.zip",
-      "size": 2553534,
-      "sha256": "be293dfde7ad4a8f5689be112578097728fabd92cd2efe14abe80d1ffa801d68",
-      "updated": "2026-11-15T18:24:02Z"
+      "filename": "plugin.program.kodipovilwizard-0.5.0.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.5.0.zip",
+      "size": 2554387,
+      "sha256": "f1706ee3e9647ce980612b4e136aa3ca43215602d94d2193e44e99b343e91144",
+      "updated": "2026-11-17T13:34:40Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
@@ -145,13 +145,13 @@
     "service.subtitles.kodipovilai": {
       "id": "service.subtitles.kodipovilai",
       "name": "MoranSubs",
-      "version": "0.3.91",
+      "version": "0.3.92",
       "type": "subtitle",
-      "filename": "service.subtitles.kodipovilai-0.3.91.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.91.zip",
-      "size": 3927458,
-      "sha256": "008cdbeda6081731fcd98d6020c73e16e74fd8b20d31c0011d8e14e3cba3fc5b",
-      "updated": "2026-11-17T09:08:05Z"
+      "filename": "service.subtitles.kodipovilai-0.3.92.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.92.zip",
+      "size": 3913781,
+      "sha256": "7393c3d02bfa2273e3a03d89cf258d49b3cdfcabaa2c46e09d68132aaf39d3fd",
+      "updated": "2026-11-17T13:34:40Z"
     },
     "skin.estuary": {
       "id": "skin.estuary",
@@ -178,13 +178,13 @@
     "skin.povil.onyx": {
       "id": "skin.povil.onyx",
       "name": "Kodi POV IL - Onyx",
-      "version": "1.0.10",
+      "version": "1.0.11",
       "type": "skin",
-      "filename": "skin.povil.onyx-1.0.10.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.onyx-1.0.10.zip",
-      "size": 2832567,
-      "sha256": "5e6ac8350a104abd89d279d5b4a3985e9e190d41179b658cecc57cbac5f02acc",
-      "updated": "2026-11-15T18:24:02Z"
+      "filename": "skin.povil.onyx-1.0.11.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.onyx-1.0.11.zip",
+      "size": 2832809,
+      "sha256": "f62be767b18a1c1e286ef8d21bf85be7aafc82dde6d854174eeed9a35f7423cb",
+      "updated": "2026-11-17T13:34:40Z"
     }
   }
 }
