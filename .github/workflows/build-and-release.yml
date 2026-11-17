@@ -142,6 +142,10 @@ jobs:
           elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null \
                  | grep -qE '^userdata/'; then
             CONFIG_CHANGED=true
+          elif ! python -c 'import json,sys; m=json.load(open("manifest.json", encoding="utf-8")).get("config") or {}; p=json.load(open("userdata/config_policy.json", encoding="utf-8")); sys.exit(0 if m.get("config_version") == p.get("config_version") else 1)'; then
+            # The published manifest still carries an older settings pack
+            # (the run that should have moved it failed): catch up on this run.
+            CONFIG_CHANGED=true
           fi
           echo "config=$CONFIG_CHANGED" >> "$GITHUB_OUTPUT"
 
