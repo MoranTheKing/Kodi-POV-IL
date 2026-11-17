@@ -13,6 +13,7 @@
 #
 # Fully guarded: every failure is swallowed so this can never break Kodi startup.
 
+import json
 import os
 import tempfile
 
@@ -68,7 +69,49 @@ def _same_file(src, dst):
         return False
 
 
-def _install_assets(addon_path):
+# What the last pass left in place: for every asset, the size and the
+# modification time of the packaged file and of its installed copy. This
+# runs at every Kodi start (and whenever the add-on is opened), and comparing
+# the bytes means reading the whole media folder twice -- 36 MB on storage
+# that is slow exactly on the boxes where the start is slow. A pair that
+# still has the four figures it had when its bytes were last compared is not
+# read again; an update of this add-on rewrites the packaged files, and an
+# edited or replaced copy gets a new time, so either one is compared again.
+# What the figures cannot show is a copy whose bytes went bad under the same
+# size and time (a power cut right after a copy, failing storage). The
+# Wizard's strict gate compares the bytes itself and refuses to go on when
+# they differ, so its pass does not trust the stamp: it repairs as before.
+_STAMP = 'povil_media.stamp'
+
+
+def _signature(src, dst):
+    try:
+        left, right = os.stat(src), os.stat(dst)
+    except (OSError, IOError):
+        return None
+    return [left.st_size, left.st_mtime_ns, right.st_size, right.st_mtime_ns]
+
+
+def _read_stamp(dst_root):
+    try:
+        with open(os.path.join(dst_root, _STAMP), 'r') as source:
+            stamp = json.load(source)
+        return stamp if isinstance(stamp, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_stamp(dst_root, stamp):
+    path = os.path.join(dst_root, _STAMP)
+    try:
+        with open(path + '.new', 'w') as target:
+            json.dump(stamp, target)
+        os.replace(path + '.new', path)
+    except Exception:
+        pass
+
+
+def _install_assets(addon_path, trust_stamp=True):
     """Copy changed bundled media to the global folder and return writes."""
     written = 0
     for src_rel, dst_special in _COPY_JOBS:
@@ -78,6 +121,9 @@ def _install_assets(addon_path):
                 continue
             
             dst_root = xbmcvfs.translatePath(dst_special)
+            stamp = _read_stamp(dst_root)
+            trusted = stamp if trust_stamp else {}
+            verified = {}
             
             # Walk through all directories and files recursively
             for root, dirs, files in os.walk(src_root):
@@ -87,6 +133,11 @@ def _install_assets(addon_path):
                     # Calculate the relative path to maintain directory structure
                     rel_path = os.path.relpath(src, src_root)
                     dst = os.path.join(dst_root, rel_path)
+                    key = rel_path.replace(os.sep, '/')
+                    signature = _signature(src, dst)
+                    if signature and trusted.get(key) == signature:
+                        verified[key] = signature
+                        continue
                     
                     # Ensure the destination subdirectory exists
                     dst_dir = os.path.dirname(dst)
@@ -97,6 +148,8 @@ def _install_assets(addon_path):
                             pass
                             
                     if _same_file(src, dst):
+                        if signature:
+                            verified[key] = signature
                         continue
                     tmp = None
                     try:
@@ -110,6 +163,9 @@ def _install_assets(addon_path):
                         os.replace(tmp, dst)
                         tmp = None
                         written += 1
+                        signature = _signature(src, dst)
+                        if signature:
+                            verified[key] = signature
                     except Exception as exc:
                         _log('asset update failed for {0}: {1}'.format(rel_path, exc))
                     finally:
@@ -118,6 +174,8 @@ def _install_assets(addon_path):
                                 os.remove(tmp)
                             except OSError:
                                 pass
+            if verified != stamp:
+                _write_stamp(dst_root, verified)
         except Exception:
             pass
     return written
@@ -156,7 +214,7 @@ def install_and_verify_global_media_assets():
     if xbmcvfs is None or _ADDON is None:
         return False
     addon_path = xbmcvfs.translatePath(_ADDON.getAddonInfo('path'))
-    _install_assets(addon_path)
+    _install_assets(addon_path, trust_stamp=False)
     found = False
     for src_rel, dst_special in _COPY_JOBS:
         src_root = os.path.join(addon_path, src_rel)

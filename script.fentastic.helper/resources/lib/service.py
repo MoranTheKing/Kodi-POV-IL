@@ -1,6 +1,5 @@
 import xbmc, xbmcgui
 from threading import Thread
-from modules.MDbList import MDbListAPI
 import json
 
 logger = xbmc.log
@@ -18,7 +17,10 @@ empty_ratings = {
 class RatingsService(xbmc.Monitor):
     def __init__(self):
         xbmc.Monitor.__init__(self)
-        self.mdblist_api = MDbListAPI
+        # Imported at the first rating that is asked for, not at Kodi's start:
+        # it brings requests and sqlite with it, this service starts under
+        # every skin, and the ratings are shown by FENtastic alone.
+        self.mdblist_api = None
         self.last_set_imdb_id = None
         self.window = xbmcgui.Window
         self.get_window_id = xbmcgui.getCurrentWindowId
@@ -109,6 +111,9 @@ class RatingsService(xbmc.Monitor):
 
     def set_ratings(self, api_key, imdb_id):
         set_property = self.window(self.get_window_id()).setProperty
+        if self.mdblist_api is None:
+            from modules.MDbList import MDbListAPI
+            self.mdblist_api = MDbListAPI
         result = self.mdblist_api().fetch_info({"imdb_id": imdb_id}, api_key)
         if result:
             set_property(f"fentastic.cachedRatings.{imdb_id}", json.dumps(result))
