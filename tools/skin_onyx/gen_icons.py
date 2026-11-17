@@ -126,9 +126,34 @@ def skipfwd(d):
     tri(d, [(66, 20), (66, 40), (82, 30)])
 
 
+def _subtitle_lines(d, top):
+    rbar(d, 24, top, 44, top + 6, 3)
+    rbar(d, 50, top, 72, top + 6, 3)
+    rbar(d, 24, top + 12, 36, top + 18, 3)
+    rbar(d, 42, top + 12, 72, top + 18, 3)
+
+
+def power(d):
+    """The power sign: a ring open at the top with a bar through the opening."""
+    ring(d, 48, 50, 24, 5, start=-60, end=240)
+    rbar(d, 45, 20, 51, 50, 3)
+
+
+def subup(d):
+    """Two subtitle lines with an arrow above them: the subtitles move up."""
+    tri(d, [(48, 16), (32, 36), (64, 36)])
+    _subtitle_lines(d, 48)
+
+
+def subdown(d):
+    """Two subtitle lines with an arrow under them: the subtitles move down."""
+    _subtitle_lines(d, 22)
+    tri(d, [(48, 80), (32, 60), (64, 60)])
+
+
 ICONS = dict(play=play, pause=pause, stop=stop, rewind=rewind, forward=forward, subtitles=subtitles,
              audio=audio, source=source, episodes=episodes, sync=sync, settings=settings, info=info,
-             skipback=skipback, skipfwd=skipfwd)
+             skipback=skipback, skipfwd=skipfwd, subup=subup, subdown=subdown, power=power)
 
 for name, draw in ICONS.items():
     mask = canvas()

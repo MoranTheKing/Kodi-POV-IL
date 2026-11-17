@@ -94,14 +94,20 @@
 			<texture>povil/vignette.png</texture>
 		</control>
 		<control type="label" description="clock">
-			<left>90</left><top>30</top><width>400</width><height>52</height>
+			<left>90</left><top>30</top><width>250</width><height>52</height>
 			<font>povil_clock</font><textcolor>povil_white</textcolor><aligny>center</aligny>
 			<label>$INFO[System.Time]</label>
 		</control>
 		<control type="label" description="date">
-			<left>90</left><top>80</top><width>400</width><height>30</height>
+			<left>90</left><top>80</top><width>250</width><height>30</height>
 			<font>povil_small</font><textcolor>povil_faint</textcolor><aligny>center</aligny>
 			<label>$INFO[System.Date(DDDD)]$INFO[System.Date(d MMMM),  •  ]</label>
+		</control>
+		<control type="button" id="9099" description="power">
+			<left>350</left><top>32</top><width>60</width><height>60</height>
+			<texturenofocus colordiffuse="B3FFFFFF">povil/osd/power.png</texturenofocus><texturefocus>povil/osd/power_fo.png</texturefocus>
+			<label></label><onclick>ActivateWindow(ShutdownMenu)</onclick>
+			<onright>9017</onright><ondown>9017</ondown><onleft>noop</onleft><onup>noop</onup>
 		</control>
 		<control type="list" id="9890" description="Kodi favourites, counted for the favourites row">
 			<left>-4000</left><top>0</top><width>20</width><height>20</height>
@@ -273,6 +279,7 @@
 				<onfocus>SetProperty(povil.tab.settings,1,home)</onfocus>
 				<onfocus>SetProperty(povil.focus,9017,home)</onfocus>
 				<onclick>ActivateWindow(Settings)</onclick>
+				<onleft>9099</onleft>
 				<onright>9016</onright>
 				<ondown>5081</ondown>
 			</control>
