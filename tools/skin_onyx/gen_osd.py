@@ -27,8 +27,13 @@ NOT_LIVE_SOURCE = ('!String.Contains(Player.Folderpath,plugin.video.idanplus) + 
                    ' + !String.Contains(Player.Folderpath,plugin.video.flashstream)')
 ROW, TIMELINE = 7000, 7001
 TIMELINE_TOP = 866
-# the picture between the title block (ends at 288) and the clock line (812): see gen()
-TAP_CLOSE, TAP_TOP, TAP_BOTTOM = 7005, 300, 800
+# the picture between the title block (its pills end at 340) and the clock line (812): see gen()
+TAP_CLOSE, TAP_TOP, TAP_BOTTOM = 7005, 352, 800
+# What is playing, as pills under the details line, read right to left: the
+# picture's size, its frame rate, its dynamic range, the sound, the video codec
+# (the owner, with a photo of another player: "like this"). A pill with nothing
+# to say is not drawn. Listed left to right, so the first one here is the last read.
+PILLS = ('POVIL_OSD_Codec', 'POVIL_OSD_Audio', 'POVIL_OSD_Hdr', 'POVIL_OSD_Fps', 'POVIL_OSD_Res')
 # (id, icon, Hebrew name, onclick list, visible) left to right; None = a gap between groups
 BUTTONS = [
     (7010, 'stop', 'עצירה', ['PlayerControl(Stop)'], ''),
@@ -46,6 +51,11 @@ BUTTONS = [
      '[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + ' + NOT_LIVE_SOURCE),
     (7022, 'audio', 'שמע', ['ActivateWindow(OSDAudioSettings)'], ''),
     (7023, 'sync', 'סנכרון כתוביות', ['Dialog.Close(VideoOSD)', 'SubtitleDelay'], '!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles'),
+    # Where the subtitles sit (the owner, with a photo of a wide film: the lines fell half on the picture
+    # and half on the black bar, and Onyx offered nothing to move them). The controls stay open: a press
+    # is a step, and the next one follows it.
+    (7025, 'subdown', 'כתוביות למטה', ['RunPlugin(%s?mode=player_subs_position&step=down)' % WIZARD], 'VideoPlayer.HasSubtitles'),
+    (7026, 'subup', 'כתוביות למעלה', ['RunPlugin(%s?mode=player_subs_position&step=up)' % WIZARD], 'VideoPlayer.HasSubtitles'),
     (7024, 'subtitles', 'כתוביות', ['RunScript(service.subtitles.kodipovilai,action=choose_subs)'],
      '!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles'),
 ]
@@ -85,7 +95,22 @@ def title_block(x, depth):
              '<textcolor>povil_gold</textcolor><align>right</align><aligny>center</aligny><label>$VAR[POVIL_OSD_Episode]</label></control>' % (right - 1200))
     x(depth, '<control type="label"><left>%d</left><top>252</top><width>1200</width><height>36</height><font>povil_meta</font>'
              '<textcolor>povil_dim</textcolor><align>right</align><aligny>center</aligny>'
-             '<label>$INFO[VideoPlayer.Year]$INFO[VideoPlayer.Genre,  •  ]</label></control>' % (right - 1200))
+             '<label>$INFO[VideoPlayer.Year]$INFO[VideoPlayer.Genre,  •  ]$VAR[POVIL_OSD_Provider,  •  ]</label></control>' % (right - 1200))
+    x(depth, '<control type="grouplist"><left>%d</left><top>298</top><width>1200</width><height>42</height>'
+             '<orientation>horizontal</orientation><align>right</align><itemgap>10</itemgap>' % (right - 1200))
+    for name in PILLS:
+        # a button that cannot take the focus: the one control that sizes itself to its text over a texture
+        x(depth + 1, '<control type="button"><width>auto</width><height>42</height><font>povil_chip</font>'
+                     '<textcolor>povil_white</textcolor><disabledcolor>povil_white</disabledcolor><align>center</align><aligny>center</aligny>'
+                     '<textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturenofocus>'
+                     '<texturefocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturefocus>'
+                     '<label>$VAR[%s]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(%d))</visible></control>'
+                     % (name, 7910 + PILLS.index(name)))
+    x(depth, '</control>')
+    for name in PILLS:
+        # a variable cannot be tested for being empty; a label off the screen can
+        x(depth, '<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
+                 '<label>$VAR[%s]</label></control>' % (7910 + PILLS.index(name), name))
 
 
 def timeline(x, depth, focusable):
@@ -331,6 +356,59 @@ def variables():
     x(1, '<variable name="POVIL_OSD_Episode">')
     x(2, '<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.Season,עונה , · ]$INFO[VideoPlayer.Episode,פרק ]$INFO[VideoPlayer.Title,  ·  ]</value>')
     x(2, '<value condition="VideoPlayer.HasEpg">$INFO[VideoPlayer.Title]</value>')
+    x(1, '</variable>')
+    # The pills. Kodi names what the decoder reports; the pills say it the way a box's own player does.
+    x(1, '<variable name="POVIL_OSD_Res">')
+    for value, text in (('8K', '8K'), ('4K', '4K'), ('1080', '1080p'), ('720', '720p'), ('576', '576p'), ('540', '540p'), ('480', '480p')):
+        x(2, '<value condition="String.IsEqual(VideoPlayer.VideoResolution,%s)">%s</value>' % (value, text))
+    x(1, '</variable>')
+    x(1, '<variable name="POVIL_OSD_Fps">')
+    # Kodi prints three decimals: 25.000 is said as 25, and 23.976 stays as it is
+    for value, text in (('24.000', '24'), ('25.000', '25'), ('30.000', '30'), ('48.000', '48'), ('50.000', '50'),
+                        ('60.000', '60'), ('120.000', '120'), ('29.970', '29.97'), ('59.940', '59.94')):
+        x(2, '<value condition="String.IsEqual(Player.Process(videofps),%s)">%s fps</value>' % (value, text))
+    x(2, '<value condition="!String.IsEmpty(Player.Process(videofps)) + !String.IsEqual(Player.Process(videofps),0.000)">$INFO[Player.Process(videofps)] fps</value>')
+    x(1, '</variable>')
+    x(1, '<variable name="POVIL_OSD_Hdr">')
+    for value, text in (('dolbyvision', 'Dolby Vision'), ('hdr10plus', 'HDR10+'), ('hdr10', 'HDR10'), ('hlg', 'HLG')):
+        x(2, '<value condition="String.IsEqual(VideoPlayer.HdrType,%s)">%s</value>' % (value, text))
+    # a kind Kodi names in a way this list does not know is still HDR
+    x(2, '<value condition="!String.IsEmpty(VideoPlayer.HdrType)">HDR</value>')
+    x(1, '</variable>')
+    x(1, '<variable name="POVIL_OSD_AudioCodec">')
+    for value, text in (('eac3_ddp_atmos', 'DD+ Atmos'), ('truehd_atmos', 'TrueHD Atmos'), ('eac3', 'DD+'), ('ac3', 'DD'),
+                        ('truehd', 'TrueHD'), ('dtshd_ma_x_imax', 'DTS:X'), ('dtshd_ma_x', 'DTS:X'),
+                        ('dtshd_ma', 'DTS-HD MA'), ('dtshd_hra', 'DTS-HD'),
+                        ('dca', 'DTS'), ('dts', 'DTS'), ('aac_latm', 'AAC'), ('aac', 'AAC'), ('flac', 'FLAC'), ('opus', 'Opus'),
+                        ('mp3', 'MP3'), ('mp2', 'MP2'), ('vorbis', 'Vorbis')):
+        x(2, '<value condition="String.IsEqual(VideoPlayer.AudioCodec,%s)">%s</value>' % (value, text))
+    # pcm_s16le, pcm_s24le, pcm_bluray ...
+    x(2, '<value condition="String.StartsWith(VideoPlayer.AudioCodec,pcm)">PCM</value>')
+    x(2, '<value>$INFO[VideoPlayer.AudioCodec]</value>')
+    x(1, '</variable>')
+    x(1, '<variable name="POVIL_OSD_Audio">')
+    for value, text in (('8', '7.1'), ('7', '6.1'), ('6', '5.1'), ('3', '2.1'), ('2', '2.0'), ('1', '1.0')):
+        x(2, '<value condition="!String.IsEmpty(VideoPlayer.AudioCodec) + String.IsEqual(VideoPlayer.AudioChannels,%s)">$VAR[POVIL_OSD_AudioCodec] %s</value>' % (value, text))
+    x(2, '<value condition="!String.IsEmpty(VideoPlayer.AudioCodec)">$VAR[POVIL_OSD_AudioCodec]</value>')
+    x(1, '</variable>')
+    x(1, '<variable name="POVIL_OSD_Codec">')
+    for value, text in (('hevc', 'HEVC'), ('h265', 'HEVC'), ('hvc1', 'HEVC'), ('hev1', 'HEVC'), ('dvh1', 'HEVC'),
+                        ('dvhe', 'HEVC'), ('h264', 'H.264'), ('avc1', 'H.264'), ('av1', 'AV1'), ('vp9', 'VP9'),
+                        ('mpeg2video', 'MPEG-2'), ('mpeg4', 'MPEG-4'), ('vc1', 'VC-1'), ('wvc1', 'VC-1')):
+        x(2, '<value condition="String.IsEqual(VideoPlayer.VideoCodec,%s)">%s</value>' % (value, text))
+    x(2, '<value>$INFO[VideoPlayer.VideoCodec]</value>')
+    x(1, '</variable>')
+    # Where the stream comes from (TorBox, Real-Debrid...): the Wizard's source hook names it for the source
+    # that was picked; shown only while the picked source is still the one that hook named it for, and never
+    # over live TV or another add-on's video. A POV play's folder is the stream's own web address (seen in
+    # the QA Kodi), so a library file, or an item another add-on resolved (its folder is plugin://...),
+    # shows no provider even when POV's last pick is still remembered.
+    x(1, '<variable name="POVIL_OSD_Provider">')
+    x(2, '<value condition="!String.IsEmpty(Window(Home).Property(povil_osd_provider)) + '
+         'String.IsEqual(Window(Home).Property(povil_osd_provider_for),Window(Home).Property(pov_picked_source_name)) + '
+         '[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + '
+         '[String.StartsWith(Player.Folderpath,http) | String.Contains(Player.Folderpath,plugin.video.pov)] + %s">'
+         '$INFO[Window(Home).Property(povil_osd_provider)]</value>' % NOT_LIVE_SOURCE)
     x(1, '</variable>')
     # The time on the timeline's left: while a seek is being chosen, where it will land and by how much
     x(1, '<variable name="POVIL_OSD_Time">')

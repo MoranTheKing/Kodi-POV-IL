@@ -123,6 +123,27 @@ def _match_index(results, rec):
                 return i
     return None
 
+_PROVIDER_NAMES = {
+    'torbox': 'TorBox', 'tb': 'TorBox', 'real-debrid': 'Real-Debrid', 'realdebrid': 'Real-Debrid', 'rd': 'Real-Debrid',
+    'premiumize.me': 'Premiumize', 'premiumize': 'Premiumize', 'pm': 'Premiumize',
+    'alldebrid': 'AllDebrid', 'ad': 'AllDebrid', 'offcloud': 'Offcloud', 'oc': 'Offcloud',
+    'easydebrid': 'EasyDebrid', 'ed': 'EasyDebrid', 'easynews': 'Easynews', 'debrid-link': 'Debrid-Link',
+}
+
+
+def provider_label(item):
+    """The debrid service a source plays from, as its users write it; '' when the source names none."""
+    try:
+        raw = str(item.get('debrid') or item.get('cache_provider') or '').strip()
+    except Exception:
+        return ''
+    if raw.lower().startswith('uncached'):
+        raw = raw[len('uncached'):].strip()
+    if not raw or len(raw) > 24:
+        return ''
+    return _PROVIDER_NAMES.get(raw.lower(), raw)
+
+
 def run_capture(sources_self, item, link):
     """
     Hook 1: Stashes window properties for external modules and saves the selected source.
@@ -134,6 +155,12 @@ def run_capture(sources_self, item, link):
         win.setProperty('subs.player_filename', name)
         win.setProperty('pov_picked_source_name', name)
         win.setProperty('pov_picked_source_url', link or '')
+        # Where the stream comes from, for the player's details line (Onyx).
+        # Tied to this source's name: another add-on's pick replaces the name
+        # and the skin then shows no provider rather than a stale one.
+        provider = provider_label(item)
+        win.setProperty('povil_osd_provider', provider)
+        win.setProperty('povil_osd_provider_for', name if provider else '')
     except Exception as e:
         _log('Failed setting Window properties: ' + str(e), xbmc.LOGWARNING)
 
