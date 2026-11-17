@@ -69,8 +69,8 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import hashlib, os, zipfile
-          archive = Path('dist/Kodi-POV-IL-FENtastic-quickfix-0.1.611.zip')
-          expected = 'f3fe7e5516178f252205f231e614be59d2d0ddb18f20ad0fad2ec5b9768390fe'
+          archive = Path('dist/Kodi-POV-IL-FENtastic-quickfix-0.1.627.zip')
+          expected = '4a45f3f2a2e98232565f2222923f6c13fcf7a90456bf937628a4276b8ddd1794'
           if not archive.is_file() or hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
               raise SystemExit('last public quickfix is missing or changed')
           with zipfile.ZipFile(archive) as package:
