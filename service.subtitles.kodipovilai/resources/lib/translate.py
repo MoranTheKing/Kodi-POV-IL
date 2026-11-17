@@ -2343,10 +2343,64 @@ def _still_playing():
         return False
 
 
+# The last embedded pick that produced nothing at all -- no track that could
+# be read, no external subtitle to translate instead. The automatic subtitle
+# says so on screen instead of only "no Hebrew subtitle" (a viewer's log, 17
+# Nov 2026: such a pick gave up in 2 s and the viewer could not tell why).
+_EMBEDDED_MISS = {}
+
+
+def _note_embedded_miss(reason):
+    if reason == 'busy':
+        return      # not a miss: the same track is being read already, and
+                    # its own toast says so (0.3.83)
+    try:
+        import xbmc as _xbmc
+        playing = _xbmc.Player().getPlayingFile() or ''
+    except Exception:
+        playing = ''
+    _EMBEDDED_MISS.clear()
+    _EMBEDDED_MISS.update({'reason': reason or '', 'at': time.time(),
+                           'file': playing})
+
+
+def embedded_miss_since(t0, playing_file=''):
+    """The reason ('no_index', 'no_text', 'not_mkv' or '' when unknown) of an
+    embedded pick that produced nothing at or after t0, for the file playing
+    (`playing_file`, when both sides know it: runs for two files can
+    overlap); None when there was none."""
+    miss = dict(_EMBEDDED_MISS)
+    if not miss or miss.get('at', 0) < t0:
+        return None
+    if playing_file and miss.get('file') and miss['file'] != playing_file:
+        return None
+    return miss.get('reason') or ''
+
+
+# A forced (signs-only) subtitle is no stand-in for the film's dialogue: QA
+# Kodi, 17 Nov 2026, Inception BDRip 2xUKR ENG SUB -- its Ukrainian embedded
+# track had no subtitle index, and the best-matching Ukrainian file, "Inception
+# (2010) BDRip. Forced", 12 lines, was translated as the film's subtitle.
+# Whole words only -- "The Force Awakens", "Air Force One", "Armed Forces" are
+# titles -- and never a word the playing title itself has ("Forced Entry").
+import re as _re_forced    # this module imports re inside functions only
+_FORCED_NAME_RE = _re_forced.compile(
+    r'(?<![^\W\d_])(?:forced|forcés?|forzad[oa]s?|форсов[^\W\d_]*)(?![^\W\d_])',
+    _re_forced.I)
+
+
+def _named_forced(name, title_text):
+    """True when `name` marks a forced subtitle and the title does not say
+    the same word."""
+    m = _FORCED_NAME_RE.search(name or '')
+    return bool(m) and m.group(0).lower() not in (title_text or '').lower()
+
+
 def _external_for_unreadable_embedded(info, lang):
     """The 'AI translation' payload (type engine_ai) for the external subtitle
     in `lang` -- else English -- that best matches the playing release, or
-    None. For an embedded track that cannot be read from the stream."""
+    None. For an embedded track that cannot be read from the stream. A file
+    named as forced is never it."""
     try:
         from . import subsync, release_match
         cands = subsync._oracle_candidates(info) or []
@@ -2357,9 +2411,12 @@ def _external_for_unreadable_embedded(info, lang):
     except Exception:
         playing = ''
     picked = (lang or 'en').lower()[:2]
+    title_text = ' '.join(str(info.get(k) or '') for k in (
+        'title', 'tvshow', 'picked_release', 'tagline')) + ' ' + playing
     mine = [c for c in cands
             if (c.get('language') or '').lower()[:2] in (picked, 'en')
-            and c.get('payload')]
+            and c.get('payload')
+            and not _named_forced(c.get('release') or '', title_text)]
     if not mine:
         return None
 
@@ -6547,6 +6604,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 kodi_utils.log('embedded_ai: mode={0} produced no synced source '
                                '-- deferring to the external path'.format(
                                    _emb_mode), level='INFO')
+                if not _proofread_only:
+                    _note_embedded_miss(_emb_why.get('reason'))
                 return None
             _reason = _emb_why.get('reason')
             _no_text = _reason == 'no_text'
