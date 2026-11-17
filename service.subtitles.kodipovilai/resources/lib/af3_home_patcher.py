@@ -131,6 +131,54 @@ msgstr "מידע נוסף"
 msgctxt "#31600"
 msgid "Ends at"
 msgstr "מסתיים ב-"
+
+msgctxt "#31016"
+msgid "Sort by"
+msgstr "מיון לפי"
+
+msgctxt "#31022"
+msgid "items"
+msgstr "פריטים"
+
+msgctxt "#31281"
+msgid "Welcome"
+msgstr "ברוכים הבאים"
+
+msgctxt "#31324"
+msgid "Content"
+msgstr "תוכן"
+
+msgctxt "#31639"
+msgid "Custom"
+msgstr "מותאם אישית"
+
+msgctxt "#31850"
+msgid "Results"
+msgstr "תוצאות"
+
+msgctxt "#31851"
+msgid "Sources"
+msgstr "מקורות"
+
+msgctxt "#31852"
+msgid "Decade"
+msgstr "עשור"
+
+msgctxt "#31861"
+msgid "No results"
+msgstr "אין תוצאות"
+
+msgctxt "#31863"
+msgid "Search for"
+msgstr "חפשו"
+
+msgctxt "#31864"
+msgid "movies, TV shows, people and more"
+msgstr "סרטים, סדרות, שחקנים ועוד"
+
+msgctxt "#31865"
+msgid "Enter a search term to begin."
+msgstr "הקלידו מילת חיפוש כדי להתחיל."
 '''
 
 
