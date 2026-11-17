@@ -45,7 +45,9 @@ def tracked():
         out = subprocess.run(['git', 'ls-files', '-z'], cwd=str(ROOT), capture_output=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return None
-    return [name for name in out.decode('utf-8').split('\0') if name and (ROOT / name).is_file()]
+    # every path git tracks: CI rebuilds dist/ before the tests run, so a tracked file may be absent from the
+    # folder there -- what counts is what the repository holds, not what a build left on disk
+    return [name for name in out.decode('utf-8').split('\0') if name]
 
 
 class RepositoryStaysSmallTests(unittest.TestCase):
@@ -78,7 +80,7 @@ class RepositoryStaysSmallTests(unittest.TestCase):
         self.assertLessEqual(len(pointers), 2, pointers)
 
     def test_the_whole_tree_stays_within_its_size(self):
-        sizes = {f: (ROOT / f).stat().st_size for f in self.files}
+        sizes = {f: (ROOT / f).stat().st_size for f in self.files if (ROOT / f).is_file()}
         total = sum(sizes.values()) / 1048576.0
         self.assertLessEqual(len(self.files), MAX_FILES, 'files: was 3,365 after the clean-up')
         self.assertLessEqual(total, MAX_TOTAL_MB, 'tracked megabytes: was 420.6 after the clean-up')
