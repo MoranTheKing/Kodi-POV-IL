@@ -47,7 +47,8 @@ class Router:
         action = self.params['action'] if 'action' in self.params else None
         from resources.libs.patches import profile_age_guard
         if profile_age_guard.active_policy() is not None and mode not in (
-                'profiles', 'profile_child_open', 'profile_skin', 'player_season_episodes'):
+                'profiles', 'profile_child_open', 'profile_skin', 'player_season_episodes',
+                'player_subs_position'):
             xbmcgui.Dialog().ok('פרופיל ילדים', 'ניהול הבילד זמין במשתמש הראשי.')
             if handle >= 0:
                 xbmcplugin.endOfDirectory(handle, succeeded=False)
@@ -97,6 +98,10 @@ class Router:
             # the skins' 'פרקי העונה' list for an Idan Plus episode on screen
             from resources.libs import player_styles
             player_styles.season_episodes(handle)
+        elif mode == 'player_subs_position':
+            # the player's 'subtitles up / down' buttons (Onyx)
+            from resources.libs import player_styles
+            player_styles.subtitles_position(self.params.get('step'))
         elif mode in ('player_settings', 'player_change_source', 'player_episodes'):
             from resources.libs import player_styles
             {'player_settings': player_styles.settings,

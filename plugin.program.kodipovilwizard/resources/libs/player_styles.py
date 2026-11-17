@@ -58,6 +58,48 @@ def change_source():
     xbmc.executebuiltin('{0}(plugin://plugin.video.{1}/?{2})'.format(action, provider, urlencode(params)))
 
 
+SUBS_STEP, SUBS_MAX = 2.0, 30.0
+
+
+def _setting(name, value=None):
+    request = {'jsonrpc': '2.0', 'id': 1,
+               'method': 'Settings.GetSettingValue' if value is None else 'Settings.SetSettingValue',
+               'params': {'setting': name} if value is None else {'setting': name, 'value': value}}
+    reply = json.loads(xbmc.executeJSONRPC(json.dumps(request))).get('result')
+    return reply.get('value') if value is None and isinstance(reply, dict) else reply
+
+
+def subtitles_position(step):
+    """One step up or down for the subtitles, from the player's buttons.
+
+    Kodi places subtitles by Settings > Player > Subtitles: a position (bottom
+    or top, of the screen or of the picture) and a vertical margin in percent.
+    A wide film on a 16:9 screen has black bars, and with "bottom of the
+    screen" two lines fall half on the picture and half on the bar. A step
+    changes the margin by two percent -- away from the edge the position is
+    tied to, or back toward it -- so "up" always moves the text up the
+    screen; with the Manual position it is Kodi's own shift instead. Kodi
+    applies it at once and keeps it for every video. Returns the new margin,
+    or None when nothing was changed."""
+    if step not in ('up', 'down'):
+        return None
+    try:
+        align = int(_setting('subtitles.align'))
+        if align == 0:
+            for _ in range(4):
+                xbmc.executebuiltin('Action(SubtitleShift%s)' % ('Up' if step == 'up' else 'Down'))
+            return None
+        margin = float(_setting('subtitles.marginvertical') or 0)
+        away = (step == 'up') != (align in (3, 4))        # top positions grow downward
+        target = round(min(SUBS_MAX, max(0.0, margin + (SUBS_STEP if away else -SUBS_STEP))), 1)
+        if target == margin or _setting('subtitles.marginvertical', target) is not True:
+            return None
+        return target
+    except Exception as exc:
+        xbmc.log('[POV IL player] subtitles position: {0!r}'.format(exc), xbmc.LOGWARNING)
+        return None
+
+
 def episodes():
     provider = xbmcaddon.Addon('service.subtitles.kodipovilai').getSetting('search_provider')
     if provider == 'umbrella' and xbmc.getCondVisibility('System.HasAddon(plugin.video.umbrella)'):

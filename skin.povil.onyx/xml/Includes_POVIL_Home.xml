@@ -1797,6 +1797,85 @@
 		<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.Season,עונה , · ]$INFO[VideoPlayer.Episode,פרק ]$INFO[VideoPlayer.Title,  ·  ]</value>
 		<value condition="VideoPlayer.HasEpg">$INFO[VideoPlayer.Title]</value>
 	</variable>
+	<variable name="POVIL_OSD_Res">
+		<value condition="String.IsEqual(VideoPlayer.VideoResolution,8K)">8K</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoResolution,4K)">4K</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoResolution,1080)">1080p</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoResolution,720)">720p</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoResolution,576)">576p</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoResolution,540)">540p</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoResolution,480)">480p</value>
+	</variable>
+	<variable name="POVIL_OSD_Fps">
+		<value condition="String.IsEqual(Player.Process(videofps),24.000)">24 fps</value>
+		<value condition="String.IsEqual(Player.Process(videofps),25.000)">25 fps</value>
+		<value condition="String.IsEqual(Player.Process(videofps),30.000)">30 fps</value>
+		<value condition="String.IsEqual(Player.Process(videofps),48.000)">48 fps</value>
+		<value condition="String.IsEqual(Player.Process(videofps),50.000)">50 fps</value>
+		<value condition="String.IsEqual(Player.Process(videofps),60.000)">60 fps</value>
+		<value condition="String.IsEqual(Player.Process(videofps),120.000)">120 fps</value>
+		<value condition="String.IsEqual(Player.Process(videofps),29.970)">29.97 fps</value>
+		<value condition="String.IsEqual(Player.Process(videofps),59.940)">59.94 fps</value>
+		<value condition="!String.IsEmpty(Player.Process(videofps)) + !String.IsEqual(Player.Process(videofps),0.000)">$INFO[Player.Process(videofps)] fps</value>
+	</variable>
+	<variable name="POVIL_OSD_Hdr">
+		<value condition="String.IsEqual(VideoPlayer.HdrType,dolbyvision)">Dolby Vision</value>
+		<value condition="String.IsEqual(VideoPlayer.HdrType,hdr10plus)">HDR10+</value>
+		<value condition="String.IsEqual(VideoPlayer.HdrType,hdr10)">HDR10</value>
+		<value condition="String.IsEqual(VideoPlayer.HdrType,hlg)">HLG</value>
+		<value condition="!String.IsEmpty(VideoPlayer.HdrType)">HDR</value>
+	</variable>
+	<variable name="POVIL_OSD_AudioCodec">
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,eac3_ddp_atmos)">DD+ Atmos</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,truehd_atmos)">TrueHD Atmos</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,eac3)">DD+</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,ac3)">DD</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,truehd)">TrueHD</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,dtshd_ma_x_imax)">DTS:X</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,dtshd_ma_x)">DTS:X</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,dtshd_ma)">DTS-HD MA</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,dtshd_hra)">DTS-HD</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,dca)">DTS</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,dts)">DTS</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,aac_latm)">AAC</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,aac)">AAC</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,flac)">FLAC</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,opus)">Opus</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,mp3)">MP3</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,mp2)">MP2</value>
+		<value condition="String.IsEqual(VideoPlayer.AudioCodec,vorbis)">Vorbis</value>
+		<value condition="String.StartsWith(VideoPlayer.AudioCodec,pcm)">PCM</value>
+		<value>$INFO[VideoPlayer.AudioCodec]</value>
+	</variable>
+	<variable name="POVIL_OSD_Audio">
+		<value condition="!String.IsEmpty(VideoPlayer.AudioCodec) + String.IsEqual(VideoPlayer.AudioChannels,8)">$VAR[POVIL_OSD_AudioCodec] 7.1</value>
+		<value condition="!String.IsEmpty(VideoPlayer.AudioCodec) + String.IsEqual(VideoPlayer.AudioChannels,7)">$VAR[POVIL_OSD_AudioCodec] 6.1</value>
+		<value condition="!String.IsEmpty(VideoPlayer.AudioCodec) + String.IsEqual(VideoPlayer.AudioChannels,6)">$VAR[POVIL_OSD_AudioCodec] 5.1</value>
+		<value condition="!String.IsEmpty(VideoPlayer.AudioCodec) + String.IsEqual(VideoPlayer.AudioChannels,3)">$VAR[POVIL_OSD_AudioCodec] 2.1</value>
+		<value condition="!String.IsEmpty(VideoPlayer.AudioCodec) + String.IsEqual(VideoPlayer.AudioChannels,2)">$VAR[POVIL_OSD_AudioCodec] 2.0</value>
+		<value condition="!String.IsEmpty(VideoPlayer.AudioCodec) + String.IsEqual(VideoPlayer.AudioChannels,1)">$VAR[POVIL_OSD_AudioCodec] 1.0</value>
+		<value condition="!String.IsEmpty(VideoPlayer.AudioCodec)">$VAR[POVIL_OSD_AudioCodec]</value>
+	</variable>
+	<variable name="POVIL_OSD_Codec">
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,hevc)">HEVC</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,h265)">HEVC</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,hvc1)">HEVC</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,hev1)">HEVC</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,dvh1)">HEVC</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,dvhe)">HEVC</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,h264)">H.264</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,avc1)">H.264</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,av1)">AV1</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,vp9)">VP9</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,mpeg2video)">MPEG-2</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,mpeg4)">MPEG-4</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,vc1)">VC-1</value>
+		<value condition="String.IsEqual(VideoPlayer.VideoCodec,wvc1)">VC-1</value>
+		<value>$INFO[VideoPlayer.VideoCodec]</value>
+	</variable>
+	<variable name="POVIL_OSD_Provider">
+		<value condition="!String.IsEmpty(Window(Home).Property(povil_osd_provider)) + String.IsEqual(Window(Home).Property(povil_osd_provider_for),Window(Home).Property(pov_picked_source_name)) + [VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + [String.StartsWith(Player.Folderpath,http) | String.Contains(Player.Folderpath,plugin.video.pov)] + !String.Contains(Player.Folderpath,plugin.video.idanplus) + !String.Contains(Player.Folderpath,plugin.video.supertv) + !String.Contains(Player.Folderpath,plugin.video.flashstream)">$INFO[Window(Home).Property(povil_osd_provider)]</value>
+	</variable>
 	<variable name="POVIL_OSD_Time">
 		<value condition="Player.Seeking + !String.IsEmpty(Player.SeekStepSize)">$INFO[Player.SeekTime]   [COLOR povil_gold]$INFO[Player.SeekStepSize][/COLOR]</value>
 		<value condition="!String.IsEmpty(Player.SeekNumeric)">$INFO[Player.SeekNumeric]</value>
@@ -1836,6 +1915,8 @@
 		<value condition="Control.HasFocus(7021)">החלפת מקור</value>
 		<value condition="Control.HasFocus(7022)">שמע</value>
 		<value condition="Control.HasFocus(7023)">סנכרון כתוביות</value>
+		<value condition="Control.HasFocus(7025)">כתוביות למטה</value>
+		<value condition="Control.HasFocus(7026)">כתוביות למעלה</value>
 		<value condition="Control.HasFocus(7024)">כתוביות</value>
 	</variable>
 	<!-- POVIL OSD END -->
