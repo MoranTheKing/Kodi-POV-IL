@@ -9,7 +9,7 @@
 #
 # IMPORTANT (no double-toggle): PlayerControl(Play) TOGGLES play/pause, so we
 # must never inject two pauses into the SAME firing scope (they'd cancel out).
-#   * NOX / Estuary  : one button with two condition-gated onclicks (movie vs
+#   * Estuary        : one button with two condition-gated onclicks (movie vs
 #                      episode) -> inject ONCE, before the first (mode 'first').
 #   * FENtastic      : the change-source onclicks live in SEPARATE list <item>s
 #                      (each item has exactly one onclick, only the selected
@@ -44,7 +44,7 @@ MARKER = 'AI_SUBS_CHGSRC_PAUSE'
 PAUSE = ('<!-- ' + MARKER + ' --><onclick condition="Player.Playing">'
          'PlayerControl(Play)</onclick>')
 
-# NOX / Estuary: the button we inject uses RunPlugin(plugin://plugin.video.pov/
+# Estuary: the button we inject uses RunPlugin(plugin://plugin.video.pov/
 # ?mode=play_media...). FENtastic: RunPlug[Ii]n($VAR[OsdReplaceSourceStartPoint]
 # ...).
 _POV_RX = re.compile(
@@ -58,8 +58,6 @@ _FEN_RX = re.compile(
 
 # (skin id, OSD file, regex, mode 'first'|'each')
 TARGETS = (
-    ('skin.povil.nox', 'xml/VideoOSD.xml', _POV_RX, 'first'),
-    ('skin.povil.nox', 'xml/Includes_POVIL_NativePlayer.xml', _POV_RX, 'first'),
     ('skin.estuary', 'xml/VideoOSD.xml', _POV_RX, 'first'),
     # FENtastic: the change-source onclicks appear inline as separate list
     # items in each player style, plus once in a shared include.

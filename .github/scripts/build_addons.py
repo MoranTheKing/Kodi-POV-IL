@@ -4,7 +4,7 @@
 Usage::
 
     python .github/scripts/build_addons.py --all
-    python .github/scripts/build_addons.py plugin.video.pov skin.povil.nox
+    python .github/scripts/build_addons.py plugin.video.pov skin.povil.onyx
 
 A valid Kodi addon zip contains a single top-level folder named exactly
 after the addon id, with ``addon.xml`` inside it (``plugin.video.pov/addon.xml``).

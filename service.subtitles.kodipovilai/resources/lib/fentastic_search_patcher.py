@@ -74,16 +74,6 @@ def _target_onclick():
     except Exception:
         return POV_SEARCH_ONCLICK
 
-# NOX also has a main-menu "חיפוש" hub item that points at POV's TV-only
-# search-history; repoint it to the full search hub too. Matched by the exact
-# encoded path (unique in the file), keeping the ActivateWindow(...) wrapper.
-NOX_MAIN_MENU = ('special://home/addons/skin.povil.nox/xml/'
-                 'Custom_nox_main_menu.xml')
-_NOX_OLD_SEARCH = ('plugin://plugin.video.pov/?mode=search_history'
-                   '&amp;action=tvshow'
-                   '&amp;iconImage=https%3A%2F%2Fi.imgur.com%2FxYTdX3O.png')
-_NOX_NEW_SEARCH = 'plugin://plugin.video.pov/?mode=navigator.search'
-
 # Per-skin search-button definitions. For each skin: the search-icon
 # control_id(s) -> the skin's default onclick (used for ensure_unpatched).
 _SEARCH_SKINS = (
@@ -94,14 +84,6 @@ _SEARCH_SKINS = (
     }),
     ('skin.estuary', 'Home.xml', {
         '801': 'ActivateWindow(1107)',
-    }),
-    # NOX uses the same search control ids but its own Home file. One of 806
-    # has the default onclick sitting AFTER an XML comment, so _onclick_re
-    # tolerates a comment between control_id and onclick.
-    ('skin.povil.nox', 'Home_nox.xml', {
-        '804': 'ActivateWindow(1107)',
-        '805': 'RunScript(script.fentastic.helper,mode=search_input)',
-        '806': 'ActivateWindow(1107)',
     }),
 )
 
@@ -222,59 +204,11 @@ def _apply(target_onclick_for_factory):
     return 'no_target'
 
 
-def _nox_known_paths():
-    """Every search path this item may currently hold: the skin's own default,
-    plus each provider's hub. Switching provider has to recognise the one that
-    is in the file TODAY, not only the one the skin shipped with -- otherwise
-    the second switch is a no-op and the menu item stays on the first."""
-    paths = [_NOX_OLD_SEARCH]
-    try:
-        from resources.lib import search_provider
-        paths.extend(search_provider.all_hub_paths())
-    except Exception:
-        paths.append(_NOX_NEW_SEARCH)
-    return paths
-
-
-def _repoint_nox_main_menu():
-    """Repoint NOX's main-menu search item to the chosen provider's search
-    hub. Unlike the buttons this item is already wrapped in the skin's own
-    ActivateWindow, so it takes the bare plugin path.
-    Returns 'patched' / 'unchanged' / 'no_target' / 'failed'."""
-    if xbmcvfs is None:
-        return 'failed'
-    if not _exists(NOX_MAIN_MENU):
-        return 'no_target'
-    try:
-        from resources.lib import search_provider
-        new_path = search_provider.hub_path()
-    except Exception:
-        new_path = _NOX_NEW_SEARCH
-    try:
-        content = _read(NOX_MAIN_MENU)
-    except Exception as e:
-        _log('nox main-menu read failed: {0}'.format(e), level='WARNING')
-        return 'failed'
-    updated = content
-    for old in _nox_known_paths():
-        if old == new_path:
-            continue
-        updated = updated.replace(old, new_path)
-    if updated == content:
-        return 'unchanged'
-    try:
-        _write(NOX_MAIN_MENU, updated)
-    except Exception as e:
-        _log('nox main-menu write failed: {0}'.format(e), level='WARNING')
-        return 'failed'
-    return 'patched'
-
-
 def ensure_patched():
     """Repoint the home search icon to the chosen provider's full search hub
     (POV's navigator.search: Movies / TV Shows / People / Movies Collection,
-    or Umbrella's tools_searchNavigator) on FENtastic, Estuary and NOX -- plus
-    NOX's main-menu search item -- so every skin's magnifying glass offers the
+    or Umbrella's tools_searchNavigator) on FENtastic and Estuary, so every
+    skin's magnifying glass offers the
     same richer set of search options, not just movie+show, and offers them
     from whichever add-on the user asked for."""
     target = _target_onclick()
@@ -285,8 +219,7 @@ def ensure_patched():
         return _target
 
     status = _apply(_target_factory)
-    nox_menu = _repoint_nox_main_menu()
-    if status == 'patched' or nox_menu == 'patched':
+    if status == 'patched':
         _log('search buttons repointed to POV full search hub')
         return 'patched'
     return status

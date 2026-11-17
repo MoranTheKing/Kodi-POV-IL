@@ -878,7 +878,7 @@ else:
 # KODI-RD-IL - FIRST BUILD LAUNCH BUILD SKIN SWITCH NOTIFICATION
 if CONFIG.get_setting('buildname') and CONFIG.get_setting('build_skin_switch_notifcation_dismiss') == 'false':
     CONFIG.set_setting('build_skin_switch_notifcation_dismiss', 'true')
-    msg = f"על מנת להחליף סקין יש ללחוץ: כפתור כיבוי --> החלף סקין.\nהסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין NOX"
+    msg = f"על מנת להחליף סקין יש ללחוץ: כפתור כיבוי --> החלף סקין.\nהסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3"
     window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
 #####################################
 
@@ -1020,9 +1020,9 @@ if CONFIG.get_setting('installed') == 'true':
 else:
     logging.log("[Build Installed Check] Not Enabled", level=xbmc.LOGINFO)
 
-# KODI-POV-IL - Auto-refresh the on-demand NOX skin pack for users who are
+# KODI-POV-IL - Auto-refresh the on-demand skin pack for users who are
 # already ON it. On-demand skins are normally only (re)installed from Switch
-# Skin; this makes a published NOX update reach existing NOX users on their
+# Skin; this makes a published skin update reach its existing users on their
 # next quick_update + restart, exactly like the other skins, without them
 # having to toggle skins. Version-gated, so it never re-downloads needlessly.
 try:

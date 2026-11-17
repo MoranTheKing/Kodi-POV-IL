@@ -1,3 +1,6 @@
+0.3.92
+- The repairs written for a skin that left the build (Wizard 0.5.0) go with it: its change-source button, OSD sizing, next-episode and subtitles-button patchers, its poster-rating default, its search targets and its entries in the choose-subtitles and change-source-pause lists. Nothing else changes; a device that still has that skin on disk is moved off it by the Wizard.
+
 0.3.91
 - The top overlay's lines after the search reach the screen again. The engine's search ends the overlay it shares with the automatic subtitle ('END' in subs_engine_bridge._search_inner, there since 28 Sep 2026), 2-4 s after the start -- so every line written after it went nowhere: "כתובית נטענה · בודק סנכרון" (0.3.77), "כתובית מסונכרנת", "הסנכרון לא אומת", "לא נמצאה כתובית עברית". Seen on QA Kodi screenshots (17 Nov 2026) after a viewer asked for a clear sign that a sync is running, like other add-ons give, since viewers give up and move to the next link. autosub_service._overlay_show opens the overlay again for such a line, and the line is put back when a background search writes its own progress over it. QA Kodi, Inception through POV, a pool Hebrew subtitle for another release: "כתובית נטענה · בודק סנכרון" with the subtitle's name on screen from the load until the check ended 5.6 s later, then SubSync's toast "הכתובית סונכרנה אוטומטית (+0.4 שנ')". Also: when the last candidate failed, the run cleared the current subtitle and with it its own claim, so even "לא נמצאה כתובית עברית" never showed; the run now keeps ownership of the player it cleared.
 - An embedded pick that gives nothing says why. When the video's own subtitle was the pick and there is neither a track that can be read nor an external subtitle to translate instead, the overlay says so (the track cannot be read from the stream / is a picture / the file type is not read yet / the reading did not finish -- pick it again from the list) instead of only "no Hebrew subtitle" (the viewer's report in 0.3.90). translate.embedded_miss_since, tied to the file that was playing (runs for two files can overlap); a pick that found the same track already being read ('busy') is no miss.
@@ -40,7 +43,7 @@
   Two requests for the views. They put ~80 lines into Hebrew, six or seven minutes of film; the full translation starts only when the whole track is in. While the reading still has a minute or more to go at the measured rate, one more request (100 lines, the default model) now goes out each time the Hebrew ahead of the viewer is down to two minutes, six at most for a pick. A track read in seconds (many ranges a request) earns none: there the two views are all, as before.
   Simulation of that film with the real _EmbeddedSteps and _extract_in_windows (tests/test_embedded_steps.py LineARequest; the model answers at once, a real answer takes about ten seconds): picked at minute 80 and watched through the thirteen minutes of reading -- 71 lines in English, six minutes on end, before; 2 lines now, for one request more on a film of ~39 chunks. A jump ahead inside the long window: 68 lines in English after it (six minutes) before, none now, three view requests in all. The field log's three jumps: 93 lines before, 3 now, seven view requests where there were four.
   QA Kodi, on the screen (Fight Club 2160p from TorBox, 1,937 lines, the QA copy's reader made to ask one range a request: ~3 lines a second; picked at minute 30, a jump to minute 75 inside the long window, three runs): Hebrew at the viewer's place 20, 24 and 20 s after the jump, and from then on every sample (each 4 s) had a Hebrew line at the viewer's place while the reading went on; in the last run (this code) no sample of the five and a half minutes showed a source-language line of the view, for two requests more than the two views. In the run where the job was the automatic pick on play, the view stayed up with no line at the new place for those 20 s (that path has no embedded track to put back -- as before this change, where it lasted until the window ended).
-- Arctic Fuse 3, the player: a tap or a click on the picture closes the controls (the owner, on a phone: "if I press the middle while the player is open, it should close -- in the other skins' players too"). Kodi itself only opens the controls from a tap; Estuary has an area that closes them, the build's own skins get one in this release (Onyx 1.0.10, Nox 1.0.22, FENtastic 1.0.34), and Arctic Fuse 3 updates itself, so af3_osd_tap_close_patcher puts the control into its VideoOSD.xml at start-up and again after every update of the skin (repair_af3.py): the first control inside <controls>, so every button of the skin keeps its own taps; no picture; the bottom 280 px left out; any arrow from it goes to the window's default control. Marker AI_SUBS_AF3_OSD_TAP_CLOSE_v1; a file without exactly one <controls>, without a default control, or that uses id 6990 itself is left alone. QA Kodi on Arctic Fuse 3 3.5.1, taps sent to the window with no pointer movement: open by key, closed by a tap, opened by the next tap, closed again; the pause button still pauses.
+- Arctic Fuse 3, the player: a tap or a click on the picture closes the controls (the owner, on a phone: "if I press the middle while the player is open, it should close -- in the other skins' players too"). Kodi itself only opens the controls from a tap; Estuary has an area that closes them, the build's own skins get one in this release (Onyx 1.0.10, FENtastic 1.0.34), and Arctic Fuse 3 updates itself, so af3_osd_tap_close_patcher puts the control into its VideoOSD.xml at start-up and again after every update of the skin (repair_af3.py): the first control inside <controls>, so every button of the skin keeps its own taps; no picture; the bottom 280 px left out; any arrow from it goes to the window's default control. Marker AI_SUBS_AF3_OSD_TAP_CLOSE_v1; a file without exactly one <controls>, without a default control, or that uses id 6990 itself is left alone. QA Kodi on Arctic Fuse 3 3.5.1, taps sent to the window with no pointer movement: open by key, closed by a tap, opened by the next tap, closed again; the pause button still pauses.
 
 0.3.84
 - Embedded reading from a stream: a COLD file is read by four connections that share small batches. What 0.3.83 called a slow node is the provider's cold storage: the same TorBox link read twice in a row outside Kodi, the film playing in Kodi -- The Boys 1x01, 1,197 lines: 69.5 s (58 ms a line), then 5.6 s (4.7 ms); still warm 90 s later. On fresh places of a cold file (lab, batches of 50 ranges of 1 KB from one queue): one connection 77-100 ms a range, 3 -> 43, 4 -> 24-31, 6 -> 21, 8 -> 8-16, every answer 206; with 12 and 16 most batches got 429. One big batch per connection had not scaled (0.3.83's 'no gain'): connections land on a few back-end workers at random, so they must share a queue.
@@ -218,7 +221,7 @@
 
 0.3.46
 - Umbrella: 29 more menu rows in Hebrew, among them the main menu's combined search ("חיפוש משולב", English until now since Umbrella 6.7.93), settings export/import, and the newer watch-list rows and their managers. Service names stay as they are, "Custom" included (Umbrella replaces it with the name the user gave that service). The combined-search label is short enough for an Arctic Fuse 3 tile, where a longer label shows only its last word.
-- QA (Windows Kodi, Umbrella 6.7.96): Hebrew for 302 strings installed; the menus show them after a restart, in Nox and in Arctic Fuse 3; the order of Hebrew next to "(TMDb)" checked in Nox.
+- QA (Windows Kodi, Umbrella 6.7.96): Hebrew for 302 strings installed; the menus show them after a restart, in Arctic Fuse 3; the order of Hebrew next to "(TMDb)" checked.
 
 0.3.45
 - AI translation, from a second pass over SRT AI Translator NG's architecture and decision records (MIT, Akila3): when the daily Gemini quota runs out or Gemini keeps rate-limiting in the middle of a title, the parts the AI already translated are kept and only the rest goes to Google Translate (before, the whole title went to Google). The next time that English subtitle is picked from the subtitle list with AI available, it is usually translated with AI again: the Google Hebrew stays on screen and the AI parts replace it as they arrive (before, the Google file was served from the cache for good). Not retried on a day the quota is known to be used up; if the AI run fails, the Google file stays.
@@ -228,7 +231,7 @@
 - Audio timing: the speech times the model returns are sorted (one out of order made the aligner refuse the whole reference, and the cache kept the refusal). Audio requests count toward the daily Gemini figure.
 - The log names the provider of the gender reference; a subtitle archive over 200 MB or 500 files is not unpacked.
 - Tried in Kodi and dropped: speaker gender and the extra gender question only with a Hebrew reference (without one, 45 gender conflicts against 39); resending a reply that failed the checks and then splitting it with the same reference (Prada 25-60 s slower, no gender gain; the old code already resends once before changing language); Low thinking (faster, but 13 gender conflicts against 9 on four titles).
-- QA (Windows Kodi, Nox, real TorBox streams, gemini-3.5-flash-lite): with the quota forced out after 3 requests on Friends, 1-2 of 7 parts were kept from the AI and the rest came from Google; reopened the same day, the file came from the cache with no request; the next day with Gemini forced overloaded, or the quota gone at once, the Google file stayed on screen; the next day normally, AI in 74-105 s, with the preview showing the Google Hebrew until the AI parts replaced it. 14 regular translations of 6 titles during this work all finished.
+- QA (Windows Kodi, real TorBox streams, gemini-3.5-flash-lite): with the quota forced out after 3 requests on Friends, 1-2 of 7 parts were kept from the AI and the rest came from Google; reopened the same day, the file came from the cache with no request; the next day with Gemini forced overloaded, or the quota gone at once, the Google file stayed on screen; the next day normally, AI in 74-105 s, with the preview showing the Google Hebrew until the AI parts replaced it. 14 regular translations of 6 titles during this work all finished.
 
 0.3.44
 - New repair_af3.py, run by the Wizard's host watch (0.4.72) right after Kodi updates Arctic Fuse 3: re-applies the build's AF3 Hebrew font and strings, POV search, Discover and subtitle-dialog edits and rebuilds/reloads the skin. It waits for this service's own start-up pass (which runs the same patchers) and for playback to end before reloading, runs once at a time, finishes a rebuild deferred while POV was reloading (the home marker survives the update, so a plain retry would never reload the restored font), and treats a moved anchor as final instead of retrying.
@@ -292,7 +295,6 @@
 - SubSync: read the image (PGS) subtitles of Blu-ray rips as the captions they are, so files with only PGS tracks can confirm an in-sync subtitle, and fix TV/web subtitles across the disc's act breaks when held-out parts of the disc track and a second PGS language of the same disc confirm the map.
 
 0.3.31
-- Stop the Nox player OSD fix from shrinking neighbouring buttons on later starts, and restore the buttons it already shrank.
 - Idan Plus: Kan 11, Kan Educational 23 and the Kan archive play again after changes on Kan's website, and i24NEWS English lists its programs again after its old catalog service shut down.
 - Never start the automatic subtitle search on Idan Plus live channels or VOD, also when they are started from a home widget or a favourite.
 
@@ -365,13 +367,13 @@
 - Defer POV's TMDb and Trakt HTTP stack until an expired or missing catalogue cache needs it, reducing 32-bit home and cache-hit navigation time without changing cache freshness or live fallback.
 
 0.2.544
-- Reduce initial home-screen work on 32-bit devices with a compact Arctic Fuse 3 layout and bounded POV movie, TV, episode and NOX children widgets, while preserving full catalogue navigation.
+- Reduce initial home-screen work on 32-bit devices with a compact Arctic Fuse 3 layout and bounded POV movie, TV and episode widgets, while preserving full catalogue navigation.
 - Defer speculative subtitle-engine and patch-health work until startup settles; a real subtitle request still starts immediately.
 - Load POV's Trakt and MDBList watched backends only when an operation actually needs them, reducing cold navigation imports.
 - Bound future artwork decoding on exact build-owned 32-bit profiles without deleting cached images or changing custom settings.
 
 0.2.543
-- Bound POV movie and TV home widgets to the items each skin can actually display on FENtastic, NOX and Arctic Fuse 3, reducing hidden metadata work on slower 32-bit devices.
+- Bound POV movie and TV home widgets to the items each skin can actually display on FENtastic and Arctic Fuse 3, reducing hidden metadata work on slower 32-bit devices.
 - Preserve full POV catalogue navigation and existing list freshness; Estuary and subtitle search, matching and playback paths remain unchanged.
 
 0.2.542
@@ -1589,7 +1591,7 @@ v0.2.499
 - The player bar now hides itself on every skin that can do it, not only on
   FENtastic. The setting that closes it after a few idle seconds was being
   turned on by a check that named one skin and returned for all the others, so
-  anyone on Nox had the bar stay up until they pressed Back. It is detected
+  anyone on another skin had the bar stay up until they pressed Back. It is detected
   from the skin's own files now, so a skin that has the feature gets it, and if
   you turn it back off yourself it stays off.
 - Umbrella's "continue watching" for SERIES no longer gets stuck several
@@ -2048,7 +2050,7 @@ v0.2.457
 - A fresh install that lands on an EMPTY FENtastic home screen now repairs
   itself. The build ships a 36-tile favourites.xml, something between the zip
   and the first boot was losing it, and the workaround people found -- switch
-  the skin to NOX and back -- says what was missing: that path makes the wizard
+  the skin to another one and back -- says what was missing: that path makes the wizard
   copy a favourites seed over the file. We were holding the same canonical file
   all along and refusing to use it, because the repair was disabled outright
   after an older version of it resurrected tiles users had deliberately deleted.
@@ -2986,7 +2988,7 @@ v0.2.364
 
 v0.2.363
 - Fixed: the "synced" mark added in 0.2.362 used a check-mark glyph (✓, U+2713)
-  that is missing from some skin fonts (NOX among them), so it rendered as an
+  that is missing from some skin fonts, so it rendered as an
   empty tofu box instead of a tick. Replaced it with the plain ASCII word
   "SYNC" ("HEB NN% SYNC", or "HEB SYNC" when there's no name match), which
   renders in every font on every skin. Same bright-green highlight, same
@@ -3014,7 +3016,7 @@ v0.2.361
   deliberately deleted, so each update looked like it reset the home screen back
   to default. That repair is long finished for the whole fleet, so all three
   forced restores are now retired: deletions are honoured permanently, on every
-  skin (nox, fentastic, estuary, arctic fuse 3). The only remaining canonical
+  skin (fentastic, estuary, arctic fuse 3). The only remaining canonical
   restore is the already-disabled heuristic, so a missing tile is treated as
   intentional user customisation. Action-repair fixes (debrid/torbox tiles) and
   clean-install seeding from the build zip are unchanged.
@@ -3407,7 +3409,7 @@ v0.2.336
   focus-restore was correct but on a different code path, so it couldn't help).
   ReloadSkin() is now skipped whenever the home screen is showing: the OSD XML
   is re-read by Kodi on the next OSD open anyway, so nothing is lost and the
-  focus jump is gone. (Applies to Estuary, FENtastic and NOX reload paths.)
+  focus jump is gone. (Applies to Estuary and FENtastic reload paths.)
 
 v0.2.335
 - Quality fix is now filter-aware (fixes "I hid 4K but 4K still shows"). The
@@ -3447,7 +3449,7 @@ v0.2.332
   slot 0 -- so it always reported "0" and restored focus to the first tile.
   It now captures the ABSOLUTE selected index (Container(id).CurrentItem) and
   restores with SetFocus(...,absolute), which round-trips correctly on
-  Estuary's fixedlist as well as regular lists/panels on FENtastic/NOX.
+  Estuary's fixedlist as well as regular lists/panels on FENtastic.
 
 v0.2.331
 - Reverted the 0.2.330 change per request: "Include Pre-Release Results"
@@ -3481,7 +3483,7 @@ v0.2.329
 
 v0.2.328
 - Fixed POV getting STUCK when you press BACK on the "Resume / Play from
-  beginning" prompt (all skins - NOX/Estuary/FENtastic/AF3). Picking a source
+  beginning" prompt (all skins - Estuary/FENtastic/AF3). Picking a source
   for a mid-watched title opens a modal resolving window; POV's player showed
   the resume prompt over it, and pressing BACK ('cancel') returned WITHOUT
   closing that window - so the UI froze and needed a full Kodi restart. The
@@ -3611,9 +3613,6 @@ v0.2.313
 
 v0.2.312
 - Maintenance and stability improvements.
-- Build (NOX): the player-OSD "next episode" button no longer errors -- the
-  base build changed how it plays the next episode, so the button now opens the
-  working "Next Episode" list instead.
 
 v0.2.311
 - Maintenance and stability improvements.
@@ -3654,10 +3653,6 @@ v0.2.307
 
 v0.2.306
 - Maintenance and stability improvements.
-- Build: one-time restore of the "series by network" tiles (Netflix / Disney+ /
-  Apple TV+ / HBO / HBO Max / FOX / Amazon / Hulu / CW) on the NOX home screen.
-  Some devices lost most of these when the base build self-updated and reset its
-  home-menu database; they are restored once, then left to the user's edits.
 
 v0.2.305
 - Maintenance and stability improvements.
@@ -3863,20 +3858,19 @@ v0.2.277
 
 v0.2.276
 - "בחר כתוביות" is now skin-aware: on FENtastic it opens Tal's own native
-  subtitle window (kept exactly as he designed it); on every other skin (NOX /
-  Estuary / Arctic Fuse 3) it opens our new custom window with the same gorgeous
+  subtitle window (kept exactly as he designed it); on every other skin
+  (Estuary / Arctic Fuse 3) it opens our new custom window with the same gorgeous
   look. Best of both -- Tal's real design where it exists, ours everywhere else.
 
 v0.2.275
 - "בחר כתוביות" is now a brand-new, gorgeous custom window (Tal-inspired) that
-  looks the SAME on every skin (FENtastic / NOX / Estuary / Arctic Fuse 3): the
+  looks the SAME on every skin (FENtastic / Estuary / Arctic Fuse 3): the
   title's fanart + poster background, a clean two-line list with a language flag,
   bold title line + dim release line, a colour-coded match % on the right, and a
   smooth focus highlight. It's a self-contained window bundled in the add-on
   (no per-skin dependency), so it no longer falls back to each skin's plain
   download dialog. Picking AI still shows the source immediately and swaps Hebrew
-  in the background. Also fixed the NOX subtitle button still calling the old
-  All_Subs add-on.
+  in the background.
 
 v0.2.274
 - "בחר כתוביות" now opens in the gorgeous redesigned subtitle window (on
@@ -3917,7 +3911,7 @@ v0.2.270
   The % is back inline and highlighted in bright white so it stands out. Also
   refined the colour palette (gold/green = ready Hebrew by match strength, amber
   = foreign-to-be-translated, magenta = currently applied) alongside the flag
-  icons. Same on every skin (FENtastic, Estuary, NOX).
+  icons. Same on every skin (FENtastic, Estuary).
 
 v0.2.269
 - "בחר כתוביות" chooser, much clearer: each row now shows a real FLAG icon for
@@ -4009,15 +4003,6 @@ v0.2.263
 - If the chooser can't open (e.g. nothing found yet), the button now falls back
   to Kodi's native subtitle SEARCH window instead of the delay/sync settings.
 
-v0.2.262
-- NOX player: fixed "הפרק הבא" (next episode) overlapping the play controls
-  while a video was playing. Adding the "החלף מקור" button had widened NOX's
-  right-aligned button row, which pushed "הפרק הבא" left into the central
-  rewind/forward controls (those only appear during playback, so paused looked
-  fine). Fix: the right-row buttons are re-sized so the whole row is exactly as
-  wide as it was before we added "החלף מקור" -- so "הפרק הבא" sits back where it
-  used to, with no button removed. Resolution-independent and self-healing.
-
 v0.2.261
 - FENtastic: the "בחר כתוביות" rewire now covers ALL player styles, not just the
   "advanced" one. The button also lives in the simple player (and the other
@@ -4034,20 +4019,12 @@ v0.2.261
   applies there. Nothing to patch.)
 
 v0.2.260
-- NOX player: fixed the "החלף מקור" button overlapping the fast-forward/next
-  control. The real cause was the NEW "בחר כתוביות" button we'd added: NOX's
-  right-side OSD group is right-aligned, so the extra button widened the group
-  and pushed "החלף מקור" left into the play controls. Fix: we no longer add a
-  button -- we rewire NOX's existing subtitles button (it only opened the plain
-  Kodi subtitle dialog) to open the MoranSubs chooser instead, so the OSD layout
-  is unchanged. The previously-added button is removed automatically (self-
-  healing on the next start).
 - "בחר כתוביות" window now has a "הורדת כתוביות (Kodi)" button that opens Kodi's
   full native subtitle search/download dialog -- for when you want the regular
-  download flow, not just the quick picker. Works on every skin (NOX included),
+  download flow, not just the quick picker. Works on every skin,
   and since it lives inside the window it adds no OSD button (no collision).
 - "החלף מקור" pauses the video again before opening the source-selection
-  screen, instead of letting it keep playing in the background. Restored on NOX,
+  screen, instead of letting it keep playing in the background. Restored on
   Estuary and FENtastic.
 
 v0.2.259
@@ -4075,8 +4052,8 @@ v0.2.257
   dead DarkSubs button: it lists the available Hebrew subs WITH a match % per
   sub (and built-in/foreign options), and applies the one you pick on the spot,
   staying open so you can try another. Built with pyxbmct so it looks the same
-  on every skin. The button is rewired in FENtastic AND Estuary, and ADDED to
-  the NOX player. (AF3 keeps its own native subtitle selector + the Download
+  on every skin. The button is rewired in FENtastic AND Estuary.
+  (AF3 keeps its own native subtitle selector + the Download
   dialog, which opens the same chooser.) If the window can't open it falls back
   to Kodi's native subtitle selector.
 
@@ -4150,9 +4127,6 @@ v0.2.251
 - "Remember source" itself is now force-enabled for everyone once (it's an
   important feature) -- including anyone who had turned it off. After this,
   turning it off again sticks.
-- NOX skin: the content rating/score on posters is now force-enabled for
-  everyone once more (it's an important default) -- including anyone who had
-  turned it off. After this, turning it off again sticks.
 
 v0.2.250
 - Hebrew subtitles on streaming sources are no longer all named the generic
@@ -4164,9 +4138,6 @@ v0.2.250
   source. They used to collide on that single shared "TempSubtitle" file so
   the 3rd and beyond silently never appeared in the list even though the
   download reported success.
-- NOX skin: the content rating/score now shows on posters by default (the
-  rating circle). You can still turn it off in the skin's rating settings --
-  if you do, it stays off.
 
 v0.2.249
 - New setting "Keep DarkSubs (regular Hebrew subtitle search) enabled": by
@@ -4748,7 +4719,7 @@ v0.2.166
   you removed and won't re-add them. It tells a real deletion (the tile is gone
   but its TMDB anchor tile is still there) from a skin-switch reseed (which
   restores everything), so it respects deletions without breaking the
-  survive-skin-switch behaviour. Covers FENtastic + NOX (shared favourites.xml).
+  survive-skin-switch behaviour. Covers FENtastic (shared favourites.xml).
   (First run after this update behaves as before; delete once more and it
   sticks. AF3's separate home nodes will follow.)
 
@@ -6933,7 +6904,7 @@ v0.2.36
 
 - Fix (b): the old `fentastic_dialog_subtitles_patcher` was
   hard-coded to FENtastic's XML structure. Users on Arctic Zephyr,
-  Estuary, Aeon Nox etc. got `'no_file'` from it -- the dialog
+  Estuary etc. got `'no_file'` from it -- the dialog
   header kept reading `$INFO[Player.Filename]` (the UUID for
   TorBox URLs). The new `skin_dialog_subtitles_patcher`
   auto-detects the active skin via `xbmc.getSkinDir()`, locates

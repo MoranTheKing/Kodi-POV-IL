@@ -366,7 +366,7 @@ def _show_pyxbmct():
             self.connect(self.lst, self.on_pick)
             # Full native Kodi subtitle search/download -- for users who want the
             # regular "download subtitles" flow, not just this picker. Skin-
-            # agnostic (the OSD layout is untouched, so no NOX button collision).
+            # agnostic (the OSD layout is untouched, so no button collision).
             self.dl = pyxbmct.Button('[B]הורדת כתוביות (Kodi)[/B]')
             self.placeControl(self.dl, 8, 0)
             self.connect(self.dl, self.on_download)

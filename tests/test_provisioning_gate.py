@@ -113,7 +113,7 @@ class ProvisioningGateTests(unittest.TestCase):
         config = types.SimpleNamespace(get_setting=lambda key: state.get(key, ''))
         logging = types.SimpleNamespace(log=lambda message, **kw: messages.append(message))
         native_present = {'plugin.video.pov': True, 'plugin.video.idanplus': True,
-                          'skin.povil.nox': True, 'script.fentastic.helper': True}
+                          'skin.povil.onyx': True, 'script.fentastic.helper': True}
         xbmc = types.SimpleNamespace(
             LOGERROR=4, LOGINFO=1,
             getCondVisibility=lambda condition: native_present.get(
@@ -126,17 +126,17 @@ class ProvisioningGateTests(unittest.TestCase):
         updater = types.SimpleNamespace(
             get_local_version=lambda aid: versions.get(aid),
             _version_tuple=lambda ver: tuple(int(part) for part in ver.split('.')),
-            ON_DEMAND_SKINS=frozenset(('skin.povil.nox', 'skin.povil.onyx')),
-            OPTIONAL_SKINS=frozenset(('skin.povil.onyx',)),
+            ON_DEMAND_SKINS=frozenset(('skin.povil.onyx',)),
+            OPTIONAL_SKINS=frozenset(),
             _pending_addon_receipt=lambda _aid: False,
             CORE_PROVISION_IDS=('plugin.video.pov', 'plugin.video.idanplus'))
         manifest = {'addons': {aid: {'version': ver} for aid, ver in versions.items()},
                     'config': {'config_version': '2.0.7'}}
-        manifest['addons']['skin.povil.nox'] = {'version': '1.0.11'}
+        manifest['addons']['skin.povil.onyx'] = {'version': '1.0.11'}
         # Onyx is optional: published but not installed never blocks a fresh install
         manifest['addons']['skin.povil.onyx'] = {'version': '1.0.0'}
         self.assertFalse(fn(updater, manifest), 'missing default skin must block completion')
-        versions['skin.povil.nox'] = '1.0.11'
+        versions['skin.povil.onyx'] = '1.0.11'
         self.assertTrue(fn(updater, manifest))
         native_present['plugin.video.idanplus'] = False
         self.assertFalse(fn(updater, manifest), 'missing native core must block completion')
@@ -148,7 +148,7 @@ class ProvisioningGateTests(unittest.TestCase):
         self.assertFalse(fn(updater, manifest))
         self.assertTrue(any('incomplete' in message for message in messages))
 
-    def test_fresh_queue_installs_default_nox_skin(self):
+    def test_fresh_queue_installs_the_default_skin(self):
         config = types.SimpleNamespace(USER_AGENT='Kodi POV IL QA')
         logs = types.SimpleNamespace(log=lambda *_a, **_kw: None)
         xbmc = types.SimpleNamespace(LOGINFO=1)
@@ -162,7 +162,7 @@ class ProvisioningGateTests(unittest.TestCase):
                                                 'version': '0.4.3'},
             'service.subtitles.kodipovilai': {'id': 'service.subtitles.kodipovilai',
                                               'version': '0.3.18'},
-            'skin.povil.nox': {'id': 'skin.povil.nox', 'version': '1.0.11'},
+            'skin.povil.onyx': {'id': 'skin.povil.onyx', 'version': '1.0.11'},
             # optional: a fresh install never downloads it (Switch Skin does)
             'skin.povil.onyx': {'id': 'skin.povil.onyx', 'version': '1.0.0'}},
             'config': {'config_version': '2.0.7'}}
@@ -171,8 +171,8 @@ class ProvisioningGateTests(unittest.TestCase):
             _load_manifest=lambda: manifest,
             get_local_version=lambda _id: None,
             _on_disk=lambda _id: False,
-            ON_DEMAND_SKINS=frozenset(('skin.povil.nox', 'skin.povil.onyx')),
-            OPTIONAL_SKINS=frozenset(('skin.povil.onyx',)),
+            ON_DEMAND_SKINS=frozenset(('skin.povil.onyx',)),
+            OPTIONAL_SKINS=frozenset(),
             _pending_addon_receipt=lambda _aid: False,
             install_missing=True, fresh=True,
             _record_build_identity=lambda _manifest: True,
@@ -181,7 +181,7 @@ class ProvisioningGateTests(unittest.TestCase):
         self.assertTrue(fn(updater))
         self.assertEqual([item['id'] for item in seen],
                          ['plugin.program.kodipovilwizard',
-                          'service.subtitles.kodipovilai', 'skin.povil.nox'])
+                          'service.subtitles.kodipovilai', 'skin.povil.onyx'])
         # No old service exists. The conservative unknown-addon probe must
         # never prevent an initial installation (real Kodi returns an error).
         updater._runtime_addon_enabled = lambda _aid: True

@@ -33,13 +33,13 @@ class LegacyFavouritesMigrationTests(unittest.TestCase):
         self.assertEqual(modes['userdata/guisettings.xml'], 'seed_if_absent')
         self.assertTrue(all(modes[dest] == 'merge_missing_id' for dest in
                             destinations - {'userdata/guisettings.xml'}))
-        original = ('<settings><setting id="lookandfeel.skin">skin.povil.nox'
+        original = ('<settings><setting id="lookandfeel.skin">skin.povil.onyx'
                     '</setting><setting id="custom">personal</setting></settings>')
         incoming = ('<settings><setting id="lookandfeel.skin">skin.fentastic'
                     '</setting><setting id="new_feature">on</setting></settings>')
         merged = config_apply.merge_settings_xml(
             original, incoming, overwrite_existing=False)
-        self.assertIn('skin.povil.nox', merged)
+        self.assertIn('skin.povil.onyx', merged)
         self.assertNotIn('skin.fentastic', merged)
         self.assertIn('personal', merged)
         self.assertIn('new_feature', merged)

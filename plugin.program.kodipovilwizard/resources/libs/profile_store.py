@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 
-BOOTSTRAP_SHA256 = '20f3f23b5571bc48be7313096e144fd01e903b346b050ca9a7a2899a92963f85'
+BOOTSTRAP_SHA256 = '5871d7aaba09d86c8acc6a7ca700fc4bcea8b61fa65b04cd2cffd2178182c101'
 WIZARD = 'plugin.program.kodipovilwizard'
 
 
@@ -301,7 +301,7 @@ def seed_profile(master, profile, archive, prepare_login=False):
                 write_missing(target, name, content)
         # Native "start fresh" does not save guisettings until first login.
         # Seed the verified build defaults before that login, so the new
-        # profile starts in NOX with Hebrew/subtitles instead of bare Kodi.
+        # profile starts in the build's skin with Hebrew/subtitles instead of bare Kodi.
         # Existing native/user settings are never replaced.
         if completing_home:
             write_missing(target, 'kodipovil.profile_gui_defaults.xml', zf.read('guisettings.xml'))
@@ -316,7 +316,7 @@ def seed_profile(master, profile, archive, prepare_login=False):
             row = root.find("setting[@id='lookandfeel.skin']")
             if row is None:
                 row = ET.SubElement(root, 'setting', {'id': 'lookandfeel.skin'})
-            row.text = 'skin.povil.nox'
+            row.text = 'skin.povil.onyx'
             row.attrib.pop('default', None)
             fd, temporary = tempfile.mkstemp(prefix='.profile-', dir=target)
             try:

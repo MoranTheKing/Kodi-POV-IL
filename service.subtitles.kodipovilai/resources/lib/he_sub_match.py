@@ -1259,8 +1259,8 @@ def label_prefix(src_release, names, embedded=None, alt_release='',
     contains THIS row's normalized release, the badge gains a trailing 'SYNC'
     tag and turns bright green -- "the community verified a synced Hebrew
     subtitle for this exact release". We use the ASCII word 'SYNC' rather than a
-    check-mark glyph (U+2713): that glyph is MISSING from some skin fonts (NOX's
-    among them) and renders as an empty tofu box -- plain ASCII letters render in
+    check-mark glyph (U+2713): that glyph is MISSING from some skin fonts
+    and renders as an empty tofu box -- plain ASCII letters render in
     every font on every skin. Kept LTR (no Hebrew) so it never triggers bidi
     reordering / clipping of the badge.
 

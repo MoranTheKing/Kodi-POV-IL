@@ -99,10 +99,10 @@ class FreshHomeReadinessTests(unittest.TestCase):
         kodi = types.SimpleNamespace(getSkinDir=lambda: 'skin.estuary', getCondVisibility=lambda _: True,
             getLocalizedString=lambda _: 'Keep this skin?', executebuiltin=clicks.append)
         fn = _load_function(SKIN, 'confirm_requested_skin',
-            dict(xbmcgui=gui, xbmc=kodi, SKINS=('skin.estuary','skin.povil.nox')))
+            dict(xbmcgui=gui, xbmc=kodi, SKINS=('skin.estuary','skin.povil.onyx')))
         self.assertTrue(fn('skin.estuary'))
         self.assertEqual(clicks, ['SendClick(10100,11)'])
-        self.assertFalse(fn('skin.povil.nox'))
+        self.assertFalse(fn('skin.povil.onyx'))
         body[0] = 'Allow unknown sources?';self.assertFalse(fn('skin.estuary'))
         body[0] = 'Keep this skin?';dialogid[0] = 10101;self.assertFalse(fn('skin.estuary'))
         dialogid[0] = 10100;properties.clear();self.assertFalse(fn('skin.estuary'))
@@ -111,7 +111,7 @@ class FreshHomeReadinessTests(unittest.TestCase):
     def test_live_defaults_are_typed_and_skin_is_last(self):
         with tempfile.TemporaryDirectory() as raw:
             Path(raw, 'kodipovil.fresh_gui_defaults.xml').write_text('''<settings>
-                <setting id="lookandfeel.skin">skin.povil.nox</setting>
+                <setting id="lookandfeel.skin">skin.povil.onyx</setting>
                 <setting id="locale.language">resource.language.he_il</setting>
                 <setting id="test.bool">false</setting>
                 <setting id="test.list">English|Hebrew</setting>
@@ -137,14 +137,14 @@ class FreshHomeReadinessTests(unittest.TestCase):
                 'ET': ET, 'os': os, 're': re, 'threading': threading, 'CONFIG': types.SimpleNamespace(USERDATA=raw),
                 'xbmc': xbmc, '_rpc': rpc, '_accept_initial_skin_confirmation': lambda: False,
                 'apply_live_settings': live})
-            activate = _load_function(SKIN, 'activate', {'SKINS': ('skin.povil.nox',),
+            activate = _load_function(SKIN, 'activate', {'SKINS': ('skin.povil.onyx',),
                 'enable_skin': lambda _target: True, 'xbmc': xbmc, 'rpc': rpc,
                 'threading': threading, 'confirm_requested_skin': lambda _target: False,
                 'persist_live_settings': lambda: True, 'prepare_skin_confirmation': lambda _: True,
-                'xbmcgui': types.SimpleNamespace(Window=lambda _: types.SimpleNamespace(getProperty=lambda _: 'skin.povil.nox', setProperty=lambda *a:None, clearProperty=lambda *a:None))})
+                'xbmcgui': types.SimpleNamespace(Window=lambda _: types.SimpleNamespace(getProperty=lambda _: 'skin.povil.onyx', setProperty=lambda *a:None, clearProperty=lambda *a:None))})
             with patch.dict('sys.modules', skin_modules(activate)):
                 self.assertTrue(fn())
-            self.assertEqual(calls[-1], {'setting': 'lookandfeel.skin', 'value': 'skin.povil.nox'})
+            self.assertEqual(calls[-1], {'setting': 'lookandfeel.skin', 'value': 'skin.povil.onyx'})
             self.assertIs(calls[1]['value'], False)
             self.assertEqual(calls[2]['value'], ['English', 'Hebrew'])
             self.assertLess(sum(waits), 10)  # no polling native dialog controls
@@ -161,7 +161,7 @@ class FreshHomeReadinessTests(unittest.TestCase):
             xbmc = types.SimpleNamespace(
                 Monitor=lambda: types.SimpleNamespace(abortRequested=lambda: False,
                     waitForAbort=lambda secs: waits.append(secs) or False),
-                getSkinDir=lambda: 'skin.povil.nox', getCondVisibility=lambda _c: home[0],
+                getSkinDir=lambda: 'skin.povil.onyx', getCondVisibility=lambda _c: home[0],
                 executebuiltin=builtin)
             fn = _load_function(FRESH, 'apply_live_defaults', {'ET': ET, 'os': os,
                 'CONFIG': types.SimpleNamespace(USERDATA=raw), 'xbmc': xbmc,
@@ -228,7 +228,7 @@ class FreshHomeReadinessTests(unittest.TestCase):
         gui = next(row for row in policy['files'] if row['src'] == 'guisettings.xml')
         self.assertEqual(gui['update'], 'seed_if_absent')
         self.assertEqual(ET.parse(ROOT / 'userdata/guisettings.xml').find(
-            "setting[@id='lookandfeel.skin']").text, 'skin.povil.nox')
+            "setting[@id='lookandfeel.skin']").text, 'skin.povil.onyx')
 
 
 if __name__ == '__main__':

@@ -175,17 +175,6 @@
       "sha256": "a57fb5f5cc8d59b0f9b561d21084edce033418b842b074d12bb3eb186c1fdbfc",
       "updated": "2026-11-15T18:24:02Z"
     },
-    "skin.povil.nox": {
-      "id": "skin.povil.nox",
-      "name": "Kodi POV IL - NOX",
-      "version": "1.0.22",
-      "type": "skin",
-      "filename": "skin.povil.nox-1.0.22.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.nox-1.0.22.zip",
-      "size": 24504676,
-      "sha256": "419e9774b7c6b58041d7250fba0f00864ac59b38f586aee4bdb04739659770d8",
-      "updated": "2026-11-15T18:24:02Z"
-    },
     "skin.povil.onyx": {
       "id": "skin.povil.onyx",
       "name": "Kodi POV IL - Onyx",

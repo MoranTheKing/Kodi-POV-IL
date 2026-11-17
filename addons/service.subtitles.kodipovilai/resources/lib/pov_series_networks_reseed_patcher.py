@@ -1,4 +1,4 @@
-# One-time restore of the NOX "series by networks" home row.
+# One-time restore of the "series by networks" home row.
 #
 # The home screen's per-service SERIES tiles (Netflix / Disney+ /
 # Apple TV+ / HBO / HBO Max / FOX / Amazon / Hulu / CW) are not baked

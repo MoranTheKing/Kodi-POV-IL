@@ -1,3 +1,8 @@
+0.5.0
+- One skin left the build (skin_retirement.RETIRED names it), and Onyx is the skin a new installation opens with. The skin that left is gone from Switch Skin, from the profile skin chooser and from every list of the build's skins; its on-demand pack, its auto-refresh at start-up and the player-style chooser that belonged to it are removed. A new installation, a new profile and a new kids profile start in Onyx (build_skin.DEFAULT_SKIN; settings pack 2.0.12 and the Wizard's own copy of the pack); Onyx is now part of a fresh installation and no longer optional.
+- A device installed earlier (skin_retirement.py, at each start, each profile's own): Onyx is installed if it is not there; once Onyx is on the device, a profile that is not loaded and names the old skin has its saved skin rewritten on disk and is marked, so its own next start finishes the move; the loaded profile is moved through Switch Skin -- after the start-up repairs, never over a video, and only once Onyx is on the device (no network: nothing changes, the next start tries again; a switch that fails at three starts is left for Switch Skin) -- and is told once that its skin was removed and that it is on Onyx now; when no profile names the old skin any more, its add-on folder, its downloaded package and its settings are deleted. A profile on FENtastic, Arctic Fuse 3 or Estuary keeps its skin.
+  QA Kodi (started on the old skin, Onyx not on the device): Onyx was downloaded and installed, the profile was switched, the notice was shown once, and the old skin's folder and settings were deleted; the saved skin is Onyx. Tests: tests/test_skin_retirement.py (15); full suite 1905 OK (3 skipped).
+
 0.4.99
 - Subtitles without the box behind them (the owner: "the default should be without the black rectangle created for the subtitles -- only white text with a black outline"). The build shipped Kodi's box background (type 2, 35 % black) with border size 41. In that mode Kodi draws no outline at all and greys the border size out; with no background the outline is drawn, and 41 fills the letters (QA Kodi, on a white and on a coloured picture), while 25 -- Kodi's own default -- reads cleanly on both. So: no background, border 25.
   A fresh install gets it from the settings pack (userdata/guisettings.xml, config 2.0.11). A device already installed gets it once, at start-up (subtitle_style.py), and only when its background and border settings are exactly the ones the build shipped; a device where any of the five was changed keeps its look, and so does one that has no box already (moved from the old build). Font, size, colour and position are not looked at. After it the box is the user's to switch back on (Settings > Player > Subtitles > Background type). Kodi's Settings API changes memory only, so the change is saved at once (build_skin.persist_live_settings); a start cut between the two values is finished at the next.
@@ -59,8 +64,8 @@
 - POV clear logos in the build's language. POV showed Hebrew posters but took the first logo TMDb listed, usually the English one; it now takes TMDb's Hebrew logo when there is one, in every skin (QA Kodi: 14 of the 20 popular movies). A new art type, povil_logo, holds the logo only when it suits a Hebrew screen (a Hebrew logo, or a title that is not in Hebrew); Onyx writes the Hebrew title otherwise. Lists POV already saved keep their old logo until POV refreshes them.
 
 0.4.84
-- A button in the Wizard's main menu, "שחזור הגדרות קודי של הבילד", puts Kodi's own settings back to the build's: language, region and keyboard layouts, subtitles (MoranSubs as the subtitle service for films and series, Hebrew subtitles, the build's subtitle look), playback (seek steps, play next, cache) and add-on updates. Field report (28 Oct 2026, Android): Kodi came up in English, with Estuary and a 12-hour clock -- Kodi's defaults -- and switching back to NOX by hand still left English labels; the session in which Kodi's settings reset left no log. The settings come from the Wizard's own copy of the build's settings pack, without the ones kept per device (screen resolution, network services) and without the audio output (an AV receiver may need its own); they are applied through Kodi's settings API and saved at once through Kodi's own save path, since in Kodi 21 the API changes memory only. The skin is offered afterwards, only when it is installed, never switched without asking. The button works offline too: it shows even when the online build check fails.
-- At the end of start-up, when Kodi's language is back to English and its region is no longer the build's, the Wizard offers the same restore once (not on a kids profile, where the Wizard's menu is closed as well); a "no" is remembered until the language changes again. QA Kodi with that state saved to disk: offered (also with NOX already active, as in the field report), restored (Hebrew, Israel, MoranSubs for films and series, Hebrew subtitles) and found in guisettings.xml before any restart; the same from the menu button; with Estuary, NOX on the second question.
+- A button in the Wizard's main menu, "שחזור הגדרות קודי של הבילד", puts Kodi's own settings back to the build's: language, region and keyboard layouts, subtitles (MoranSubs as the subtitle service for films and series, Hebrew subtitles, the build's subtitle look), playback (seek steps, play next, cache) and add-on updates. Field report (28 Oct 2026, Android): Kodi came up in English, with Estuary and a 12-hour clock -- Kodi's defaults -- and switching the skin back by hand still left English labels; the session in which Kodi's settings reset left no log. The settings come from the Wizard's own copy of the build's settings pack, without the ones kept per device (screen resolution, network services) and without the audio output (an AV receiver may need its own); they are applied through Kodi's settings API and saved at once through Kodi's own save path, since in Kodi 21 the API changes memory only. The skin is offered afterwards, only when it is installed, never switched without asking. The button works offline too: it shows even when the online build check fails.
+- At the end of start-up, when Kodi's language is back to English and its region is no longer the build's, the Wizard offers the same restore once (not on a kids profile, where the Wizard's menu is closed as well); a "no" is remembered until the language changes again. QA Kodi with that state saved to disk: offered (also with the build's skin already active, as in the field report), restored (Hebrew, Israel, MoranSubs for films and series, Hebrew subtitles) and found in guisettings.xml before any restart; the same from the menu button; with Estuary, the build's skin on the second question.
 
 0.4.83
 - The sign-in window of Account Manager (חיבור שירותים: TorBox, Real-Debrid, Trakt ...) shows its QR code on devices without PIL too. Account Manager 1.2.x draws the QR with qrcode, whose images need PIL, and its fallback asks qrcode 6.1.0 for an image type it does not have, so on such a device the window showed only a code and a link cut short to fit (field report, 28 Oct 2026). The Wizard now draws the QR itself with segno (pure Python, already used for the log-upload QR) whenever Account Manager gives up. QA Kodi with PIL hidden: Account Manager logged "QR generation failed: No module named 'pymaging'" and the QR showed, drawn by the Wizard; with PIL, Account Manager's own QR is untouched.
@@ -138,7 +143,7 @@
 - The "searching for sources..." notice shows as soon as a tap on an episode or movie reaches POV, instead of 1.5 s later (on a Shield that was still a visible gap, field video Oct 2026), and it is taken down the moment POV's sources window, results list or background bar is up or a video plays (a request that ends without a window within the first second takes it down too; later, POV's own "no results" toast is left alone). No notice for POV's own next episode during playback. QA: notice 0.2 s after the tap, sources window at 0.48 s, notice closed 30 ms later.
 
 0.4.62
-- A show's seasons and a season's episodes are saved too: returning to them from the player (or opening them again) showed a spinner for 3-4.5 s on a Shield while POV rebuilt them from scratch (field log and video, Oct 2026 -- reached through search). They follow the show's rows in POV's metadata cache (a new episode or season, an expired refresh) and the watch state (a watched episode or resume point: shown at once, rebuilt and refreshed in place), and the date. QA (NOX, real debrid episode): back from the player to the episode list in 0.43 s from the saved copy, focus on the same episode; POV's own refresh after saving the resume point served from the copy in 47 ms.
+- A show's seasons and a season's episodes are saved too: returning to them from the player (or opening them again) showed a spinner for 3-4.5 s on a Shield while POV rebuilt them from scratch (field log and video, Oct 2026 -- reached through search). They follow the show's rows in POV's metadata cache (a new episode or season, an expired refresh) and the watch state (a watched episode or resume point: shown at once, rebuilt and refreshed in place), and the date. QA (real debrid episode): back from the player to the episode list in 0.43 s from the saved copy, focus on the same episode; POV's own refresh after saving the resume point served from the copy in 47 ms.
 
 0.4.61
 - A tap on an episode or movie while Kodi is busy gets an answer at once: if POV's sources window is not up 1.5 s after the tap, a short "searching for sources..." notice shows (none once POV's sources window, results list or background progress bar is up, once playing, or once POV's route has returned -- no results, cancelled; router.py now reports that, as atexit runs only after the timer). Field log (Shield, right after start): ~6 s between the tap and the sources window with nothing on screen, and people tapped again. QA: a tap right after start reached the sources window in 1.3 s on a PC (no notice); with the threshold lowered for the test the notice showed before the window.
@@ -173,14 +178,14 @@
 - Saved lists are compressed (~5x smaller) to leave room for lists built ahead.
 
 0.4.54
-- POV's menus open from saved copies too: genres, years, networks, "My content", the movie/TV main menus and shortcut folders -- what NOX and FENtastic open as categories (each click used to load all of POV, 1-1.5 s on a phone). They follow POV's menu database, its settings and the account manager (rows of disconnected services stay hidden); the years menu follows the date.
+- POV's menus open from saved copies too: genres, years, networks, "My content", the movie/TV main menus and shortcut folders -- what FENtastic opens as categories (each click used to load all of POV, 1-1.5 s on a phone). They follow POV's menu database, its settings and the account manager (rows of disconnected services stay hidden); the years menu follows the date.
 - The Wizard's start-up work (update check, notices, profile checks) now waits until the home rows stop loading (at most 15 s), so the rows do not share the CPU with it.
-- Idan Plus home rows (NOX: Reshet 13, mako, live TV) are saved too: shown at once from the copy saved last time, then rebuilt behind the scenes when older than 10 minutes or after an Idan Plus settings change; the rows refresh themselves when the content changed. Browsing inside Idan Plus, searches and playback are untouched. QA NOX cold start: last home row 5.2 -> 3.7-4.0 s after the home screen, each Idan Plus row 0.04-0.13 s.
+- Idan Plus home rows (Reshet 13, mako, live TV) are saved too: shown at once from the copy saved last time, then rebuilt behind the scenes when older than 10 minutes or after an Idan Plus settings change; the rows refresh themselves when the content changed. Browsing inside Idan Plus, searches and playback are untouched. QA cold start: last home row 5.2 -> 3.7-4.0 s after the home screen, each Idan Plus row 0.04-0.13 s.
 - Several home rows that changed together refresh the home screen once instead of once each, and a damaged saved list is simply rebuilt (it used to leave its row empty until the next visit).
 - Saved lists are shown at once up to a week old (was a day) and refreshed right after: people often come back to Kodi after a day.
 
 0.4.53
-- Saved lists start much faster: each home row is a fresh Python interpreter, and while Kodi starts a dozen add-on services, importing json alone took 0.3-1.2 s (QA, NOX). Serving a saved list now imports none of json, hashlib, sqlite3, re or urllib: the record is read with marshal and "nothing changed" is proven by file sizes and times, falling back to a light content check (C sqlite module, crc32) when a file was rewritten. QA NOX cold start: check 0.7 s -> 0.1 s per row, first rows on screen 0.25-0.4 s after the home screen instead of 1.0-1.2 s.
+- Saved lists start much faster: each home row is a fresh Python interpreter, and while Kodi starts a dozen add-on services, importing json alone took 0.3-1.2 s (QA). Serving a saved list now imports none of json, hashlib, sqlite3, re or urllib: the record is read with marshal and "nothing changed" is proven by file sizes and times, falling back to a light content check (C sqlite module, crc32) when a file was rewritten. QA cold start: check 0.7 s -> 0.1 s per row, first rows on screen 0.25-0.4 s after the home screen instead of 1.0-1.2 s.
 - Home rows no longer import POV just to replay its view-mode call (a no-op for rows): 0.6 s less per row at start-up.
 - Trakt charts (trending, most watched) count as public lists: a Trakt sync no longer throws them away at every start (field log: 3.3 s rebuild of "Trakt trending" on each launch).
 
@@ -190,7 +195,7 @@
 - Estuary 4.0.8: the loading background shows the POV IL build artwork instead of the old RealDebrid KODI logo.
 
 0.4.51
-- Faster lists and home rows on every skin: Kodi never saves compiled Python, so each list, row and category recompiled its add-on code from scratch on every visit. The build now writes that compiled code once in the background (about 40 s on a PC, never while a video plays) and refreshes it after updates. QA, home screen fully loaded after a cold start: FENtastic 10.2 -> 7.0 s, NOX 8.0 -> 5.2 s; single rows such as "Continue watching" 1.56 -> 0.46 s.
+- Faster lists and home rows on every skin: Kodi never saves compiled Python, so each list, row and category recompiled its add-on code from scratch on every visit. The build now writes that compiled code once in the background (about 40 s on a PC, never while a video plays) and refreshes it after updates. QA, home screen fully loaded after a cold start: FENtastic 10.2 -> 7.0 s; single rows such as "Continue watching" 1.56 -> 0.46 s.
 - Each POV list asked Kodi's screen twice whether a child profile is active; it now asks once.
 - The compiled code is hash-checked: Python verifies it against the file's current content on every load, so a file that an update rewrites can never run its old version.
 
@@ -227,7 +232,7 @@
 - Seed existing local home shortcuts before verifying the first-install favourites cache; prevent late service startup from hiding Tonight and recent updates until a restart.
 
 0.4.18
-- Copy rollback content without unsupported filesystem metadata operations on Android emulated storage; unblock fresh config, Nox activation and Hebrew subtitle defaults while retaining transactional rollback on real I/O failures.
+- Copy rollback content without unsupported filesystem metadata operations on Android emulated storage; unblock fresh config, skin activation and Hebrew subtitle defaults while retaining transactional rollback on real I/O failures.
 
 0.4.17
 - Expand native POV expiry sliders to accept all subscription-notice thresholds up to 365 days; preserve saved choices and repair the range again after host updates.
@@ -325,17 +330,11 @@ v0.1.42
   their official repositories so they update straight from their developers.
   Nothing changes for anyone who does not pick it.
 
-[COLOR yellow][B]v0.1.38[/B][/COLOR]
-* NOX skin updated to 1.0.11: the seek bar now slides away on its own after
-  five seconds of pause, matching FENtastic, and returns on any key press.
-* Devices already on NOX pick the new skin pack up automatically on the next
-  quick update via the existing version gate.
-
 [COLOR yellow][B]v0.1.37[/B][/COLOR]
 * Arctic Fuse 3 skin updated to the current upstream release (6.3.2.14),
   keeping the mod layer, the Hebrew localisation and all build integrations.
 * A device already ON Arctic Fuse 3 now refreshes the skin pack automatically
-  on quick update, same as NOX -- no need to switch skins back and forth.
+  on quick update -- no need to switch skins back and forth.
 * Re-extracting the AF3 skin now clears the old skin folder first, so files
   the skin author removed can no longer linger and load as zombie windows.
 
@@ -378,97 +377,24 @@ v0.1.42
   quickfix, so a quick update no longer re-imposes the old Real-Debrid/KODI art
   on top of the new branding. The wizard bundled in the build is rebuilt from
   source (correct icons + notification title, home-widget preservation across
-  quick updates, NOX skin 1.0.10) instead of a stale snapshot.
+  quick updates) instead of a stale snapshot.
 
 [COLOR yellow][B]v0.1.31[/B][/COLOR]
 * Rebrand: the update-notification title now reads "KODI POV IL" and the bottom
   badge is the POV IL square (replacing the old circular Real-Debrid/KODI logo).
 
-[COLOR yellow][B]v0.1.30[/B][/COLOR]
-* NOX gate -> skin 1.0.10. Reordered the "my content" tiles on the NOX home
-  so each provider's movies and series sit next to each other -- my movies
-  (Trakt) + my series (Trakt), then TMDB pair, then POV pair -- instead of
-  all movies followed by all series. The updated Custom_nox_main_menu.xml is
-  also shipped inside the FENtastic quickfix for fast propagation.
-
-[COLOR yellow][B]v0.1.29[/B][/COLOR]
-* NOX gate -> skin 1.0.9. The 1.0.8 vendor-logo image still rendered small
-  (the wide logo had to fit a short box, and the framed square dominated).
-  Replaced it with a large frameless TEXT logo on the NOX home: "POV IL" in
-  font60 (white + gold "IL") with "KODI BUILD" beneath it -- no image, no
-  frame, scales crisply. Also shipped the new Home_nox.xml inside the
-  FENtastic quickfix so existing NOX users get it on the next quick-update
-  restart instead of waiting for the full skin-pack re-pull.
-
-[COLOR yellow][B]v0.1.28[/B][/COLOR]
-* NOX gate -> skin 1.0.8. Enlarged the POV logo on the NOX home screen and
-  switched it to the wide "POV IL / KODI BUILD" vendor logo (same artwork
-  FENtastic uses top-left) instead of the small square K-logo. New media
-  file media/logos/pov_il_vendor_logo.png; both home logo controls now point
-  at it at 300x83. Bumped skin.povil.nox to 1.0.8 so the version gate fires
-  and devices already on NOX re-pull the pack via auto_update_active_skin_pack.
-
-[COLOR yellow][B]v0.1.27[/B][/COLOR]
-* NOX gate -> skin 1.0.7. The 6-tile favorites fix (PR #240) was packed
-  as 1.0.6 IN PLACE -- but 1.0.6 had already shipped via PR #239, so
-  devices that pulled it (gate==on-disk==1.0.6) would never re-download
-  the fixed pack. Bumped the skin to 1.0.7 so the version gate fires.
-  Lesson encoded: never rebuild a skin pack in place once its version
-  has been merged to main.
-
 [COLOR yellow][B]v0.1.26[/B][/COLOR]
-* NOX gate -> skin 1.0.6:
-  - "הסרטים שלי / הסדרות שלי" on the home now open POV's unified
-    "My Content" hub (navigator.my_content) instead of the POV-only
-    favorites list, which showed 0 for users who keep their lists on
-    Trakt/TMDB rather than POV.
-  - Focused submenu item is highlighted yellow instead of gray.
 * FENtastic: applied Tal Levi's updated player set (new VideoOSD /
   OsdSettings / NetflixPlayer + supporting includes -- 26 files), kept all
   other skin files, and preserved our clear-cache RunPlugin fix.
 
-[COLOR yellow][B]v0.1.25[/B][/COLOR]
-* NOX gate -> skin 1.0.5.
-  - Movies/TV/Kids reverted to a SINGLE row (popular) -- the two stacked
-    rows collided with the top info panel so the title/plot was unreadable.
-  - NOX is now the default home: no more "choose view (Nox/Fentastic/...)"
-    prompt on first switch to NOX (Home.xml defaults HomeS=Home_nox and
-    sets firsttimerun; the chooser is still reachable from Skin settings).
-  - Removed the broken "אוספי סרטים" (Movie Collections) search entry that
-    threw a POV error.
-  - Removed the "כאן 11" Israeli-content row (kept channel 13 + 12).
-
 [COLOR yellow][B]v0.1.24[/B][/COLOR]
-* NOX gate -> skin 1.0.4. Fixes the overlapping home rows: Movies / TV /
-  Kids now show two separate stacked rows (Popular + New / kids movies +
-  kids series) instead of both widgets rendering at the same position.
-  Each row is wrapped in its own group with a vertical offset (mirroring
-  the working VOD layout); the category groups moved up so both rows fit.
 * Israeli content (תוכן ישראלי): added the "כאן 11" row beneath
   channel 13 and channel 12 (idanplus module=kan), so it shows 13/12/11.
 
 [COLOR yellow][B]v0.1.23[/B][/COLOR]
-* NOX skin now auto-updates for users already ON it. Added
-  auto_update_active_skin_pack() (called from startup.py): if the active
-  skin is skin.povil.nox and the on-disk version is behind NOX_SKIN_VERSION,
-  it re-downloads the pack and reloads the skin -- so a published NOX update
-  reaches existing NOX users on their next quick update + restart, like the
-  other skins, without having to switch skins and back. Version-gated, so it
-  never re-downloads when already current (no wipe of the user's favourites
-  order / skin settings, which live in addon_data, not in the pack).
-* Gate bumped to NOX skin 1.0.3.
 * Fixed the mojibake "current build" header in the wizard's Builds menu
   (THEME4 was double-encoded gibberish) -> now reads "בילד נוכחי:".
-
-[COLOR yellow][B]v0.1.22[/B][/COLOR]
-* Fix NOX skin being auto-disabled as "incompatible add-on" right after
-  switching to it (Kodi then fell back to plain Estuary, so it looked
-  identical to the simple skin). Cause: skin.povil.nox declared
-  <import addon="xbmc.gui" version="5.15.0"/> (Nexus), which Kodi 21
-  Omega rejects. The build's working skins (Estuary, FENtastic) keep that
-  import commented out; NOX now matches. Skin bumped to 1.0.1 and
-  NOX_SKIN_VERSION gated to 1.0.1 so devices that already pulled the
-  broken 1.0.0 re-download the fixed pack on the next switch.
 
 [COLOR yellow][B]v0.1.21[/B][/COLOR]
 * Fix the "Kodi hangs for a few seconds on the first launch after an
@@ -481,17 +407,6 @@ v0.1.42
   matching the symptom. Added wait_for_gui_ready(): the service now
   blocks (bounded) until the Home window is actually live before any
   first-launch dialog, so each modal has a real parent window.
-
-[COLOR yellow][B]v0.1.20[/B][/COLOR]
-* New 4th skin: NOX (skin.povil.nox), a rebranded + scrubbed Estuary MOD
-  with a Hebrew home menu remapped to our POV / idanplus / otaku addons.
-  Like Arctic Fuse 3 it is NOT bundled in the base build -- it downloads
-  on demand the first time the user picks it in Switch Skin, so it costs
-  nothing for users who do not use it. The on-demand installer was
-  generalised (_ensure_packs_installed) so AF3 and NOX share one path,
-  including the critical Addons-DB register step that prevents the silent
-  Estuary fallback. The side-loader and all foreign wizard/IPTV calls in
-  the original skin were removed.
 
 [COLOR yellow][B]v0.1.19[/B][/COLOR]
 * CRITICAL: kill_kodi() is a true hard kill again (os._exit, no Quit).

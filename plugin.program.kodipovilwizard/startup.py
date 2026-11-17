@@ -521,7 +521,7 @@ ROWS_PROPERTY = 'povil.rows.last'
 def wait_for_home_rows(monitor, settle=1.5, first=5.0, cap=15.0):
     """Hold start-up work while the home rows load: every row is a Python
     interpreter of its own, and the build's services starting beside them
-    stretched the last home row by ~0.8 s on a PC (QA, NOX) -- more on a
+    stretched the last home row by ~0.8 s on a PC (QA) -- more on a
     phone. POV's saved lists stamp ROWS_PROPERTY when they serve a row; go
     on once none arrived for `settle` seconds (or none at all within `first`
     seconds of Home), and never wait more than `cap` seconds."""
@@ -764,7 +764,7 @@ logging.log('[Startup] first-launch notice gate: buildname={0}, dismissed={1}'.f
 if CONFIG.get_setting('buildname') and CONFIG.get_setting('build_skin_switch_notifcation_dismiss') == 'false':
     window.show_contact(CONFIG.CONTACT)
     CONFIG.set_setting('build_skin_switch_notifcation_dismiss', 'true')
-    msg = f"על מנת להחליף סקין יש ללחוץ: כפתור כיבוי --> החלף סקין.\nהסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין NOX\n5. סקין Onyx"
+    msg = f"על מנת להחליף סקין יש ללחוץ: כפתור כיבוי --> החלף סקין.\nהסקינים הקיימים בבילד:\n1. סקין Onyx\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין Estuary"
     window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
 #####################################
 
@@ -960,19 +960,15 @@ if CONFIG.get_setting('installed') == 'true':
 else:
     logging.log("[Build Installed Check] Not Enabled", level=xbmc.LOGINFO)
 
-# KODI-POV-IL - Auto-refresh the on-demand NOX skin pack for users who are
-# already ON it. On-demand skins are normally only (re)installed from Switch
-# Skin; this makes a published NOX update reach existing NOX users on their
-# next quick_update + restart, exactly like the other skins, without them
-# having to toggle skins. Version-gated, so it never re-downloads needlessly.
+# KODI-POV-IL - a skin that left the build (skin_retirement.py): a profile still
+# on it moves to the build's default skin, and its files leave the device.
 try:
     if CONFIG.get_setting('buildname'):
-        from resources.libs import wizard as _wiz_skin
-        _wiz_skin.auto_update_active_skin_pack()
-except Exception as _skin_upd_err:
-    logging.log("[Skin Auto Update] startup hook failed: {0}".format(_skin_upd_err),
+        from resources.libs import skin_retirement
+        _start_watch('POVILSkinRetirement', skin_retirement.run)
+except Exception as _skin_retire_err:
+    logging.log('[Skin retirement] startup hook failed: {0}'.format(_skin_retire_err),
                 level=xbmc.LOGERROR)
-
 # The normal startup patch pass is not enough if Kodi updates POV later in
 # this same session. A separate small interpreter watches host identities.
 def _host_watch():

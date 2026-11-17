@@ -32,17 +32,17 @@ class Tree(unittest.TestCase):
         self.system = Path(self.tmp.name) / 'system'
         self.master = self.home / 'userdata'
         addons = self.home / 'addons'
-        _write(self.master / 'guisettings.xml', '<settings><setting id="lookandfeel.skin">skin.povil.nox</setting></settings>')
+        _write(self.master / 'guisettings.xml', '<settings><setting id="lookandfeel.skin">skin.povil.onyx</setting></settings>')
         _write(self.master / 'profiles.xml',
                '<profiles><profile><id>0</id><directory pathversion="1">special://masterprofile/</directory></profile>'
                '<profile><id>1</id><directory pathversion="1">profiles/Kid/</directory></profile></profiles>')
         _write(self.master / 'profiles' / 'Kid' / 'guisettings.xml',
                '<settings><setting id="lookandfeel.skin" default="true">skin.estuary</setting></settings>')
-        _write(addons / 'skin.povil.nox' / 'xml' / 'Home.xml', b'h' * 10)
-        _write(addons / 'skin.povil.nox' / 'xml' / 'notes.txt', b'no')
-        _write(addons / 'skin.povil.nox' / 'media' / 'Textures.xbt', b't' * 50)
-        _write(addons / 'skin.povil.nox' / 'language' / 'resource.language.he_il' / 'strings.po', b'l' * 8)
-        _write(addons / 'skin.povil.nox' / 'language' / 'resource.language.fr_fr' / 'strings.po', b'f' * 8)
+        _write(addons / 'skin.povil.onyx' / 'xml' / 'Home.xml', b'h' * 10)
+        _write(addons / 'skin.povil.onyx' / 'xml' / 'notes.txt', b'no')
+        _write(addons / 'skin.povil.onyx' / 'media' / 'Textures.xbt', b't' * 50)
+        _write(addons / 'skin.povil.onyx' / 'language' / 'resource.language.he_il' / 'strings.po', b'l' * 8)
+        _write(addons / 'skin.povil.onyx' / 'language' / 'resource.language.fr_fr' / 'strings.po', b'f' * 8)
         _write(self.system / 'addons' / 'skin.estuary' / 'addon.xml',
                '<addon id="skin.estuary"><extension point="xbmc.gui.skin">'
                '<res width="1920" height="1080" aspect="16:9" default="true" folder="layout" /></extension></addon>')
@@ -66,21 +66,21 @@ class Tree(unittest.TestCase):
         _write(self.master / 'Database' / 'Addons33.db', b'd' * 20)
 
     def plan(self):
-        return self.lw.plan(str(self.home), str(self.system), str(self.master), 'skin.povil.nox', '.cpython-38.pyc')
+        return self.lw.plan(str(self.home), str(self.system), str(self.master), 'skin.povil.onyx', '.cpython-38.pyc')
 
     def test_only_what_the_profile_is_sure_to_open_in_the_order_it_asks(self):
-        self.assertEqual(self.lw.skins(str(self.master), 'skin.povil.nox'), ['skin.povil.nox', 'skin.estuary'])
+        self.assertEqual(self.lw.skins(str(self.master), 'skin.povil.onyx'), ['skin.povil.onyx', 'skin.estuary'])
         self.assertEqual(self.lw.services(str(self.home / 'addons')), ['service.a', 'script.module.dep'])
         rows = self.plan()
         names = [(stage, os.path.relpath(path, self.tmp.name).replace('\\', '/')) for stage, path, _most in rows]
         self.assertEqual(names, [
-            ('skin', 'home/addons/skin.povil.nox/xml/Home.xml'),
-            ('skin', 'home/addons/skin.povil.nox/language/resource.language.he_il/strings.po'),
+            ('skin', 'home/addons/skin.povil.onyx/xml/Home.xml'),
+            ('skin', 'home/addons/skin.povil.onyx/language/resource.language.he_il/strings.po'),
             ('skin', 'system/addons/skin.estuary/layout/Home.xml'),
             ('database', 'home/userdata/Database/Addons33.db'),
             ('python', 'home/addons/service.a/lib/__pycache__/deep.cpython-38.pyc'),
             ('python', 'home/addons/script.module.dep/lib/__pycache__/dep.cpython-38.pyc'),
-            ('textures', 'home/addons/skin.povil.nox/media/Textures.xbt'),
+            ('textures', 'home/addons/skin.povil.onyx/media/Textures.xbt'),
         ])
 
     def test_the_compiled_name_is_the_interpreters_own(self):
@@ -89,7 +89,7 @@ class Tree(unittest.TestCase):
         suffix = self.lw.compiled_suffix()
         self.assertTrue(suffix.startswith('.' + sys.implementation.cache_tag) and suffix.endswith('.pyc'))
         self.assertTrue(importlib.util.cache_from_source('pkg/m.py').endswith('m' + suffix))
-        rows = self.lw.plan(str(self.home), str(self.system), str(self.master), 'skin.povil.nox', '.cpython-38.opt-1.pyc')
+        rows = self.lw.plan(str(self.home), str(self.system), str(self.master), 'skin.povil.onyx', '.cpython-38.opt-1.pyc')
         self.assertEqual([os.path.basename(p) for stage, p, _ in rows if stage == 'python'], ['dep.cpython-38.opt-1.pyc'])
 
     def test_reads_everything_once_and_changes_nothing(self):

@@ -212,9 +212,6 @@ with tempfile.TemporaryDirectory(prefix='pov-budget-crlf-') as folder:
 
 
 print('\n=== skin delivery ===')
-check('NOX children row is included in the producer budget',
-      ('skin.povil.nox', 'xml/script-nox-widget_kids.xml', 12)
-      in patcher.SKIN_TARGETS)
 old_xml = '''<?xml version="1.0" encoding="UTF-8"?>
 <includes>
   <include name="Rows">

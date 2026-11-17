@@ -375,7 +375,7 @@ class EarlyFontRestore(unittest.TestCase):
 
     def test_other_skins_and_an_install_in_flight_are_left_alone(self):
         self.font(ours=False)
-        self.skin = 'skin.povil.nox'
+        self.skin = 'skin.povil.onyx'
         self.assertEqual(self.run_early(), [])
         self.skin, self.loaded = AF3, False                      # Kodi has AF3 unloaded
         self.assertEqual(self.run_early(), [])

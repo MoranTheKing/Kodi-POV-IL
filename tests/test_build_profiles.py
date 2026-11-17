@@ -303,20 +303,20 @@ class ProfileStoreTests(unittest.TestCase):
             self.assertEqual((self.target / name).read_bytes(), data)
         self.assertFalse((self.target / 'kodipovil.profile_gui_defaults.xml').exists())
 
-    def test_old_addon_receipt_without_complete_home_still_queues_nox(self):
+    def test_old_addon_receipt_without_complete_home_still_queues_the_default_skin(self):
         (self.target / 'kodipovil.profile_addons_ready').write_text('1')
         self.seed()
         queue = ET.parse(self.target / 'kodipovil.profile_gui_defaults.xml')
-        self.assertEqual(queue.findtext("setting[@id='lookandfeel.skin']"), 'skin.povil.nox')
+        self.assertEqual(queue.findtext("setting[@id='lookandfeel.skin']"), 'skin.povil.onyx')
         self.assertFalse((self.target / 'kodipovil.profile_home_ready').exists())
 
-    def test_master_prepares_initial_nox_before_load_but_keeps_completed_skin(self):
+    def test_master_prepares_the_default_skin_before_load_but_keeps_completed_skin(self):
         gui = self.target / 'guisettings.xml'
         gui.write_text('<settings><setting id="lookandfeel.skin" default="true">skin.estuary</setting>'
                        '<setting id="device.preference">KEEP</setting></settings>')
         store.seed_profile(str(self.master), self.profile, str(ARCHIVE), prepare_login=True)
         root = ET.parse(gui)
-        self.assertEqual(root.findtext("setting[@id='lookandfeel.skin']"), 'skin.povil.nox')
+        self.assertEqual(root.findtext("setting[@id='lookandfeel.skin']"), 'skin.povil.onyx')
         self.assertIsNone(root.find("setting[@id='lookandfeel.skin']").get('default'))
         self.assertEqual(root.findtext("setting[@id='device.preference']"), 'KEEP')
         (self.target / 'kodipovil.profile_home_ready').write_text('1')
@@ -340,7 +340,7 @@ class ProfileStoreTests(unittest.TestCase):
         (self.target / 'guisettings.xml').unlink()
         self.seed()
         values = {s.get('id'): s.text for s in ET.parse(self.target / 'guisettings.xml').getroot().findall('setting')}
-        self.assertEqual(values['lookandfeel.skin'], 'skin.povil.nox')
+        self.assertEqual(values['lookandfeel.skin'], 'skin.povil.onyx')
         self.assertEqual(values['locale.language'], 'resource.language.he_il')
         self.assertEqual(values['locale.subtitlelanguage'], 'Hebrew')
         self.assertTrue((self.target / 'kodipovil.provisioned').exists())
@@ -434,18 +434,18 @@ class FirstLoginTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.target = Path(self.tmp.name) / 'profile'; self.target.mkdir()
         self.addons = Path(self.tmp.name) / 'addons'; self.addons.mkdir()
-        for ident in ('plugin.program.kodipovilwizard', 'plugin.video.pov', 'skin.povil.nox',
+        for ident in ('plugin.program.kodipovilwizard', 'plugin.video.pov', 'skin.povil.onyx',
                       'script.fentastic.helper', 'service.subtitles.kodipovilai',
                       'plugin.program.orderfavourites-hebrew'):
             folder = self.addons / ident; folder.mkdir()
-            dep = '<requires><import addon="script.fentastic.helper"/></requires>' if ident == 'skin.povil.nox' else ''
+            dep = '<requires><import addon="script.fentastic.helper"/></requires>' if ident == 'skin.povil.onyx' else ''
             (folder / 'addon.xml').write_text('<addon id="{}">{}</addon>'.format(ident, dep))
         self.fail_required = False
 
     def test_dependency_first_registration_and_receipt_preserves_later_disabled_choices(self):
         enabled = set(); manager, calls = self.load_manager(self.target, self.addons, enabled)
         self.assertTrue(manager.prepare_first_login())
-        self.assertLess(calls.index('script.fentastic.helper'), calls.index('skin.povil.nox'))
+        self.assertLess(calls.index('script.fentastic.helper'), calls.index('skin.povil.onyx'))
         enabled.clear(); calls.clear()
         self.assertTrue(manager.prepare_first_login())
         self.assertEqual(calls, [])
@@ -458,10 +458,10 @@ class FirstLoginTests(unittest.TestCase):
         self.fail_required = False
         self.assertTrue(manager.prepare_first_login())
 
-    def test_selected_nox_with_actual_fallback_causes_a_real_skin_change(self):
+    def test_selected_default_skin_with_actual_fallback_causes_a_real_skin_change(self):
         defaults = self.target / 'defaults.xml'
-        defaults.write_text('<settings><setting id="lookandfeel.skin">skin.povil.nox</setting></settings>')
-        selected, actual, changes = ['skin.povil.nox'], ['skin.estuary'], []
+        defaults.write_text('<settings><setting id="lookandfeel.skin">skin.povil.onyx</setting></settings>')
+        selected, actual, changes = ['skin.povil.onyx'], ['skin.estuary'], []
         def rpc(method, params):
             if method == 'Settings.GetSettingValue':
                 return {'value': selected[0]}
@@ -477,11 +477,11 @@ class FirstLoginTests(unittest.TestCase):
             Thread=lambda **_: types.SimpleNamespace(start=lambda: None, join=lambda _: None))
         fn = _load_function(LIBS / 'build_skin.py', 'activate',
             {'xbmc': kodi, 'rpc': rpc, 'threading': fake_threads,
-             'SKINS': ['skin.povil.nox'], 'enable_skin': lambda _: True,
+             'SKINS': ['skin.povil.onyx'], 'enable_skin': lambda _: True,
              'confirm_requested_skin': lambda _: False, 'persist_live_settings': lambda: True, 'prepare_skin_confirmation': lambda _: True,
-                'xbmcgui': types.SimpleNamespace(Window=lambda _: types.SimpleNamespace(getProperty=lambda _: 'skin.povil.nox', setProperty=lambda *a:None, clearProperty=lambda *a:None))})
-        self.assertTrue(fn('skin.povil.nox'))
-        self.assertEqual(changes, ['skin.estuary', 'skin.povil.nox'])
+                'xbmcgui': types.SimpleNamespace(Window=lambda _: types.SimpleNamespace(getProperty=lambda _: 'skin.povil.onyx', setProperty=lambda *a:None, clearProperty=lambda *a:None))})
+        self.assertTrue(fn('skin.povil.onyx'))
+        self.assertEqual(changes, ['skin.estuary', 'skin.povil.onyx'])
 
     def test_first_login_does_not_start_arbitrary_user_services(self):
         ident = 'service.custom.disabled'

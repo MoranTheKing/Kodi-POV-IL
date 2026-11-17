@@ -400,7 +400,7 @@ jobs:
             "Android APK: stable package id '${PACKAGE_ID}', complete POV IL launcher/TV branding, and the wizard pre-bundled in assets/." \
             "Windows installer: preserves an existing portable_data profile, repairs standard-user access, and creates branded -p shortcuts without launching Kodi elevated." \
             "LG webOS IPK: keeps app id org.xbmc.kodi for in-place updates, uses a valid numeric package version, preserves upstream archive metadata, and bundles the same wizard." \
-            "Fresh installs provision the modular build and open Nox after checking the required add-ons and home configuration. Existing app installations do not need an APK update for this build update.")
+            "Fresh installs provision the modular build and open Onyx after checking the required add-ons and home configuration. Existing app installations do not need an APK update for this build update.")
           # Also keep stable filenames (no version) so download pages
           # can use the /latest/download/ redirect without rewriting.
           cp "../out/Kodi-POV-IL-${VERSION}-32bit.apk" "../out/Kodi-POV-IL-32bit.apk"
