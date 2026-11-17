@@ -50,6 +50,12 @@ AF3_SKIN_ID = 'skin.arctic.fuse.3'
 SEARCH_PATH_REL = ('addons/' + AF3_SKIN_ID +
                    '/shortcuts/generator/data/setup/search_path.xml')
 
+# Arctic Fuse 3 3.5 moved search to SkinVariables' multisearch: search_path.xml
+# is gone, and a row's `path` token is looked up in this JSON table instead
+# ({query} = the search text, percent-encoded once -- what POV reads).
+MULTISEARCH_PATHS_REL = ('addons/' + AF3_SKIN_ID +
+                         '/shortcuts/skinvariables-multisearch-paths.json')
+
 _MARKER_BASE = '<!-- AI_SUBS_POV_SEARCH_v3_rollback'
 
 
@@ -157,6 +163,101 @@ def _search_path_file():
     return p if os.path.isfile(p) else ''
 
 
+def _multisearch_paths_file():
+    if xbmcvfs is None:
+        return ''
+    try:
+        base = xbmcvfs.translatePath('special://home/')
+    except Exception:
+        return ''
+    p = os.path.join(base, *MULTISEARCH_PATHS_REL.split('/'))
+    return p if os.path.isfile(p) else ''
+
+
+INCLUDES_SEARCH_REL = 'addons/' + AF3_SKIN_ID + '/1080i/Includes_Search.xml'
+# The search window's five drop-down labels end in this arrow (U+2304). The
+# build's Hebrew font for Arctic Fuse 3 has no such glyph: each showed as an
+# empty box.
+_DROPDOWN_GLYPH = u' \u2304</label>'
+
+
+def _strip_dropdown_glyph():
+    """'patched' when the arrow was removed from the labels, else
+    'already_patched' (nothing to remove, or the file cannot be handled --
+    a box beside a label is not worth failing the search over)."""
+    if xbmcvfs is None:
+        return 'already_patched'
+    tmp = ''
+    try:
+        path = os.path.join(xbmcvfs.translatePath('special://home/'),
+                            *INCLUDES_SEARCH_REL.split('/'))
+        with open(path, 'r', encoding='utf-8', newline='') as f:
+            text = f.read()
+        if _DROPDOWN_GLYPH not in text:
+            return 'already_patched'
+        tmp = path + '.aitmp'
+        with open(tmp, 'w', encoding='utf-8', newline='') as f:
+            f.write(text.replace(_DROPDOWN_GLYPH, u'</label>'))
+        os.replace(tmp, path)
+        return 'patched'
+    except Exception as e:
+        _log('search labels: the arrow could not be removed: {0}'.format(e), level='WARNING')
+        try:
+            if tmp and os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
+        return 'already_patched'
+
+
+def _ensure_multisearch_paths(path):
+    """Arctic Fuse 3 3.5+: define the build's search tokens in the skin's
+    multisearch table. The rows themselves (the searchwidgets node, written
+    by af3_home_patcher) keep the same DefaultSearch-POV* tokens as before.
+    A skin update ships a fresh table, so this runs at every start; a
+    change of the search add-on changes the wanted values and rewrites it."""
+    import json
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            text = f.read()
+    except Exception as e:
+        _log('multisearch paths: read failed: {0}'.format(e), level='WARNING')
+        return 'read_failed'
+    try:
+        table = json.loads(text)
+    except ValueError:
+        table = None
+    if not isinstance(table, dict) or not any(
+            isinstance(v, str) and '{query' in v for v in table.values()):
+        _log('multisearch paths: not the table this patcher knows; leaving '
+             'it alone', level='WARNING')
+        return 'unmatched'
+    provider, prefixes = _provider_and_prefixes()
+    # the prefixes are written for search_path.xml, where '&' is escaped twice
+    wanted = dict(
+        ('DefaultSearch-POV' + row,
+         prefix.replace('&amp;amp;', '&').replace('&amp;', '&') + '{query}')
+        for row, prefix in prefixes.items())
+    if all(table.get(token) == value for token, value in wanted.items()):
+        return 'already_patched'
+    table.update(wanted)
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
+            json.dump(table, f, indent=4, ensure_ascii=False)
+            f.write('\n')
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        _log('multisearch paths: write failed: {0}'.format(e), level='WARNING')
+        return 'write_failed'
+    _log('search tokens defined in the multisearch table ({0})'.format(provider), 'INFO')
+    return 'patched'
+
+
 def _rule(token, value):
     """One generator rule block (matches the file's 12-space indent)."""
     return (
@@ -185,6 +286,12 @@ def ensure_patched():
     | 'unmatched' | 'read_failed' | 'write_failed'."""
     path = _search_path_file()
     if not path:
+        multisearch = _multisearch_paths_file()
+        if multisearch:
+            status = _ensure_multisearch_paths(multisearch)
+            if status in ('patched', 'already_patched') and _strip_dropdown_glyph() == 'patched':
+                return 'patched'
+            return status
         # distinguish "AF3 not installed" from "file missing"
         if xbmcvfs is None:
             return 'no_af3'
