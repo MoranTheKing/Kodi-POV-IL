@@ -255,6 +255,9 @@ jobs:
         if: steps.detect.outputs.proceed == 'true'
         run: |
           set -euo pipefail
+          # the manifest devices are reading now: its packages outlive this build
+          # (see "Remove superseded packages from the release")
+          cp manifest.json "$RUNNER_TEMP/manifest.previous.json"
           python .github/scripts/gen_manifest.py
 
       - name: Verify pinned official POV migration package
@@ -317,3 +320,18 @@ jobs:
           BRANCH="${{ github.ref_name }}"
           # A concurrent source change requires a fresh build and review.
           git push origin "HEAD:${BRANCH}"
+
+      # The release kept every version it had ever served (228 files before
+      # they were cleared by hand, Nov 2026). After the new manifest is in
+      # place, what neither it nor the manifest before it names is removed;
+      # the script deletes nothing when anything looks wrong, and a failure
+      # here never fails the build -- the packages are already published.
+      - name: Remove superseded packages from the release
+        if: steps.detect.outputs.proceed == 'true'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --json assets -q '.assets[].name' > "$RUNNER_TEMP/release-assets.txt"
+          python .github/scripts/prune_release_assets.py --manifest manifest.json \
+            --previous "$RUNNER_TEMP/manifest.previous.json" \
+            --assets "$RUNNER_TEMP/release-assets.txt" --delete

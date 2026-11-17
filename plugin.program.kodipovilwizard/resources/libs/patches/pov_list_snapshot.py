@@ -106,6 +106,11 @@ EPISODE_ROUTES = ('build_next_episode', 'build_in_progress_episode')
 # Trakt's public charts (POV's trakt_main: trending, most watched, ...) are
 # the same for everyone; only the account's own Trakt lists follow its syncs.
 TRAKT_PUBLIC_PREFIXES = ('trakt_movies_', 'trakt_tv_', 'trakt_moviesanime_', 'trakt_tvanime_')
+# POV's own saved movies / shows (action favorites_movies, favorites_tvshows)
+# and the dependency that carries their rows.
+OWN_FAVOURITES_PREFIX = 'favorites_'
+OWN_FAVOURITES = 'favorites'
+LISTS_TOKEN = '$INFO[Window(home).Property(povil.lists.t)]'
 _LISTITEM_RECORDED = ('set', 'add', 'select')
 
 
@@ -386,6 +391,8 @@ def _dep_file(key):
         return 'maincache.db'
     if key == 'acctmgr':
         return ACCTMGR_SETTINGS
+    if key == OWN_FAVOURITES:
+        return WATCH_DBS[0]
     return key.split(':')[0]
 
 
@@ -410,6 +417,16 @@ def _deps(profile, params, keep=None, fresh=None):
         if action.startswith(('tmdb_watchlist', 'tmdb_favorites', 'tmdb_recommendations')):
             out['tmdblist'] = keep['tmdblist'] if reuse('tmdblist') else _list_marks(
                 os.path.join(profile, 'maincache.db'), TMDB_ACCOUNT_CACHE)
+        if action.startswith(OWN_FAVOURITES_PREFIX):
+            # POV's own saved lists ARE its favourites table. To every other
+            # list that table is watch state (count and last row, below): a
+            # change shows the saved copy and rebuilds it behind. Here a
+            # change is the list itself, so it is rebuilt BEFORE it is shown;
+            # and the rows themselves, not their count: remove the only
+            # favourite and add another, and the count and the last row are
+            # what they were.
+            out[OWN_FAVOURITES] = keep[OWN_FAVOURITES] if reuse(OWN_FAVOURITES) else _rows_crc(
+                os.path.join(profile, WATCH_DBS[0]), 'favorites')
     for name in HASHED_FILES:
         if reuse(name):
             out[name] = keep[name]
@@ -972,6 +989,11 @@ def _watch_only_change(old, new):
     return bool(changed) and changed <= set(WATCH_DBS)
 
 
+def _ended_empty(recorder):
+    """The build finished its directory and put nothing in it."""
+    return not recorder.items and any(c[0] == 'endOfDirectory' for c in recorder.calls)
+
+
 def _stale(snap, age, personal):
     return age >= (PERSONAL_TTL_S if personal else GENERAL_TTL_S) or snap.get('day') != _today()
 
@@ -1126,7 +1148,7 @@ def serve_early(argv):
     if stale:
         if not _wait_rows_quiet(xbmc):
             return True       # shown; rebuilt on a later visit
-        EARLY[handle] = (snap, labels)
+        EARLY[handle] = (snap, labels, watch_changed)
         return False          # POV loads and rebuilds it; nothing more is shown
     return True
 
@@ -1421,7 +1443,9 @@ def skin_targets(skin_dir):
                     text = fh.read()
             except OSError:
                 continue
-            for argv2 in pattern.findall(text):
+            # the rows of the viewer's own saved titles carry a refresh token
+            # (Onyx): at start it is empty, and so is the address asked then
+            for argv2 in pattern.findall(text.replace(LISTS_TOKEN, '')):
                 argv2 = argv2.replace('&amp;', '&')
                 if '$' not in argv2 and '[' not in argv2 and argv2 not in found:
                     found.append(argv2)
@@ -1618,7 +1642,9 @@ def wrap(original, native):
                 or not _adult_profile()):
             return original(sys_obj)
         early = EARLY.pop(handle, None)
-        watch_stale = False
+        # the copy on screen is being rebuilt because the viewer's own state
+        # changed just now (not because it is old)
+        watch_stale = bool(early and early[2])
         try:
             profile = _profile_dir(xbmcvfs)
             personal = _personal(params)
@@ -1706,6 +1732,24 @@ def wrap(original, native):
                     xbmc.log('[POV IL snapshot] changed mode=%s refresh=%s' % (params.get('mode'), how), xbmc.LOGINFO)
             elif recorder.state['unsupported']:
                 xbmc.log('[POV IL snapshot] not saved: %s' % recorder.state['unsupported'][:80], xbmc.LOGINFO)
+            elif path and _ended_empty(recorder) and (shown is None or watch_stale):
+                # The list is empty now, and an empty list is never saved: the
+                # copy saved before would stay, and come back -- at once when
+                # it was shown first and rebuilt behind (a watch-state change:
+                # the last in-progress title was finished), later when the
+                # marks it was saved under return (the only title of an account
+                # list was removed and its cache refilled). Field report, Nov
+                # 2026: "removing a favourite leaves it in the favourites". A
+                # copy rebuilt only because it is old keeps its file: an empty
+                # answer may then be a service that did not answer.
+                try:
+                    os.remove(path)
+                    removed = True
+                except OSError:
+                    removed = False
+                how = _refresh_shown(xbmc, argv, context, time.time()) if shown is not None else 'none'
+                xbmc.log('[POV IL snapshot] empty now mode=%s saved copy %s refresh=%s' % (
+                    params.get('mode'), 'removed' if removed else 'absent', how), xbmc.LOGINFO)
         except Exception:
             pass
         return result
