@@ -1030,10 +1030,86 @@ class ModularUpdater:
             raise RuntimeError('refusing live MoranSubs directory swap')
         data_dir = os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID)
         addon_install_receipt.begin(data_dir, addon_id, mod.get('version'), sha256)
-        count = staged_addon_install.install(
-            zip_path, CONFIG.ADDONS, addon_id, str(mod.get('version')), sha256)
+        try:
+            count = staged_addon_install.install(
+                zip_path, CONFIG.ADDONS, addon_id, str(mod.get('version')), sha256)
+        except PermissionError:
+            # Windows, the skin Kodi has loaded: see _swap_loaded_skin. The
+            # package is extracted and verified by now; only the swap failed.
+            # Anything else that was refused (an old backup's removal, a
+            # scanner holding a file during extraction, a read-only folder)
+            # leaves no verified package: unloading the skin would gain nothing.
+            if not (self._may_swap_loaded_skin(addon_id) and
+                    staged_addon_install.prepared_matches(
+                        CONFIG.ADDONS, addon_id, str(mod.get('version')), sha256)):
+                raise
+            count = self._swap_loaded_skin(addon_id, str(mod.get('version')), sha256)
         addon_install_receipt.complete(data_dir, addon_id)
         return count
+
+    def _may_swap_loaded_skin(self, addon_id):
+        """Only the skin on screen, only in the background pass, never over a video.
+
+        The foreground installers draw their own windows with the skin and
+        are left as they were: their failure keeps the verified package, and
+        the next start's background pass swaps it in. Unloading the skin
+        closes whatever is open, so it happens from the home screen with no
+        dialog up only (a source list, a profile picker or a question that
+        closed under the viewer would read as their own "cancel"); anywhere
+        else the package waits for the next start.
+        """
+        try:
+            return bool(self.background and addon_id == xbmc.getSkinDir() and
+                        xbmc.getCondVisibility(
+                            'Window.IsActive(home) + !System.HasActiveModalDialog + !Player.HasMedia'))
+        except Exception:
+            return False
+
+    def _swap_loaded_skin(self, addon_id, version, sha256):
+        """Swap in the update of the skin Kodi has loaded (Windows).
+
+        Kodi keeps the loaded skin's texture bundle (media/Textures.xbt)
+        open, and Windows refuses to rename a folder that holds an open
+        file. So the staged swap of the ACTIVE skin failed with "Access is
+        denied" at every start, the zip was downloaded again at the next
+        one, and the skin never updated on a Windows device that uses it
+        (QA Kodi, 17 Nov 2026: Onyx 1.0.11 -> 1.0.12; the bundle was the one
+        open file out of 210). Another skin's folder, and any skin's on
+        Android or Linux, renames freely.
+
+        With the skin unloaded the folder is free (measured: the rename
+        works within half a second of UnloadSkin). The package is already
+        extracted and verified beside the add-ons folder, so only the two
+        renames happen while nothing is drawn, and the skin is loaded again
+        whatever happens -- the new one, or the old one if the swap failed.
+        """
+        from resources.libs import staged_addon_install
+        monitor = xbmc.Monitor()
+        logging.log('[ModularUpdater] {0} is the loaded skin: unloading it for the swap'
+                    .format(addon_id), level=xbmc.LOGINFO)
+        xbmc.executebuiltin('UnloadSkin()', True)
+        leaving = False
+        try:
+            refused = None
+            for _ in range(10):
+                try:
+                    return staged_addon_install.activate_prepared(
+                        CONFIG.ADDONS, addon_id, version, sha256)
+                except PermissionError as exc:
+                    refused = exc
+                    # Both renames done and only the old copy's removal was
+                    # refused (a scanner): the new skin is in place, and the
+                    # leftover is cleared by the next start's recovery.
+                    if str(self.get_local_version(addon_id)) == version:
+                        return sum(len(names) for _root, _dirs, names in
+                                   os.walk(os.path.join(CONFIG.ADDONS, addon_id)))
+                    if monitor.waitForAbort(0.3):
+                        leaving = True
+                        break
+            raise refused
+        finally:
+            if not leaving:
+                xbmc.executebuiltin('ReloadSkin()')
 
     def _fresh_install_complete(self, manifest):
         """Certify the installed files, not the installer dialog's completion.
