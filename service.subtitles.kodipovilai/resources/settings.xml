@@ -545,7 +545,7 @@
           <level>4</level>
           <default>pov</default>
         </setting>
-        <!-- Hidden marker: one-time restore of the NOX "series by
+        <!-- Hidden marker: one-time restore of the "series by
              networks" home row has been applied. Read/written by
              pov_series_networks_reseed_patcher.py. -->
         <setting id="_pov_series_networks_reseed" type="string" label="30000">
@@ -1064,13 +1064,6 @@
           </constraints>
         </setting>
         <setting id="_ktuvit_on_v4" type="string" label="30000">
-          <level>4</level>
-          <default></default>
-          <constraints>
-            <allowempty>true</allowempty>
-          </constraints>
-        </setting>
-        <setting id="_nox_poster_rating_default_v2" type="string" label="30000">
           <level>4</level>
           <default></default>
           <constraints>

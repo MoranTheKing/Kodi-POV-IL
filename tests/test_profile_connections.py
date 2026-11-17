@@ -85,10 +85,10 @@ class RetentionTests(unittest.TestCase):
         kodi = types.SimpleNamespace(getSkinDir=lambda: 'skin.estuary', getCondVisibility=lambda _: True,
             getLocalizedString=lambda _: 'Keep this skin?', executebuiltin=clicks.append)
         fn = _load_function(LIBS / 'build_skin.py', 'confirm_requested_skin',
-            dict(xbmcgui=gui, xbmc=kodi, SKINS=('skin.estuary','skin.povil.nox')))
+            dict(xbmcgui=gui, xbmc=kodi, SKINS=('skin.estuary','skin.povil.onyx')))
         self.assertTrue(fn('skin.estuary'))
         self.assertEqual(clicks, ['SendClick(10100,11)'])
-        self.assertFalse(fn('skin.povil.nox'))
+        self.assertFalse(fn('skin.povil.onyx'))
         body[0] = 'Allow unknown sources?';self.assertFalse(fn('skin.estuary'))
         body[0] = 'Keep this skin?';dialogid[0] = 10101;self.assertFalse(fn('skin.estuary'))
         dialogid[0] = 10100;properties.clear();self.assertFalse(fn('skin.estuary'))

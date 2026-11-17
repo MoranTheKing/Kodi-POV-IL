@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Open POV's season list in a view that actually draws a poster.
 #
-# The report was "the per-season posters only work in NOX". They do not work
-# only in NOX -- they work everywhere, and the screen simply was not showing
+# The report was "the per-season posters only work in one skin". They do not work
+# only in one -- they work everywhere, and the screen simply was not showing
 # any poster at all. POV hands every season its own artwork:
 #
 #     listitem.setArt({'poster': poster, 'icon': poster, 'thumb': poster,
@@ -12,7 +12,7 @@
 #
 # where `poster` is that season's own TMDb poster_path, and TMDb returns a
 # distinct one per season in Hebrew (checked live against six shows: none of
-# them returns null for `he`). Estuary, FENtastic and NOX then resolve posters
+# them returns null for `he`). Estuary and FENtastic then resolve posters
 # through a byte-identical `PosterVar`, and Arctic Fuse 3 prefers
 # ListItem.Art(poster) outright. There is nothing wrong with the artwork.
 #
@@ -40,8 +40,8 @@
 # THE ID IS PER SKIN AND POV'S TABLE IS NOT. `views` is
 # (view_type TEXT, view_id TEXT, UNIQUE (view_type)) -- no skin column -- so
 # one number is applied in every skin, and the same number means different
-# layouts in different skins. 51 is Poster in Estuary, in FENtastic and in
-# NOX (all three derive their numbering from Estuary), but Arctic Fuse 3
+# layouts in different skins. 51 is Poster in Estuary and in FENtastic
+# (which derives its numbering from Estuary), but Arctic Fuse 3
 # numbers its own views and 512 is its Poster Wall; its 51 does not exist.
 #
 # So the marker records what we wrote FOR EACH SKIN, not just the last value:
@@ -84,12 +84,10 @@ VIEW_TYPE = 'view.seasons'
 # Skin id -> the view in that skin that draws a poster per item.
 #   skin.estuary      View_51_Poster.xml
 #   skin.fentastic    View_51_Poster.xml   (uses ListItem.Art(poster))
-#   skin.povil.nox    View_51_Poster.xml
 #   skin.arctic.fuse.3  View_512_Poster_Wall (Includes_Views.xml)
 POSTER_VIEWS = {
     'skin.estuary': '51',
     'skin.fentastic': '51',
-    'skin.povil.nox': '51',
     'skin.arctic.fuse.3': '512',
 }
 

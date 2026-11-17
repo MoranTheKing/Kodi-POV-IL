@@ -97,10 +97,9 @@ class Router:
             # the skins' 'פרקי העונה' list for an Idan Plus episode on screen
             from resources.libs import player_styles
             player_styles.season_episodes(handle)
-        elif mode in ('choose_player_style', 'player_settings', 'player_change_source', 'player_episodes'):
+        elif mode in ('player_settings', 'player_change_source', 'player_episodes'):
             from resources.libs import player_styles
-            {'choose_player_style': player_styles.choose,
-             'player_settings': player_styles.settings,
+            {'player_settings': player_styles.settings,
              'player_change_source': player_styles.change_source,
              'player_episodes': player_styles.episodes}[mode]()
 

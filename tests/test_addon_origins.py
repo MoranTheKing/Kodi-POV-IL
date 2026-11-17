@@ -206,7 +206,7 @@ def _heal():
               if isinstance(n, ast.FunctionDef) and n.name == 'heal_missing_addons')
     namespace = {
         'xbmc': types.SimpleNamespace(
-            getCondVisibility=lambda cond: cond.endswith('(skin.povil.nox)'),
+            getCondVisibility=lambda cond: cond.endswith('(skin.povil.onyx)'),
             executebuiltin=lambda cmd: None, LOGWARNING=2, LOGERROR=3),
         'logging': types.SimpleNamespace(log=lambda *a, **k: None),
         'youtube_platform': types.SimpleNamespace(eligible=lambda ids: []),
@@ -223,7 +223,7 @@ class HealCaseTests(unittest.TestCase):
             _manifest={'addons': {
                 'repository.Fishenzon': {'id': 'repository.Fishenzon'},
                 'repository.otaku': {'id': 'repository.otaku'},
-                'skin.povil.nox': {'id': 'skin.povil.nox'}}},
+                'skin.povil.onyx': {'id': 'skin.povil.onyx'}}},
             _on_disk=lambda aid: True,
             _runtime_addon_enabled=lambda aid: enabled_in_kodi,
             _enable_addon=enabled.append,

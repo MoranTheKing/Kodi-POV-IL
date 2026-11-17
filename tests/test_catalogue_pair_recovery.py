@@ -15,7 +15,7 @@ spec = importlib.util.spec_from_file_location('catalogue_widgets',
     ROOT/'plugin.program.kodipovilwizard/resources/libs/fentastic_widgets.py')
 widgets = importlib.util.module_from_spec(spec); spec.loader.exec_module(widgets)
 ARCHIVE = ROOT/'plugin.program.kodipovilwizard/resources/bootstrap/config.zip'
-DIGEST = '20f3f23b5571bc48be7313096e144fd01e903b346b050ca9a7a2899a92963f85'
+DIGEST = '5871d7aaba09d86c8acc6a7ca700fc4bcea8b61fa65b04cd2cffd2178182c101'
 
 
 class CataloguePairTests(unittest.TestCase):

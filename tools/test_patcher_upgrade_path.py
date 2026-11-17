@@ -272,7 +272,6 @@ HOSTS = {
     'skin.arctic.zephyr.2': ('AZ2_STOCK', ''),
     'skin.fentastic': ('FENTASTIC_STOCK', ''),
     'skin.estuary': ('ESTUARY_STOCK', ''),
-    'skin.povil.nox': ('NOX_STOCK', ''),
     'service.subtitles.All_Subs': ('ALLSUBS_STOCK', ''),
     'plugin.program.kodipovilwizard': ('WIZARD_STOCK', ''),
     # 4.0.2 is what devices self-update to; GetYouTube is byte-identical
@@ -592,10 +591,6 @@ pin('fentastic_widget_patcher', 'UNPROVEN',
     '_WIDGET_SEED_VERSION=v1', '_fen_widgets_seeded=v1')
 pin('kodi_utils', 'UNPROVEN',
     '_embedded_mode_v1')
-pin('nox_change_source_patcher', 'UNPROVEN',
-    'AI_SUBS_NOX_CHANGE_SOURCE_v1')
-pin('nox_osd_collision_patcher', 'UNPROVEN',
-    'AI_SUBS_NOX_OSD_FIX_v1')
 pin('pov_container_refresh_crash_fix', 'UNPROVEN',
     'AI_SUBS_POV_WIDGET_REFRESH_v1')
 pin('pov_favorites_diagnostic', 'UNPROVEN',
@@ -620,7 +615,7 @@ pin('service', 'UNPROVEN',
     '_fast_first_chunk_default_v2', '_fen_osd_autoclose_v1',
     '_gemini3_tune_v1', '_gemini_model_bump_v2', '_gemini_model_bump_v3',
     '_gender_ref_on_v1',
-    '_ktuvit_on_v4', '_nox_poster_rating_default_v2',
+    '_ktuvit_on_v4',
     '_pool_default_on_v1', '_pool_share_force_v1',
     '_pov_autoplay_default_v1', '_pov_autoplay_revert_v2',
     '_pov_resume_revert_v1', '_remember_source_default_v1',

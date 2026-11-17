@@ -17,7 +17,7 @@
 #
 # Why generic (vs the FENtastic-only patcher):
 #   Users install on whatever skin they like -- Arctic Zephyr,
-#   Estuary, Aeon Nox, etc. Each skin has its own DialogSubtitles.xml
+#   Estuary, etc. Each skin has its own DialogSubtitles.xml
 #   structure but they all share the `$INFO[Player.Filename]` idiom.
 #   Detecting the active skin and patching its XML in place covers
 #   every user without needing per-skin patcher modules.

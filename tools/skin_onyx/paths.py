@@ -1,4 +1,4 @@
-"""idanplus / otaku / POV paths reused from NOX's menu (skin.povil.nox Custom_nox_main_menu.xml)."""
+"""idanplus / otaku / POV paths of the build's home menu."""
 IDAN = {
     'kan11': 'plugin://plugin.video.idanplus/?moredata=&name=%D7%9B%D7%90%D7%9F+11&url=&iconimage=&module=kan&mode=0',  # כאן 11
     'keshet12': 'plugin://plugin.video.idanplus/?moredata=&name=%D7%9E%D7%90%D7%A7%D7%95+VOD&url=&iconimage=&module=keshet&mode=0',  # קשת 12

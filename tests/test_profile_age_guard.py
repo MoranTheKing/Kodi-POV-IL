@@ -159,7 +159,7 @@ class ProfilePolicyTests(unittest.TestCase):
         self.parent.set_child(str(self.master), self.profile, 7)
         path=self.child/'guisettings.xml'
         gui=ET.parse(path)
-        self.assertEqual(gui.findtext("setting[@id='lookandfeel.skin']"),'skin.povil.nox')
+        self.assertEqual(gui.findtext("setting[@id='lookandfeel.skin']"),'skin.povil.onyx')
         gui.find("setting[@id='lookandfeel.skin']").text='skin.fentastic'
         gui.write(path)
         self.parent.set_child(str(self.master), self.profile, 9)

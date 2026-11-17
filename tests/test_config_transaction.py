@@ -26,7 +26,7 @@ class ConfigTransactionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / 'guisettings.xml'
             for skin in ('skin.estuary', 'skin.fentastic',
-                         'skin.povil.nox', 'skin.arctic.fuse.3'):
+                         'skin.povil.onyx', 'skin.arctic.fuse.3'):
                 path.write_text('<settings><setting id="lookandfeel.skin">'
                                 + skin + '</setting></settings>', encoding='utf-8')
                 self.assertEqual(config_apply._saved_active_skin(raw), skin)

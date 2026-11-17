@@ -1575,25 +1575,6 @@ AF3_PACKS = [
     },
 ]
 
-# KODI-POV-IL - NOX skin, same on-demand pattern as AF3. The NOX skin is a
-# rebranded + scrubbed Estuary MOD (~24 MB) whose home menu was remapped to
-# our POV / idanplus / otaku addons. It is downloaded only when the user
-# picks it from Switch Skin so it never bloats the base build. Single pack
-# (fits under GitHub's 100 MB limit), unlike AF3's four. Its only hard
-# dependency, script.fentastic.helper, already ships in the build.
-NOX_SKIN_VERSION = '1.0.11'
-NOX_PACKS = [
-    {
-        'name': 'סקין NOX',
-        'url': '{0}/Kodi-POV-IL-NOX-skin-pack.zip'.format(AF3_PACK_BASE_URL),
-        'filename': 'nox_skin_pack.zip',
-        'sentinel': 'special://home/addons/skin.povil.nox/addon.xml',
-        'expected_version': NOX_SKIN_VERSION,
-        'addon_ids': ['skin.povil.nox'],
-    },
-]
-
-
 # KODI-POV-IL - UMBRELLA PILOT (opt-in, on-demand). Umbrella + CocoScrapers
 # plus BOTH of their official repository addons, so once installed they keep
 # updating straight from their developers -- the same trust model POV has via
@@ -1644,7 +1625,7 @@ ACCTMGR_PACKS = [
 
 def ensure_acctmgr_installed():
     """Download + extract the Account Manager pack on demand (same
-    battle-tested path as the AF3/NOX/Umbrella packs, including the Addons-DB
+    battle-tested path as the AF3/Umbrella packs, including the Addons-DB
     registration that makes Kodi actually see the new addons)."""
     return _ensure_packs_installed(
         ACCTMGR_PACKS,
@@ -1746,7 +1727,7 @@ def install_acctmgr_pilot():
 
 def ensure_umbrella_installed():
     """Download + extract the Umbrella pilot pack on demand (same
-    battle-tested path as the AF3/NOX packs, including the Addons-DB
+    battle-tested path as the AF3 packs, including the Addons-DB
     registration that makes Kodi actually see the new addons)."""
     return _ensure_packs_installed(
         UMBRELLA_PACKS,
@@ -2033,16 +2014,8 @@ def ensure_arctic_fuse_3_installed():
             CONFIG.COLOR1))
 
 
-def ensure_nox_installed():
-    """Download + extract the NOX skin pack on demand (see _ensure_packs_installed)."""
-    return _ensure_packs_installed(
-        NOX_PACKS,
-        '[COLOR {0}][B]מוריד את סקין NOX[/B][/COLOR]'.format(CONFIG.COLOR2),
-        '[COLOR {0}][B]סקין NOX מוכן לשימוש[/B][/COLOR]'.format(CONFIG.COLOR1))
-
-
 def auto_update_active_skin_pack():
-    """Refresh an on-demand skin pack (NOX or AF3) when the user is already
+    """Refresh an on-demand skin pack (AF3) when the user is already
     ON that skin and a newer version has been published. The pack is otherwise
     only (re)installed when picked from Switch Skin, so without this an existing
     user never gets skin updates from a normal quick_update -- they had to
@@ -2054,9 +2027,7 @@ def auto_update_active_skin_pack():
     so the user's favourites order and skin tweaks are preserved."""
     try:
         active = CONFIG.SKIN or ''
-        if 'skin.povil.nox' in active:
-            pack, ensure, label = NOX_PACKS[0], ensure_nox_installed, 'NOX'
-        elif 'skin.arctic.fuse.3' in active:
+        if 'skin.arctic.fuse.3' in active:
             # The AF3 SKIN pack specifically (the one whose sentinel is the
             # skin's addon.xml) -- found by sentinel, not by list position,
             # so reordering AF3_PACKS can never silently break this.
@@ -2106,7 +2077,7 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
     Reuses the wizard's existing Downloader + extract.all machinery
     -- the same code that powers quick_update and Fresh Install --
     so progress / cancel / error reporting all behave the same way.
-    Generic over a packs list so AF3 and NOX (and any future on-demand
+    Generic over a packs list so AF3 (and any future on-demand
     skin) share one battle-tested install path, including the critical
     Addons-DB register step that prevents the silent Estuary fallback."""
     try:
@@ -2291,7 +2262,7 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
         # ONLY IF IT IS STILL OPEN. The extract-failure branch closes the
         # dialog and continues, which is right when another pack follows --
         # the loop head re-opens one -- and wrong when the failing pack was
-        # the LAST, or the only one, which is the real shape of the NOX,
+        # the LAST, or the only one, which is the real shape of the
         # Umbrella and Account Manager lists. A review drove a single-pack
         # list whose extract fails and watched update() and close() both land
         # on the closed object.
@@ -2465,14 +2436,13 @@ def build_switch_skin():
 
 
     from resources.libs.gui import window
-    msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין NOX"
+    msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3"
     window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
 
     skin_mapping = {
         'סקין Estuary - מראה פשוט עם כפתורים': 'skin.estuary',
         'סקין FENtastic - יפהפה': 'skin.fentastic',
-        'סקין Arctic Fuse 3 - מודרני (ניסיוני)': 'skin.arctic.fuse.3',
-        'סקין NOX - עברית מלאה (ניסיוני)': 'skin.povil.nox'
+        'סקין Arctic Fuse 3 - מודרני (ניסיוני)': 'skin.arctic.fuse.3'
     }
         
     # Get the name of the current active skin. If the user manually
@@ -2516,15 +2486,6 @@ def build_switch_skin():
                 logging.log_notify(
                     CONFIG.ADDONTITLE,
                     '[COLOR {0}]Arctic Fuse 3 לא הותקן - מבטל[/COLOR]'.format(
-                        CONFIG.COLOR2))
-                return
-        # NOX is also too big to bundle in the base build; download +
-        # extract it on first switch, identical to the AF3 path.
-        elif gotoskin == 'skin.povil.nox':
-            if not ensure_nox_installed():
-                logging.log_notify(
-                    CONFIG.ADDONTITLE,
-                    '[COLOR {0}]סקין NOX לא הותקן - מבטל[/COLOR]'.format(
                         CONFIG.COLOR2))
                 return
 

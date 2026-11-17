@@ -322,7 +322,7 @@ class GeneratedXmlTests(unittest.TestCase):
             self.assertNotIn('Mono', mono.findtext('filename'))
 
     def test_the_users_own_live_tv_has_a_chip_and_a_row(self):
-        # field report: IPTV set up under Nox "disappeared" in Onyx
+        # field report: IPTV set up under another skin "disappeared" in Onyx
         home = ET.parse(XML / 'Home.xml').getroot()
         buttons = {c.findtext('label'): c for c in home.iter('control') if c.get('type') == 'button'}
         chip = buttons['IPTV שלי']
@@ -489,7 +489,7 @@ class RtlPatchTests(unittest.TestCase):
                     sys.modules[k] = v
 
     def test_flagged_home_row_is_reversed_and_marked(self):
-        calls, items = self._run('?mode=build_movie_list&povil_rtl=1', skin='skin.povil.nox')
+        calls, items = self._run('?mode=build_movie_list&povil_rtl=1', skin='skin.fentastic')
         self.assertIn(('many', ['c', 'b', 'a']), calls)
         self.assertEqual(calls[-1], ('end',))
         self.assertTrue(all(i.props.get('povil_rtl') == '1' for i in items))
@@ -615,10 +615,10 @@ class RtlPatchTests(unittest.TestCase):
     def test_a_reused_interpreter_decides_for_each_request(self):
         # Idan Plus (and POV with fast navigation) keep xbmcplugin wrapped between requests
         stub = _plugin_stub()
-        calls, _items = self._run('?mode=1&povil_rtl=1', skin='skin.povil.nox', pov=False, plugin=stub)
+        calls, _items = self._run('?mode=1&povil_rtl=1', skin='skin.fentastic', pov=False, plugin=stub)
         self.assertIn(('many', ['c', 'b', 'a']), calls)
         del calls[:]
-        calls, items = self._run('?mode=1', skin='skin.povil.nox', pov=False, plugin=stub, keep_module=True)
+        calls, items = self._run('?mode=1', skin='skin.fentastic', pov=False, plugin=stub, keep_module=True)
         self.assertIn(('many', ['a', 'b']), calls, 'a later plain request passes straight through')
         self.assertFalse(any(i.props for i in items))
         del calls[:]
@@ -667,7 +667,7 @@ class RtlPatchTests(unittest.TestCase):
         self.assertNotIn(('content', 'tvshows'), calls, 'a list with playable items keeps its content')
 
     def test_other_requests_keep_their_order(self):
-        for kwargs in ({'window': 10025, 'view': '50'}, {'window': 10000}, {'skin': 'skin.povil.nox', 'window': 10025}):
+        for kwargs in ({'window': 10025, 'view': '50'}, {'window': 10000}, {'skin': 'skin.fentastic', 'window': 10025}):
             with self.subTest(kwargs):
                 calls, items = self._run('?mode=build_movie_list', **kwargs)
                 self.assertNotIn(('many', ['c', 'b', 'a']), calls)
@@ -708,7 +708,8 @@ class WizardRegistryTests(unittest.TestCase):
         self.assertIn("': 'skin.povil.onyx'", wizard)
         self.assertIn("if not ensure_onyx_installed():", wizard)
         updater = (LIBS / 'modular_updater.py').read_text(encoding='utf-8')
-        self.assertIn("OPTIONAL_SKINS = frozenset(('skin.povil.onyx',))", updater)
+        self.assertIn("ON_DEMAND_SKINS = frozenset(('skin.povil.onyx',))", updater)
+        self.assertIn('OPTIONAL_SKINS = frozenset()', updater)
 
     def test_rtl_patches_are_registered_first_in_their_entry_scripts(self):
         ns = {}

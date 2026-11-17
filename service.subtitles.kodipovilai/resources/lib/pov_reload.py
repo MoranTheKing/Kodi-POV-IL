@@ -82,7 +82,7 @@ except Exception:                       # no threads here at all
 # above all ReloadSkin() -- has to wait. A user hit exactly that: the widget
 # patcher reloaded the skin 0.6 s into this window, the home screen rebuilt,
 # every POV widget raised "Unknown addon id", and POV's own service had to be
-# killed for not stopping. The same update applied cleanly on NOX, where that
+# killed for not stopping. The same update applied cleanly on a skin where that
 # patcher never runs -- which is what identified the pairing.
 _cycling = False
 # Raised the moment a cycle is REQUESTED, not when it begins. The cycle waits
@@ -1019,7 +1019,7 @@ def _restore_home_focus(saved):
                 break
         # Restore by ABSOLUTE index so it round-trips on Estuary's home
         # fixedlist (where the on-screen slot is pinned) as well as regular
-        # lists/panels on FENtastic/NOX.
+        # lists/panels on FENtastic.
         cmd = ('SetFocus(%s,%s,absolute)' % (cid, pos)) if pos else ('SetFocus(%s)' % cid)
         xbmc.executebuiltin(cmd)
         _log('restored home focus -> control %s item %s' % (cid, pos),

@@ -90,17 +90,11 @@ v0.1.42
   their official repositories so they update straight from their developers.
   Nothing changes for anyone who does not pick it.
 
-[COLOR yellow][B]v0.1.38[/B][/COLOR]
-* NOX skin updated to 1.0.11: the seek bar now slides away on its own after
-  five seconds of pause, matching FENtastic, and returns on any key press.
-* Devices already on NOX pick the new skin pack up automatically on the next
-  quick update via the existing version gate.
-
 [COLOR yellow][B]v0.1.37[/B][/COLOR]
 * Arctic Fuse 3 skin updated to the current upstream release (6.3.2.14),
   keeping the mod layer, the Hebrew localisation and all build integrations.
 * A device already ON Arctic Fuse 3 now refreshes the skin pack automatically
-  on quick update, same as NOX -- no need to switch skins back and forth.
+  on quick update -- no need to switch skins back and forth.
 * Re-extracting the AF3 skin now clears the old skin folder first, so files
   the skin author removed can no longer linger and load as zombie windows.
 
@@ -143,97 +137,24 @@ v0.1.42
   quickfix, so a quick update no longer re-imposes the old Real-Debrid/KODI art
   on top of the new branding. The wizard bundled in the build is rebuilt from
   source (correct icons + notification title, home-widget preservation across
-  quick updates, NOX skin 1.0.10) instead of a stale snapshot.
+  quick updates) instead of a stale snapshot.
 
 [COLOR yellow][B]v0.1.31[/B][/COLOR]
 * Rebrand: the update-notification title now reads "KODI POV IL" and the bottom
   badge is the POV IL square (replacing the old circular Real-Debrid/KODI logo).
 
-[COLOR yellow][B]v0.1.30[/B][/COLOR]
-* NOX gate -> skin 1.0.10. Reordered the "my content" tiles on the NOX home
-  so each provider's movies and series sit next to each other -- my movies
-  (Trakt) + my series (Trakt), then TMDB pair, then POV pair -- instead of
-  all movies followed by all series. The updated Custom_nox_main_menu.xml is
-  also shipped inside the FENtastic quickfix for fast propagation.
-
-[COLOR yellow][B]v0.1.29[/B][/COLOR]
-* NOX gate -> skin 1.0.9. The 1.0.8 vendor-logo image still rendered small
-  (the wide logo had to fit a short box, and the framed square dominated).
-  Replaced it with a large frameless TEXT logo on the NOX home: "POV IL" in
-  font60 (white + gold "IL") with "KODI BUILD" beneath it -- no image, no
-  frame, scales crisply. Also shipped the new Home_nox.xml inside the
-  FENtastic quickfix so existing NOX users get it on the next quick-update
-  restart instead of waiting for the full skin-pack re-pull.
-
-[COLOR yellow][B]v0.1.28[/B][/COLOR]
-* NOX gate -> skin 1.0.8. Enlarged the POV logo on the NOX home screen and
-  switched it to the wide "POV IL / KODI BUILD" vendor logo (same artwork
-  FENtastic uses top-left) instead of the small square K-logo. New media
-  file media/logos/pov_il_vendor_logo.png; both home logo controls now point
-  at it at 300x83. Bumped skin.povil.nox to 1.0.8 so the version gate fires
-  and devices already on NOX re-pull the pack via auto_update_active_skin_pack.
-
-[COLOR yellow][B]v0.1.27[/B][/COLOR]
-* NOX gate -> skin 1.0.7. The 6-tile favorites fix (PR #240) was packed
-  as 1.0.6 IN PLACE -- but 1.0.6 had already shipped via PR #239, so
-  devices that pulled it (gate==on-disk==1.0.6) would never re-download
-  the fixed pack. Bumped the skin to 1.0.7 so the version gate fires.
-  Lesson encoded: never rebuild a skin pack in place once its version
-  has been merged to main.
-
 [COLOR yellow][B]v0.1.26[/B][/COLOR]
-* NOX gate -> skin 1.0.6:
-  - "הסרטים שלי / הסדרות שלי" on the home now open POV's unified
-    "My Content" hub (navigator.my_content) instead of the POV-only
-    favorites list, which showed 0 for users who keep their lists on
-    Trakt/TMDB rather than POV.
-  - Focused submenu item is highlighted yellow instead of gray.
 * FENtastic: applied Tal Levi's updated player set (new VideoOSD /
   OsdSettings / NetflixPlayer + supporting includes -- 26 files), kept all
   other skin files, and preserved our clear-cache RunPlugin fix.
 
-[COLOR yellow][B]v0.1.25[/B][/COLOR]
-* NOX gate -> skin 1.0.5.
-  - Movies/TV/Kids reverted to a SINGLE row (popular) -- the two stacked
-    rows collided with the top info panel so the title/plot was unreadable.
-  - NOX is now the default home: no more "choose view (Nox/Fentastic/...)"
-    prompt on first switch to NOX (Home.xml defaults HomeS=Home_nox and
-    sets firsttimerun; the chooser is still reachable from Skin settings).
-  - Removed the broken "אוספי סרטים" (Movie Collections) search entry that
-    threw a POV error.
-  - Removed the "כאן 11" Israeli-content row (kept channel 13 + 12).
-
 [COLOR yellow][B]v0.1.24[/B][/COLOR]
-* NOX gate -> skin 1.0.4. Fixes the overlapping home rows: Movies / TV /
-  Kids now show two separate stacked rows (Popular + New / kids movies +
-  kids series) instead of both widgets rendering at the same position.
-  Each row is wrapped in its own group with a vertical offset (mirroring
-  the working VOD layout); the category groups moved up so both rows fit.
 * Israeli content (תוכן ישראלי): added the "כאן 11" row beneath
   channel 13 and channel 12 (idanplus module=kan), so it shows 13/12/11.
 
 [COLOR yellow][B]v0.1.23[/B][/COLOR]
-* NOX skin now auto-updates for users already ON it. Added
-  auto_update_active_skin_pack() (called from startup.py): if the active
-  skin is skin.povil.nox and the on-disk version is behind NOX_SKIN_VERSION,
-  it re-downloads the pack and reloads the skin -- so a published NOX update
-  reaches existing NOX users on their next quick update + restart, like the
-  other skins, without having to switch skins and back. Version-gated, so it
-  never re-downloads when already current (no wipe of the user's favourites
-  order / skin settings, which live in addon_data, not in the pack).
-* Gate bumped to NOX skin 1.0.3.
 * Fixed the mojibake "current build" header in the wizard's Builds menu
   (THEME4 was double-encoded gibberish) -> now reads "בילד נוכחי:".
-
-[COLOR yellow][B]v0.1.22[/B][/COLOR]
-* Fix NOX skin being auto-disabled as "incompatible add-on" right after
-  switching to it (Kodi then fell back to plain Estuary, so it looked
-  identical to the simple skin). Cause: skin.povil.nox declared
-  <import addon="xbmc.gui" version="5.15.0"/> (Nexus), which Kodi 21
-  Omega rejects. The build's working skins (Estuary, FENtastic) keep that
-  import commented out; NOX now matches. Skin bumped to 1.0.1 and
-  NOX_SKIN_VERSION gated to 1.0.1 so devices that already pulled the
-  broken 1.0.0 re-download the fixed pack on the next switch.
 
 [COLOR yellow][B]v0.1.21[/B][/COLOR]
 * Fix the "Kodi hangs for a few seconds on the first launch after an
@@ -246,17 +167,6 @@ v0.1.42
   matching the symptom. Added wait_for_gui_ready(): the service now
   blocks (bounded) until the Home window is actually live before any
   first-launch dialog, so each modal has a real parent window.
-
-[COLOR yellow][B]v0.1.20[/B][/COLOR]
-* New 4th skin: NOX (skin.povil.nox), a rebranded + scrubbed Estuary MOD
-  with a Hebrew home menu remapped to our POV / idanplus / otaku addons.
-  Like Arctic Fuse 3 it is NOT bundled in the base build -- it downloads
-  on demand the first time the user picks it in Switch Skin, so it costs
-  nothing for users who do not use it. The on-demand installer was
-  generalised (_ensure_packs_installed) so AF3 and NOX share one path,
-  including the critical Addons-DB register step that prevents the silent
-  Estuary fallback. The side-loader and all foreign wizard/IPTV calls in
-  the original skin were removed.
 
 [COLOR yellow][B]v0.1.19[/B][/COLOR]
 * CRITICAL: kill_kodi() is a true hard kill again (os._exit, no Quit).

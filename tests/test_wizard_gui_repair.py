@@ -2,7 +2,7 @@
 
 Field report (28 Oct 2026, Android, Kodi 21.3): Kodi came up in English with
 Estuary and a 12-hour clock -- Kodi's defaults -- on a build installed in
-Hebrew with NOX, and with them went the build's subtitle settings. The Wizard
+Hebrew with the build's skin, and with them went the build's subtitle settings. The Wizard
 now restores the build's guisettings through Kodi's Settings API (menu button)
 and offers it at start-up when the language and region look reset.
 """
@@ -57,7 +57,7 @@ class GuiRepairTests(unittest.TestCase):
         fresh.apply_live_settings = lambda root: (self.applied.append(root) or self.events.append('apply')
                                                   or (len(root), []))
         build_skin = types.ModuleType('resources.libs.build_skin')
-        build_skin.SKINS = ('skin.estuary', 'skin.fentastic', 'skin.povil.nox', 'skin.arctic.fuse.3')
+        build_skin.SKINS = ('skin.estuary', 'skin.fentastic', 'skin.povil.onyx', 'skin.arctic.fuse.3')
         build_skin.activate = lambda target: self.activated.append(target) or True
         self.saves = True
         build_skin.persist_live_settings = lambda: self.events.append('save') or self.saves
@@ -142,7 +142,7 @@ class GuiRepairTests(unittest.TestCase):
         self.memory = ('skin.estuary', 1.0)   # what a reset leaves in the memory
         self.assertTrue(self.mod.offer_after_reset())
         self.assertEqual(1, len(self.applied))
-        self.assertEqual(['skin.povil.nox'], self.activated)
+        self.assertEqual(['skin.povil.onyx'], self.activated)
         self.assertTrue(self.toasts)
 
     def test_the_remembered_build_skin_is_offered(self):
@@ -165,9 +165,9 @@ class GuiRepairTests(unittest.TestCase):
         self.assertEqual([], self.events)
 
     def test_the_settings_are_saved_without_a_skin_switch(self):
-        # Kodi 21's Settings API changes memory only; the field case had NOX
+        # Kodi 21's Settings API changes memory only; the field case had the build's skin
         # back already, so no skin switch would have saved them.
-        self.skin = 'skin.povil.nox'
+        self.skin = 'skin.povil.onyx'
         self.answers = [True]
         self.assertTrue(self.mod.restore())
         self.assertEqual(['apply', 'save'], self.events)
@@ -175,7 +175,7 @@ class GuiRepairTests(unittest.TestCase):
         self.assertEqual(1, len(self.asked), 'no skin question for the active skin')
 
     def test_an_unsaved_repair_says_how_to_keep_it(self):
-        self.skin = 'skin.povil.nox'
+        self.skin = 'skin.povil.onyx'
         self.saves = False
         self.answers = [True]
         self.assertTrue(self.mod.restore())
@@ -242,7 +242,7 @@ class ApplyLiveSettingsTests(unittest.TestCase):
             '<setting id="subtitles.fontsize">52</setting>'
             '<setting id="videoplayer.seeksteps">-30,-10,10,30</setting>'
             '<setting id="videoplayer.convertdovi">true</setting>'
-            '<setting id="lookandfeel.skin">skin.povil.nox</setting>'
+            '<setting id="lookandfeel.skin">skin.povil.onyx</setting>'
             '<setting id="services.devicename">X</setting>'
             '<setting id="gone.setting">1</setting>'
             '<setting id="locale.country" default="true">USA (12h)</setting>'

@@ -24,7 +24,7 @@ class ConfigBootstrapRecoveryTests(unittest.TestCase):
         # This seed is immutable; a future config can safely require a download.
         pack = ROOT/'plugin.program.kodipovilwizard/resources/bootstrap/config.zip'
         self.assertEqual(hashlib.sha256(pack.read_bytes()).hexdigest(),
-                         '20f3f23b5571bc48be7313096e144fd01e903b346b050ca9a7a2899a92963f85')
+                         '5871d7aaba09d86c8acc6a7ca700fc4bcea8b61fa65b04cd2cffd2178182c101')
         seed = dict(sha256=hashlib.sha256(pack.read_bytes()).hexdigest(),size=pack.stat().st_size)
         self.assertTrue(config_apply._bundled_config_zip(seed))
         self.assertIsNone(config_apply._bundled_config_zip(dict(seed,sha256='0'*64)))
@@ -86,7 +86,7 @@ class ConfigBootstrapRecoveryTests(unittest.TestCase):
             snapshot=ET.parse(userdata/'kodipovil.fresh_gui_defaults.xml')
             for key in ('locale.subtitlelanguage','subtitles.languages'):
                 self.assertEqual(snapshot.find("setting[@id='"+key+"']").text,'Hebrew')
-            self.assertEqual(snapshot.find("setting[@id='lookandfeel.skin']").text,'skin.povil.nox')
+            self.assertEqual(snapshot.find("setting[@id='lookandfeel.skin']").text,'skin.povil.onyx')
 
     def test_actual_pack_applies_when_network_is_unavailable(self):
         self.apply_actual_pack()

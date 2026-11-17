@@ -150,7 +150,7 @@ class HomeBootstrapBudgetTests(unittest.TestCase):
             self.assertFalse(self.module.resume())
 
     def test_all_skins_keep_adult_fast_path(self):
-        for self.skin in ('skin.estuary','skin.povil.nox','skin.fentastic','skin.arctic.fuse.3'):
+        for self.skin in ('skin.estuary','skin.povil.onyx','skin.fentastic','skin.arctic.fuse.3'):
             self.assertTrue(self.module._settled_adult(str(self.master),str(self.active)))
 
     def test_pending_profile_and_sidebar_migration_keep_full_path(self):

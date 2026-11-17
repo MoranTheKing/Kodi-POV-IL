@@ -54,7 +54,7 @@ class PlatformSkinIncidents(unittest.TestCase):
 
     def test_home_bootstrap_cannot_interrupt_pending_skin_confirmation(self):
         kodi = types.SimpleNamespace(executebuiltin=lambda _: self.fail('unexpected reload'))
-        requested = ['skin.povil.nox']
+        requested = ['skin.povil.onyx']
         gui = types.SimpleNamespace(Window=lambda _: types.SimpleNamespace(
             getProperty=lambda _: requested[0]), getCurrentWindowDialogId=lambda: 10100)
         fn = _load_function(ROOT / 'plugin.program.kodipovilwizard/profile_bootstrap.py',
@@ -85,7 +85,7 @@ class PlatformSkinIncidents(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             folder = Path(raw)
             module, state, calls, notes = self.platform(folder)
-            ids = ['plugin.video.pov', 'plugin.video.youtube', 'skin.povil.nox']
+            ids = ['plugin.video.pov', 'plugin.video.youtube', 'skin.povil.onyx']
             for version in (None, '18.9.0'):
                 state['version'] = version
                 self.assertEqual(module.eligible(ids), [ids[0], ids[2]])

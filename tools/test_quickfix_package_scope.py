@@ -44,7 +44,6 @@ OWNED_ADDONS = {
     "service.subtitles.kodipovilai",
     "plugin.program.kodipovilwizard",
     "skin.fentastic",
-    "skin.povil.nox",
     "script.fentastic.helper",
     "service.subtitles.All_Subs",
 }

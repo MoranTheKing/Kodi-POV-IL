@@ -1,3 +1,6 @@
+[B]Kodi POV IL - Onyx 1.0.11[/B]
+- Clear cache (the owner: "where do you clear the cache? Onyx has no button"): "ניקוי קאש" in the settings tab's shortcuts and in the power menu -- POV's own clear-all-cache, as on the build's other skins. Shown when POV is installed.
+
 [B]Kodi POV IL - Onyx 1.0.10[/B]
 - Player (the owner, on a phone: "if I press the middle while the player is open, the top and the bottom should close"): a tap or a click on the picture, between the title and the controls, closes them. Kodi itself only ever opens the controls from a tap on the picture. The area is the first control of the window (button 7005, no picture), so every button drawn after it takes its own taps; no key leads to it, and any arrow from it goes back to the buttons. QA Kodi, taps sent to the window with no pointer movement, as a touch arrives: tap -- open, tap -- closed, four times in a row; the pause button still pauses.
 
@@ -17,7 +20,7 @@
 - Israeli tab (field report: no summary on Keshet 12, no backdrop on Keshet 12 and Kan 11 like Reshet 13's): once the screen is still on a Keshet or Kan show, the Wizard fetches what Idan Plus leaves out (hero_details) and the hero shows it -- Keshet's summary, its 1920x1080 picture and its Hebrew title logo; Kan's 1920x1080 picture. Label 9805 (POVIL_HeroDetailsKey) names the show, timer povil_details asks; the soft wash gives way to a fetched picture
 
 [B]Kodi POV IL - Onyx 1.0.6[/B]
-- Live tab: the user's own live TV (IPTV Simple and the like, Kodi's PVR) has a chip "IPTV שלי" (Kodi's channels window) and a row of its channels, right to left with their logos' soft wash (the Wizard's pvr_row) -- both hidden without live TV (field report: IPTV set up under Nox "disappeared" in Onyx). "מדריך שידורים" opens Kodi's TV guide
+- Live tab: the user's own live TV (IPTV Simple and the like, Kodi's PVR) has a chip "IPTV שלי" (Kodi's channels window) and a row of its channels, right to left with their logos' soft wash (the Wizard's pvr_row) -- both hidden without live TV (field report: IPTV set up under another skin "disappeared" in Onyx). "מדריך שידורים" opens Kodi's TV guide
 - Favourites row: the soft wash of each favourite's picture too
 
 [B]Kodi POV IL - Onyx 1.0.5[/B]

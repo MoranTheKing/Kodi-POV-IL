@@ -110,11 +110,11 @@ HOSTS = {
 #
 # THE SECOND HALF IS THE PART THAT MATTERS, and it is here because the first
 # version of this dict did not have it. "Not a third-party add-on" is not the
-# same as "nothing a bullet would name": NOX is a skin, so it landed in this
-# dict, and "NOX" was not among the filtered terms -- unlike Estuary, AF3 and
-# FENtastic, which are. Two bullets about the NOX player, 0.2.260 and 0.2.262,
-# had been reaching standalone users for a year, about a skin they do not
-# have. The review that found it was looking for exactly this and I was not.
+# same as "nothing a bullet would name": a skin landed in this dict while its
+# name was not among the filtered terms -- unlike Estuary, AF3 and FENtastic,
+# which are -- and two bullets about its player had been reaching standalone
+# users for a year, about a skin they do not have. The review that found it
+# was looking for exactly this and I was not.
 #
 # So anything with a name of its own must have that name filtered, whether it
 # is an add-on or not. None means there is no product name -- it is a part of
@@ -130,7 +130,6 @@ NOT_A_HOST = {
     'fentastic_': ('the FENtastic skin', 'FENtastic'),
     'hebrew_build_ui_': ("the build's own UI", None),
     'kodi_playlist_timeout_': ('Kodi itself', None),
-    'nox_': ('the Nox skin', 'Nox'),
     'recent_updates_tile_': ("the build's home screen", None),
     # deliberately None: this one is shipped standalone and patches whichever
     # skin is running, so it has no product name of its own. 'skin' is in the
@@ -169,7 +168,7 @@ check('no patcher filename matches two prefixes', not _ambiguous,
       'first-match-wins would pick one of these silently: %s' % _ambiguous)
 
 # Anything with a product name of its own must have that name filtered, skin
-# or add-on. This is the check NOX slipped past for a year.
+# or add-on. This is the check a skin slipped past for a year.
 for _pfx, (_what, _name) in sorted(NOT_A_HOST.items()):
     if _name is None:
         continue
@@ -226,7 +225,7 @@ check('every soft term is in the full term list',
 check('the soft list is only ordinary words, no host names',
       not [t for t in mod._STANDALONE_SOFT_TERMS
            if t in ('POV', 'Umbrella', 'MDBList', 'AF3', 'Arctic', 'Estuary',
-                    'FENtastic', 'NOX', 'Nox', 'nox', 'Wizard', 'TorBox',
+                    'FENtastic', 'Wizard', 'TorBox',
                     'Premiumize', 'AllDebrid', 'Real-Debrid', 'Real Debrid',
                     'Idan Plus', 'Kan 11', 'quickfix', 'favourites')],
       'a host name in the soft list would let note 598 back in')
@@ -268,7 +267,7 @@ check('the full changelog still has everything (the filter is not in-place)',
       any(t in full for t in TERMS),
       'the BUILD changelog must keep the bullets the standalone drops')
 
-# AND THE OTHER DIRECTION, which the NOX review found by the same pass. Every
+# AND THE OTHER DIRECTION, which that review found by the same pass. Every
 # term added here silences whole bullets, and a term can be right about the
 # host it names and still catch a bullet that was never about that host.
 # Adding "Idan Plus" dropped 0.2.372 -- the live/IPTV autosub skip, an engine

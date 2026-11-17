@@ -250,6 +250,13 @@
 					<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profile_skin)</onclick>
 				</item>
 				<item>
+					<label>ניקוי קאש</label>
+					<icon>DefaultAddonRepository.png</icon>
+					<onclick>Dialog.Close(all)</onclick>
+					<onclick>RunPlugin(plugin://plugin.video.pov/?mode=clear_all_cache&amp;isFolder=false)</onclick>
+					<visible>System.HasAddon(plugin.video.pov)</visible>
+				</item>
+				<item>
 					<label>$LOCALIZE[13009]</label>
 					<icon>bmquit.png</icon>
 					<onclick>Dialog.Close(shutdownmenu,true)</onclick>

@@ -28,40 +28,13 @@ class MDBListPersonalRoutesTests(unittest.TestCase):
     def test_large_tiles_submenu_and_continue_use_identical_directory_urls(self):
         generator = load('qa_fav_routes', 'plugin.program.orderfavourites-hebrew/favourites_generator.py')
         with patch.object(generator, '_check_condition', return_value=True):
-            for skin in ('skin.povil.nox', 'skin.fentastic', 'skin.estuary'):
+            tiles = set()
+            for skin in ('skin.povil.onyx', 'skin.fentastic', 'skin.estuary'):
                 rows = ET.fromstring(generator.generate_favourites_xml(skin, merge=False, write=False))
                 for action in ('mdblist_my_movies', 'mdblist_my_tvshows'):
-                    tile = next(i.text for i in rows if 'action=' + action + '&' in i.text)
-                    for filename in ('Custom_nox_main_menu.xml', 'Custom_2115_next_watch.xml'):
-                        menu = ET.parse(ROOT / 'skin.povil.nox/xml' / filename)
-                        self.assertIn(tile, [i.text for i in menu.iter('onclick')])
-
-    def test_nox_favourites_submenu_and_continue_dialog_include_combined_library_routes(self):
-        for filename in ('Custom_nox_main_menu.xml', 'Custom_2115_next_watch.xml'):
-            root = ET.parse(ROOT / 'skin.povil.nox/xml' / filename).getroot()
-            for action, mode in (('mdblist_my_movies', 'build_movie_list'),
-                                 ('mdblist_my_tvshows', 'build_tvshow_list')):
-                rows = [item for item in root.iter('item')
-                        if any('action=' + action + '&' in (onclick.text or '')
-                               for onclick in item.findall('onclick'))]
-                self.assertEqual(len(rows), 1, (filename, action))
-                self.assertIn('MDBList', rows[0].findtext('label'))
-                self.assertTrue(any('mode=' + mode + '&' in onclick.text
-                                    for onclick in rows[0].findall('onclick')))
-                if filename == 'Custom_nox_main_menu.xml':
-                    self.assertEqual(rows[0].findtext('visible'),
-                                     'String.IsEqual(Container(9000).ListItem.Property(id),favorites)')
-                else:
-                    self.assertEqual(rows[0].findtext('onclick'), 'Close')
-            if filename == 'Custom_2115_next_watch.xml':
-                group = root.find('controls/control')
-                self.assertEqual(group.findtext('centertop'), '50%')
-                self.assertEqual(group.findtext('height'), '980')
-                self.assertEqual(group.find('include/param[@name="height"]').get('value'), '980')
-        home = ET.parse(ROOT / 'skin.povil.nox/xml/Home_nox.xml').getroot()
-        self.assertTrue(any(item.text == 'MainMenu' for item in home.iter('include')))
-        self.assertTrue(any('ActivateWindow(2115)' in (param.get('value') or '')
-                            for param in home.iter('param')))
+                    tiles.add((action, next(i.text for i in rows if 'action=' + action + '&' in i.text)))
+            # one url an action, whatever the skin
+            self.assertEqual(len(tiles), 2, tiles)
 
     def test_shipped_personal_folders_repaired_in_memory_only(self):
         path = ROOT / 'userdata/addon_data/plugin.video.pov/navigator.db'

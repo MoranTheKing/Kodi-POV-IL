@@ -1280,7 +1280,7 @@ def _maybe_patch_mdblist_reauth():
 def _maybe_seed_pov_seasons_view():
     """Open POV's season list in a view that draws a poster.
 
-    Reported as "per-season posters only work in NOX". They work everywhere;
+    Reported as "per-season posters only work in one skin". They work everywhere;
     the screen was a text list with no poster in the layout at all. Writes
     POV's own views.db -- the same row POV's Set View writes -- once per skin,
     over whatever is there, and then never again. See the module."""
@@ -2158,7 +2158,7 @@ def _maybe_patch_skin_dialog_subtitles():
 
     This patcher auto-detects the active skin via xbmc.getSkinDir()
     and works against FENtastic, Arctic Zephyr (any variant),
-    Estuary, Aeon Nox -- any skin whose DialogSubtitles.xml has a
+    Estuary -- any skin whose DialogSubtitles.xml has a
     `<control type="label">…$INFO[Player.Filename]…</control>`
     element. Users who chose a non-FENtastic skin previously saw
     the UUID gibberish in the header even on the latest addon
@@ -2193,113 +2193,10 @@ def _maybe_patch_skin_dialog_subtitles():
             pass
 
 
-def _maybe_patch_nox_change_source():
-    """Add a 'החלף מקור' (change source) button to the NOX skin's player OSD
-    (skin.povil.nox/xml/VideoOSD.xml). NOX shipped without one, so a bad source
-    mid-playback left users stuck with no way to pick another. No-op when NOX
-    isn't installed. Marker-gated + XML-parse-checked so it can never corrupt
-    the skin / black-screen the player."""
-    try:
-        from resources.lib import nox_change_source_patcher, kodi_utils
-    except Exception:
-        return
-    try:
-        status = nox_change_source_patcher.ensure_patched()
-        if status == 'patched':
-            kodi_utils.log(
-                'nox_change_source_patcher: change-source button added to '
-                'NOX OSD', level='INFO')
-            _maybe_reload_nox_skin()
-        elif status in ('unmatched', 'parse_failed', 'write_failed',
-                        'read_failed'):
-            kodi_utils.log('nox_change_source_patcher: ' + status,
-                           level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log('nox_change_source_patcher failed: {0}'.format(e),
-                           level='WARNING')
-        except Exception:
-            pass
-
-
-def _maybe_patch_nox_osd_collision():
-    """Shrink NOX's right-side OSD buttons back to their pre-change-source total
-    width, so adding "החלף מקור" no longer pushes "הפרק הבא" left into the central
-    play controls (the overlap that only showed during playback). No-op when NOX
-    isn't installed or the buttons aren't at their known original widths. Marker-
-    gated + XML-parse-checked."""
-    try:
-        from resources.lib import nox_osd_collision_patcher, kodi_utils
-    except Exception:
-        return
-    try:
-        status = nox_osd_collision_patcher.ensure_patched()
-        if status == 'patched':
-            kodi_utils.log(
-                'nox_osd_collision_patcher: NOX OSD buttons re-sized so '
-                '"הפרק הבא" no longer collides with the play controls',
-                level='INFO')
-            _maybe_reload_nox_skin()
-        elif status in ('parse_failed', 'write_failed', 'read_failed'):
-            kodi_utils.log('nox_osd_collision_patcher: ' + status,
-                           level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log('nox_osd_collision_patcher failed: {0}'.format(e),
-                           level='WARNING')
-        except Exception:
-            pass
-
-
-def _maybe_patch_nox_next_episode():
-    """Repoint NOX's fullscreen-OSD "next episode" button from POV's dropped
-    play_media&next=1 call to POV's working next-episode list. No-op when NOX
-    isn't installed or the button was already repointed / changed upstream."""
-    try:
-        from resources.lib import nox_next_episode_patcher, kodi_utils
-    except Exception:
-        return
-    try:
-        status = nox_next_episode_patcher.ensure_patched()
-        if status == 'patched':
-            kodi_utils.log(
-                'nox_next_episode_patcher: OSD next-episode button repointed',
-                level='INFO')
-            _maybe_reload_nox_skin()
-        elif status in ('write_failed', 'read_failed', 'unmatched'):
-            kodi_utils.log('nox_next_episode_patcher: ' + status,
-                           level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log('nox_next_episode_patcher failed: {0}'.format(e),
-                           level='WARNING')
-        except Exception:
-            pass
-
-
-def _maybe_reload_nox_skin():
-    """Skin XML is read at skin load, so a freshly-applied NOX OSD patch only
-    shows after a reload. Reload once when NOX is the active skin. Otherwise the
-    button simply appears on the next Kodi restart."""
-    try:
-        import xbmc
-    except Exception:
-        return
-    try:
-        if xbmc.getSkinDir() != 'skin.povil.nox':
-            return
-        xbmc.executebuiltin('ReloadSkin()')
-    except Exception:
-        pass
-
-
 def _maybe_patch_choose_subs_buttons():
     """Wire the player's subtitle button to MoranSubs's chooser window:
-    rewire FENtastic + Estuary (they pointed at the disabled DarkSubs) and
-    rewire NOX's existing subtitles button (id 70046, which only opened
-    ActivateWindow(2118)). NOX is rewired -- NOT given a new button -- because an
-    added button widened the right-aligned OSD group and pushed "החלף מקור" into
-    the play controls. All skin-gated, XML-parse-checked, self-healing. A reload
+    rewire FENtastic + Estuary (they pointed at the disabled DarkSubs).
+    All skin-gated, XML-parse-checked, self-healing. A reload
     is done only when the patched skin is the active one."""
     # FENtastic + Estuary: rewire the existing DarkSubs button to our chooser.
     try:
@@ -2334,24 +2231,6 @@ def _maybe_patch_choose_subs_buttons():
                            .format(e), level='WARNING')
         except Exception:
             pass
-    # NOX: rewire the existing subtitles button (no new button -> no collision).
-    try:
-        from resources.lib import nox_choose_subs_patcher, kodi_utils
-        status = nox_choose_subs_patcher.ensure_patched()
-        if status == 'patched':
-            kodi_utils.log('nox_choose_subs_patcher: NOX subtitles button '
-                           'rewired to MoranSubs chooser', level='INFO')
-            _maybe_reload_nox_skin()
-        elif status in ('unmatched', 'parse_failed', 'write_failed',
-                        'read_failed'):
-            kodi_utils.log('nox_choose_subs_patcher: ' + status,
-                           level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log('nox_choose_subs_patcher failed: {0}'.format(e),
-                           level='WARNING')
-        except Exception:
-            pass
 
 
 def _maybe_patch_change_source_pause():
@@ -2359,7 +2238,7 @@ def _maybe_patch_change_source_pause():
     before opening the source-selection screen -- it used to pause but started
     playing through in the background. Injects a Player.Playing-gated
     PlayerControl(Play) onclick before the existing change-source onclick in
-    NOX, Estuary, and FENtastic. Marker-gated, XML-parse-checked, self-healing.
+    Estuary and FENtastic. Marker-gated, XML-parse-checked, self-healing.
     Must run AFTER the change-source button patchers so Estuary's inserted
     button exists. Reloads only the active skin if it was patched."""
     try:
@@ -2399,7 +2278,7 @@ def _maybe_patch_change_source_pause():
 
 def _reload_skin_if_safe():
     """ReloadSkin() -- but NEVER while the home window is showing. All our
-    reloads here refresh player-OSD XML (VideoOSD.xml on Estuary/FENtastic/NOX)
+    reloads here refresh player-OSD XML (VideoOSD.xml on Estuary/FENtastic)
     after a fresh patch. ReloadSkin() rebuilds every window, and on Estuary/
     FENtastic the home menu is a fixedlist (defaultcontrol 9000, focusposition=0)
     that then snaps focus to the FIRST tile -- the "home jumps to tile 1 after an
@@ -2514,7 +2393,7 @@ def _maybe_patch_af3_dialog_subtitles():
         except Exception:
             pass
 def _maybe_patch_hub_search():
-    """Restore the search button on Estuary, FENtastic and NOX at boot.
+    """Restore the search button on Estuary and FENtastic at boot.
 
     The provider picker also calls this patcher after a choice; startup must
     cover the default POV choice and skin updates before the first click.
@@ -2976,10 +2855,9 @@ def _maybe_enable_osd_autoclose():
 
     THIS USED TO NAME ONE SKIN. It gated on `getSkinDir() != 'skin.fentastic'`
     and returned otherwise, so it only ever reached FENtastic users -- while
-    skin.povil.nox ships the identical feature (same `OSDAutoClose` /
+    another skin can ship the identical feature (same `OSDAutoClose` /
     `OSDAutoCloseTime` settings, same Timers.xml `autoclosevideoosd` timer),
-    also off by default. Every Nox user has had the bar stay up since the
-    feature shipped, and that is what the report was.
+    also off by default, and its users had the bar stay up.
 
     So it detects the CAPABILITY instead of matching a name: if the active
     skin's own XML declares OSDAutoClose, it supports it. AF3 and Estuary do
@@ -3007,7 +2885,7 @@ def _maybe_enable_osd_autoclose():
     wired to the bool one. A mark written with Skin.SetString is invisible to
     it -- the guard would read false forever and this migration would re-force
     the values on EVERY boot, which is the opposite of leaving an opt-out
-    alone. _maybe_default_nox_poster_rating pairs them correctly; so does this.
+    alone. This pairs them correctly.
     """
     try:
         from resources.lib import kodi_utils
@@ -3096,8 +2974,7 @@ def _maybe_enable_osd_autoclose():
         xbmc.executebuiltin('Skin.SetBool(OSDAutoClose)')
         xbmc.executebuiltin('Skin.SetString(OSDAutoCloseTime,4)')
         # executebuiltin queues; the read below can otherwise race the write
-        # and report a failure that did not happen. Same 150ms the NOX rating
-        # rollout settled on next door.
+        # and report a failure that did not happen (150ms settles it).
         xbmc.sleep(150)
         # Only claim it once the skin actually reports the setting: a write
         # issued while the skin is still loading can be lost, and marking
@@ -3141,57 +3018,6 @@ def _maybe_force_pool_share():
         try:
             kodi_utils.log('pool_share force migration failed: {0}'.format(e),
                            level='WARNING')
-        except Exception:
-            pass
-
-
-def _maybe_default_nox_poster_rating():
-    """One-shot rollout: FORCE the NOX skin's rating/score circle ON for posters
-    so the content score shows on artwork -- for EVERYONE, the first time NOX is
-    the active skin after this update. The rating is considered an important
-    default, so this run also re-enables it for users who had previously turned
-    it off (it sets 'circle_rating' and clears the mutually-exclusive
-    'circle_none' / 'circle_userrating'). Marker-gated by a FRESH version (v2),
-    so it re-applies exactly once even for users who already passed the earlier
-    v1 default -- and a later MANUAL opt-out AFTER this run sticks again (we
-    never force it back on on subsequent startups).
-
-    Skin settings can only be read/written for the ACTIVE skin (Skin.HasSetting
-    / Skin.SetBool / Skin.Reset target whatever skin is loaded), so this no-ops
-    on every startup until NOX is actually the active skin -- then it applies
-    and marks itself done. We confirm the bool actually took before marking
-    done, so a write that didn't persist is retried on a later startup. No-op
-    for users who never run NOX (the marker is simply never set)."""
-    try:
-        import xbmc
-        from resources.lib import kodi_utils
-    except Exception:
-        return
-    try:
-        if kodi_utils.get_setting('_nox_poster_rating_default_v2', '') == '1':
-            return
-        # Only meaningful while NOX is the active skin -- otherwise the
-        # Skin.* condition/builtin would read/write the wrong skin. Try again
-        # on a later startup (cheap, marker stays unset).
-        if xbmc.getSkinDir() != 'skin.povil.nox':
-            return
-        # Force the rating circle ON (override a prior 'off'/'user rating'
-        # choice this once). circle_rating / circle_userrating / circle_none
-        # are mutually exclusive, so clear the other two and set rating.
-        xbmc.executebuiltin('Skin.Reset(circle_none)')
-        xbmc.executebuiltin('Skin.Reset(circle_userrating)')
-        xbmc.executebuiltin('Skin.SetBool(circle_rating)')
-        xbmc.sleep(150)
-        # Only mark done once the setting is actually present, so a write that
-        # failed to take is retried next startup instead of being lost.
-        if xbmc.getCondVisibility('Skin.HasSetting(circle_rating)'):
-            kodi_utils.set_setting('_nox_poster_rating_default_v2', '1')
-            kodi_utils.log('NOX poster rating circle force-enabled for '
-                           'everyone (rollout v2)', level='INFO')
-    except Exception as e:
-        try:
-            kodi_utils.log('NOX poster rating default migration failed: {0}'
-                           .format(e), level='WARNING')
         except Exception:
             pass
 
@@ -3451,7 +3277,7 @@ def _point_subtitle_button(engine_on):
         return
     # Write only what differs. Every Skin.Set*/Reset makes Kodi re-evaluate
     # the open windows, and the home screen then asks every widget again:
-    # QA (NOX and FENtastic) loaded each home row twice at every start-up,
+    # QA (FENtastic) loaded each home row twice at every start-up,
     # the second round right after this ran with nothing to change.
     try:
         has_kodi_window = xbmc.getCondVisibility(
@@ -4095,7 +3921,7 @@ ROWS_PROPERTY = 'povil.rows.last'
 def wait_for_home_rows(monitor, settle=1.5, first=5.0, cap=15.0):
     """Hold start-up work while the home rows load: every row is a Python
     interpreter of its own, and the build's services starting beside them
-    stretched the last home row by ~0.8 s on a PC (QA, NOX) -- more on a
+    stretched the last home row by ~0.8 s on a PC (QA) -- more on a
     phone. POV's saved lists stamp ROWS_PROPERTY when they serve a row; go
     on once none arrived for `settle` seconds (or none at all within `first`
     seconds of Home), and never wait more than `cap` seconds."""
@@ -4464,29 +4290,6 @@ def main():
     if build_mode:
         _maybe_patch_af3_dialog_subtitles()
 
-    # Add a "change source" button to the NOX skin's player OSD -- NOX
-    # shipped without one, so a bad source mid-playback was a dead end.
-    # Skin-gated (no-op unless skin.povil.nox is installed), XML-checked.
-    if build_mode:
-        _maybe_patch_nox_change_source()
-
-    # That change-source button widened NOX's right-aligned OSD group, pushing
-    # "הפרק הבא" left into the play controls during playback. Re-size the right-
-    # group buttons back to their original total width to clear it. Runs AFTER
-    # the change-source patcher so the button exists. Skin-gated, XML-checked.
-    if build_mode:
-        _maybe_patch_nox_osd_collision()
-
-    # Repoint NOX's OSD "next episode" button: it used POV's old
-    # play_media&next=1 (dropped in POV 6.07, so it errored). Point it at POV's
-    # working next-episode list instead. Skin-gated, idempotent.
-    if build_mode:
-        _maybe_patch_nox_next_episode()
-
-    # Turn NOX's rating/score circle ON for posters by default (one-shot, only
-    # while NOX is the active skin; a later manual change sticks).
-    if build_mode:
-        _maybe_default_nox_poster_rating()
 
     if build_mode:
         _maybe_patch_estuary_change_source()
@@ -4494,9 +4297,8 @@ def main():
         _maybe_patch_fentastic_simpleplayer_source()
 
     # Point the player's subtitle button at MoranSubs's own chooser window
-    # (FENtastic + Estuary pointed at the now-disabled DarkSubs; NOX's existing
-    # subtitles button is rewired in place, not duplicated, to avoid widening
-    # its OSD group). Skin-gated, XML-parse-checked, self-healing.
+    # (FENtastic + Estuary pointed at the now-disabled DarkSubs).
+    # Skin-gated, XML-parse-checked, self-healing.
     if build_mode:
         _maybe_patch_choose_subs_buttons()
 
@@ -4631,8 +4433,8 @@ def main():
 
     # One-shot per skin: enable the active skin's own OSD auto-close (4s) so the
     # player bars hide after a few idle seconds. Detected from the skin's XML,
-    # not from a list of skin names -- Nox ships the same feature FENtastic does
-    # and was missed by the old name check.
+    # not from a list of skin names -- a skin that ships the same feature
+    # FENtastic does was missed by the old name check.
     if build_mode:
         _maybe_enable_osd_autoclose()
 

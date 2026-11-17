@@ -24,9 +24,7 @@
 # stack both layouts. The blast radius has to stay on the screen that was
 # reported.
 #
-# skin.povil.nox is deliberately NOT patched: its Poster view already carries
-# the control and shows the tick correctly (verified against the maintainer's
-# own screenshots). A skin with no verified recipe here is left alone rather
+# A skin with no verified recipe here is left alone rather
 # than patched on a guess -- a wrong coordinate ships a tick floating over
 # somebody's artwork on every device.
 
