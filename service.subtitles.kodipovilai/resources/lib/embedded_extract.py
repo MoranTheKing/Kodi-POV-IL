@@ -2106,26 +2106,8 @@ def _parse_head(src, head_bytes, log):
         in_head = pstart + size <= len(head)
         payload = head[pstart:pstart + size] if in_head else b''
         if eid == _SEEKHEAD and in_head:
-            sbuf = _Buf(payload, 0)
-            for seid, ssize, sstart in _walk(sbuf, len(payload)):
-                if ssize is None:
-                    break
-                sp = payload[sstart:sstart + ssize]
-                sbuf.p = sstart + ssize
-                if seid == _SEEK:
-                    ibuf = _Buf(sp, 0)
-                    sid, spos = None, None
-                    for ieid, isize, istart in _walk(ibuf, len(sp)):
-                        if isize is None:
-                            break
-                        ip = sp[istart:istart + isize]
-                        ibuf.p = istart + isize
-                        if ieid == _SEEKID:
-                            sid = _read_uint(ip)
-                        elif ieid == _SEEKPOS:
-                            spos = _read_uint(ip)
-                    if sid is not None and spos is not None:
-                        seeks[sid] = seg_start + spos
+            for sid, spos in _seekhead_entries(payload, seg_start):
+                seeks[sid] = spos
         elif eid == _INFO and in_head:
             ibuf = _Buf(payload, 0)
             for ieid, isize, istart in _walk(ibuf, len(payload)):
@@ -2184,6 +2166,102 @@ def _sub_tracks(tracks):
 
 
 # ---- Cues -------------------------------------------------------------------
+def _seekhead_entries(payload, seg_start):
+    """[(element id, absolute position)] of one SeekHead's payload."""
+    out = []
+    sbuf = _Buf(payload, 0)
+    for seid, ssize, sstart in _walk(sbuf, len(payload)):
+        if ssize is None:
+            break
+        sp = payload[sstart:sstart + ssize]
+        sbuf.p = sstart + ssize
+        if seid == _SEEK:
+            ibuf = _Buf(sp, 0)
+            sid, spos = None, None
+            for ieid, isize, istart in _walk(ibuf, len(sp)):
+                if isize is None:
+                    break
+                ip = sp[istart:istart + isize]
+                ibuf.p = istart + isize
+                if ieid == _SEEKID:
+                    sid = _read_uint(ip)
+                elif ieid == _SEEKPOS:
+                    spos = _read_uint(ip)
+            if sid is not None and spos is not None:
+                out.append((sid, seg_start + spos))
+    return out
+
+
+# A SeekHead may list a further SeekHead instead of the Cues: QA, 17 Nov 2026,
+# Griff Across the Alps S01E01 1080p HDTV H264-DARKFLiX (2.2 GB) -- the head's
+# SeekHead lists a SeekHead and the Tags at the end of the file, that one lists
+# another SeekHead and the Info, and the Cues (with an entry for every
+# subtitle line) are listed there. Read from the head alone the file had "no
+# index": its English text track was picked by itself and given up in 2 s,
+# with nothing on screen and no external subtitle in any language to
+# translate instead (a viewer's log the same day). Matroska allows the chain;
+# a few small reads at most, and only when the head's SeekHead has no Cues.
+_SEEKHEAD_HOPS = 4
+_SEEKHEAD_CAP = 64 * 1024
+
+
+def _cues_pos(src, seeks, seg_start, log=None):
+    """The Cues element's absolute position: from the head's SeekHead, or by
+    following the further SeekHeads it lists (at most _SEEKHEAD_HOPS reads;
+    what they list joins `seeks`, so a second caller reads nothing again).
+    None when there is no Cues. A read that failed on the way (an empty or
+    short answer, an error) marks `src._cues_unsure`: the file may well have
+    an index, so _extract_cues does not call it 'no_index' (review of
+    0.3.90 -- the 0.3.81 lesson). Never raises."""
+    pos = seeks.get(_CUES)
+    if pos:
+        return pos
+    seen = set()
+    nxt = seeks.get(_SEEKHEAD)
+    hops = 0
+    try:
+        while nxt and nxt not in seen and hops < _SEEKHEAD_HOPS:
+            seen.add(nxt)
+            hops += 1
+            raw = src.read(nxt, 4096)
+            if not raw:
+                _mark_cues_unsure(src)
+                break
+            b = _Buf(raw, nxt)
+            eid, _l = _read_vint(b, True)
+            size, slen = _read_vint(b, False)
+            if (eid != _SEEKHEAD or not slen or size is None
+                    or size > _SEEKHEAD_CAP):
+                break
+            if b.p + size > len(raw):
+                raw += src.read(nxt + len(raw), b.p + size - len(raw)) or b''
+                if b.p + size > len(raw):
+                    _mark_cues_unsure(src)
+                    break
+            nxt = None
+            for sid, spos in _seekhead_entries(raw[b.p:b.p + size], seg_start):
+                if sid == _SEEKHEAD:
+                    if nxt is None and spos not in seen:
+                        nxt = spos
+                elif sid not in seeks:
+                    seeks[sid] = spos
+    except Exception:
+        _mark_cues_unsure(src)
+    # remembered either way: the chain is read once a file
+    seeks[_SEEKHEAD] = None
+    pos = seeks.get(_CUES)
+    if pos and log is not None:
+        log('cues: listed by a further SeekHead (%d read(s))' % hops)
+    return pos
+
+
+def _mark_cues_unsure(src):
+    try:
+        src._cues_unsure = True
+    except Exception:
+        pass
+
+
 def _read_cues(src, seeks, seg_start, want_track, log):
     """Absolute cluster positions from the Cues index, as (positions, is_sub).
     Each position is (cluster_pos, relative_pos_or_None, cue_time_or_None) --
@@ -2195,7 +2273,7 @@ def _read_cues(src, seeks, seg_start, want_track, log):
     positions when the file has none. ([], False) when there's no usable Cues.
     Hard-capped by _CUES_CAP so a corrupt/huge Cues size can NEVER trigger a
     multi-GB read."""
-    pos = seeks.get(_CUES)
+    pos = _cues_pos(src, seeks, seg_start, log)
     if not pos:
         return [], False
     raw = src.read(pos, 64 * 1024)
@@ -2320,7 +2398,7 @@ def _read_cue_times_multi(src, seeks, seg_start, want_tracks, log):
     want_tracks = set(want_tracks)
     if not want_tracks:
         return {}
-    pos = seeks.get(_CUES)
+    pos = _cues_pos(src, seeks, seg_start, log)
     if not pos:
         return {}
     raw = src.read(pos, 64 * 1024)
@@ -3662,6 +3740,7 @@ def _extract_cues(src, seeks, seg_start, want, entries,
         # not be read (a dropped connection, a stop, a cut answer) is not
         # that (review of 0.3.81, round 5).
         if (src.is_http and src._stats is not None and not src.tripped
+                and not getattr(src, '_cues_unsure', False)
                 and (positions or not seeks.get(_CUES))):
             src._stats['why'] = 'no_index'
         return False
