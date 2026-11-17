@@ -787,16 +787,16 @@
 		<value condition="!String.IsEmpty(Window(home).Property(povil.tab.favourites))">plugin://plugin.program.kodipovilwizard/?mode=favourites_row&amp;r=$INFO[Container(9890).NumItems]&amp;t=$INFO[Window(home).Property(povil.fav.t)]&amp;povil_rtl=1</value>
 	</variable>
 	<variable name="POVIL_Path_5062">
-		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.favourites))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=favorites_movies&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%A9%D7%9E%D7%95%D7%A8%D7%99%D7%9D&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.favourites))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=favorites_movies&amp;povil_t=$INFO[Window(home).Property(povil.lists.t)]&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%A9%D7%9E%D7%95%D7%A8%D7%99%D7%9D&amp;povil_rtl=1</value>
 	</variable>
 	<variable name="POVIL_Path_5063">
-		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.favourites))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=favorites_tvshows&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%A9%D7%9E%D7%95%D7%A8%D7%95%D7%AA&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.favourites))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=favorites_tvshows&amp;povil_t=$INFO[Window(home).Property(povil.lists.t)]&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%A9%D7%9E%D7%95%D7%A8%D7%95%D7%AA&amp;povil_rtl=1</value>
 	</variable>
 	<variable name="POVIL_Path_5064">
-		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.favourites))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=mdblist_my_movies&amp;name=%D7%94%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%A9%D7%9C%D7%99%20%28MDBList%29&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.favourites))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=mdblist_my_movies&amp;povil_t=$INFO[Window(home).Property(povil.lists.t)]&amp;name=%D7%94%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%A9%D7%9C%D7%99%20%28MDBList%29&amp;povil_rtl=1</value>
 	</variable>
 	<variable name="POVIL_Path_5065">
-		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.favourites))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=mdblist_my_tvshows&amp;name=%D7%94%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%A9%D7%9C%D7%99%20%28MDBList%29&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.favourites))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=mdblist_my_tvshows&amp;povil_t=$INFO[Window(home).Property(povil.lists.t)]&amp;name=%D7%94%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%A9%D7%9C%D7%99%20%28MDBList%29&amp;povil_rtl=1</value>
 	</variable>
 	<variable name="POVIL_Path_5071">
 		<value condition="!String.IsEmpty(Window(home).Property(povil.tab.search))">plugin://plugin.video.pov/?mode=search_history&amp;action=movie&amp;name=%D7%97%D7%99%D7%A4%D7%95%D7%A9%D7%99%20%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%90%D7%97%D7%A8%D7%95%D7%A0%D7%99%D7%9D&amp;povil_rtl=1</value>

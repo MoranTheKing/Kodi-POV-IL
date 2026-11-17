@@ -131,6 +131,7 @@ class Env(object):
             get_infolabel=lambda k: env.labels_gui.get(k, ''))
         self.label = 'Movie'
         self.extra_arg = None
+        self.count = 3              # titles the list has
         self.age_guard = types.SimpleNamespace(active_policy=lambda: None)
 
     def modules(self):
@@ -146,7 +147,7 @@ class Env(object):
         exit_to = self.ku.get_infolabel('Container.FolderPath')
         widget = 'pov' not in self.ku.get_infolabel('Container.PluginName')
         items = []
-        for n in range(3):
+        for n in range(self.count):
             li = self.ku.make_listitem()
             li.setLabel('%s %d' % (self.label, n))
             li.setArt({'poster': 'p%d.jpg' % n})
@@ -775,6 +776,105 @@ class SnapshotTests(unittest.TestCase):
         self.assertTrue(all(isinstance(li, FakeListItem) for _u, li, _f in rows))
         self.open()
         self.assertEqual(self.env.built, 2)                                # not saved
+
+    # ---- a favourite that was removed stayed in the list (field report, Nov 2026)
+    FAVOURITES = '?mode=build_movie_list&action=favorites_movies'
+
+    def favourites(self, *statements):
+        c = sqlite3.connect(str(self.env.profile / 'watched.db'))
+        for statement in statements:
+            c.execute(statement)
+        c.commit(); c.close()
+
+    def test_povs_own_saved_list_is_rebuilt_before_it_is_shown(self):
+        """To every other list the favourites table is watch state (shown, then rebuilt); here it is the list."""
+        self.favourites("insert into favorites values ('movie','1','A')")
+        self.open(self.FAVOURITES)
+        self.favourites("insert into favorites values ('movie','2','B')")
+        self.env.label = 'Updated'
+        self.assertEqual(self.labels(self.open(self.FAVOURITES))[0], 'Updated 0', 'never the copy from before')
+        self.assertEqual(self.env.built, 2)
+        self.assertEqual(self.labels(self.open(self.FAVOURITES))[0], 'Updated 0')
+        self.assertEqual(self.env.built, 2, 'and saved again for the next visit')
+
+    def test_the_same_count_and_last_row_is_still_another_list(self):
+        """Remove the only favourite and add another: SQLite gives the new row the old row's number."""
+        self.favourites("insert into favorites values ('movie','1','A')")
+        self.open(self.FAVOURITES)
+        self.favourites("delete from favorites", "insert into favorites values ('movie','2','B')")
+        deps = self.m._deps(str(self.env.profile), {'mode': 'build_movie_list', 'action': 'favorites_movies'})
+        self.assertEqual(deps['watched.db']['favorites'][:2], [1, 1], 'the marks cannot tell them apart')
+        self.env.label = 'Other'
+        self.assertEqual(self.labels(self.open(self.FAVOURITES))[0], 'Other 0')
+        self.assertEqual(self.env.built, 2)
+        self.assertEqual(self.m._dep_file(self.m.OWN_FAVOURITES), 'watched.db')
+        self.assertNotIn(self.m.OWN_FAVOURITES, self.m._deps(
+            str(self.env.profile), {'mode': 'build_movie_list', 'action': 'tmdb_movies_popular'}))
+
+    def test_removing_the_last_favourite_leaves_no_saved_copy(self):
+        self.favourites("insert into favorites values ('movie','1','A')")
+        self.open(self.FAVOURITES)
+        store = self.env.profile / 'povil_snapshots'
+        self.assertEqual(len(list(store.glob('*.snap'))), 1)
+        self.favourites("delete from favorites")
+        self.env.count = 0
+        sent = self.open(self.FAVOURITES)
+        self.assertEqual([s for s in sent if s[0] == 'addDirectoryItems'][0][2][0], [], 'the empty list, at once')
+        self.assertEqual(list(store.glob('*.snap')), [], 'and the copy with the removed title is gone')
+        # the same title saved again: the marks are what they were, and nothing old can answer
+        self.favourites("insert into favorites values ('movie','1','A')")
+        self.env.count, self.env.label = 3, 'Again'
+        self.assertEqual(self.labels(self.open(self.FAVOURITES))[0], 'Again 0')
+
+    def test_a_list_emptied_by_a_watch_change_is_cleared_and_the_screen_refreshed(self):
+        """Shown from its copy, rebuilt behind, and the rebuild is empty (the last in-progress title was finished)."""
+        self.env.parent['Container.FolderPath'] = 'plugin://plugin.video.pov/' + self.QUERY  # back from the player
+        self.env.opens_window = False
+        self.open()
+        c = sqlite3.connect(str(self.env.profile / 'watched.db'))
+        c.execute("insert into watched_status values ('movie','1',0,0,'2026-10-17 10:00:00','x')")
+        c.commit(); c.close()
+        self.env.count = 0
+        self.assertEqual(self.labels(self.open())[0], 'Movie 0')          # the copy, at once
+        self.assertEqual(self.env.built, 2)                                # rebuilt behind: empty
+        self.assertEqual(list((self.env.profile / 'povil_snapshots').glob('*.snap')), [])
+        self.assertEqual(self.env.builtins, ['Container.Refresh'], 'the open list is asked again')
+        sent = self.open()                                                 # that refresh
+        self.assertEqual(self.env.built, 3)
+        self.assertEqual([s for s in sent if s[0] == 'addDirectoryItems'][0][2][0], [])
+        self.assertEqual(self.env.builtins, ['Container.Refresh'], 'once: an empty list refreshes nothing more')
+
+    def test_an_old_copy_whose_rebuild_is_empty_keeps_its_file(self):
+        """Rebuilt only because it is old: an empty answer may be a service that did not answer."""
+        self.open()
+        path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
+        data = rec_load(path); data['created'] -= 5 * 3600
+        path.write_bytes(marshal.dumps(data))
+        self.env.count = 0
+        self.assertEqual(self.labels(self.open())[0], 'Movie 0')
+        self.assertEqual(self.env.built, 2)
+        self.assertTrue(path.is_file())
+        self.assertEqual(self.env.builtins, [])
+
+    def test_the_early_path_tells_the_route_why_the_copy_is_being_rebuilt(self):
+        self.env.parent['Container.PluginName'] = ''                       # a home row
+        self.env.opens_window = False
+        self.open()
+        argv = ['plugin://plugin.video.pov/', '9', self.QUERY]
+        c = sqlite3.connect(str(self.env.profile / 'watched.db'))
+        c.execute("insert into watched_status values ('movie','1',0,0,'2026-10-17 10:00:00','x')")
+        c.commit(); c.close()
+        fake_pov = types.SimpleNamespace(kodi_utils=self.env.ku)
+        with mock.patch.dict(sys.modules, {'modules': fake_pov, 'modules.kodi_utils': self.env.ku}):
+            self.env.sent = []
+            self.env.labels_gui = dict(self.env.parent)
+            self.assertFalse(self.m.serve_early(argv))                     # shown; POV rebuilds it
+            self.assertIs(self.m.EARLY[9][2], True, 'a change of the viewer\'s own state, not age')
+        self.env.count = 0
+        self.env.sent = []
+        self.routing(types.SimpleNamespace(argv=argv))
+        self.assertEqual(list((self.env.profile / 'povil_snapshots').glob('*.snap')), [])
+        self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo)'], 'the home rows are asked again')
 
 
 class IdanPlusTests(unittest.TestCase):
