@@ -177,15 +177,15 @@ If `KEYSTORE_PASSWORD` is lost:
 
 This is the same constraint the kodi7rd build operates under.
 
-**Re-running at the SAME label is a supported operation and is what a
-package refresh normally is.** The workflow deletes and recreates the
-release, so the artifacts change while the label and `version_code` do
-not -- no installed client is prompted, and the point is the bundled
-Wizard, which decides how a BRAND-NEW install performs its first
-extraction. Bump the label only when you want existing devices asked to
-reinstall the app; that also means editing the pointer files under
-`wizard/assets/kodi_version_auto_update/` and
-`NO_AUTO_APP_PROMPT_TARGETS` in the wizard's `uservar.py`.
+**A package refresh is a NEW label.** The workflow refuses a release that
+already exists (it never deletes one), so bump the four label lines in
+`build-apk.yml` (the two input defaults, `EXPECTED_RELEASE`,
+`EXPECTED_VERSION_CODE`) and run it. No installed client is prompted as
+long as the pointer files under `wizard/assets/kodi_version_auto_update/`
+are left alone (they have stayed at `21.3-povil.49` through .50-.57); the
+point of a refresh is the bundled Wizard, which decides how a BRAND-NEW
+install performs its first extraction. Edit the pointer files only when
+existing devices should be asked to reinstall the app.
 
 ## Known limitations of the apktool rebrand
 
