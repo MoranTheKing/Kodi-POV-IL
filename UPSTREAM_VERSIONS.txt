@@ -1,11 +1,14 @@
 # Upstream versions the build's patches were last verified against.
 #
 # These add-ons update themselves on users' devices from their developers'
-# repositories. tools/check_upstream_addons.py compares the live
-# repositories with this file, and .github/workflows/check-upstream-pov.yml
-# opens an issue when one moves. After re-running the patchers against the
-# new version (wizard patch engine, MoranSubs host patchers) and fixing any
-# moved anchor, update the line here.
+# repositories. The POV and Umbrella lines are moved by the pin job of
+# .github/workflows/check-upstream-pov.yml, together with the pin, once the
+# Wizard's hooks and MoranSubs' patchers fit the new official zip. The other
+# lines are the last version a person checked by hand; since 17 Nov 2026 the
+# same workflow runs the patches on the newest published version of Arctic
+# Fuse 3, Idan Plus and Account Manager every six hours
+# (.github/scripts/upstream_audit.py) and keeps an issue open only while
+# something does not fit, so these need no update.
 plugin.video.pov: 6.11.03
 plugin.video.idanplus: 4.0.6
 skin.arctic.fuse.3: 3.4.22

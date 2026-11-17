@@ -391,6 +391,15 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
+        <!-- Hidden marker: Arctic Fuse 3 3.5's TMDb discover sources in the
+             search window were turned off once (af3_discover_pov_patcher). -->
+        <setting id="_af3_search_discover_off_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <!-- Hidden marker: FENtastic OSD auto-close enabled (migration). Still
              read: it is the only record that a FENtastic user was seeded by
              the old add-on-side migration, and it is carried over to the
