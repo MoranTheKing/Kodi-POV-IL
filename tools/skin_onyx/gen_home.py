@@ -211,6 +211,9 @@ def tab_cond(tab):
     return 'String.IsEqual(Window(home).Property(povil.tab),%s)' % tab['id']
 
 
+POWER_BUTTON = 9099
+
+
 def tab_button(ti):
     return 9010 + ti
 
@@ -901,16 +904,24 @@ def ambient(x, d):
 
 
 def top_bar(x, d):
-    # Clock and date (top left)
+    # Clock and date (top left); they end before the power button
     x(d, '<control type="label" description="clock">')
-    x(d + 1, '<left>%d</left><top>30</top><width>400</width><height>52</height>' % MARGIN)
+    x(d + 1, '<left>%d</left><top>30</top><width>250</width><height>52</height>' % MARGIN)
     x(d + 1, '<font>povil_clock</font><textcolor>povil_white</textcolor><aligny>center</aligny>')
     x(d + 1, '<label>$INFO[System.Time]</label>')
     x(d, '</control>')
     x(d, '<control type="label" description="date">')
-    x(d + 1, '<left>%d</left><top>80</top><width>400</width><height>30</height>' % MARGIN)
+    x(d + 1, '<left>%d</left><top>80</top><width>250</width><height>30</height>' % MARGIN)
     x(d + 1, '<font>povil_small</font><textcolor>povil_faint</textcolor><aligny>center</aligny>')
     x(d + 1, '<label>$INFO[System.Date(DDDD)]$INFO[System.Date(d MMMM),  •  ]</label>')
+    x(d, '</control>')
+    # Power, one step left of the last tab (the owner: "a power button within reach"). It opens the power
+    # menu, as the settings tab's tile does; the tabs keep their own focus memory.
+    x(d, '<control type="button" id="%d" description="power">' % POWER_BUTTON)
+    x(d + 1, '<left>350</left><top>32</top><width>60</width><height>60</height>')
+    x(d + 1, '<texturenofocus colordiffuse="B3FFFFFF">povil/osd/power.png</texturenofocus><texturefocus>povil/osd/power_fo.png</texturefocus>')
+    x(d + 1, '<label></label><onclick>ActivateWindow(ShutdownMenu)</onclick>')
+    x(d + 1, '<onright>%d</onright><ondown>%d</ondown><onleft>noop</onleft><onup>noop</onup>' % (tab_button(len(TABS) - 1), tab_button(len(TABS) - 1)))
     x(d, '</control>')
     x(d, '<control type="list" id="%d" description="Kodi favourites, counted for the favourites row">' % FAV_COUNT)
     x(d + 1, '<left>-4000</left><top>0</top><width>20</width><height>20</height>')
@@ -950,8 +961,7 @@ def top_bar(x, d):
             x(d + 2, '<onclick condition="![%s]">%s</onclick>' % (e(cond), e(named(tab['click'], tab['label']))))
         else:
             x(d + 2, '<onclick>%s</onclick>' % e(named(tab['click'], tab['label'])))
-        if ti + 1 < n:
-            x(d + 2, '<onleft>%d</onleft>' % tab_button(ti + 1))
+        x(d + 2, '<onleft>%d</onleft>' % (tab_button(ti + 1) if ti + 1 < n else POWER_BUTTON))
         if ti:
             x(d + 2, '<onright>%d</onright>' % tab_button(ti - 1))
         x(d + 2, '<ondown>%d</ondown>' % target)
