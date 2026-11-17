@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-11-17T17:18:16Z",
+  "generated": "2026-11-17T19:31:13Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -57,13 +57,13 @@
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
       "name": "מועדפים ואייקונים",
-      "version": "1.4.12",
+      "version": "1.4.13",
       "type": "plugin",
-      "filename": "plugin.program.orderfavourites-hebrew-1.4.12.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.12.zip",
-      "size": 13337644,
-      "sha256": "006b55ae2559f90a9df8c0a596b87ec3ea1f10a48bf4ee7275655f577f5e656f",
-      "updated": "2026-11-01T13:20:23Z"
+      "filename": "plugin.program.orderfavourites-hebrew-1.4.13.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.13.zip",
+      "size": 13338413,
+      "sha256": "5e6df3a0d269a66f5ba2adfad25959a61e0616468e93d047d087bd883a0fcf56",
+      "updated": "2026-11-17T19:31:13Z"
     },
     "repository.709": {
       "id": "repository.709",
@@ -123,13 +123,13 @@
     "script.fentastic.helper": {
       "id": "script.fentastic.helper",
       "name": "FENtastic Helper",
-      "version": "0.6.20a",
+      "version": "0.6.21",
       "type": "module",
-      "filename": "script.fentastic.helper-0.6.20a.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/script.fentastic.helper-0.6.20a.zip",
-      "size": 19065,
-      "sha256": "d5947ac0fb6fd89b8353cce4b4160687cdfcde805a0f86f9bacc7602a1fc9d44",
-      "updated": "2026-11-01T13:20:23Z"
+      "filename": "script.fentastic.helper-0.6.21.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/script.fentastic.helper-0.6.21.zip",
+      "size": 19192,
+      "sha256": "6b22dc143e7bcdf71a2022aa16817ce2df2941ad6a457dfc687f50c2cbbd3106",
+      "updated": "2026-11-17T19:31:13Z"
     },
     "script.module.autocompletion": {
       "id": "script.module.autocompletion",
