@@ -17,8 +17,7 @@
 # Self-healing: re-applied every Kodi startup (so a skin refresh that re-adds an
 # old call is corrected again), idempotent, XML-parse-checked before writing,
 # atomic. No-op for skins/files that aren't installed or don't contain any of the
-# old calls. (OLD has no such button -- it's handled by old_choose_subs_patcher;
-# AF3 has none either.)
+# old calls. (AF3 has no such button.)
 
 import os
 import re
@@ -62,10 +61,6 @@ TARGETS = (
     ('skin.fentastic', 'xml/Includes_VideoOsd3.xml'),
     ('skin.fentastic', 'xml/Includes_VideoOsd4.xml'),
     ('skin.estuary', 'xml/VideoOSD.xml'),
-    # OLD: catches the old All_Subs button form (e.g. skin v1.0.7) so the button
-    # reaches our chooser even before the skin updates. (old_choose_subs_patcher
-    # also handles OLD's newer ActivateWindow(2118) form -- both are idempotent.)
-    ('skin.povil.old', 'xml/VideoOSD.xml'),
 )
 
 # FENtastic's OSD files use raw, unescaped "&" in RunPlugin URLs (Kodi's skin

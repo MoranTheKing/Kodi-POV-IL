@@ -193,11 +193,14 @@ def power_menu(folder):
         items.append(body[i:j])
         pos = j
     extra = []
-    for label, icon, mode in (('החלפת סקין', 'DefaultAddonSkin.png', 'profile_skin'),
-                              ('מי צופה? פרופילים', 'DefaultUser.png', 'profiles')):
+    clear = 'plugin://plugin.video.pov/?mode=clear_all_cache&amp;isFolder=false'
+    for label, icon, action, when in (('ניקוי קאש', 'DefaultAddonRepository.png', clear, 'System.HasAddon(plugin.video.pov)'),
+                                      ('החלפת סקין', 'DefaultAddonSkin.png', wizard + '?mode=profile_skin', ''),
+                                      ('מי צופה? פרופילים', 'DefaultUser.png', wizard + '?mode=profiles', '')):
         extra.append(NL.join(['<item>', '					<label>%s</label>' % label, '					<icon>%s</icon>' % icon,
                               '					<onclick>Dialog.Close(all)</onclick>',
-                              '					<onclick>RunPlugin(%s?mode=%s)</onclick>' % (wizard, mode), '				</item>']))
+                              '					<onclick>RunPlugin(%s)</onclick>' % action]
+                             + (['					<visible>%s</visible>' % when] if when else []) + ['				</item>']))
     ordered = items[:1] + extra + items[1:]
     body = NL + '				' + marker + NL + '				' + (NL + '				').join(reversed(ordered)) + NL + '			'
     text = text[:start] + body + text[end:]

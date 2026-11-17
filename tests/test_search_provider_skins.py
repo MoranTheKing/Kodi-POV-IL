@@ -40,14 +40,12 @@ class SearchSkinTests(unittest.TestCase):
                  if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)]
         self.assertIn('_maybe_patch_hub_search', calls)
 
-    def test_provider_round_trip_all_three_hub_skins(self):
+    def test_provider_round_trip_both_hub_skins(self):
         with tempfile.TemporaryDirectory() as raw:
             home = Path(raw)
             targets = (
                 ('skin.fentastic', 'Home.xml'),
                 ('skin.estuary', 'Home.xml'),
-                ('skin.povil.old', 'Home_old.xml'),
-                ('skin.povil.old', 'Custom_old_main_menu.xml'),
             )
             for skin, filename in targets:
                 dst = home / 'addons' / skin / 'xml' / filename
@@ -61,12 +59,9 @@ class SearchSkinTests(unittest.TestCase):
                     search_provider.current = lambda value=provider: value
                     self.assertEqual(patcher.ensure_patched(), 'patched')
                     target = search_provider.HUB_ONCLICK[provider]
-                    for skin, filename in targets[:3]:
+                    for skin, filename in targets:
                         contents = (home / 'addons' / skin / 'xml' / filename).read_text('utf-8')
                         self.assertIn(target, contents, skin)
-                    old_menu = (home / 'addons' / targets[3][0] / 'xml' /
-                                targets[3][1]).read_text('utf-8')
-                    self.assertIn(search_provider.HUB_PATH[provider], old_menu)
                     self.assertEqual(patcher.ensure_patched(), 'unchanged')
             finally:
                 patcher.xbmcvfs = original_vfs

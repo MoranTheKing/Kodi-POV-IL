@@ -14,9 +14,8 @@ from resources.libs import profile_store
 from resources.libs.patches import profile_age_guard
 
 WIZARD = 'plugin.program.kodipovilwizard'
-SKINS = (('skin.povil.old', 'OLD'), ('skin.fentastic', 'FENtastic'),
-         ('skin.estuary', 'Estuary'), ('skin.arctic.fuse.3', 'Arctic Fuse 3'),
-         ('skin.povil.onyx', 'Onyx'))
+SKINS = (('skin.povil.onyx', 'Onyx'), ('skin.fentastic', 'FENtastic'),
+         ('skin.estuary', 'Estuary'), ('skin.arctic.fuse.3', 'Arctic Fuse 3'))
 
 
 def _rpc(method, params=None):
@@ -199,7 +198,7 @@ def prepare_first_login():
     receipt = os.path.join(active, 'kodipovil.profile_addons_ready')
     if os.path.isfile(receipt):
         return True
-    required = (WIZARD, 'plugin.video.pov', 'skin.povil.old',
+    required = (WIZARD, 'plugin.video.pov', 'skin.povil.onyx',
                 'script.fentastic.helper', 'service.subtitles.kodipovilai',
                 'plugin.program.orderfavourites-hebrew')
     addons = xbmcvfs.translatePath('special://home/addons/')
@@ -221,7 +220,7 @@ def prepare_first_login():
     build_addons = ('script.module.acctmgr', 'plugin.video.umbrella',
                     'plugin.video.idanplus', 'plugin.video.youtube',
                     'plugin.video.themoviedb.helper', 'resource.language.he_il',
-                    'skin.estuary', 'skin.fentastic', 'skin.povil.onyx', 'repository.kodipovil')
+                    'skin.estuary', 'skin.fentastic', 'repository.kodipovil')
     required += tuple(ident for ident in build_addons if ident in graph)
     if all(addon_enabled(ident) for ident in required):
         profile_store.write_missing(active, 'kodipovil.profile_addons_ready', b'1')
@@ -367,7 +366,7 @@ def add_profile():
         'המועדפים והבילד יתווספו אוטומטית, יחד עם החיבורים שסימנת.')
     if not _native_settings():
         return
-    # Old and Estuary show the profile list only on the second left-hand
+    # Estuary-based skins show the profile list only on the second left-hand
     # category. Focus that native category before trying to focus its list.
     xbmc.executebuiltin('SetFocus(9000,1,absolute)')
     if xbmc.Monitor().waitForAbort(0.2):

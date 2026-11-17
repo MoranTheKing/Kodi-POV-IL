@@ -386,8 +386,8 @@ device's own files.
 
 The setting that closes the player's on-screen bar after a few idle seconds was
 being turned on by a check that named one skin — FENtastic — and returned for
-everything else. `skin.povil.old` ships the identical feature, off by default
-like FENtastic's, so anyone on Old had the bar stay up until they pressed Back.
+everything else. Another skin shipped the identical feature, off by default
+like FENtastic's, so anyone on it had the bar stay up until they pressed Back.
 Nothing was broken on those devices; a default simply never reached them.
 
 It is detected from the active skin's own files now, rather than matched
@@ -868,7 +868,7 @@ A parallel line of work lives at
 [Kodi-POV-IL-RedLight](https://github.com/MoranTheKing/Kodi-POV-IL-RedLight)
 and ships to nobody. It exists to answer two questions in order:
 
-1. does Kodi 22 "Piers" work for us, and do FENtastic, Estuary and OLD render
+1. does Kodi 22 "Piers" work for us, and do FENtastic and Estuary render
    on it?
 2. could Red Light replace POV as the video add-on?
 
@@ -897,15 +897,10 @@ The back-compat line is what decides whether a 5.17.0 skin loads at all, and
 all four skins are 5.17.0. Nothing *structurally* blocks them. What that does
 not cover is rendering, which is the entire reason the test APK exists.
 
-**And a correction worth carrying:** `skin.povil.old` is OURS -- a rebranded,
-scrubbed Estuary MOD hosted here as `dist/Kodi-POV-IL-OLD-skin-pack.zip`. Its
-Kodi 22 support is our call. Only Arctic Fuse 3 belongs to an upstream author.
-
 If Red Light ever does replace POV, `tools/skin_customisation_inventory.py`
 prints what would have to survive: 48 files, 965 Hebrew lines, and 132
 `plugin://plugin.video.pov` references across five skins -- 28 of which sit
-inside FENtastic's existing search-provider switch and 59 of which are the OLD
-Hebrew main menu alone.
+inside FENtastic's existing search-provider switch.
 
 ## Tooling
 

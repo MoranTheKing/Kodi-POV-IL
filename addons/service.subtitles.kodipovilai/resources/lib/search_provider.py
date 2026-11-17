@@ -16,7 +16,7 @@
 #
 # TWO SHAPES OF SEARCH, because the skins genuinely differ:
 #
-#   FENtastic / Estuary / OLD -- the magnifying glass ACTIVATES A HUB and the
+#   FENtastic / Estuary -- the magnifying glass ACTIVATES A HUB and the
 #     add-on takes it from there. One onclick per skin, written by
 #     fentastic_search_patcher. POV's hub is navigator.search (Movies / TV /
 #     People / Movies Collection); Umbrella's is tools_searchNavigator
@@ -48,7 +48,7 @@ DISPLAY = {
     UMBRELLA: 'Umbrella',
 }
 
-# --- the hub the magnifying glass opens (FENtastic / Estuary / OLD) --------
+# --- the hub the magnifying glass opens (FENtastic / Estuary) --------------
 # navigator.search / tools_searchNavigator take no extra query params, so no
 # '&' escaping is needed inside the XML attribute value.
 HUB_PATH = {
@@ -139,19 +139,6 @@ def hub_onclick():
     return HUB_ONCLICK[current()]
 
 
-def hub_path():
-    """The bare plugin path, for the one place (OLD's main menu) that embeds
-    it inside an ActivateWindow of the skin's own making."""
-    return HUB_PATH[current()]
-
-
-def all_hub_paths():
-    """Every provider's hub path. The OLD rewrite has to recognise whichever
-    one is in the file today in order to replace it, not just the one it
-    originally shipped."""
-    return tuple(HUB_PATH.values())
-
-
 def af3_prefixes():
     return AF3_PREFIXES[current()]
 
@@ -215,14 +202,14 @@ def _refresh_active_skin(af3_changed):
     no reason. AF3 additionally has to regenerate its shortcut includes before
     the reload, which af3_home_patcher already knows how to do."""
     skin = _active_skin()
-    hub_skins = ('skin.fentastic', 'skin.estuary', 'skin.povil.old')
+    hub_skins = ('skin.fentastic', 'skin.estuary')
     try:
         import xbmc
     except Exception:
         return False
     # Every branch below rebuilds windows, and POV widgets live on the home
-    # screen of all four skins -- so this guard belongs before the branch, not
-    # inside one of them. Estuary, OLD and Arctic Fuse 3 were exposed to the
+    # screen of every skin -- so this guard belongs before the branch, not
+    # inside one of them. Estuary and Arctic Fuse 3 were exposed to the
     # same fault as FENtastic; only the code path differed.
     # DO NOT WAIT HERE. Alone among the reload sites, this one is on a direct
     # user click -- the settings dialog's provider switch -- so a 30-second

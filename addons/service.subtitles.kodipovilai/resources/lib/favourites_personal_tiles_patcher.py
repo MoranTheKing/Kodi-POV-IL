@@ -1118,8 +1118,8 @@ def _favourite_count(content):
 # boot is losing it -- and whatever that something is, we could always have
 # repaired it: the canonical fixture is bundled in this add-on, and this
 # function was the one thing refusing to use it. Users work around it by
-# switching skin to OLD and back, which makes the wizard copy a favourites seed
-# over the file, which is exactly the repair we declined to do.
+# switching to another skin and back, which makes the wizard copy a favourites
+# seed over the file, which is exactly the repair we declined to do.
 #
 # So: below this many favourites, restore the canonical surface once. Nobody
 # curates their home down to three tiles; a build install that ends up there is

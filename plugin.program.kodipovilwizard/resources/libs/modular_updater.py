@@ -13,12 +13,13 @@ from resources.libs.common import tools
 
 
 class ModularUpdater:
-    # OLD is required for fresh installs. Existing users install it only
-    # through Switch Skin; OTA never changes their chosen skin.
-    ON_DEMAND_SKINS = frozenset(('skin.povil.old', 'skin.povil.onyx'))
+    # Onyx is required for fresh installs (it is the skin they open with).
+    # A device installed before it became the default gets it through
+    # Switch Skin or skin_retirement; OTA never changes a chosen skin.
+    ON_DEMAND_SKINS = frozenset(('skin.povil.onyx',))
     # Optional skins are never installed automatically, not even on a fresh
-    # install: only Switch Skin installs them (wizard.ensure_onyx_installed).
-    OPTIONAL_SKINS = frozenset(('skin.povil.onyx',))
+    # install: only Switch Skin installs them. None at present.
+    OPTIONAL_SKINS = frozenset()
 
     @staticmethod
     def _pending_addon_receipt(addon_id):
@@ -234,7 +235,7 @@ class ModularUpdater:
         #
         # FIX #2 (safety): only update addons that are ALREADY installed.
         # The manifest lists ALL build addons -- including the on-demand
-        # skin.povil.old (31MB) and the other skins. The original
+        # skin and the other skins. The original
         # "install if not local_ver" branch would silently force-install
         # every missing skin onto every device on the first check, which
         # fights the build's on-demand-skin design (startup.py only ever
@@ -1052,7 +1053,7 @@ class ModularUpdater:
                     self._version_tuple(actual) < self._version_tuple(expected)):
                 missing.append('{0} ({1}, expected {2})'.format(
                     addon_id, actual or 'missing', expected or 'unspecified'))
-        for addon_id in youtube_platform.eligible(self.CORE_PROVISION_IDS) + ['skin.povil.old', 'script.fentastic.helper']:
+        for addon_id in youtube_platform.eligible(self.CORE_PROVISION_IDS) + ['skin.povil.onyx', 'script.fentastic.helper']:
             try:
                 enabled = xbmc.getCondVisibility(
                     'System.HasAddon({0})'.format(addon_id))
@@ -1423,7 +1424,7 @@ class ModularUpdater:
             for _ in range(20):
                 if self._fresh_install_complete(manifest):
                     break
-                for addon_id in youtube_platform.eligible(self.CORE_PROVISION_IDS) + ['skin.povil.old', 'script.fentastic.helper']:
+                for addon_id in youtube_platform.eligible(self.CORE_PROVISION_IDS) + ['skin.povil.onyx', 'script.fentastic.helper']:
                     if not xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
                         self._enable_addon(addon_id)
                 if monitor.waitForAbort(1):

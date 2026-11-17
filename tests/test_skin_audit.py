@@ -4,7 +4,6 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OLD = ROOT / 'skin.povil.old'
 FEN = ROOT / 'skin.fentastic'
 ESTUARY = ROOT / 'skin.estuary'
 # names that stay as they are inside a Hebrew label
@@ -29,17 +28,9 @@ class SkinAudit(unittest.TestCase):
         bad = [c for c in re.findall(r'condition="([^"]*)"', text) if c.count('[') != c.count(']')]
         self.assertEqual(bad, [])
 
-    def test_the_old_search_dialog_names_every_row(self):
-        text = read(OLD / 'xml' / 'Custom_1107_SearchDialog.xml')
-        defined = set()
-        for path in (OLD / 'xml').glob('*.xml'):
-            defined.update(re.findall(r'<variable\s+name="([^"]+)"', read(path)))
-        self.assertEqual(sorted(set(re.findall(r'\$VAR\[([^\],]+)', text)) - defined), [])
-        self.assertNotIn('<label>Addons</label>', text)
-
     def test_a_tap_on_the_picture_closes_the_player_controls_in_every_style(self):
         # 15 Nov 2026, the owner on a phone: "if I press the middle while the player is open, it should
-        # close". Estuary, Old's native and simple players had the area; the rest did not.
+        # close". Estuary had the area; FENtastic did not.
         def area_first(body, where):
             first = re.search(r'<control type="(\w+)"[^>]*>(.*?)</control>', body, re.S)
             self.assertIsNotNone(first, where)
@@ -48,14 +39,6 @@ class SkinAudit(unittest.TestCase):
             self.assertIn('<texturefocus />', first.group(2), where)
             return first.group(2)
 
-        players = read(OLD / 'xml' / 'Includes_POVIL_Players.xml')
-        for n in '1234':
-            body = re.search(r'<include name="POVIL_Player_videosd%s">(.*?)\n\t</include>' % n, players, re.S).group(1)
-            area = area_first(body, 'Old videosd' + n)
-            if n != '3':
-                for tag in ('onup', 'ondown', 'onleft', 'onright'):
-                    self.assertIn('<%s>201</%s>' % (tag, tag), area, n)
-        area_first(read(OLD / 'xml' / 'Includes_POVIL_NativePlayer.xml'), 'Old native player')
         osd = read(FEN / 'xml' / 'VideoOSD.xml')
         area = area_first(osd[osd.index('<controls>'):], 'FENtastic')
         for tag in ('onup', 'ondown', 'onleft', 'onright'):
@@ -64,18 +47,14 @@ class SkinAudit(unittest.TestCase):
         area_first(read(ESTUARY / 'xml' / 'VideoOSD.xml').split('<controls>', 1)[1], 'Estuary')
 
     def test_skin_settings_are_in_hebrew(self):
-        for skin in (OLD, FEN):
+        for skin in (FEN,):
             with self.subTest(skin.name):
                 labels = re.findall(r'<label>([^<]*)</label>', read(skin / 'xml' / 'SkinSettings.xml'))
                 self.assertGreater(len(labels), 40)
                 latin = [t for t in labels if re.search(r'[A-Za-z]{3,}', re.sub(NAMES, '', t))]
                 self.assertEqual(latin, [])
-        self.assertNotIn('<label>Skin settings</label>', read(OLD / 'xml' / 'Settings.xml'))
 
     def test_player_buttons_use_strings_their_skin_has(self):
-        old = read(OLD / 'xml' / 'Includes_POVIL_Players.xml')
-        for sid in ('700035', '700016', '700017', '700041'):
-            self.assertNotIn('$LOCALIZE[%s]' % sid, old, 'Old has no string %s' % sid)
         fen = hebrew_strings(FEN)
         simple = read(FEN / 'xml' / 'Includes_VideoOsd3.xml')
         for sid in set(re.findall(r'\$LOCALIZE\[(7\d{4,6})\]', simple)):
@@ -95,14 +74,10 @@ class SkinAudit(unittest.TestCase):
 
     def test_skin_strings_shown_on_screen_are_translated(self):
         common = ('31037 31054 31055 31073 31115 31135 31150 31168 31169 31170 31171 31172 31173 31603 31606 31608').split()
-        for skin, ids in ((OLD, common), (FEN, common), (ESTUARY, common + ['31147', '31174', '31175', '31176'])):
+        for skin, ids in ((FEN, common), (ESTUARY, common + ['31147', '31174', '31175', '31176'])):
             with self.subTest(skin.name):
                 strings = hebrew_strings(skin)
                 self.assertEqual([sid for sid in ids if sid in strings and not strings[sid]], [])
-
-    def test_season_and_episode_are_named_in_the_interface_language(self):
-        for path in (OLD / 'xml').glob('*.xml'):
-            self.assertNotIn('<label>Season $INFO[ListItem.Season], Episode $INFO[ListItem.Episode]</label>', read(path), path.name)
 
 
 if __name__ == '__main__':

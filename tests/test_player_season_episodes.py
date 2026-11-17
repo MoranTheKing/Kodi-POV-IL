@@ -1,5 +1,5 @@
 """The skins' 'פרקי העונה' list for Israeli VOD (Wizard 0.4.95, FENtastic 1.0.32,
-Old 1.0.20).
+and the skin of then).
 
 Idan Plus VOD (Kan 11, Keshet 12, Reshet 13) plays as an episode with no TMDb
 id; the list asked POV for build_episode_list&tmdb_id= and POV threw KeyError
@@ -215,14 +215,6 @@ class Wiring(unittest.TestCase):
         for name in ('Includes_VideoOsd1.xml', 'Includes_VideoOsd2.xml', 'Includes_Items.xml'):
             text = (ROOT / 'skin.fentastic/xml' / name).read_text(encoding='utf-8')
             self.assertIn('[!String.IsEmpty(VideoPlayer.UniqueID(tmdb)) | String.Contains(Player.FolderPath,idanplus)]', text, name)
-
-    def test_old_lists_idan_plus_from_the_wizard(self):
-        text = (ROOT / 'skin.povil.old/xml/Includes_POVIL_Players.xml').read_text(encoding='utf-8')
-        block = text[text.index('<variable name="POVIL_Player_build_Episodes_Url_OSD">'):]
-        block = block[:block.index('</variable>')]
-        self.assertIn('plugin://plugin.program.kodipovilwizard/?mode=player_season_episodes'
-                      '&amp;ep=$ESCINFO[VideoPlayer.TVShowTitle]$ESCINFO[VideoPlayer.Title]', block)
-        self.assertEqual(text.count('[!String.IsEmpty(VideoPlayer.UniqueID(tmdb)) | String.Contains(Player.FolderPath,idanplus)]'), 2)
 
 
 if __name__ == '__main__':

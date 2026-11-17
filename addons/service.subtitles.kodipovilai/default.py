@@ -3983,7 +3983,7 @@ def _handle_choose_subs(params):
 
     On FENtastic we open Kodi's NATIVE subtitle window -- that's Tal's own
     redesigned DialogSubtitles, the real thing, so it stays exactly as he made
-    it. On every OTHER skin (OLD / Estuary / Arctic Fuse 3 / ...) the native
+    it. On every OTHER skin (Estuary / Arctic Fuse 3 / ...) the native
     dialog is plain, so we open our self-contained WindowXMLDialog instead, which
     brings the same gorgeous look everywhere. Both flows use the same candidate
     list + background AI translation. Guarded fallbacks at each step."""

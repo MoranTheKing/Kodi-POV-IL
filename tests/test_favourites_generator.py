@@ -218,10 +218,10 @@ class FavouritesGeneratorTests(unittest.TestCase):
 
     def test_connecting_mdblist_inserts_each_tile_in_its_personal_group(self):
         self.visibility.active.remove('mdblist')
-        first = self._refresh('skin.povil.old')
+        first = self._refresh('skin.povil.onyx')
         before = [i.get('name') for i in _items(first)]
         self.visibility.active.add('mdblist')
-        after = [i.get('name') for i in _items(self._refresh('skin.povil.old'))]
+        after = [i.get('name') for i in _items(self._refresh('skin.povil.onyx'))]
         for media in ('הסרטים', 'הסדרות'):
             mdbl = '[B]%s שלי (MDBList)[/B]' % media
             pov = '[B]%s שלי (POV)[/B]' % media
@@ -322,7 +322,7 @@ class FavouritesGeneratorTests(unittest.TestCase):
         self.assertEqual(sum(i.get('name') == '[B]POV[/B]' for i in rows), 1)
 
     def test_umbrella_search_and_mdblist_routes_across_four_skins(self):
-        for skin in ('skin.estuary', 'skin.fentastic', 'skin.povil.old'):
+        for skin in ('skin.estuary', 'skin.fentastic', 'skin.povil.onyx'):
             rows = _items(generator.generate_favourites_xml(
                 skin, merge=False, write=False))
             actions = [item.text for item in rows]
@@ -370,7 +370,7 @@ class FavouritesGeneratorTests(unittest.TestCase):
 
     def test_stale_build_watchlist_routes_repair_without_baseline_and_keep_order_icons(self):
         import json
-        desired = self._refresh('skin.povil.old')
+        desired = self._refresh('skin.povil.onyx')
         for lost_baseline in (False, True):
             root = ET.fromstring(desired)
             for item in root:
@@ -389,14 +389,14 @@ class FavouritesGeneratorTests(unittest.TestCase):
                 # Baseline already canonical, installed legacy route wrongly
                 # considered an edit by the previous three-way merge.
                 self.assertIn('action=mdblist_my_', state['baseline'])
-            repaired = _items(self._refresh('skin.povil.old'))
+            repaired = _items(self._refresh('skin.povil.onyx'))
             self.assertEqual([i.get('name') for i in repaired], [i.get('name') for i in root])
             for item in repaired:
                 if 'MDBList' in item.get('name'):
                     self.assertEqual(item.get('thumb'), 'my-custom-thumbnail.png')
                     self.assertIn('action=mdblist_my_', item.text)
                     self.assertNotIn('Watchlist', item.text)
-            self.assertEqual(_items(self._refresh('skin.povil.old'))[-1].get('name'), root[-1].get('name'))
+            self.assertEqual(_items(self._refresh('skin.povil.onyx'))[-1].get('name'), root[-1].get('name'))
 
     def test_custom_filtered_watchlist_and_deleted_build_tile_stay_authoritative(self):
         first = self._refresh()

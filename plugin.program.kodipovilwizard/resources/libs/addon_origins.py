@@ -63,7 +63,6 @@ BUILD_OWNED = frozenset((
     'service.subtitles.kodipovilai',
     'skin.estuary',
     'skin.fentastic',
-    'skin.povil.old',
     'skin.povil.onyx',
 ))
 

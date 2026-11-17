@@ -68,7 +68,7 @@
 <td valign="top">
 
 ### 🎨 חמישה סקינים
-הסקינים Old, ‏Onyx (ממשק מימין לשמאל מלא), ‏FENtastic, ‏Arctic Fuse 3 ו־Estuary. כולם בעברית, והמעבר ביניהם נעשה מתוך הבילד.
+הסקינים Onyx (ממשק מימין לשמאל מלא), ‏FENtastic, ‏Arctic Fuse 3 ו־Estuary. כולם בעברית, והמעבר ביניהם נעשה מתוך הבילד.
 
 </td>
 <td valign="top">
@@ -119,7 +119,7 @@
 |---|---|
 | **התוסף MoranSubs** (`service.subtitles.kodipovilai`) | [רישיון GNU GPL v3.0 ומעלה, עם תנאי ייחוס](service.subtitles.kodipovilai/LICENSE.txt): כל עותק חייב להשאיר "MoranSubs by MoranTheKing" וקישור לכאן, וגרסה ששונתה חייבת לציין זאת ואסור לה להשתמש בשם MoranSubs. עד 0.3.61: MIT. |
 | **הוויזארד** (`plugin.program.kodipovilwizard`) | רישיון GNU GPL v3.0, כמו OpenWizard שהוא מבוסס עליו |
-| **הסקינים** Old, Onyx, FENtastic, Estuary | רישיונות CC BY-SA 4.0 ו־GNU GPL v2.0, כמו הסקינים שהם מבוססים עליהם |
+| **הסקינים** Onyx, FENtastic, Estuary | רישיונות CC BY-SA 4.0 ו־GNU GPL v2.0, כמו הסקינים שהם מבוססים עליהם |
 | **שאר הבילד**: הגדרות, כלים, בדיקות, תיעוד, עמודי התקנה ותמונות | כל הזכויות שמורות ל־MoranTheKing. אין להעתיק, לשנות, להפיץ או להשתמש בהם לבילד אחר בלי אישור בכתב. |
 
 התוספים של צדדים שלישיים בבילד שייכים ליוצריהם ונשארים ברישיון שלהם. הפירוט המלא נמצא ב־[LICENSE](LICENSE).

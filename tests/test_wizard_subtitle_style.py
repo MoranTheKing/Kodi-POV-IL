@@ -184,7 +184,7 @@ class SubtitleStyleTests(unittest.TestCase):
             self.assertEqual(node.text, str(value))
             self.assertIsNone(node.get('default'))
         policy = json.loads((REPO / 'userdata/config_policy.json').read_text('utf-8'))
-        self.assertEqual(policy['config_version'], '2.0.11')
+        self.assertEqual(policy['config_version'], '2.0.12')
 
     def test_the_shipped_values_are_the_ones_the_wizards_copy_of_the_pack_carries(self):
         with zipfile.ZipFile(ROOT / 'resources/bootstrap/config.zip') as pack:
