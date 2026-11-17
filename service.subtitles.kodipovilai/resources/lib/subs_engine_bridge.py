@@ -1048,7 +1048,7 @@ def note_playback_streams(info, streams=None, final=False):
         try:
             def _is_he_label(n):
                 low = (n or '').strip().lower()
-                if not low:
+                if not low or is_external_stream(low):
                     return False
                 if _LANG_NORMALIZE.get(low, low[:2]) == 'he':
                     return True
@@ -1206,7 +1206,7 @@ def embedded_candidates(info):
     out = []
     for idx, name in enumerate(streams):
         n = (name or '').strip().lower()
-        if not n:
+        if not n or is_external_stream(n):
             continue
         code = _stream_code(n)
         if code == 'he':
@@ -1253,6 +1253,20 @@ def _iso639_1(name):
             pass
         return n            # 'fil' is not Finnish, 'und' is not a language
     return n[:2] if len(n) >= 2 else n
+
+
+# Kodi names a subtitle file it loaded beside the video "<name> (External)",
+# "(חיצוני)" in Hebrew -- when no language is read from the file name. One
+# loaded before the play-start snapshot (POV's own subtitle, a viewer's log of
+# 17 Nov 2026: 'POVSubs_tt22084616_he (חיצוני)') is in the snapshot, and the
+# Hebrew word alone made it "built-in Hebrew": the release was reported to the
+# pool as carrying a Hebrew track, and the list showed an "[מובנה] PO" row.
+_EXTERNAL_STREAM_RE = re.compile(r'\((?:external|חיצוני)\)\s*$', re.I)
+
+
+def is_external_stream(name):
+    """True for a stream Kodi marks as a subtitle file, not part of the video."""
+    return bool(_EXTERNAL_STREAM_RE.search(name or ''))
 
 
 def _stream_code(name):

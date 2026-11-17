@@ -3610,7 +3610,9 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                         pass
                 return None
             kodi_utils.log(
-                'embedded: no usable text track for {0}'.format(src_lang),
+                'embedded: no usable text track for {0}{1}'.format(
+                    src_lang, (' ({0})'.format(_xstats['why'])
+                               if _xstats.get('why') else '')),
                 level='INFO')
             return None
         out = os.path.join(kodi_utils.cache_dir(),
