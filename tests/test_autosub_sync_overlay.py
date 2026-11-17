@@ -9,6 +9,7 @@ by SubSync's own toast, so the overlay leaves for it."""
 
 import importlib.util
 import sys
+import threading
 import time
 import types
 import unittest
@@ -35,15 +36,21 @@ def load_module():
     return module
 
 
-def run_autosub(states, toasts='true', pick_at=None, stop_at=None, overlay=True):
+def run_autosub(states, toasts='true', pick_at=None, stop_at=None, overlay=True,
+                search_ends_overlay=False, hijack_at=None, miss=None):
     """One automatic on-play run that applies a Hebrew subtitle.
 
     states: what the timing status reads, one entry per read (the last one
     repeats).  pick_at / stop_at: the viewer picks another subtitle / stops
-    the video at that read.  Returns the overlay lines in order, the seconds
-    slept while each was up, and the log."""
+    the video at that read.  search_ends_overlay: the search writes 'END'
+    into the overlay it shares, as subs_engine_bridge._search_inner does.
+    hijack_at: at that read a background search writes its own progress into
+    the overlay.  miss: nothing is applied and translate reports this embedded
+    miss reason.  Returns the overlay lines in order, the seconds slept while
+    each was up, and the log."""
     current = {'file': 'film.mkv', 'link': '', 'token': 0, 'playing': True}
     reads = {'n': 0}
+    starts = []
     slept = {}
     overlays = []
     log = []
@@ -99,6 +106,8 @@ def run_autosub(states, toasts='true', pick_at=None, stop_at=None, overlay=True)
             set_current('picked-by-the-viewer')
         if stop_at is not None and index == stop_at:
             current['playing'] = False
+        if hijack_at is not None and index == hijack_at:
+            general.show_msg = 'אנא המתן 00:00:01 Ktuvit:0'
         if link != current['link']:
             return {}
         state = states[min(index, len(states) - 1)]
@@ -108,11 +117,18 @@ def run_autosub(states, toasts='true', pick_at=None, stop_at=None, overlay=True)
     kodi.log = lambda message, *args, **kwargs: log.append(message)
 
     translate = types.ModuleType('resources.lib.translate')
-    translate.list_candidates = lambda info, modal_progress=False: [
-        {'language': 'he', 'link': 'he-1', 'filename': 'Film.WEB-DL.heb'}]
+    def list_candidates(info, modal_progress=False):
+        if search_ends_overlay:
+            general.show_msg = 'END'
+        return [{'language': 'he', 'link': 'he-1', 'filename': 'Film.WEB-DL.heb'}]
+
+    translate.list_candidates = list_candidates
+    translate.embedded_miss_since = lambda t0, playing_file='': (
+        miss if playing_file == current['file'] else None)
     translate._decode_link = lambda link: {'type': 'engine'}
     translate.set_quiet = lambda quiet: None
-    translate.resolve = lambda link, info, selection=None, **kwargs: link + '.srt'
+    translate.resolve = lambda link, info, selection=None, **kwargs: (
+        None if miss is not None else link + '.srt')
     translate.proofread_later = lambda link, selection: None
     bridge = types.ModuleType('resources.lib.subs_engine_bridge')
     bridge._release_ready = lambda info: True
@@ -124,7 +140,14 @@ def run_autosub(states, toasts='true', pick_at=None, stop_at=None, overlay=True)
             raise RuntimeError('no overlay')
         bridge.ensure_engine_settings = no_engine
     general = types.ModuleType('resources.lib.subs_engine.general')
-    general.show_results = lambda *args: None
+    def show_results(*args):
+        # like the real one: up until 'END' (or the end of playback)
+        starts.append(general.show_msg)
+        pause = threading.Event()
+        while general.show_msg != 'END' and current['playing']:
+            pause.wait(0.001)
+
+    general.show_results = show_results
     general.show_msg = ''
     subsync = types.ModuleType('resources.lib.subsync')
     subsync.prefetch_autosub_reference = lambda info, rows: False
@@ -160,6 +183,7 @@ def run_autosub(states, toasts='true', pick_at=None, stop_at=None, overlay=True)
             heading = text.replace('[COLOR lightblue]', '').replace('[/COLOR]', '').split('\n')[0]
             lines.append((heading, round(slept.get(index, 0.0), 1)))
     return {'lines': lines, 'last': overlays[-1] if overlays else None, 'reads': reads['n'],
+            'starts': starts,
             'log': [m for m in log if 'autosub overlay' in m], 'all': overlays, 'cap': module._SYNC_CHECK_OVERLAY_CAP}
 
 
@@ -302,6 +326,33 @@ class OverlayThroughTheCheck(unittest.TestCase):
         self.assertEqual(r['lines'], [(CHECKING, 1.4), (CHECKING, 3.6)])
         self.assertIn('not followed further after 1.4s', r['log'][0])
         self.assertEqual(r['last'], 'END')
+
+    def test_a_search_that_closed_the_overlay_does_not_swallow_the_line(self):
+        # QA Kodi, 17 Nov 2026: the engine's search ends the overlay it shares
+        # with the run ('END'), 2-4 s after the start -- every later line went
+        # nowhere. The overlay is opened again for the line.
+        r = run_autosub(['checking'] * 31 + ['unverified'], search_ends_overlay=True)
+        self.assertEqual(r['lines'], [(CHECKING, 6.0), (NOT_VERIFIED, 5.0)])
+        self.assertEqual(len(r['starts']), 2)
+        self.assertTrue(r['starts'][1].startswith('[COLOR lightblue]' + CHECKING), r['starts'])
+        self.assertEqual(r['last'], 'END')
+
+    def test_a_line_a_background_search_wrote_over_is_put_back(self):
+        r = run_autosub(['checking'] * 31 + ['confirmed'], hijack_at=10)
+        self.assertEqual([h for h, _s in r['lines']], [CHECKING, CHECKING, CONFIRMED])
+        # one 0.2 s step shows the other text before the line is back
+        self.assertEqual(round(sum(s for h, s in r['lines'] if h == CHECKING), 1), 5.8)
+
+    def test_an_embedded_pick_that_gave_nothing_says_why(self):
+        for reason, words in (('no_index', 'אי אפשר לקרוא מהסטרים'), ('no_text', 'תמונה ולא טקסט'),
+                              ('not_mkv', 'מהסוג הזה'), ('', 'לא הושלמה')):
+            r = run_autosub(['checking'], miss=reason, search_ends_overlay=True)
+            text = [t for t in r['all'] if 'לא נמצאה כתובית עברית' in t]
+            self.assertEqual(len(text), 1, reason)
+            self.assertIn(words, text[0])
+            self.assertEqual(r['last'], 'END')
+        plain = run_autosub(['checking'], miss=None)
+        self.assertFalse(any('אי אפשר' in t for t in plain['all']))
 
     def test_without_the_overlay_nothing_waits(self):
         r = run_autosub(['checking'], overlay=False)
