@@ -1888,21 +1888,6 @@
 		<value condition="Player.Paused + Player.Caching">טוען...</value>
 		<value condition="Player.Paused">מושהה</value>
 	</variable>
-	<variable name="POVIL_OSD_File">
-		<value>$INFO[VideoPlayer.VideoResolution,,p]$INFO[VideoPlayer.VideoCodec,  •  [UPPERCASE],[/UPPERCASE]]$INFO[VideoPlayer.HdrType,  •  [UPPERCASE],[/UPPERCASE]]$INFO[VideoPlayer.AudioCodec,  •  [UPPERCASE],[/UPPERCASE]]$VAR[POVIL_OSD_Channels, ]</value>
-	</variable>
-	<variable name="POVIL_OSD_Channels">
-		<value condition="String.IsEqual(VideoPlayer.AudioChannels,1)">מונו</value>
-		<value condition="String.IsEqual(VideoPlayer.AudioChannels,2)">סטריאו</value>
-		<value condition="String.IsEqual(VideoPlayer.AudioChannels,3)">2.1</value>
-		<value condition="String.IsEqual(VideoPlayer.AudioChannels,4)">4.0</value>
-		<value condition="String.IsEqual(VideoPlayer.AudioChannels,5)">5.0</value>
-		<value condition="String.IsEqual(VideoPlayer.AudioChannels,6)">5.1</value>
-		<value condition="String.IsEqual(VideoPlayer.AudioChannels,7)">6.1</value>
-		<value condition="String.IsEqual(VideoPlayer.AudioChannels,8)">7.1</value>
-		<value condition="String.IsEqual(VideoPlayer.AudioChannels,10)">9.1</value>
-		<value>$INFO[VideoPlayer.AudioChannels]</value>
-	</variable>
 	<variable name="POVIL_OSD_Focused">
 		<value condition="Control.HasFocus(7001)">ימינה ושמאלה מדלגים · לחיצות רצופות מדלגות רחוק יותר · אישור משהה</value>
 		<value condition="Control.HasFocus(7010)">עצירה</value>

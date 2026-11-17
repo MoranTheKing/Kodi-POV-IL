@@ -3,7 +3,7 @@
   <color name="Grey3">FFABABAB</color>
 	<color name="Grey2">FFBEBEBE</color>
 	<color name="Grey">FF636363</color>
-	<color name="White">FFCCCCCC</color>
+	<color name="White">FFE4E4E4</color>
 	<!--<color name="White">FFF1F1F1</color>-->
 	<color name="White2">FFFFFFFF</color>
 	<color name="Red">FFFF0000</color>
@@ -36,7 +36,7 @@
 	<!-- Kodi POV IL -->
 	<color name="povil_gold">FFD9B77E</color>
 	<color name="povil_white">FFF5F2EC</color>
-	<color name="povil_dim">BFF5F2EC</color>
-	<color name="povil_faint">80F5F2EC</color>
+	<color name="povil_dim">D9F5F2EC</color>
+	<color name="povil_faint">A6F5F2EC</color>
 	<color name="povil_ink">FF17130D</color>
 </colors>

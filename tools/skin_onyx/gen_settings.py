@@ -42,7 +42,7 @@ def e(s):
 
 
 # ---------------------------------------------------------------- rows
-def plate(focus=True, nofocus='0DFFFFFF'):
+def plate(focus=True, nofocus='16FFFFFF'):
     out = '<texturefocus border="30">%srow_focus.png</texturefocus>' % S if focus else '<texturefocus></texturefocus>'
     if nofocus:
         out += '<texturenofocus border="30" colordiffuse="%s">povil/rounded_fill.png</texturenofocus>' % nofocus

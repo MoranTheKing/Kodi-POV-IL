@@ -373,7 +373,7 @@ class ProvisioningGateTests(unittest.TestCase):
             lambda *_a, **_k: seen.append('config') or {'skin_touched': False})
         modules['resources.libs'].config_apply = modules['resources.libs.config_apply']
         updater = types.SimpleNamespace(
-            background=False, fresh=False, _manifest={'config': {}},
+            background=False, fresh=False, _manifest={'config': {}}, _finish_loaded_skin_swap=lambda done: None,
             _missing_native=[],
             _runtime_addon_enabled=lambda _aid: seen.append('runtime') or True,
             _service_handoff_ready=lambda: seen.append('patches') or True)
@@ -463,7 +463,7 @@ class ProvisioningGateTests(unittest.TestCase):
                              'xbmc': xbmc, 'xbmcgui': xbmcgui},
                             class_name='ModularUpdater')
         updater = types.SimpleNamespace(
-            fresh=True, background=False, PROVISION_IDS=('core.one', 'core.two'),
+            fresh=True, background=False, _finish_loaded_skin_swap=lambda done: None, PROVISION_IDS=('core.one', 'core.two'),
             _manifest={'addons': {}, 'config': {}},
             _config_pending=lambda _manifest: False,
             _resolve_phase_two_bounded=lambda: (_ for _ in ()).throw(
