@@ -41,7 +41,7 @@ class WidgetWorkTests(unittest.TestCase):
     def wrap(self, policy=None):
         guard = types.SimpleNamespace(active_policy=lambda:policy)
         with patch.dict(sys.modules, {'profile_age_guard':guard,
-                'xbmc':types.SimpleNamespace(getSkinDir=lambda:'skin.povil.old')}):
+                'xbmc':types.SimpleNamespace(getSkinDir=lambda:'skin.povil.onyx')}):
             return self.module.wrap_worker(self.instance, self.worker)
 
     def test_visible_watched_titles_also_avoid_metadata_outside_the_row(self):
@@ -77,13 +77,13 @@ class WidgetWorkTests(unittest.TestCase):
             self.assertEqual(self.wrap(policy),self.worker)
         with patch.dict(sys.modules,{'profile_age_guard':types.SimpleNamespace(
                 active_policy=lambda:(_ for _ in ()).throw(ValueError('broken policy'))),
-                'xbmc':types.SimpleNamespace(getSkinDir=lambda:'skin.povil.old')}):
+                'xbmc':types.SimpleNamespace(getSkinDir=lambda:'skin.povil.onyx')}):
             self.assertEqual(self.module.wrap_worker(self.instance,self.worker),self.worker)
 
     def test_native_failure_restores_complete_source(self):
         def failure(): raise RuntimeError('native worker failure')
         with patch.dict(sys.modules, {'profile_age_guard':types.SimpleNamespace(active_policy=lambda:None),
-                'xbmc':types.SimpleNamespace(getSkinDir=lambda:'skin.povil.old')}):
+                'xbmc':types.SimpleNamespace(getSkinDir=lambda:'skin.povil.onyx')}):
             worker=self.module.wrap_worker(self.instance,failure)
         with self.assertRaises(RuntimeError): worker()
         self.assertIs(self.instance.list,self.source)

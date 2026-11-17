@@ -17,7 +17,7 @@ spec = importlib.util.spec_from_file_location('build_standalone_moransubs',
 bsm = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bsm)
 SRC = bsm.SRC
-BUILDISH = re.compile(r'(pov_|af3_|umbrella_|mdblist_|old_|estuary_|fentastic_|idanplus_|'
+BUILDISH = re.compile(r'(pov_|af3_|umbrella_|mdblist_|estuary_|fentastic_|idanplus_|'
                       r'subs_chooser|search_provider|he_sub_match|wizard|tonight|brand_|favourites_)')
 
 

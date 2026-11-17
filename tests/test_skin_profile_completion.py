@@ -89,7 +89,7 @@ class SkinProfileCompletionTests(unittest.TestCase):
                          executebuiltin=lambda *args: calls.append(args))))
             self.assertTrue(fn())
             self.assertEqual(calls, [('Skin.SetBool(POVIL.SettingsCommitted,true)', True)])
-            path.write_text('<settings><setting id="lookandfeel.skin">skin.povil.old</setting></settings>')
+            path.write_text('<settings><setting id="lookandfeel.skin">skin.povil.onyx</setting></settings>')
             self.assertFalse(fn())
 
     def test_estuary_build_pages_never_open_the_empty_native_library(self):

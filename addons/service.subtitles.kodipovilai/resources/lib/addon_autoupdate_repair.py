@@ -278,7 +278,6 @@ MANAGED = frozenset((
     'service.xbmc.versioncheck',
     'skin.arcticfuse3',
     'skin.fentastic',
-    'skin.povil.old',
 ))
 
 

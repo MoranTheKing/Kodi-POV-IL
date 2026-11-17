@@ -12,7 +12,9 @@ import xbmc
 import xbmcvfs
 import xbmcgui
 
-SKINS = ('skin.estuary', 'skin.fentastic', 'skin.povil.old', 'skin.arctic.fuse.3', 'skin.povil.onyx')
+SKINS = ('skin.estuary', 'skin.fentastic', 'skin.arctic.fuse.3', 'skin.povil.onyx')
+# The skin a new installation and a new profile open with.
+DEFAULT_SKIN = 'skin.povil.onyx'
 
 
 def close_switch_menu():

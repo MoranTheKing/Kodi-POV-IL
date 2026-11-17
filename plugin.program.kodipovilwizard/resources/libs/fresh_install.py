@@ -89,8 +89,8 @@ def _rpc(method, params):
 
 
 def _accept_initial_skin_confirmation():
-    from resources.libs.build_skin import confirm_requested_skin
-    return confirm_requested_skin('skin.povil.old')
+    from resources.libs.build_skin import confirm_requested_skin, DEFAULT_SKIN
+    return confirm_requested_skin(DEFAULT_SKIN)
 
 
 def apply_live_settings(root, strict=False):
@@ -157,7 +157,7 @@ def apply_live_defaults(defaults_path=None):
     reverted skin is not reported as a successfully activated build.
     """
     root = ET.parse(defaults_path or os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')).getroot()
-    target_skin = root.findtext("setting[@id='lookandfeel.skin']", 'skin.povil.old')
+    target_skin = root.findtext("setting[@id='lookandfeel.skin']", 'skin.povil.onyx')
     monitor = xbmc.Monitor()
     if apply_live_settings(root, strict=True) is None:
         return False
@@ -234,7 +234,7 @@ def finalize():
     if not ModularUpdater.is_provisioned():
         return False
     required = tuple(youtube_platform.eligible(ModularUpdater.CORE_PROVISION_IDS)) + (
-        'skin.povil.old', 'script.fentastic.helper',
+        'skin.povil.onyx', 'script.fentastic.helper',
         'plugin.program.orderfavourites-hebrew', 'service.subtitles.kodipovilai')
     from resources.libs.build_profiles import addon_enabled
     db.addon_database(list(required), 1, True)

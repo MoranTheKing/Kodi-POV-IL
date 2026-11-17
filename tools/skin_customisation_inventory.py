@@ -145,7 +145,7 @@ def main():
         # which 29 carry Hebrew -- a 220-line strings.po, 149 Hebrew lines in
         # Variables.xml, three VideoOsd includes -- plus ten files naming the
         # video add-on. All of that is ours and all of it has to survive a
-        # port. Reporting only the two Old overlays made the job look an order
+        # port. Reporting only two overlays made the job look an order
         # of magnitude smaller than it is.
         for rel, sz, full in sorted(files):
             if not rel.endswith(('.xml', '.po')):

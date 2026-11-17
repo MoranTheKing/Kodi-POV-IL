@@ -319,8 +319,9 @@ def _reload_skin_if_fentastic():
     each one raised "Unknown addon id 'plugin.video.pov'" -- ending with POV's
     own service killed for not stopping in time, and the quick update never
     recording itself as done, so it retried and nagged on every launch. The
-    same update applied cleanly when they switched to OLD and back, because
-    this patcher does not run on OLD at all. That is what named the pairing.
+    same update applied cleanly when they switched to another skin and back,
+    because this patcher does not run there at all. That is what named the
+    pairing.
     """
     if _SKIN_RELOADED[0] or xbmc is None:
         return

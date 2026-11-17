@@ -2,7 +2,7 @@
 
 Field report (28 Oct 2026, Android, Kodi 21.3): Kodi came up in English, with
 Estuary and a 12-hour clock -- Kodi's own defaults -- on a build installed in
-Hebrew with OLD. Switching back to OLD by hand still left English labels,
+Hebrew with the build's skin. Switching back to it by hand still left English labels,
 because the language and region had reset too, and with them the build's
 subtitle settings (MoranSubs as the default subtitle service, Hebrew subtitle
 language). The session in which guisettings.xml reset left no log behind.
@@ -97,7 +97,7 @@ def _offer_skin(defaults):
     profile last used when that is one of the build's (Estuary excluded: it is
     also what a reset leaves behind, and the memory may have recorded it)."""
     from resources.libs import build_skin
-    target = defaults.findtext("setting[@id='lookandfeel.skin']") or 'skin.povil.old'
+    target = defaults.findtext("setting[@id='lookandfeel.skin']") or build_skin.DEFAULT_SKIN
     try:
         from resources.libs import host_patch_watch
         remembered = host_patch_watch.read_skin_memory()[0]
@@ -108,7 +108,7 @@ def _offer_skin(defaults):
     if (xbmc.getSkinDir() == target or target not in build_skin.SKINS or
             not xbmc.getCondVisibility('System.HasAddon({0})'.format(target))):
         return
-    names = {'skin.povil.old': 'OLD', 'skin.fentastic': 'FENtastic',
+    names = {'skin.fentastic': 'FENtastic',
              'skin.estuary': 'Estuary', 'skin.arctic.fuse.3': 'Arctic Fuse 3',
              'skin.povil.onyx': 'Onyx'}
     if xbmcgui.Dialog().yesno(TITLE, 'לחזור גם לסקין {0}?'.format(names.get(target, target)),

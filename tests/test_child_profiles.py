@@ -109,7 +109,7 @@ class ChildProfilesTests(unittest.TestCase):
         self.assertEqual([r.args[0] for r in self.kodi.executebuiltin.call_args_list],
                          ['SetFocus(3,1,absolute)','Action(Select,12000)'])
 
-    def test_old_root_includes_keep_native_home_and_gain_child_skin_selection(self):
+    def test_root_includes_keep_native_home_and_gain_child_skin_selection(self):
         with tempfile.TemporaryDirectory() as raw:
             path=Path(raw)/'Home.xml'
             text='<window><defaultcontrol>9000</defaultcontrol><include condition="Skin.HasSetting(POVILChild)" content="skin_home_child"/><include condition="!Skin.HasSetting(POVILChild)" content="original_home"/></window>'

@@ -15,7 +15,7 @@ This packages the SAME tree the build ships, minus what only the build uses:
     skin's buttons and settings or the build's state already runs only when
     the build is detected (service._is_kodi_pov_il_build).
   * resources/lib: the subtitle modules only (the legacy list plus the 0.3
-    additions the translation needs); no pov_/af3_/umbrella_/mdblist_/old_
+    additions the translation needs); no pov_/af3_/umbrella_/mdblist_
     patchers, no subtitle chooser, no Wizard healers.
   * default.py: the build-only actions are cut out by syntax tree.
   * changelog.txt: build-only bullets dropped (legacy rules).

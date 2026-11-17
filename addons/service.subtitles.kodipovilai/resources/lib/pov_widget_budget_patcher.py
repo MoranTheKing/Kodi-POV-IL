@@ -5,7 +5,7 @@ metadata, artwork, watched state and context menus for the complete page before
 Kodi discards the hidden items. On 32-bit devices several rows doing that
 together are a large avoidable part of the home-screen spinner.
 
-This patcher gives build-owned FENtastic and OLD media rows an explicit
+This patcher gives build-owned FENtastic media rows an explicit
 ``widget_limit`` and teaches POV's movie/TV builders to honour it before their
 metadata workers run. POV must both report an external/widget browse and carry
 the explicit parameter, so normal lists, search and playback are unchanged.
@@ -43,9 +43,6 @@ POV_TARGETS = (
 SKIN_TARGETS = (
     ('skin.fentastic', 'xml/script-fentastic-widget_movies.xml', 12),
     ('skin.fentastic', 'xml/script-fentastic-widget_tvshows.xml', 12),
-    ('skin.povil.old', 'xml/script-old-widget_movies.xml', 12),
-    ('skin.povil.old', 'xml/script-old-widget_tvshows.xml', 12),
-    ('skin.povil.old', 'xml/script-old-widget_kids.xml', 12),
 )
 
 _ADD_ITEMS_RE = re.compile(

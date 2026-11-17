@@ -417,31 +417,11 @@ def update_favourites_xml_file(gotoskin):
 #     at mutually-compatible versions, and they keep updating from their own
 #     repos. This replaces the old four static "pack" zips (deps/skin/fonts/
 #     studios) -- no hardcoded dist links, no version-pinned bundles.
-#
-#   * OLD (skin.povil.old) -- a rebranded + scrubbed Estuary MOD that is NOT on
-#     any public repo, so it is still shipped as a single on-demand pack zip in
-#     dist/ and downloaded+extracted on first switch (see _ensure_packs_installed).
 
-# KODI-POV-IL - OLD skin. A rebranded + scrubbed Estuary MOD (~24 MB) whose home
-# menu was remapped to our POV / idanplus / otaku addons. It is NOT on any public
-# repo, so (unlike AF3) it cannot be resolved natively -- it is shipped as a
-# single on-demand pack zip in dist/ and downloaded only when the user picks it
-# from Switch Skin, so it never bloats the base build. Its only hard dependency,
-# script.fentastic.helper, already ships in the build.
-OLD_PACK_BASE_URL = "https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist"
-OLD_SKIN_VERSION = '1.0.17'
-OLD_PACKS = [
-    {
-        'name': 'סקין OLD',
-        'url': '{0}/Kodi-POV-IL-OLD-skin-pack.zip'.format(OLD_PACK_BASE_URL),
-        'filename': 'old_skin_pack.zip',
-        'sentinel': 'special://home/addons/skin.povil.old/addon.xml',
-        'expected_version': OLD_SKIN_VERSION,
-        'addon_ids': ['skin.povil.old'],
-    },
-]
-# Onyx (skin.povil.onyx) is optional too: installed from the modular manifest
-# only when the user picks it from Switch Skin.
+# The one host of the on-demand pack zips (dist/ on main).
+PACK_BASE_URL = "https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist"
+# Onyx (skin.povil.onyx), the build's default skin: installed from the modular
+# manifest -- by a fresh install, by Switch Skin, or by skin_retirement.
 ONYX_SKIN_VERSION = '1.0.0'
 
 
@@ -450,13 +430,11 @@ ONYX_SKIN_VERSION = '1.0.0'
 # updating straight from their developers -- the same trust model POV has via
 # repository.kodifitzwell. Nothing here runs unless the user explicitly picks
 # the wizard menu entry; no tile, no search wiring, no change for anyone else.
-# Reuses OLD_PACK_BASE_URL: it is the same dist/ release folder, just a
-# different zip in it -- there is only one pack host for this build.
 UMBRELLA_PACK_VERSION = '6.7.85'
 UMBRELLA_PACKS = [
     {
         'name': 'Umbrella + CocoScrapers',
-        'url': '{0}/Kodi-POV-IL-Umbrella-pack.zip'.format(OLD_PACK_BASE_URL),
+        'url': '{0}/Kodi-POV-IL-Umbrella-pack.zip'.format(PACK_BASE_URL),
         'filename': 'umbrella_pack.zip',
         'sentinel': 'special://home/addons/plugin.video.umbrella/addon.xml',
         'expected_version': UMBRELLA_PACK_VERSION,
@@ -624,7 +602,7 @@ def install_acctmgr_pilot():
 
 def ensure_umbrella_installed():
     """Download + extract the Umbrella pilot pack on demand (same
-    battle-tested path as the OLD/AcctMgr packs, including the Addons-DB
+    battle-tested path as the AcctMgr pack, including the Addons-DB
     registration that makes Kodi actually see the new addons)."""
     return _ensure_packs_installed(
         UMBRELLA_PACKS,
@@ -935,11 +913,6 @@ def ensure_arctic_fuse_3_installed():
     return xbmc.getCondVisibility('System.HasAddon({0})'.format(AF3_SKIN_ID))
 
 
-def ensure_old_installed():
-    """Use the verified modular skin, never the obsolete static pack."""
-    return ensure_modular_skin('skin.povil.old', OLD_SKIN_VERSION, 'OLD')
-
-
 def ensure_onyx_installed():
     return ensure_modular_skin('skin.povil.onyx', ONYX_SKIN_VERSION, 'Onyx')
 
@@ -970,39 +943,6 @@ def ensure_modular_skin(ident, floor, tag):
         return False
 
 
-def auto_update_active_skin_pack():
-    """Refresh an on-demand skin pack (currently OLD) when the user is already
-    ON that skin and a newer version has been published. The pack is otherwise
-    only (re)installed when picked from Switch Skin, so without this an existing
-    OLD user never gets skin updates from a normal quick_update -- they had to
-    switch away and back. Idempotent: the version gate (_af3_pack_current) means
-    we only re-download when the on-disk skin is actually OLDER than what we now
-    ship, so it does NOT re-download every boot, and it does NOT re-download when
-    the user merely toggles skins. Re-extracting overwrites only the skin's addon
-    files under addons/skin.povil.old -- never userdata/addon_data skin settings,
-    so the user's favourites order and skin tweaks are preserved."""
-    try:
-        active = CONFIG.SKIN or ''
-        if 'skin.povil.old' not in active:
-            return
-        pack = OLD_PACKS[0]
-        if _af3_pack_current(pack):
-            return  # on-disk version already current; no re-download
-        logging.log(
-            '[Skin Auto Update] OLD is active and the installed pack is behind '
-            '{0}; refreshing it now.'.format(pack.get('expected_version')),
-            level=xbmc.LOGINFO)
-        if ensure_old_installed():
-            xbmc.sleep(800)
-            try:
-                xbmc.executebuiltin('ReloadSkin()')
-            except Exception:
-                pass
-    except Exception as e:
-        logging.log('[Skin Auto Update] failed: {0}'.format(e),
-                    level=xbmc.LOGERROR)
-
-
 def _ensure_packs_installed(packs, downloading_label, ready_label):
     """Download + extract any supplemental skin packs that aren't already
     on disk. Returns True if all packs are present at the end; False if any
@@ -1012,8 +952,8 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
     Reuses the wizard's existing Downloader + extract.all machinery
     -- the same code that powers quick_update and Fresh Install --
     so progress / cancel / error reporting all behave the same way.
-    Generic over a packs list so OLD (and any future on-demand
-    skin) share one battle-tested install path, including the critical
+    Generic over a packs list, so every on-demand pack shares one
+    battle-tested install path, including the critical
     Addons-DB register step that prevents the silent Estuary fallback."""
     try:
         all_ok = True
@@ -1287,16 +1227,15 @@ def build_switch_skin():
     if not build_skin.close_switch_menu():
         return
     from resources.libs.gui import window
-    msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין OLD\n5. סקין Onyx"
+    msg = f"הסקינים הקיימים בבילד:\n1. סקין Onyx\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין Estuary"
     if policy is None:
         window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
 
     skin_mapping = {
-        'סקין Estuary - מראה פשוט עם כפתורים': 'skin.estuary',
+        'סקין Onyx - יוקרתי, מימין לשמאל': 'skin.povil.onyx',
         'סקין FENtastic - יפהפה': 'skin.fentastic',
         'סקין Arctic Fuse 3 - מודרני (ניסיוני)': 'skin.arctic.fuse.3',
-        'סקין OLD - עברית מלאה (ניסיוני)': 'skin.povil.old',
-        'סקין Onyx - יוקרתי, מימין לשמאל (ניסיוני)': 'skin.povil.onyx'
+        'סקין Estuary - מראה פשוט עם כפתורים': 'skin.estuary'
     }
 
     # Get the name of the current active skin. If the user manually
@@ -1338,15 +1277,6 @@ def build_switch_skin():
                 logging.log_notify(
                     CONFIG.ADDONTITLE,
                     '[COLOR {0}]Arctic Fuse 3 לא הותקן - מבטל[/COLOR]'.format(
-                        CONFIG.COLOR2))
-                return
-        # OLD is also too big to bundle in the base build; download +
-        # extract it on first switch, identical to the AF3 path.
-        elif gotoskin == 'skin.povil.old':
-            if not ensure_old_installed():
-                logging.log_notify(
-                    CONFIG.ADDONTITLE,
-                    '[COLOR {0}]סקין OLD לא הותקן - מבטל[/COLOR]'.format(
                         CONFIG.COLOR2))
                 return
         elif gotoskin == 'skin.povil.onyx':

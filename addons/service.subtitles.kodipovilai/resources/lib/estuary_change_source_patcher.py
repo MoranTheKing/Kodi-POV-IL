@@ -5,7 +5,7 @@
 # playback left the user stuck. (FENtastic has it; Estuary didn't.) Estuary
 # even carries a COMMENTED-OUT "Twilight Switch Source Button" attempt that used
 # the wrong POV param (media_type=, with an underscore); the form that actually
-# works -- proven by FENtastic's OSD and OLD's next-episode button -- is:
+# works -- proven by FENtastic's OSD -- is:
 #   plugin://plugin.video.pov/?mode=play_media&mediatype=<movie|episode>
 #       &tmdb_id=...&autoplay=false
 # autoplay=false forces the source dialog to re-show; since a video is already
@@ -15,7 +15,7 @@
 # Self-healing: marker-gated, reverts prior versions, XML-parse-checked before
 # an atomic write (so a bad edit can never corrupt the skin / black-screen the
 # player), and preserves the file's CRLF line endings. No-op when Estuary isn't
-# installed. Mirrors old_change_source_patcher with the Estuary anchor + style.
+# installed.
 
 import os
 import re

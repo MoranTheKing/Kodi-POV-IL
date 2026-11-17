@@ -8,7 +8,7 @@ import xbmc
 import xbmcaddon
 import xbmcgui
 
-SKINS = ('skin.povil.old', 'skin.estuary', 'skin.fentastic', 'skin.arctic.fuse.3', 'skin.povil.onyx')
+SKINS = ('skin.povil.onyx', 'skin.estuary', 'skin.fentastic', 'skin.arctic.fuse.3')
 # Kodi's native settings controls are generated from negative IDs (-180).
 # Positive IDs belong to dialog chrome/templates, not the editable settings.
 NATIVE_SETTING_CONTROLS = range(-180, -160)
@@ -51,8 +51,8 @@ def install_home(path):
     if controls is None:
         if root.find("include[@content='skin_home_child']") is None:
             return False
-        # OLD composes entire windows through root-level includes, unlike
-        # the other skins' root controls. Retain that native structure.
+        # A skin that composes entire windows through root-level includes,
+        # unlike root controls. Retain that native structure.
         includes = ET.Element('includes')
         section = ET.SubElement(includes, 'include', name='skin_home_child')
         ET.SubElement(section, 'defaultcontrol', always='true').text = '9500'
@@ -64,7 +64,7 @@ def install_home(path):
         ET.SubElement(old, 'visible').text = '!Skin.HasSetting(POVILChild)'
         for row in list(controls):
             controls.remove(row)
-            # Supersede OLD's first child-only include with the shared layout.
+            # Supersede a first child-only include with the shared layout.
             if row.tag == 'include' and row.get('content') == 'skin_home_child':
                 continue
             old.append(row)

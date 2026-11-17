@@ -2,7 +2,7 @@
 
 THE BUG THIS EXISTS FOR. The migration that turns on the skin's own "hide the
 player bar after 4s" used to read `getSkinDir() != 'skin.fentastic'` and return
-otherwise. skin.povil.old ships the identical feature, so every Old user had
+otherwise. Another skin shipped the identical feature, so its users had
 the bar stay up since the day it shipped. That was the report.
 
 THE BUG THE REWRITE THEN INTRODUCED, which is why this file exists at all: the
@@ -232,17 +232,17 @@ def make_skin(root, skin_id, feature=True, xml_files=40, bulk_dirs=True):
 home = tmpdir('osd-home-')
 addons = os.path.join(home, 'addons')
 os.makedirs(addons)
-make_skin(addons, 'skin.povil.old', feature=True)
+make_skin(addons, 'skin.other.mod', feature=True)
 make_skin(addons, 'skin.fentastic', feature=True)
 make_skin(addons, 'skin.arcticfuse3', feature=False)
-VERS = {'skin.povil.old': '3.2.14', 'skin.fentastic': '2.0.1',
+VERS = {'skin.other.mod': '3.2.14', 'skin.fentastic': '2.0.1',
         'skin.arcticfuse3': '3.2.14'}
 
 # --------------------------------------------------------------------------
-# 1. the report: Old gets the feature turned on
+# 1. the report: the other skin gets the feature turned on
 # --------------------------------------------------------------------------
-k = boot(Kodi('skin.povil.old', addons, VERS))
-check('Old -- the skin from the report -- gets auto-close turned on',
+k = boot(Kodi('skin.other.mod', addons, VERS))
+check('the skin from the report gets auto-close turned on',
       k.bools.get('OSDAutoClose') is True,
       'this is the reported bug; the old code returned before here')
 check('and the 4s timeout with it',
@@ -271,7 +271,7 @@ check('and a manually changed timeout is left alone',
 # --------------------------------------------------------------------------
 # 3. per-skin, because the mark lives in the skin
 # --------------------------------------------------------------------------
-k2 = Kodi('skin.povil.old', addons, VERS)
+k2 = Kodi('skin.other.mod', addons, VERS)
 boot(k2)
 k2.skin = 'skin.fentastic'
 k2.bools.pop('AISubsOsdSeeded', None)   # a different skin = a different settings file
@@ -308,7 +308,7 @@ check('and the superseded stamp does not accumulate',
 # --------------------------------------------------------------------------
 # 4b. the cache prunes by SKIN, and one skin id is a prefix of another
 # --------------------------------------------------------------------------
-# skin.povil.old already exists, so this family is not hypothetical. Pruning
+# skin.povil.onyx already exists, so this family is not hypothetical. Pruning
 # on the bare skin id instead of `<skin>=` would take the longer id's entry
 # out with the shorter one's -- and no fixture above has a prefix pair, so
 # that mutation passed every other check in this file.
@@ -397,7 +397,7 @@ broken = '\n\n'.join(FUNCS.values()).replace(
     "xbmc.executebuiltin('Skin.SetString(AISubsOsdSeeded,1)')")
 check('SABOTAGE: the string/bool sabotage applies',
       broken != '\n\n'.join(FUNCS.values()))
-ks = Kodi('skin.povil.old', addons, VERS)
+ks = Kodi('skin.other.mod', addons, VERS)
 boot(ks, broken)
 ks.bools['OSDAutoClose'] = False
 boot(ks, broken)
@@ -409,7 +409,7 @@ check('SABOTAGE: a mark in the STRING map is caught stomping the opt-out',
 nowait = '\n\n'.join(FUNCS.values()).replace('        xbmc.sleep(150)\n', '')
 check('SABOTAGE: the sleep sabotage applies',
       nowait != '\n\n'.join(FUNCS.values()))
-kw = Kodi('skin.povil.old', addons, VERS)
+kw = Kodi('skin.other.mod', addons, VERS)
 boot(kw, nowait)
 check('SABOTAGE: a missing wait before the verify is caught', kw.slept == 0)
 

@@ -212,9 +212,6 @@ with tempfile.TemporaryDirectory(prefix='pov-budget-crlf-') as folder:
 
 
 print('\n=== skin delivery ===')
-check('OLD children row is included in the producer budget',
-      ('skin.povil.old', 'xml/script-old-widget_kids.xml', 12)
-      in patcher.SKIN_TARGETS)
 old_xml = '''<?xml version="1.0" encoding="UTF-8"?>
 <includes>
   <include name="Rows">

@@ -66,7 +66,7 @@ def prepare(master, profile):
     generator.STATE_PATH = os.path.join(target, 'addon_data',
         'plugin.program.orderfavourites-hebrew', 'favourites_state.json')
     generator._VIS_MGR = _Connections(target)
-    if generator.generate_favourites_xml('skin.povil.old', merge=True, write=True) is None:
+    if generator.generate_favourites_xml('skin.povil.onyx', merge=True, write=True) is None:
         raise ValueError('Profile favourites could not be prepared')
     base = os.path.join(addons, 'service.subtitles.kodipovilai', 'resources', 'lib')
     tonight = _module('tonight', os.path.join(base, 'tonight', 'entrypoints.py'))

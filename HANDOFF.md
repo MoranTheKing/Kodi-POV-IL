@@ -44,7 +44,7 @@ plus a standalone subtitle addon. Main pieces:
 - **`plugin.program.kodipovilwizard`** — installs the build and applies
   quick updates.
 
-Skins: `skin.fentastic` (default), `skin.povil.old`, `skin.estuary`,
+Skins: `skin.fentastic` (default), `skin.estuary`,
 `skin.arctic.fuse.3`.
 
 ## Repo layout (the parts that matter)
@@ -462,8 +462,8 @@ the deps-pack's jurialmunkey 0.2.35 / infotagger 0.0.8).
 
 **How AF3 updates reach users:** the pack URL is FIXED (`AF3_PACK_BASE_URL`),
 so fresh AF3 installs always get the current pack. Existing AF3 users update
-via wizard `auto_update_active_skin_pack()` (extended in 0.1.37 to cover AF3,
-not just OLD) gated by `AF3_CE_SKIN_VERSION` in `wizard.py` — bump that
+via wizard `auto_update_active_skin_pack()` (extended in 0.1.37 to cover AF3)
+gated by `AF3_CE_SKIN_VERSION` in `wizard.py` — bump that
 constant on every pack update or nobody already on the skin re-downloads.
 
 The crash "stop playback on AF3 → back to Home → force-close" is a KNOWN
@@ -517,7 +517,7 @@ the surface is built, not stamped once.
 One setting, `search_provider` (`pov` default / `umbrella`), hidden in
 MoranSubs' settings.xml and owned by `resources/lib/search_provider.py`. The
 user changes it from the "מנוע החיפוש - POV / Umbrella" home tile (FENtastic /
-Estuary / OLD) or the matching AF3 submenu + power-menu row -- both of which
+Estuary) or the matching AF3 submenu + power-menu row -- both of which
 run `RunScript(service.subtitles.kodipovilai,action=search_provider)`.
 
 **The provider is baked into the skin files, not resolved at click time.** A
@@ -528,12 +528,9 @@ searching is nightly. So the switch rewrites files and pays a `ReloadSkin()`.
 
 Two shapes, because the skins genuinely differ:
 
-- **FENtastic / Estuary / OLD** activate a HUB and the add-on takes over. One
+- **FENtastic / Estuary** activate a HUB and the add-on takes over. One
   onclick per skin, written by `fentastic_search_patcher`. POV's hub is
-  `navigator.search`; Umbrella's is `tools_searchNavigator`. OLD also has a
-  main-menu search item carrying the bare path -- it now recognises whichever
-  provider's path is in the file today, not just the one the skin shipped
-  with, or the second switch would be a no-op.
+  `navigator.search`; Umbrella's is `tools_searchNavigator`.
 - **Arctic Fuse 3** types the query IN THE SKIN and builds four result rows
   from `search_path.xml`, so switching means swapping four path prefixes
   (`af3_search_pov_patcher`). Umbrella has a term-driven action for all four
@@ -1922,7 +1919,7 @@ one refreshes the skin after an update, the other restarts POV so the update
 takes effect. When they met, the home screen was rebuilt while POV could not be
 constructed, every POV row on it raised "Unknown addon id", and POV's service
 had to be killed. Root-caused from two field logs and confirmed by the reporter
-applying the same update cleanly on OLD -- the one skin where that patcher does
+applying the same update cleanly on another skin -- one where that patcher does
 not run, which is what identified the pairing.
 
 Every skin reload on the update path now waits for POV to be constructible
@@ -2693,8 +2690,8 @@ was uploading partial/failed translations (stayed mostly English) the server onl
    until now, which is exactly why it kept being forgotten. Requirements as
    given:
 
-   - A widget on the HOME screen, on **all four skins** (FENtastic, Estuary,
-     OLD, Arctic Fuse 3), listing the ten most recent update notes so a user
+   - A widget on the HOME screen, on the skins of then (FENtastic, Estuary,
+     Arctic Fuse 3), listing the ten most recent update notes so a user
      can read what changed without waiting for a notification to appear.
    - **If the user deletes the widget it must stay deleted** -- not restored by
      the next quick update, and not by the next launch. `fentastic_widget_patcher`
@@ -2989,7 +2986,7 @@ was uploading partial/failed translations (stayed mostly English) the server onl
    and "install wizard" home tiles were byte-identical images, so when the skin's
    text label briefly vanishes they were indistinguishable; each now bakes its
    Hebrew label into the image (below the intact POV square). One pair of images
-   covers every skin (FEN / Estuary / OLD / Arctic Fuse 3) because the service
+   covers every skin (FEN / Estuary / Arctic Fuse 3) because the service
    force-syncs them to the live media dir on boot; Arctic Fuse 3's "switch skin"
    tile — which reused the same image — got its own so it isn't mislabelled.
    **(c) Paid-tier fast mode.** A new **`ai_paid_mode`** toggle (Settings →
@@ -4329,7 +4326,7 @@ Raw by a few minutes; poll rather than assume.
   add-on-side marker can do neither. The trade is that it only means anything
   while that skin is active.
 - **`executebuiltin` queues.** Reading a setting straight back after writing it
-  can observe the old value. `_maybe_default_old_poster_rating` settled on
+  can observe the old value. The poster-rating default settled on
   `xbmc.sleep(150)` between; `executebuiltin(cmd, True)` is the synchronous
   form. Verify-then-mark is the right shape either way, so a lost write retries
   next boot instead of being marked done.
@@ -5806,7 +5803,7 @@ standalone does not patch -- note 598's defect exactly -- and
 dict and then `if host is None: continue`, so a patcher for a host nobody had
 listed was never checked. Every `*_patcher.py` must now be classified, and
 `NOT_A_HOST` carries a product name that must itself be a filtered term --
-which immediately caught **OLD**, a skin whose name had never been filtered
+which immediately caught a skin whose name had never been filtered
 while Estuary, AF3 and FENtastic were, and whose two player bullets (0.2.260,
 0.2.262) had been reaching standalone users for a year.
 
@@ -6123,10 +6120,10 @@ real. The findings are worth more than the fixes.
 
 **The player bar that would not hide.** `_maybe_enable_osd_autoclose` (was
 `_maybe_enable_fentastic_osd_autoclose`) gated on
-`getSkinDir() != 'skin.fentastic'` and returned otherwise. `skin.povil.old`
-ships the same `OSDAutoClose` / `OSDAutoCloseTime` settings and the same
+`getSkinDir() != 'skin.fentastic'` and returned otherwise. Another skin
+shipped the same `OSDAutoClose` / `OSDAutoCloseTime` settings and the same
 `Timers.xml` `autoclosevideoosd` timer, off by default like FENtastic's, so
-every Old user had the bar stay up since the feature shipped. Nothing was
+every user of it had the bar stay up since the feature shipped. Nothing was
 broken on the reporter's device — a default never reached it. It now detects
 the CAPABILITY by scanning the active skin's own XML, so AF3 and Estuary are
 skipped without a list saying so.
@@ -6142,7 +6139,7 @@ migration re-forced the values on EVERY boot — the exact opposite of the
 "leave a deliberate opt-out alone" the function was rewritten to provide.
 `Skin.SetBool(x)` with no second argument does set true
 (`SkinBuiltins.cpp:154-169`, "default is to set it to true").
-`_maybe_default_old_poster_rating` next door already pairs them correctly; this
+The poster-rating default next door already pairs them correctly; this
 was the only place in the tree that crossed them.
 
 **`special://home/addons/` is not where every skin lives.** A skin shipped
@@ -6152,7 +6149,7 @@ never have detected such a skin on any boot.
 
 **A negative you did not measure is not an answer.** A skin WITHOUT the feature
 never gets a skin-side mark, so it is re-walked every boot forever (~200 XML
-files, ~2.4MB on a real Old). The negative is cached per skin VERSION so a skin
+files, ~2.4MB on a real skin). The negative is cached per skin VERSION so a skin
 update that ADDS the feature is still noticed — but only when at least one file
 was actually read. An empty walk caching "no" would be permanent for that
 version.
@@ -6213,7 +6210,7 @@ and the cursor-clear check named two of the three keys it clears, so dropping
 itself shipped with two defenses nothing could tell were removed — pruning the
 cache on `<skin>=` rather than the bare id, and the ten-entry cap — because no
 fixture had a skin id that was a prefix of another (`skin.povil` /
-`skin.povil.old` makes that family real) and none pushed more than three skins
+`skin.povil.onyx` makes that family real) and none pushed more than three skins
 through the cache.
 
 **`tools/test_osd_autoclose.py` models Kodi's two-map split on purpose.** A
@@ -6235,7 +6232,7 @@ release rather than one skin at a time:
    included, because (1) silently degrades without it.
 3. A POV/Umbrella search switch on all four skins at once. See the
    search-engine switch section above.
-4. Two home tiles ("מנוע החיפוש", "Umbrella") on FENtastic/Estuary/OLD and the
+4. Two home tiles ("מנוע החיפוש", "Umbrella") on FENtastic/Estuary and the
    matching two rows in AF3's submenu + power menu, all gated on Umbrella
    being installed.
 
@@ -6503,11 +6500,11 @@ service never changes them.
 
 #### Per-season posters were never the problem (0.2.482)
 
-Reported as "works in OLD, not in Estuary or FENtastic". It works everywhere:
+Reported as "works in another skin, not in Estuary or FENtastic". It works everywhere:
 POV gives every season its own TMDb poster on `poster`, `icon`, `thumb`,
 `season.poster` AND `tvshow.poster`; TMDb returns a distinct poster per season
 under `language=he` (checked live against six shows, none returns null); and
-Estuary, FENtastic and OLD resolve posters through a byte-identical
+Estuary and FENtastic resolve posters through a byte-identical
 `PosterVar`, while Arctic Fuse 3 prefers `ListItem.Art(poster)` outright.
 
 The screenshot settled it: the screen was FENtastic's Advanced List (630) — a
@@ -6521,8 +6518,8 @@ keeping:
 
 - POV's `views` table is `(view_type TEXT, view_id TEXT, UNIQUE(view_type))`
   with **no skin column**, so one number is applied in every skin and the same
-  number means different layouts. 51 is Poster in Estuary, FENtastic and OLD
-  (all three inherit Estuary's numbering); Arctic Fuse 3 numbers its own and
+  number means different layouts. 51 is Poster in Estuary and FENtastic
+  (both inherit Estuary's numbering); Arctic Fuse 3 numbers its own and
   wants 512. The marker therefore records what we wrote **per skin**.
 - POV loads `views.db` into window properties exactly once, from its own
   service at Kodi start, and `set_view_mode()` reads only the property — so the
@@ -6686,8 +6683,7 @@ exists only in `BigInfoWallMovieLayout`, which the other views use.
 
 The control is inserted into the VIEW, not into the shared layout. One edit
 there instead of four would draw a **second** tick in every view that already
-has one, because several stack both layouts. `skin.povil.old` is left alone —
-its Poster view is already correct — and a skin with no verified recipe is not
+has one, because several stack both layouts. A skin with no verified recipe is not
 patched on a guess: a wrong coordinate ships a tick floating over artwork on
 every device. Estuary and Arctic Fuse 3 still need their own recipe.
 
@@ -7751,7 +7747,7 @@ change", and those are only usually the same.
 
 The build edition integrates `action=tonight`; standalone excludes its modules and dispatch. Preferences and saved titles are local and viewer-specific. Catalog, recommendations, trailers and playback follow the home POV/Umbrella setting. Ordinary OK opens explicit actions; no long press is required. This is an experimental recommendation feature based on explicit likes, provider recommendations, genre, time and diversity, not deep semantic taste understanding.
 
-Live isolated Kodi 21.3 validation covered menu/action rendering in Estuary, FENtastic, OLD and Arctic Fuse 3; ordinary selection and Back; the favourites entry; real popular catalogs from POV6.09.03 and Umbrella6.7.87; preservation of saved identity across provider change. A live Umbrella series test found incomplete artwork caused an empty season list. The route now supplies the native consumer's required artwork keys; the same known series returns five seasons after the fix, matching POV. This does not claim source availability or successful full playback on every device.
+Live isolated Kodi 21.3 validation covered menu/action rendering in Estuary, FENtastic and Arctic Fuse 3; ordinary selection and Back; the favourites entry; real popular catalogs from POV6.09.03 and Umbrella6.7.87; preservation of saved identity across provider change. A live Umbrella series test found incomplete artwork caused an empty season list. The route now supplies the native consumer's required artwork keys; the same known series returns five seasons after the fix, matching POV. This does not claim source availability or successful full playback on every device.
 
 UX refinements put trailers third, acknowledge personal markings without another modal, return quietly on intentional catalog cancellation, show active time/type choices, and hide profile creation at the eight-profile limit. 59 feature tests pass. The wider 69-file suite passed before these bounded UI/provider refinements; relevant tests and final package verification are rerun afterwards.
 
