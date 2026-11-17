@@ -173,5 +173,119 @@ class LoadedSkinSwapTests(unittest.TestCase):
         self.assertEqual(receipts, ['begin', 'complete'])
 
 
+class ForegroundTests(unittest.TestCase):
+    """Quick Update and the install window (field report with a log, 17 Nov 2026): the window is drawn by the
+    loaded skin, so the swap waits until it has closed."""
+
+    def finish(self, kodi, manifest_version='1.0.12', prepared=True, quiet=True, swap=None):
+        config = types.SimpleNamespace(ADDON_DATA='data', ADDON_ID='plugin.program.kodipovilwizard', ADDONS='addons')
+        kodi.getCondVisibility = lambda condition: (
+            self.assertEqual(condition, '!System.HasActiveModalDialog + !Player.HasMedia') or quiet)
+        kodi.LOGERROR = 4
+        fn = _load_function(LIBS / 'modular_updater.py', '_finish_loaded_skin_swap',
+                            dict(os=os, CONFIG=config, xbmc=kodi,
+                                 logging=types.SimpleNamespace(log=lambda *a, **k: None)),
+                            class_name='ModularUpdater')
+        swaps, receipts = [], []
+
+        def default_swap(addon_id, version, sha256):
+            swaps.append((addon_id, version, sha256))
+        this = types.SimpleNamespace(
+            _manifest={'addons': {SKIN: {'version': manifest_version, 'sha256': 'a' * 64}}},
+            _swap_loaded_skin=swap or default_swap)
+        libs = types.ModuleType('resources.libs')
+        libs.staged_addon_install = types.SimpleNamespace(
+            prepared_matches=lambda addons, addon_id, version, sha256: (
+                prepared and (addons, addon_id, version, sha256) == ('addons', SKIN, '1.0.12', 'a' * 64)))
+        libs.addon_install_receipt = types.SimpleNamespace(complete=lambda *a: receipts.append(a[1]))
+
+        def run(done=()):
+            with mock.patch.dict(sys.modules, {'resources.libs': libs}):
+                return fn(this, list(done))
+        run.waiting = lambda: getattr(this, '_skin_swap_waiting', False)
+        return run, swaps, receipts
+
+    def test_the_package_the_window_left_waiting_goes_in_once_it_has_closed(self):
+        run, swaps, receipts = self.finish(Kodi())
+        self.assertEqual(run(), SKIN)
+        self.assertEqual(swaps, [(SKIN, '1.0.12', 'a' * 64)])
+        self.assertEqual(receipts, [SKIN])
+        self.assertFalse(run.waiting())
+
+    def test_a_promised_swap_that_did_not_happen_is_remembered_so_the_viewer_is_told(self):
+        run, _swaps, _receipts = self.finish(Kodi(), quiet=False)
+        self.assertIsNone(run())
+        self.assertTrue(run.waiting(), 'a video or a dialog: the next start does it')
+        run, _swaps, _receipts = self.finish(Kodi(), prepared=False)
+        self.assertIsNone(run())
+        self.assertFalse(run.waiting(), 'nothing was promised')
+        source = (LIBS / 'modular_updater.py').read_text('utf-8')
+        self.assertIn("elif getattr(self, '_skin_swap_waiting', False):", source)
+        self.assertIn("'הסקין יעודכן בהפעלה הבאה של Kodi'", source)
+
+    def test_nothing_happens_without_a_waiting_package_or_at_a_bad_moment(self):
+        for kwargs, done in ((dict(prepared=False), ()),            # nothing was left waiting
+                             (dict(quiet=False), ()),               # a video, or a dialog still up
+                             (dict(manifest_version='1.0.13'), ()),  # the waiting package is not the manifest's
+                             (dict(), (SKIN,))):                    # it went in by itself (not Windows)
+            run, swaps, receipts = self.finish(Kodi(), **kwargs)
+            self.assertIsNone(run(done))
+            self.assertEqual((swaps, receipts), ([], []))
+        run, swaps, receipts = self.finish(Kodi(skin='skin.estuary'))
+        self.assertIsNone(run(), 'a skin the manifest does not ship')
+
+    def test_a_swap_that_fails_is_reported_as_not_done(self):
+        def broken(*_args):
+            raise PermissionError(13, 'Access is denied')
+        run, _swaps, receipts = self.finish(Kodi(), swap=broken)
+        self.assertIsNone(run())
+        self.assertTrue(run.waiting())
+        self.assertEqual(receipts, [], 'the next start tries again')
+
+    def install_job(self, kodi, prepared):
+        config = types.SimpleNamespace(ADDON_DATA='data', ADDON_ID='plugin.program.kodipovilwizard', ADDONS='addons')
+        kodi.LOGERROR = 4
+        fn = _load_function(LIBS / 'gui/install_manager.py', '_install_job',
+                            dict(os=os, CONFIG=config, xbmc=kodi, LATER='later',
+                                 logging=types.SimpleNamespace(log=lambda *a, **k: None),
+                                 config_apply=types.SimpleNamespace(sha256_file=lambda path: 'a' * 64)))
+        libs = types.ModuleType('resources.libs')
+        libs.staged_addon_install = types.SimpleNamespace(
+            install=refused, prepared_matches=lambda addons, addon_id, version, sha256: (
+                prepared and (addons, version, sha256) == ('addons', '1.0.12', 'a' * 64)))
+        libs.addon_install_receipt = types.SimpleNamespace(begin=lambda *a: None, complete=lambda *a: None)
+
+        def run(addon_id):
+            with mock.patch.dict(sys.modules, {'resources.libs': libs}):
+                return fn(dict(id=addon_id, version='1.0.12', sha256='a' * 64), 'x.zip', lambda *a: None)
+        return run
+
+    def test_the_window_says_later_for_the_loaded_skin_and_failed_for_anything_else(self):
+        self.assertEqual(self.install_job(Kodi(), prepared=True)(SKIN), 'later')
+        self.assertIs(self.install_job(Kodi(), prepared=False)(SKIN), False, 'no verified package: a real failure')
+        self.assertIs(self.install_job(Kodi(skin='skin.estuary'), prepared=True)(SKIN), False)
+        self.assertIs(self.install_job(Kodi(), prepared=True)('script.fentastic.helper'), False)
+
+    def test_the_updater_finishes_the_swap_before_it_registers_what_was_installed(self):
+        source = (LIBS / 'modular_updater.py').read_text('utf-8')
+        body = source[source.index('    def execute_updates('):]
+        finish = body.index('landed = self._finish_loaded_skin_swap(extracted_addons)')
+        self.assertLess(body.index('run_install_manager(orchestrator_func=_orchestrator)'), finish)
+        self.assertLess(finish, body.index('# 4. Database Registration for all extracted addons'))
+        window = (LIBS / 'gui/install_manager.py').read_text('utf-8')
+        self.assertIn("if ok == LATER:", window)
+        self.assertIn("state='downloaded', status='יותקן מיד עם סגירת החלון'", window)
+
+    def test_the_windows_marks_are_in_every_font(self):
+        """A check, a cross and an hourglass are boxes in a skin whose font lacks them (a viewer's photo)."""
+        window = (LIBS / 'gui/install_manager.py').read_text('utf-8')
+        glyphs = window[window.index('def _glyph(state):'):window.index('def _refresh(self):')]
+        for mark in ('✓', '✗', '⌛'):
+            self.assertNotIn(mark, glyphs)
+        layout = (LIBS.parent / 'skins/Default/1080i/DialogModularInstall.xml').read_text('utf-8')
+        header = layout[layout.index('<control type="label" id="200">'):layout.index('<control type="label" id="201">')]
+        self.assertIn('<label></label>', header, 'the panel carries the logo there')
+
+
 if __name__ == '__main__':
     unittest.main()

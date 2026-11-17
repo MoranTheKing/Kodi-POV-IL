@@ -113,6 +113,10 @@ def _download(url, dest, on_progress, should_abort):
         return False
 
 
+# _install_job's answer for the loaded skin on Windows: verified, swapped in after the window
+LATER = 'later'
+
+
 def _install_job(job, package, on_progress):
     """The foreground installer uses the same verified swap as OTA.
 
@@ -134,6 +138,24 @@ def _install_job(job, package, on_progress):
             addon_install_receipt.complete(data_dir, job['id'])
         on_progress(count, count)
         return True
+    except PermissionError as exc:
+        # Windows, the skin that is on screen: Kodi holds its texture bundle
+        # open and the folder cannot be renamed under it (see
+        # modular_updater._swap_loaded_skin). This window is drawn by that
+        # skin, so the swap waits until it has closed: the package is
+        # extracted and verified, and the updater puts it in right after.
+        try:
+            waiting = (job['id'] == xbmc.getSkinDir() and staged_addon_install.prepared_matches(
+                CONFIG.ADDONS, job['id'], str(job['version']), digest))
+        except Exception:
+            waiting = False
+        if waiting:
+            logging.log('[InstallManager] {} is the loaded skin: its verified package goes in '
+                        'when this window closes'.format(job['id']), level=xbmc.LOGINFO)
+            return LATER
+        logging.log('[InstallManager] verified install failed for {}: {}'.format(
+            job['id'], exc), level=xbmc.LOGERROR)
+        return False
     except Exception as exc:
         logging.log('[InstallManager] verified install failed for {}: {}'.format(
             job['id'], exc), level=xbmc.LOGERROR)
@@ -227,13 +249,16 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
 
     @staticmethod
     def _glyph(state):
+        # A light, not a symbol: the check, the cross and the hourglass are
+        # boxes in a skin whose font lacks them (a viewer's photo, on Onyx).
+        # A bullet and a multiplication sign are in every font.
         if state == 'success':
-            return '[COLOR FF43A047]✓[/COLOR]'   # green check
+            return '[COLOR FF43A047][B]•[/B][/COLOR]'   # green
         if state == 'failed':
-            return '[COLOR FFE53935]✗[/COLOR]'   # red cross
+            return '[COLOR FFE53935][B]×[/B][/COLOR]'   # red
         if state == 'downloaded':
-            return '[COLOR FFFFFFFF]⌛[/COLOR]'   # hourglass (static)
-        return '[COLOR 88FFFFFF]⌛[/COLOR]'       # pending hourglass (dim)
+            return '[COLOR FFFFFFFF][B]•[/B][/COLOR]'   # waiting its turn
+        return '[COLOR 88FFFFFF][B]•[/B][/COLOR]'       # pending (dim)
 
     def _refresh(self):
         jobs = self._snapshot()
@@ -377,7 +402,9 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
 
             ok = _install_job(job, dest, on_ex)
             tools.remove_file(dest)
-            if ok:
+            if ok == LATER:
+                self._set(idx, state='downloaded', status='יותקן מיד עם סגירת החלון', progress=100)
+            elif ok:
                 self._set(idx, state='success', status='הותקן בהצלחה', progress=100)
                 self._installed.append(job['id'])
             else:

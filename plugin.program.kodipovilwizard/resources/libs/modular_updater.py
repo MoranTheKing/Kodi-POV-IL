@@ -1065,6 +1065,40 @@ class ModularUpdater:
         except Exception:
             return False
 
+    def _finish_loaded_skin_swap(self, done):
+        """Foreground update: put in the loaded skin's package the install window left waiting.
+
+        Field report with a log (17 Nov 2026, Windows): the background pass
+        failed on Onyx, the viewer ran Quick Update, and the install window
+        said "the installation failed" for the same reason -- Kodi holds the
+        loaded skin's texture bundle open. The window is drawn by that skin,
+        so it could not unload it; by now it has closed. Returns the skin's
+        id when its update went in, else None (nothing waiting, a video, a
+        dialog still up: the next start's background pass does it).
+        """
+        try:
+            from resources.libs import staged_addon_install, addon_install_receipt
+            skin = xbmc.getSkinDir()
+            mod = ((getattr(self, '_manifest', None) or {}).get('addons') or {}).get(skin)
+            if not mod or skin in done:
+                return None
+            version, sha256 = str(mod.get('version')), mod.get('sha256')
+            if not sha256 or not staged_addon_install.prepared_matches(
+                    CONFIG.ADDONS, skin, version, sha256):
+                return None
+            self._skin_swap_waiting = True
+            if not xbmc.getCondVisibility('!System.HasActiveModalDialog + !Player.HasMedia'):
+                return None
+            self._swap_loaded_skin(skin, version, sha256)
+            self._skin_swap_waiting = False
+            addon_install_receipt.complete(
+                os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID), skin)
+            return skin
+        except Exception as exc:
+            logging.log('[ModularUpdater] loaded skin swap after the install window failed: {0}'
+                        .format(exc), level=xbmc.LOGERROR)
+            return None
+
     def _swap_loaded_skin(self, addon_id, version, sha256):
         """Swap in the update of the skin Kodi has loaded (Windows).
 
@@ -1428,6 +1462,24 @@ class ModularUpdater:
 
             try: self.progress.close()
             except: pass
+
+        # The foreground installers could not swap the loaded skin on Windows
+        # (their windows are drawn by it). They are closed now.
+        if not self.background:
+            landed = self._finish_loaded_skin_swap(extracted_addons)
+            if landed:
+                extracted_addons.append(landed)
+                if landed in failed_addons:
+                    failed_addons.remove(landed)
+            elif getattr(self, '_skin_swap_waiting', False):
+                # the window promised "when this window closes" and the moment was
+                # wrong (a video, a dialog) or the swap was refused: say when instead
+                try:
+                    xbmcgui.Dialog().notification(
+                        CONFIG.ADDONTITLE, 'הסקין יעודכן בהפעלה הבאה של Kodi',
+                        xbmcgui.NOTIFICATION_INFO, 6000)
+                except Exception:
+                    pass
 
         # 4. Database Registration for all extracted addons
         if extracted_addons:

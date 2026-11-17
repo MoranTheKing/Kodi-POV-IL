@@ -942,7 +942,7 @@
 				<ondown>5051</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),kids)</visible>
 			</control>
-			<control type="button" id="9177">
+			<control type="button" id="9179">
 				<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
 				<font>povil_chip</font><align>center</align><aligny>center</aligny>
 				<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>
@@ -951,12 +951,12 @@
 				<label>כל המועדפים</label>
 				<onclick>ActivateWindow(favouritesbrowser)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
-				<onfocus>SetProperty(povil.focus,9177,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9179,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites)</visible>
 			</control>
-			<control type="button" id="9176">
+			<control type="button" id="9178">
 				<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
 				<font>povil_chip</font><align>center</align><aligny>center</aligny>
 				<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>
@@ -965,12 +965,12 @@
 				<label>הרשימות שלי</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.my_content&amp;name=%D7%94%D7%A8%D7%A9%D7%99%D7%9E%D7%95%D7%AA%20%D7%A9%D7%9C%D7%99",return)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
-				<onfocus>SetProperty(povil.focus,9176,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9178,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites)</visible>
 			</control>
-			<control type="button" id="9175">
+			<control type="button" id="9177">
 				<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
 				<font>povil_chip</font><align>center</align><aligny>center</aligny>
 				<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>
@@ -979,12 +979,12 @@
 				<label>סדרות ב-MDBList</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=mdblist_my_tvshows&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%91-MDBList",return)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
-				<onfocus>SetProperty(povil.focus,9175,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9177,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites) + [String.IsEqual(Window(home).Property(povil.svc.mdblist),1) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible>
 			</control>
-			<control type="button" id="9174">
+			<control type="button" id="9176">
 				<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
 				<font>povil_chip</font><align>center</align><aligny>center</aligny>
 				<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>
@@ -993,12 +993,12 @@
 				<label>סרטים ב-MDBList</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=mdblist_my_movies&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%91-MDBList",return)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
-				<onfocus>SetProperty(povil.focus,9174,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9176,home)</onfocus>
 				<onup>9015</onup>
 				<ondown>5061</ondown>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites) + [String.IsEqual(Window(home).Property(povil.svc.mdblist),1) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)]</visible>
 			</control>
-			<control type="button" id="9173">
+			<control type="button" id="9175">
 				<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
 				<font>povil_chip</font><align>center</align><aligny>center</aligny>
 				<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>
@@ -1006,6 +1006,34 @@
 				<texturefocus border="24" colordiffuse="povil_gold">povil/pill48.png</texturefocus>
 				<label>סדרות ב-Trakt</label>
 				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=trakt_my_tvshows&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%91-Trakt",return)</onclick>
+				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9175,home)</onfocus>
+				<onup>9015</onup>
+				<ondown>5061</ondown>
+				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites)</visible>
+			</control>
+			<control type="button" id="9174">
+				<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
+				<font>povil_chip</font><align>center</align><aligny>center</aligny>
+				<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>
+				<texturenofocus border="24" colordiffuse="24FFFFFF">povil/pill48.png</texturenofocus>
+				<texturefocus border="24" colordiffuse="povil_gold">povil/pill48.png</texturefocus>
+				<label>סרטים ב-Trakt</label>
+				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=trakt_my_movies&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%91-Trakt",return)</onclick>
+				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,9174,home)</onfocus>
+				<onup>9015</onup>
+				<ondown>5061</ondown>
+				<visible>String.IsEqual(Window(home).Property(povil.tab),favourites)</visible>
+			</control>
+			<control type="button" id="9173">
+				<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
+				<font>povil_chip</font><align>center</align><aligny>center</aligny>
+				<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>
+				<texturenofocus border="24" colordiffuse="24FFFFFF">povil/pill48.png</texturenofocus>
+				<texturefocus border="24" colordiffuse="povil_gold">povil/pill48.png</texturefocus>
+				<label>סדרות ב-POV</label>
+				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=favorites_tvshows&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%91-POV",return)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 				<onfocus>SetProperty(povil.focus,9173,home)</onfocus>
 				<onup>9015</onup>
@@ -1018,8 +1046,8 @@
 				<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>
 				<texturenofocus border="24" colordiffuse="24FFFFFF">povil/pill48.png</texturenofocus>
 				<texturefocus border="24" colordiffuse="povil_gold">povil/pill48.png</texturefocus>
-				<label>סרטים ב-Trakt</label>
-				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=trakt_my_movies&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%91-Trakt",return)</onclick>
+				<label>סרטים ב-POV</label>
+				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=favorites_movies&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%91-POV",return)</onclick>
 				<onfocus>SetProperty(povil.tab,favourites,home)</onfocus>
 				<onfocus>SetProperty(povil.focus,9172,home)</onfocus>
 				<onup>9015</onup>
