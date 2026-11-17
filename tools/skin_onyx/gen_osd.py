@@ -305,7 +305,8 @@ def gen_fullscreen():
     x(3, '<control type="image"><left>-320</left><top>0</top><width>2560</width><height>520</height><texture>povil/grad_top.png</texture></control>')
     x(3, '<control type="image"><left>-320</left><top>520</top><width>2560</width><height>560</height><texture>povil/grad_bottom.png</texture></control>')
     title_block(x, 3)
-    x(3, '<control type="textbox"><left>%d</left><top>300</top><width>1000</width><height>148</height><font>povil_plot</font>'
+    # under the pills (they end at 340): at 300 the plot was written over them (owner's photo, 1.0.12)
+    x(3, '<control type="textbox"><left>%d</left><top>356</top><width>1000</width><height>148</height><font>povil_plot</font>'
          '<textcolor>povil_white</textcolor><shadowcolor>FF000000</shadowcolor><align>right</align>'
          '<label>$INFO[VideoPlayer.Plot]</label><autoscroll delay="6000" time="3000" repeat="6000">true</autoscroll></control>' % (right - 1000))
     # Clock, end time and the file itself, top left
@@ -314,8 +315,7 @@ def gen_fullscreen():
     x(3, '<control type="label"><left>%d</left><top>112</top><width>600</width><height>36</height><font>povil_meta</font>'
          '<textcolor>povil_dim</textcolor><aligny>center</aligny><label>$INFO[Player.FinishTime,מסתיים ב-]</label>'
          '<visible>!String.IsEmpty(Player.Duration)</visible></control>' % H.MARGIN)
-    x(3, '<control type="label"><left>%d</left><top>150</top><width>700</width><height>36</height><font>povil_meta</font>'
-         '<textcolor>povil_gold</textcolor><aligny>center</aligny><label>$VAR[POVIL_OSD_File]</label></control>' % H.MARGIN)
+    # (the line that named the file's formats here -- "4Kp - HEVC - DOLBYVISION" -- is gone: the pills say it)
     state_line(x, 3, title=False)
     timeline(x, 3, False)
     x(2, '</control>')
@@ -423,18 +423,6 @@ def variables():
     x(2, '<value condition="Player.Rewinding">הרצה אחורה ×$INFO[Player.PlaySpeed]</value>')
     x(2, '<value condition="Player.Paused + Player.Caching">טוען...</value>')
     x(2, '<value condition="Player.Paused">מושהה</value>')
-    x(1, '</variable>')
-    # The file: picture height, picture and sound formats (the info panel)
-    x(1, '<variable name="POVIL_OSD_File">')
-    x(2, '<value>$INFO[VideoPlayer.VideoResolution,,p]$INFO[VideoPlayer.VideoCodec,  •  [UPPERCASE],[/UPPERCASE]]'
-         '$INFO[VideoPlayer.HdrType,  •  [UPPERCASE],[/UPPERCASE]]$INFO[VideoPlayer.AudioCodec,  •  [UPPERCASE],[/UPPERCASE]]'
-         '$VAR[POVIL_OSD_Channels, ]</value>')
-    x(1, '</variable>')
-    # Kodi counts the sound's channels (6); people know them by their layout (5.1)
-    x(1, '<variable name="POVIL_OSD_Channels">')
-    for count, name in (('1', 'מונו'), ('2', 'סטריאו'), ('3', '2.1'), ('4', '4.0'), ('5', '5.0'), ('6', '5.1'), ('7', '6.1'), ('8', '7.1'), ('10', '9.1')):
-        x(2, '<value condition="String.IsEqual(VideoPlayer.AudioChannels,%s)">%s</value>' % (count, name))
-    x(2, '<value>$INFO[VideoPlayer.AudioChannels]</value>')
     x(1, '</variable>')
     x(1, '<variable name="POVIL_OSD_Focused">')
     x(2, '<value condition="Control.HasFocus(%d)">%s</value>' % (TIMELINE, e(TIMELINE_HINT)))

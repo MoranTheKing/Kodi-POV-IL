@@ -132,7 +132,7 @@ class ConfigBootstrapRecoveryTests(unittest.TestCase):
             'tools':types.SimpleNamespace(ensure_folders=lambda _:None),
             'xbmc':types.SimpleNamespace(Monitor=lambda:monitor,LOGINFO=1,LOGWARNING=3,LOGERROR=4,getCondVisibility=lambda _:True)}
         fn=_load_function(LIBS/'modular_updater.py','execute_updates',scope,'ModularUpdater')
-        self_mock=types.SimpleNamespace(fresh=True,background=False,_manifest={'config':{'config_version':'2.0.9'}},
+        self_mock=types.SimpleNamespace(fresh=True,background=False,_finish_loaded_skin_swap=lambda done: None,_manifest={'config':{'config_version':'2.0.9'}},
             CORE_PROVISION_IDS=(),_resolve_phase_two_bounded=lambda:([],[]),
             _config_pending=lambda _:not state['applied'],_fresh_install_complete=lambda _:state['applied'],
             mark_provisioned=lambda _:marks.append(True),is_provisioned=lambda:bool(marks))

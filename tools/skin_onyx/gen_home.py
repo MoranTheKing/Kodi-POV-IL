@@ -151,7 +151,11 @@ TABS = [
                ('הסדרות שלי (MDBList)', pov_tv('mdblist_my_tvshows'), 'poster', True)],
          # MDBList's chips once its rows have items (a connected account): no
          # settings read on every frame
-         chips=[('סרטים ב-Trakt', videos(pov_movies('trakt_my_movies'))),
+         # POV's own saved lists first: they need no account (asked for by a viewer: the chips named
+         # Trakt and MDBList only, and the two POV rows had no way to open in full)
+         chips=[('סרטים ב-POV', videos(pov_movies('favorites_movies'))),
+                ('סדרות ב-POV', videos(pov_tv('favorites_tvshows'))),
+                ('סרטים ב-Trakt', videos(pov_movies('trakt_my_movies'))),
                 ('סדרות ב-Trakt', videos(pov_tv('trakt_my_tvshows'))),
                 ('סרטים ב-MDBList', videos(pov_movies('mdblist_my_movies')), MDBLIST_ON),
                 ('סדרות ב-MDBList', videos(pov_tv('mdblist_my_tvshows')), MDBLIST_ON),
