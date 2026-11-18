@@ -102,6 +102,10 @@ class Router:
             # the player's 'subtitles up / down' buttons (Onyx)
             from resources.libs import player_styles
             player_styles.subtitles_position(self.params.get('step'))
+        elif mode == 'pov_favorites_order':
+            # POV's own favourites: newest first, or by name (the settings' line, Onyx's favourites tab)
+            from resources.libs.patches import pov_favorites_order
+            pov_favorites_order.toggle()
         elif mode in ('player_settings', 'player_change_source', 'player_episodes'):
             from resources.libs import player_styles
             {'player_settings': player_styles.settings,

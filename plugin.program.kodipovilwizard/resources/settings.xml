@@ -24,6 +24,8 @@
         <setting type="lsep" label="המקור האחרון שנוגן (POV ו-Umbrella):"/>
         <setting id="pov_remember_source" type="bool" label="זכור את המקור שנוגן וסמן אותו ראשון ברשימת המקורות" default="true"/>
         <setting id="pov_play_remembered" type="bool" label="לחיצה על כותר מנגנת מיד את המקור האחרון שנוגן בו (בלי רשימת המקורות)" default="false" enable="eq(-1,true)"/>
+        <setting type="lsep" label="המועדפים של POV:"/>
+        <setting id="pov_favorites_order" type="action" label="מיון המועדפים: החלפה בין 'החדשים קודם' ל'לפי א-ב'" action="RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=pov_favorites_order)"/>
         <setting id="_pov_remember_migrated_v1" type="bool" label="32504" default="false" visible="false"/>
         <setting id="_pov_palette_v1" type="bool" label="32504" default="false" visible="false"/>
         <setting id="_umbrella_palette_v1" type="bool" label="32504" default="false" visible="false"/>
