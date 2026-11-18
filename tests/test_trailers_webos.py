@@ -138,6 +138,30 @@ class WebosTests(unittest.TestCase):
         desk.waiting = Tick()
         self.assertTrue(desk.guard())
         self.assertEqual(calls, [1])
+        # the owner's LG, 0.5.14: he moved on nine seconds into an opening that never showed a picture -- still
+        # counted (the stop waits for the first picture, and none came)
+        calls.clear()
+        now[0] = 1000.0
+        desk.given_up.clear()
+        desk.ours, desk.key, desk.opening = 'http://x/n.mpd', 'plugin://plugin.video.youtube/play/?video_id=bbbbbbbbbbb', now[0]
+        desk.stop()
+        self.assertTrue(desk.stop_wanted)
+        self.assertTrue(desk.guard())
+        self.assertEqual(calls, [1])
+        # ... but a trailer the viewer stopped after its first picture is simply over
+        calls.clear()
+        desk.ours, desk.key, desk.opening, desk.stop_wanted = 'http://x/o.mpd', 'plugin://plugin.video.youtube/play/?video_id=ccccccccccc', None, False
+        desk.ticket += 1
+        guard_ticket = desk.ticket
+
+        class Turn(object):
+            def wait(self, seconds):
+                desk.ticket = guard_ticket + 1      # moved on while the guard watched
+                now[0] += seconds
+                return False
+        desk.waiting = Turn()
+        self.assertFalse(desk.guard())
+        self.assertEqual(calls, [])
 
 
 if __name__ == '__main__':

@@ -93,12 +93,12 @@
 		<control type="image" description="under the trailer">
 			<left>0</left><top>0</top><width>1920</width><height>1080</height>
 			<texture colordiffuse="FF000000">povil/white.png</texture>
-			<visible>Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask))</visible>
+			<visible>Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))</visible>
 			<animation effect="fade" start="0" end="100" time="400">Visible</animation>
 		</control>
 		<control type="videowindow" description="trailer">
 			<left>0</left><top>0</top><width>1920</width><height>1080</height>
-			<visible>Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask))</visible>
+			<visible>Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))</visible>
 			<animation effect="fade" start="0" end="100" time="600">Visible</animation>
 			<animation effect="fade" start="100" end="0" time="250">Hidden</animation>
 		</control>
@@ -106,25 +106,25 @@
 		<control type="image" description="hero shade">
 			<left>520</left><top>-160</top><width>1400</width><height>1400</height>
 			<texture>povil/grad_right.png</texture>
-			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)">Conditional</animation>
+			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening)) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)">Conditional</animation>
 		</control>
 		<control type="image" description="rows shade">
 			<left>-320</left><top>330</top><width>2560</width><height>750</height>
 			<texture>povil/grad_bottom.png</texture>
-			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)">Conditional</animation>
+			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening)) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)">Conditional</animation>
 		</control>
 		<control type="image" description="top shade">
 			<left>-320</left><top>0</top><width>2560</width><height>240</height>
 			<texture>povil/grad_top.png</texture>
-			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)">Conditional</animation>
+			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening)) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)">Conditional</animation>
 		</control>
 		<control type="image" description="vignette">
 			<left>0</left><top>0</top><width>1920</width><height>1080</height>
 			<texture>povil/vignette.png</texture>
-			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)">Conditional</animation>
+			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening)) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)">Conditional</animation>
 		</control>
 		<control type="group" description="over the picture">
-			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)">Conditional</animation>
+			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening)) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)">Conditional</animation>
 			<control type="label" description="clock">
 				<left>90</left><top>30</top><width>250</width><height>52</height>
 				<font>povil_clock</font><textcolor>povil_white</textcolor><aligny>center</aligny>
@@ -393,7 +393,7 @@
 					<left>970</left><top>408</top><width>860</width><height>114</height>
 					<animation effect="slide" end="0,-40" time="140" tween="cubic" easing="out" condition="String.IsEmpty(Control.GetLabel(9807))">Conditional</animation>
 					<font>povil_plot</font><textcolor>povil_dim</textcolor><align>right</align>
-					<animation effect="fade" start="100" end="0" time="400" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask))">Conditional</animation>
+					<animation effect="fade" start="100" end="0" time="400" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))">Conditional</animation>
 					<label>$VAR[POVIL_HeroPlot]</label>
 				</control>
 			</control>
