@@ -98,6 +98,7 @@
 		</control>
 		<control type="videowindow" description="trailer">
 			<left>0</left><top>0</top><width>1920</width><height>1080</height>
+			<hitrect x="-10" y="-10" w="1" h="1"/>
 			<visible>Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))</visible>
 			<animation effect="fade" start="0" end="100" time="600">Visible</animation>
 			<animation effect="fade" start="100" end="0" time="250">Hidden</animation>
