@@ -14,12 +14,12 @@ trailers = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(trailers)
 
 
-def ask(video_codec=None, features=('avc1', 'vp9', 'av01', 'mp4a', 'opus', 'hdr', 'hfr')):
+def ask(video_codec=None, features=('avc1', 'vp9', 'av01', 'mp4a', 'opus', 'hdr', 'hfr'), max_height=None):
     seen = {}
 
     class Settings(object):
         def mpd_video_qualities(self):
-            return [{'nom_height': 1080}, {'nom_height': 720}, {'nom_height': 480}]
+            return [{'nom_height': 2160}, {'nom_height': 1080}, {'nom_height': 720}, {'nom_height': 480}]
 
         def stream_features(self, raw_values=False):
             return list(features) if raw_values else frozenset(features)
@@ -44,6 +44,8 @@ def ask(video_codec=None, features=('avc1', 'vp9', 'av01', 'mp4a', 'opus', 'hdr'
             return Client()
 
     args = {} if video_codec is None else {'video_codec': video_codec}
+    if max_height:
+        args['max_height'] = max_height
     trailers.light_streams('hoRHBV0m1hw', Provider, Context, 'w', **args)
     return seen
 
@@ -57,16 +59,18 @@ class WebosTests(unittest.TestCase):
             self.assertFalse(trailers.on_webos(None, 'C:\\Program Files\\Kodi\\', os_info), os_info)
         self.assertFalse(trailers.on_webos('', None, None))
 
-    def test_every_other_device_asks_for_h264_and_an_lg_tv_for_vp9(self):
+    def test_every_other_device_asks_720p_and_an_lg_tv_1080p_both_h264(self):
         self.assertEqual(ask()['kinds'], frozenset(('avc1', 'mp4a', 'opus')))
-        self.assertEqual(ask()['heights'], [720, 480], 'up to 720p either way')
-        lg = ask(trailers.WEBOS_VIDEO)['kinds']
-        self.assertEqual(trailers.WEBOS_VIDEO, 'vp9')
-        self.assertEqual(lg, frozenset(('vp9', 'mp4a', 'opus')), 'no H.264 among the preferred: the TV refused it')
-        self.assertNotIn('hdr', lg)
-        self.assertNotIn('hfr', lg)
-        # the add-on's own setting never named VP9: asked all the same
-        self.assertIn('vp9', ask(trailers.WEBOS_VIDEO, features=('avc1', 'mp4a'))['kinds'])
+        self.assertEqual(ask()['heights'], [720, 480], 'up to 720p elsewhere')
+        # an LG TV: H.264 like a film, and a film's size (0.5.13-0.5.15: 720p H.264 and VP9 were refused there)
+        self.assertEqual((trailers.WEBOS_VIDEO, trailers.WEBOS_HEIGHT), ('avc1', 1080))
+        lg = ask(trailers.WEBOS_VIDEO, max_height=trailers.WEBOS_HEIGHT)
+        self.assertEqual(lg['kinds'], frozenset(('avc1', 'mp4a', 'opus')))
+        self.assertEqual(lg['heights'], [1080, 720, 480])
+        self.assertNotIn('hdr', lg['kinds'])
+        self.assertNotIn('hfr', lg['kinds'])
+        # (the codec can still be asked for by name)
+        self.assertIn('vp9', ask('vp9', features=('avc1', 'mp4a'))['kinds'])
         source = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/trailers.py').read_text('utf-8')
         self.assertIn("on_webos(app_id, xbmcvfs.translatePath('special://xbmc/'), xbmc.getInfoLabel('System.OSVersionInfo'))", source)
         self.assertIn("os.environ.get('APPID') if xbmc.getCondVisibility('System.Platform.Linux + !System.Platform.Android') else None", source)
@@ -84,7 +88,15 @@ class WebosTests(unittest.TestCase):
             switch_off()
             self.assertTrue(skin['off'], 'the settings tile reads "off"')
             with open(path, encoding='utf-8') as handle:
-                self.assertEqual(json.load(handle), {'kodi': '21.0 (21.0.0) Git:20240406'})
+                self.assertEqual(json.load(handle), {'kodi': '21.0 (21.0.0) Git:20240406', 'way': trailers.WEBOS_WAY})
+            # switched off when they were played another way (0.5.14/0.5.15 on the owner's LG): tried once the new way
+            with open(path, 'w', encoding='utf-8') as handle:
+                json.dump({'kodi': '21.0 (21.0.0) Git:20240406'}, handle)
+            back, _ = guard('21.0 (21.0.0) Git:20240406')
+            self.assertTrue(back)
+            self.assertFalse(skin['off'])
+            self.assertIn('a new way to play them', said[-1])
+            switch_off()
             # the next start on the same Kodi: still off, nothing said
             said.clear()
             self.assertEqual(guard('21.0 (21.0.0) Git:20240406')[0], False)

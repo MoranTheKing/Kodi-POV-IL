@@ -1261,6 +1261,11 @@ def backdrop(x, d):
     x(d, '</control>')
     x(d, '<control type="videowindow" description="trailer">')
     x(d + 1, '<left>0</left><top>0</top><width>1920</width><height>1080</height>')
+    # A click (a tap on a phone) on a video window is Kodi's "to full screen": the home left the screen, the
+    # trailer was stopped for it, and the home came back from the start -- on the films tab (the owner, Nov
+    # 2026: "every time I tap the middle of the trailer to get the screen back, it takes me to the films menu").
+    # The window takes no clicks: a tap only brings the home back, where it was.
+    x(d + 1, '<hitrect x="-10" y="-10" w="1" h="1"/>')
     x(d + 1, '<visible>%s</visible>' % TRAILER_SHOWN)
     x(d + 1, '<animation effect="fade" start="0" end="100" time="600">Visible</animation>')
     x(d + 1, '<animation effect="fade" start="100" end="0" time="250">Hidden</animation>')

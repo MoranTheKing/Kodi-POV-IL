@@ -396,7 +396,7 @@ class DeskTests(unittest.TestCase):
         self.assertIsNone(desk.asked())
         source = (WIZARD / 'resources/libs/trailers.py').read_text('utf-8')
         self.assertIn('desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready,', source)
-        self.assertIn('return reachable(stream, fetch, save, log)', source)
+        self.assertIn('stream = reachable(stream, fetch, save, log)', source)
         self.assertIn('urllib.request.ProxyHandler({})', source, 'an address inside the device is read with no proxy')
 
     def test_a_server_that_refuses_its_own_address_is_read_through_the_device_itself(self):
@@ -448,7 +448,7 @@ class DeskTests(unittest.TestCase):
         self.assertIsNone(trailers.through_this_device('http://127.0.0.1:50152/x'))
         self.assertIsNone(trailers.through_this_device('https://rr1.example/videoplayback'))
         source = (WIZARD / 'resources/libs/trailers.py').read_text('utf-8')
-        self.assertIn('return reachable(stream, fetch, save, log)', source)
+        self.assertIn('stream = reachable(stream, fetch, save, log)', source)
         self.assertIn('os.path.join(xbmcvfs.translatePath(TEMP_PATH), name)', source, "kept in the folder the add-on's server serves from")
 
     def test_a_stop_that_comes_while_the_trailer_opens_is_looked_at_again(self):
@@ -494,7 +494,7 @@ class DeskTests(unittest.TestCase):
         self.assertEqual(player.calls[-1], ('stop',))
         # in Kodi the second look is half a second after the first picture, off the thread Kodi speaks on
         source = (WIZARD / 'resources/libs/trailers.py').read_text('utf-8')
-        self.assertIn('wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture)', source)
+        self.assertIn('wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture, translated=translated)', source)
         self.assertIn("threading.Thread(target=self._late_stop, args=late, name='POVILTrailerLook').start()", source)
         self.assertIn("xbmc.getInfoLabel('Control.GetLabel(%d)' % HERO_LABEL) == key", source)
         self.assertEqual(trailers.HERO_LABEL, 9809)
@@ -877,6 +877,12 @@ class SkinTests(unittest.TestCase):
         self.assertIn('!String.IsEmpty(Window(home).Property(povil.tr.on))', shown)
         # its first picture has come (the owner's LG: a player that hung opening said it had a video)
         self.assertIn('String.IsEmpty(Window(home).Property(povil.tr.opening))', shown)
+        # and it takes no clicks: a click on a video window is Kodi's "to full screen" (the owner's phone: a tap
+        # on the trailer stopped it and brought the home back on the films tab)
+        hit = video.find('hitrect')
+        self.assertIsNotNone(hit)
+        self.assertLess(int(hit.get('x')) + int(hit.get('w')), 0)
+        self.assertLess(int(hit.get('y')) + int(hit.get('h')), 0)
         order = [c.get('description') for c in controls]
         self.assertLess(order.index('backdrop'), order.index('trailer'))
         self.assertLess(order.index('under the trailer'), order.index('trailer'))
@@ -998,7 +1004,7 @@ class SkinTests(unittest.TestCase):
         startup = (WIZARD / 'startup.py').read_text('utf-8')
         self.assertIn("_start_watch('POVILTrailers', _trailers_watch)", startup)
         source = (WIZARD / 'resources/libs/trailers.py').read_text('utf-8')
-        self.assertIn('light_streams(video, Provider, XbmcContext, SERVER_WAKEUP, video_codec=video_codec)', source)
+        self.assertIn('light_streams(video, Provider, XbmcContext, SERVER_WAKEUP, video_codec=video_codec, max_height=max_height)', source)
         self.assertNotIn('youtube_resolver', source.split('"""', 2)[2], 'that door does not wake the add-on\'s server')
         code = source.split('"""', 2)[2]
         self.assertIn("halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)')", code)
