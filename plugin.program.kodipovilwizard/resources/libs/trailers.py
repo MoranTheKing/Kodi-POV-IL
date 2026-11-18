@@ -89,7 +89,12 @@ OPENING = 'povil.tr.opening'    # set from the moment the player is told to play
 OFF_SWITCH = 'POVILNoTrailers'  # the skin's setting: set = the viewer switched the trailers off
 HERO_LABEL = 9809               # the home's hidden label that holds the trailer address of the title in the hero (gen_home.py)
 YOUTUBE = 'plugin.video.youtube'
-QUIET_START_S = 60              # none while Kodi is still starting (its services, the home's rows)
+# None in the first seconds of this thread. It was a minute -- and this thread is started only after the
+# Wizard has seen the home's rows settle and has checked for updates, so a viewer waited well over a minute
+# from Kodi's start for the first trailer and took the trailers for broken (the owner, Nov 2026: "it has to
+# work right when one enters Kodi"). The start is over by the time this thread exists; a few seconds are
+# left for what the Wizard still does right after it.
+QUIET_START_S = 8
 MAX_HEIGHT = 720                # what the trailer asks of YouTube: H.264 up to this, which every box decodes in its chip
 HEAVY = ('vp9', 'av01', 'hdr', 'hfr', '3d', 'vr')
 WAKE_S = 5                      # how long the YouTube add-on's server may take to wake (its own player waits as long)
