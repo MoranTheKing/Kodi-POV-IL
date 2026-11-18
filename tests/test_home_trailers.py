@@ -477,7 +477,7 @@ class DeskTests(unittest.TestCase):
         self.assertEqual(player.calls[-1], ('stop',))
         # in Kodi the second look is half a second after the first picture, off the thread Kodi speaks on
         source = (WIZARD / 'resources/libs/trailers.py').read_text('utf-8')
-        self.assertIn('wanted_now=wanted_now, look=look, settle=SETTLE_S)', source)
+        self.assertIn('wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture)', source)
         self.assertIn("threading.Thread(target=self._late_stop, args=late, name='POVILTrailerLook').start()", source)
         self.assertIn("xbmc.getInfoLabel('Control.GetLabel(%d)' % HERO_LABEL) == key", source)
         self.assertEqual(trailers.HERO_LABEL, 9809)
@@ -973,7 +973,7 @@ class SkinTests(unittest.TestCase):
         startup = (WIZARD / 'startup.py').read_text('utf-8')
         self.assertIn("_start_watch('POVILTrailers', _trailers_watch)", startup)
         source = (WIZARD / 'resources/libs/trailers.py').read_text('utf-8')
-        self.assertIn('light_streams(video, Provider, XbmcContext, SERVER_WAKEUP)', source)
+        self.assertIn('light_streams(video, Provider, XbmcContext, SERVER_WAKEUP, video_codec=video_codec)', source)
         self.assertNotIn('youtube_resolver', source.split('"""', 2)[2], 'that door does not wake the add-on\'s server')
         code = source.split('"""', 2)[2]
         self.assertIn("halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)')", code)

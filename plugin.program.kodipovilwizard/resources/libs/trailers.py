@@ -131,6 +131,15 @@ MIN_TRAILER_S = 45              # a trailer shorter than this is a spot: an alte
 # (the owner's phone and the QA Kodi, Nov 2026; anxdpanic/plugin.video.youtube issues 1481 and 1483, open
 # since Aug 2026 with add-on 7.4.4). Without it the add-on plays the complete streams of its other clients.
 CUT_SHORT = ('android_vr',)
+# An LG TV (webOS) asks for VP9. The owner's LG (webOS 26 firmware, Kodi 21.0, Nov 2026): films play, but the
+# trailer's H.264 stream was refused by the TV's own decoder ("CDVDVideoCodecStarfish: Load failed"), no picture
+# came and the player hung opening. Kodi's forum reports the same refusal, and only H.264 files are named there.
+# VP9 is what LG's own YouTube app plays, and Kodi's webOS decoder takes it.
+WEBOS_VIDEO = 'vp9'
+# ... and if even that shows no picture there, the trailers are switched off on that TV (the settings tile says
+# so and turns them back on): the player hung opening there, and would at every start. Kept with the Kodi
+# version it happened on -- a TV whose Kodi is upgraded gets its trailers back once.
+WEBOS_OFF_FILE = 'trailers_webos_off.json'
 TRIES = 3                       # ... this many of a title's trailers at most, each costs a second or two
 _VIDEO_ID = re.compile(r'[?&]video_id=([\w-]{11})(?:&|$)')
 _ALTERNATIVES = re.compile(r'[?&]povil_alt=([\w.-]+)')
@@ -185,7 +194,45 @@ def whole_streams(groups, cut_short=CUT_SHORT):
     return tuple((name, tuple(client for client in clients if client not in cut_short)) for name, clients in groups)
 
 
-def light_streams(video, provider_class, context_class, wake):
+def on_webos(app_id, kodi_path, os_info):
+    """An LG TV: webOS gives every app its APPID, installs it under /usr/palm/applications, and names itself.
+    (Kodi 21 has no System.Platform condition for webOS; the caller passes the APPID only on a Linux that is
+    not Android.)"""
+    return bool(app_id) or '/usr/palm/applications/' in (kodi_path or '') or 'webos' in (os_info or '').lower()
+
+
+def webos_guard(path, kodi_version, off, set_off, log):
+    """On an LG TV: (back_on_now, switch_off). back_on_now -- the trailers were switched off here on an older
+    Kodi and are on again (the file is gone). switch_off() -- the trailer showed no picture: off, with the version."""
+    import json
+    back = False
+    try:
+        with open(path, encoding='utf-8') as handle:
+            was = json.load(handle).get('kodi')
+        if not off():
+            # the viewer switched them back on by hand: whatever they choose later is theirs, never undone here
+            os.remove(path)
+        elif was != kodi_version:
+            os.remove(path)
+            set_off(False)
+            back = True
+            log('an LG TV (webOS): Kodi is %s now (the trailers were switched off on %s): trailers on again' % (kodi_version, was))
+    except (OSError, ValueError, AttributeError):
+        pass
+
+    def switch_off():
+        set_off(True)
+        try:
+            with open(path, 'w', encoding='utf-8') as handle:
+                json.dump({'kodi': kodi_version}, handle)
+        except OSError:
+            pass
+        log('an LG TV (webOS): the trailer showed no picture -- trailers switched off on this TV '
+            '(the settings tile turns them back on)')
+    return back, switch_off
+
+
+def light_streams(video, provider_class, context_class, wake, video_codec='avc1'):
     """What the YouTube add-on answers for a trailer when asked for H.264 up to MAX_HEIGHT.
 
     First its server is woken, as its own player does before it plays (raises Asleep if it is
@@ -201,7 +248,7 @@ def light_streams(video, provider_class, context_class, wake):
     heights = [quality for quality in settings.mpd_video_qualities() if quality['nom_height'] <= MAX_HEIGHT]
     if not heights:
         raise ValueError('no adaptive streams in the YouTube add-on')
-    kinds = frozenset(kind for kind in settings.stream_features() if kind not in HEAVY) | frozenset(('avc1', 'mp4a'))
+    kinds = frozenset(kind for kind in settings.stream_features() if kind not in HEAVY and kind != 'avc1') | frozenset((video_codec, 'mp4a'))
     settings.mpd_video_qualities = lambda value=None: heights
     settings.stream_features = lambda value=None, raw_values=False: sorted(kinds) if raw_values else kinds
     client = provider.get_client(context=context)
@@ -380,7 +427,7 @@ class Desk(object):
 
     def __init__(self, home, player, resolve, make_item, enabled, log=lambda text: None, clock=None,
                  ready=lambda stream: stream, halt=None, wanted_now=lambda key: False, look=lambda key: '', settle=0.0,
-                 acting=lambda: False):
+                 acting=lambda: False, no_picture=None):
         import time
         self.home, self.player, self.resolve, self.make_item = home, player, resolve, make_item
         self.enabled, self.log, self.ready = enabled, log, ready
@@ -392,6 +439,7 @@ class Desk(object):
         # that came during the opening is looked at again (0: at once, on the caller's thread).
         self.wanted_now, self.look, self.settle = wanted_now, look, settle
         self.acting = acting        # is POV carrying out an action right now (or was a moment ago)?
+        self.no_picture = no_picture    # called when a trailer showed no picture at all (an LG TV: switched off)
         self.opened = {}            # the ask -> when its trailer was handed to the player, the last few times
         self.choice = {}            # the ask -> the one of its trailers that was found long enough (or the longest)
         self.shown = None           # when the trailer on the player showed its first picture
@@ -582,6 +630,8 @@ class Desk(object):
                         if ours:
                             self.halt()
                 self._did_not_play('given up (%s): %s' % ('stood still' if seen else 'no picture', video_id(key)))
+                if not seen and self.no_picture:
+                    self.no_picture()
                 return True
         return False
 
@@ -721,7 +771,7 @@ def watch():
         from youtube_plugin.youtube.provider import Provider
         from youtube_plugin.kodion.context import XbmcContext
         from youtube_plugin.kodion.constants import SERVER_WAKEUP
-        return light_streams(video, Provider, XbmcContext, SERVER_WAKEUP)
+        return light_streams(video, Provider, XbmcContext, SERVER_WAKEUP, video_codec=video_codec)
 
     def fetch(address, headers, seconds, span):
         # (a plain read of this module's own: no proxy for an address inside this device)
@@ -760,6 +810,17 @@ def watch():
         return item
 
     home = xbmcgui.Window(10000)
+    video_codec, no_picture = 'avc1', None
+    app_id = os.environ.get('APPID') if xbmc.getCondVisibility('System.Platform.Linux + !System.Platform.Android') else None
+    if on_webos(app_id, xbmcvfs.translatePath('special://xbmc/'), xbmc.getInfoLabel('System.OSVersionInfo')):
+        video_codec = WEBOS_VIDEO
+        log('an LG TV (webOS): trailers in %s' % WEBOS_VIDEO.upper())
+        _back, no_picture = webos_guard(
+            os.path.join(xbmcvfs.translatePath('special://profile/addon_data/plugin.program.kodipovilwizard/'), WEBOS_OFF_FILE),
+            xbmc.getInfoLabel('System.BuildVersion'),
+            off=lambda: xbmc.getCondVisibility('Skin.HasSetting(%s)' % OFF_SWITCH),
+            set_off=lambda on: xbmc.executebuiltin('Skin.%s(%s)' % ('SetBool' if on else 'Reset', OFF_SWITCH)),
+            log=log)
     home.clearProperty(ON)
     home.clearProperty(FILE)
     home.clearProperty(OPENING)
@@ -809,7 +870,7 @@ def watch():
     player = Events()
     desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready, acting=acting,
                 halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)'),
-                wanted_now=wanted_now, look=look, settle=SETTLE_S)
+                wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture)
 
     def run(job):
         threading.Thread(target=lambda: job() and desk.guard(), name='POVILTrailer').start()
