@@ -95,7 +95,7 @@
 							<posy>0</posy>
 							<width>802</width>
 							<height>81</height>
-							<texture border="9">img/MediaButton2.png</texture>
+							<texture border="14">povil/focus_box.png</texture>
 							<aspectratio>stretch</aspectratio>
 						</control>
 						<control type="label" description="Main Label">

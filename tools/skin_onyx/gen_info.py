@@ -14,12 +14,14 @@ import sys
 from xml.sax.saxutils import escape
 
 import gen_home as H
+import ratings_row as RR
 
 NL = chr(10)
 MIN = " דק'"
 RIGHT = 1920 - H.MARGIN
 COL = 1000          # width of the text column
 IS_EP = 'String.IsEqual(ListItem.DBType,episode)'
+NO_ROW = 'String.IsEmpty(Control.GetLabel(%d))' % H.RATINGS_KEY      # the title has no ratings row
 
 
 def e(s):
@@ -82,15 +84,22 @@ def gen():
     x(3, '<control type="grouplist"><left>%d</left><top>342</top><width>%d</width><height>42</height>'
          '<orientation>horizontal</orientation><align>right</align><itemgap>16</itemgap><usecontrolcoords>true</usecontrolcoords>' % (left, COL))
     x(4, '<control type="label"><width>auto</width><height>42</height><font>povil_meta</font><textcolor>povil_dim</textcolor><aligny>center</aligny><label>$VAR[POVIL_I_Meta]</label></control>')
+    # (the star and its number are for a title with no ratings row: there TMDb's mark says it)
     x(4, '<control type="label"><width>auto</width><height>42</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><aligny>center</aligny>'
-         '<label>$INFO[ListItem.Rating]$INFO[ListItem.Votes,  (,)]</label><visible>Integer.IsGreater(ListItem.Rating,0)</visible></control>')
-    x(4, '<control type="image"><top>10</top><width>22</width><height>22</height><texture colordiffuse="povil_gold">povil/star.png</texture><visible>Integer.IsGreater(ListItem.Rating,0)</visible></control>')
+         '<label>$INFO[ListItem.Rating]$INFO[ListItem.Votes,  (,)]</label><visible>Integer.IsGreater(ListItem.Rating,0) + %s</visible></control>' % NO_ROW)
+    x(4, '<control type="image"><top>10</top><width>22</width><height>22</height><texture colordiffuse="povil_gold">povil/star.png</texture>'
+         '<visible>Integer.IsGreater(ListItem.Rating,0) + %s</visible></control>' % NO_ROW)
     x(3, '</control>')
-    x(3, '<control type="textbox" id="4"><left>%d</left><top>402</top><width>%d</width><height>264</height><font>povil_plot</font>'
+    # The ratings row (ratings_row.py), then the plot under it; with no row both the plot and the cast
+    # start where they always did (402 and 396)
+    RR.key_label(x, 3, H.RATINGS_KEY, '$VAR[POVIL_I_RatingsKey]')
+    RR.row(x, 3, RIGHT, 392, H.RATINGS_KEY, H.RATINGS_SLOT, 'POVIL_I_RatingsTmdb', width=COL)
+    lift = ('<animation effect="slide" end="0,-38" time="140" tween="cubic" easing="out" condition="%s">Conditional</animation>' % NO_ROW)
+    x(3, '<control type="textbox" id="4"><left>%d</left><top>440</top><width>%d</width><height>228</height><font>povil_plot</font>'
          '<textcolor>povil_white</textcolor><align>right</align><autoscroll delay="7000" time="3000" repeat="10000">true</autoscroll>'
-         '<label>$INFO[ListItem.Plot]</label></control>' % (left, COL))
+         '<label>$INFO[ListItem.Plot]</label>%s</control>' % (left, COL, lift))
     # Cast (Kodi shows it in place of the plot): photo on the right, name and role to its left
-    x(3, '<control type="list" id="50"><left>%d</left><top>396</top><width>%d</width><height>280</height>' % (left, COL))
+    x(3, '<control type="list" id="50"><left>%d</left><top>434</top><width>%d</width><height>280</height>%s' % (left, COL, lift))
     x(4, '<orientation>vertical</orientation><scrolltime tween="cubic" easing="out">200</scrolltime><onup>9000</onup><ondown>9000</ondown>')
     for focused in (False, True):
         tag = 'focusedlayout' if focused else 'itemlayout'
@@ -146,6 +155,14 @@ def variables():
     x(2, '<value condition="%s">$INFO[ListItem.Premiered]$INFO[ListItem.Duration(mins),  •  ,%s]</value>' % (IS_EP, MIN))
     x(2, '<value>$INFO[ListItem.Year]$INFO[ListItem.Genre,  •  ]$INFO[ListItem.Duration(mins),  •  ,%s]$INFO[ListItem.MPAA,  •  ]</value>' % MIN)
     x(1, '</variable>')
+    # The ratings row (ratings_row.py): the POV title this screen is about
+    x(1, '<variable name="POVIL_I_RatingsKey">')
+    x(2, '<value condition="%s">%s</value>' % (RR.has_key('ListItem'), RR.key('ListItem')))
+    x(1, '</variable>')
+    x(1, '<variable name="POVIL_I_ListRating">')
+    x(2, '<value condition="Integer.IsGreater(ListItem.Rating,0)">$INFO[ListItem.Rating]</value>')
+    x(1, '</variable>')
+    RR.tmdb_variable(x, 'POVIL_I_RatingsTmdb', H.RATINGS_KEY, H.RATINGS_SLOT, '$VAR[POVIL_I_ListRating]')
     x(1, '<variable name="POVIL_I_Play">')
     x(2, '<value condition="Container.Content(tvshows) | String.IsEqual(ListItem.DBType,tvshow)">$LOCALIZE[1024]</value>')
     x(2, '<value>$LOCALIZE[208]</value>')

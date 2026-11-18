@@ -13,7 +13,7 @@
 					<top>130</top>
 					<width>1320</width>
 					<height>780</height>
-					<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+					<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 				</control>
 				<control type="image" description="Sidebar">
 					<left>320</left>
@@ -31,7 +31,7 @@
 					<top>130</top>
 					<width>1320</width>
 					<height>780</height>
-					<texture colordiffuse="$VAR[OSDTransperancy]" border="128">img/DialogCE.png</texture>
+					<texture colordiffuse="$VAR[OSDTransperancy]" border="128">povil/panel.png</texture>
 					<visible>Window.IsVisible(VideoFullScreen.xml)</visible>
 				</control>
 				<control type="image" description="Sidebar">
@@ -78,7 +78,7 @@
 						<posy>0</posy>
 						<height>75</height>
 						<width>680</width>
-						<texture border="9">img/MediaButton2.png</texture>
+						<texture border="14">povil/focus_box.png</texture>
 					</control>
 					<control type="group" description="Name (hidden while the focus-color override is shown)">
 						<!-- Hides an add-on-colored name while the row is focused (FocusColorOverrideDialog draws it in the focus color instead). Rows with a plain copy of the name are not hidden. -->
@@ -125,7 +125,7 @@
 						<posy>0</posy>
 						<height>75</height>
 						<width>680</width>
-						<texture border="9">img/MediaButton2.png</texture>
+						<texture border="14">povil/focus_box.png</texture>
 					</control>
 					<control type="group" description="Name (hidden while the focus-color override is shown)">
 						<!-- Hides an add-on-colored name while the row is focused (FocusColorOverrideDialog draws it in the focus color instead). Rows with a plain copy of the name are not hidden. -->

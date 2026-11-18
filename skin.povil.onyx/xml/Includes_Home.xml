@@ -18,7 +18,7 @@
 		<posx>0</posx>
 		<width>420</width>
 		<height>78</height>
-		<texture border="9">img/MediaButton2.png</texture>
+		<texture border="14">povil/focus_box.png</texture>
 		<aspectratio>stretch</aspectratio>
 	</include>
 	<include name="HomeButtonsCommons">

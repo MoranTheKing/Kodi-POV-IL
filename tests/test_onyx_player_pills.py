@@ -1,4 +1,4 @@
-"""Onyx's player says what is playing: pills under the details line and the provider in it (Onyx 1.0.12)."""
+"""Onyx's player says what is playing: pills over the controls, the provider one of them (Onyx 1.0.12, 1.0.15)."""
 
 import importlib.util
 import re
@@ -29,12 +29,12 @@ def remember():
 
 
 class PlayerPillsTests(unittest.TestCase):
-    def test_both_player_windows_carry_the_five_pills_and_none_takes_the_focus(self):
+    def test_both_player_windows_carry_the_pills_and_none_takes_the_focus(self):
         for name in ('VideoOSD.xml', 'VideoFullScreen.xml'):
             root = ET.parse(XML / name).getroot()
             pills = [c for c in root.iter('control')
                      if c.get('type') == 'button' and (c.findtext('label') or '').startswith('$VAR[POVIL_OSD_')]
-            self.assertEqual(sorted(c.findtext('label')[5:-1] for c in pills), sorted(PILLS), name)
+            self.assertEqual(sorted(c.findtext('label')[5:-1] for c in pills), sorted(PILLS + ('POVIL_OSD_Provider',)), name)
             for pill in pills:
                 self.assertEqual(pill.findtext('enable'), 'false', 'a pill is not a stop for the remote')
                 self.assertEqual(pill.findtext('width'), 'auto')
@@ -79,7 +79,28 @@ class PlayerPillsTests(unittest.TestCase):
         # a debrid service plays a web stream: a library file or another add-on's resolved item shows none
         self.assertIn('[String.StartsWith(Player.Folderpath,http) | '
                       'String.Contains(Player.Folderpath,plugin.video.pov)]', block)
-        self.assertIn('$VAR[POVIL_OSD_Provider,  •  ]', (XML / 'VideoOSD.xml').read_text('utf-8'))
+        # a pill of its own, in gold, the last one read (the owner, Nov 2026: "the source's pills at the bottom")
+        for name in ('VideoOSD.xml', 'VideoFullScreen.xml'):
+            text = (XML / name).read_text('utf-8')
+            self.assertNotIn('$VAR[POVIL_OSD_Provider,', text, 'no longer a word in the details line')
+            pill = re.search(r'<control type="button"[^>]*>(?:(?!</control>).)*<label>\$VAR\[POVIL_OSD_Provider\]</label>', text)
+            self.assertIsNotNone(pill, name)
+            self.assertIn('<textcolor>povil_gold</textcolor>', pill.group(0))
+            self.assertLess(pill.start(), text.index('<label>$VAR[POVIL_OSD_Codec]</label>'), 'leftmost: read last')
+
+    def test_the_pills_sit_over_the_controls_not_under_the_title(self):
+        # the owner, Nov 2026: "the source's pills at the bottom, a little above the player's bottom edge"
+        osd = ET.parse(XML / 'VideoOSD.xml').getroot()
+        pills = next(c for c in osd.iter('control') if c.get('description') == 'what is playing')
+        buttons = next(c for c in osd.iter('control') if c.get('id') == '7000')
+        ratings = next(c for c in osd.iter('control') if c.get('description') == 'ratings')
+        bottom = int(pills.findtext('top')) + int(pills.findtext('height'))
+        self.assertLessEqual(bottom, int(buttons.findtext('top')))
+        self.assertGreater(int(pills.findtext('top')), 700)
+        self.assertLess(int(ratings.findtext('top')), 320, 'the ratings stay with the title')
+        info = ET.parse(XML / 'VideoFullScreen.xml').getroot()
+        low = next(c for c in info.iter('control') if c.get('description') == 'what is playing')
+        self.assertTrue(700 < int(low.findtext('top')) < 980 - 42, 'over the timeline')
 
     def test_the_source_hook_names_the_provider_the_way_its_users_write_it(self):
         label = remember().provider_label

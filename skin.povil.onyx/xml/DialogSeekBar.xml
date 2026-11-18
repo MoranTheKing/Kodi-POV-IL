@@ -10,16 +10,16 @@
 		<control type="label"><left>0</left><top>0</top><width>1920</width><height>1080</height><font>povil_hero</font><textcolor>povil_gold</textcolor><shadowcolor>FF000000</shadowcolor><align>center</align><aligny>center</aligny><label>$INFO[PVR.ChannelNumberInput]</label><visible>!String.IsEmpty(PVR.ChannelNumberInput)</visible></control>
 		<control type="group">
 			<visible>String.IsEmpty(PVR.ChannelNumberInput)</visible>
-			<control type="image"><left>-320</left><top>640</top><width>2560</width><height>440</height><texture>povil/grad_bottom.png</texture></control>
-			<control type="label"><left>730</left><top>812</top><width>1100</width><height>40</height><font>povil_meta</font><textcolor>povil_dim</textcolor><align>right</align><aligny>center</aligny><label>$VAR[POVIL_OSD_Title]$VAR[POVIL_OSD_Episode,  •  ]</label></control>
-			<control type="label"><left>90</left><top>812</top><width>600</width><height>40</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><aligny>center</aligny><label>$VAR[POVIL_OSD_State]</label></control>
-			<control type="group"><left>90</left><top>866</top>
+			<control type="image"><left>-320</left><top>720</top><width>2560</width><height>360</height><texture>povil/grad_bottom.png</texture></control>
+			<control type="label"><left>730</left><top>918</top><width>1100</width><height>42</height><font>povil_meta</font><textcolor>povil_dim</textcolor><shadowcolor>B3000000</shadowcolor><align>right</align><aligny>center</aligny><label>$VAR[POVIL_OSD_Title]$VAR[POVIL_OSD_Episode,  •  ]</label></control>
+			<control type="label"><left>90</left><top>918</top><width>600</width><height>42</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><shadowcolor>B3000000</shadowcolor><aligny>center</aligny><label>$VAR[POVIL_OSD_State]</label></control>
+			<control type="group"><left>90</left><top>980</top>
 				<visible>!String.IsEmpty(Player.Duration)</visible>
-				<control type="progress"><left>0</left><top>0</top><width>1740</width><height>8</height><info>Player.ProgressCache</info><reveal>false</reveal><lefttexture></lefttexture><righttexture></righttexture><overlaytexture></overlaytexture><texturebg border="4" colordiffuse="33FFFFFF">povil/progress.png</texturebg><midtexture border="4" colordiffuse="40FFFFFF">povil/progress.png</midtexture></control>
+				<control type="progress"><left>0</left><top>0</top><width>1740</width><height>8</height><info>Player.ProgressCache</info><reveal>false</reveal><lefttexture></lefttexture><righttexture></righttexture><overlaytexture></overlaytexture><texturebg border="4" colordiffuse="38FFFFFF">povil/progress.png</texturebg><midtexture border="4" colordiffuse="47FFFFFF">povil/progress.png</midtexture></control>
 				<control type="progress"><left>0</left><top>0</top><width>1740</width><height>8</height><info>Player.Progress</info><reveal>false</reveal><lefttexture></lefttexture><righttexture></righttexture><overlaytexture></overlaytexture><texturebg border="4" colordiffuse="00FFFFFF">povil/progress.png</texturebg><midtexture border="4" colordiffuse="FFD9B77E">povil/progress.png</midtexture></control>
 				<control type="slider"><left>-11</left><top>-7</top><width>1762</width><height>22</height><texturesliderbar colordiffuse="00FFFFFF">povil/pill.png</texturesliderbar><textureslidernib colordiffuse="povil_gold">povil/pill.png</textureslidernib><textureslidernibfocus colordiffuse="povil_gold">povil/pill.png</textureslidernibfocus><info>Player.SeekBar</info><visible>Player.SeekEnabled</visible></control>
-				<control type="label"><left>0</left><top>16</top><width>700</width><height>34</height><font>povil_meta</font><textcolor>povil_white</textcolor><aligny>center</aligny><label>$VAR[POVIL_OSD_Time]</label></control>
-				<control type="label"><left>1340</left><top>16</top><width>400</width><height>34</height><font>povil_meta</font><textcolor>povil_dim</textcolor><align>right</align><aligny>center</aligny><label>$INFO[Player.Duration]</label></control>
+				<control type="label"><left>0</left><top>18</top><width>700</width><height>34</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><aligny>center</aligny><label>$VAR[POVIL_OSD_Time]</label></control>
+				<control type="label"><left>1340</left><top>18</top><width>400</width><height>34</height><font>povil_meta</font><textcolor>povil_dim</textcolor><align>right</align><aligny>center</aligny><label>$INFO[Player.Duration]</label></control>
 			</control>
 		</control>
 	</controls>

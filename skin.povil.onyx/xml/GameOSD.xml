@@ -15,7 +15,7 @@
 				<centertop>540</centertop>
 				<width>590</width>
 				<height>660</height>
-				<texture colordiffuse="$VAR[OSDTransperancy]" border="128">img/DialogCE.png</texture>
+				<texture colordiffuse="$VAR[OSDTransperancy]" border="128">povil/panel.png</texture>
 			</control>
 			<control type="grouplist" id="1000">
 				<centerleft>960</centerleft>

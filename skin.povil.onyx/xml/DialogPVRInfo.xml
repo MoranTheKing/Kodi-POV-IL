@@ -12,7 +12,7 @@
 				<posy>50</posy>
 				<width>1380</width>
 				<height>980</height>
-				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 			</control>
 			<control type="label" id="2">
 				<posx>430</posx>

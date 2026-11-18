@@ -23,7 +23,7 @@
 				<top>-68</top>
 				<width>590</width>
 				<height max="920">720</height>
-				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 			</control>
 			<control type="grouplist" id="996">
 				<left>0</left>
@@ -47,7 +47,7 @@
 			<height>60</height>
 			<align>center</align>
 			<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-			<texturefocus colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+			<texturefocus colordiffuse="$VAR[FocusBoxColor]" border="14">povil/focus_box.png</texturefocus>
 			<texturenofocus />
 		</control>
 	</controls>

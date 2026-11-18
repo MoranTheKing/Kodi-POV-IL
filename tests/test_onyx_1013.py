@@ -15,17 +15,24 @@ def number(control, tag):
 
 
 class InfoPanelTests(unittest.TestCase):
-    def test_the_plot_starts_under_the_pills(self):
-        """1.0.12 drew the pills at 298-340 and left the plot at 300: one written over the other."""
+    def test_the_plot_starts_under_what_is_over_it(self):
+        """1.0.12 drew the pills at 298-340 and left the plot at 300: one written over the other.
+        Since 1.0.15 the pills are over the timeline and the ratings row is what the plot follows."""
         root = ET.parse(XML / 'VideoFullScreen.xml').getroot()
         plot = next(c for c in root.iter('control') if c.get('type') == 'textbox' and
                     'VideoPlayer.Plot' in (c.findtext('label') or ''))
-        pills = next(c for c in root.iter('control') if c.get('type') == 'grouplist' and any(
-            (b.findtext('label') or '').startswith('$VAR[POVIL_OSD_') for b in c.iter('control')))
-        self.assertGreaterEqual(number(plot, 'top'), number(pills, 'top') + number(pills, 'height'))
+        ratings = next(c for c in root.iter('control') if c.get('description') == 'ratings')
+        self.assertGreaterEqual(number(plot, 'top'), number(ratings, 'top') + number(ratings, 'height'))
         details = next(c for c in root.iter('control') if c.get('type') == 'label' and
-                       'POVIL_OSD_Provider' in (c.findtext('label') or ''))
-        self.assertLessEqual(number(details, 'top') + number(details, 'height'), number(pills, 'top'))
+                       'VideoPlayer.Genre' in (c.findtext('label') or ''))
+        self.assertLessEqual(number(details, 'top') + number(details, 'height'), number(ratings, 'top'))
+        pills = next(c for c in root.iter('control') if c.get('description') == 'what is playing')
+        self.assertGreater(number(pills, 'top'), number(plot, 'top') + number(plot, 'height'))
+        # a film has no episode line: the details, the ratings and the plot move up together
+        block = next(c for c in root.iter('control') if c.get('description') == 'under the episode line')
+        self.assertIn('String.IsEmpty(Control.GetLabel(7902))', block.find('animation').get('condition'))
+        for part in (details, ratings, plot):
+            self.assertIn(part, list(block.iter('control')))
 
     def test_the_raw_formats_line_is_gone(self):
         """It read "4Kp - HEVC - DOLBYVISION - EAC3 5.1" on the left while the pills said it on the right."""

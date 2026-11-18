@@ -894,6 +894,14 @@ if CONFIG.get_setting('buildname'):
     except Exception as _remember_migration_error:
         logging.log('[Source Remember] preference migration failed: {0}'.format(
             _remember_migration_error), level=xbmc.LOGWARNING)
+    # The build's colours in POV's and Umbrella's own windows, once, and only where the
+    # add-on's own default colour is still set (patches/pov_palette.py)
+    try:
+        from resources.libs.patches import pov_palette
+        pov_palette.apply_once()
+    except Exception as _palette_error:
+        logging.log('[Palette] {0}: {1}'.format(type(_palette_error).__name__, _palette_error),
+                    level=xbmc.LOGWARNING)
     try:
         from resources.libs.modular_updater import ModularUpdater
         _mu = ModularUpdater(background=True)
@@ -977,6 +985,17 @@ def _host_watch():
 
 
 _start_watch('POVILHostPatchWatch', _host_watch)
+
+
+# KODI-POV-IL - ratings from several sites for the title Onyx shows: the skin
+# names it and announces the question, this thread answers (ratings.py). It
+# sleeps until asked: no polling, and no script started per title.
+def _ratings_watch():
+    from resources.libs import ratings as _ratings
+    _ratings.watch()
+
+
+_start_watch('POVILRatings', _ratings_watch)
 
 # KODI-POV-IL - the build's subtitles without the box behind them: a device
 # whose background and border settings are still the ones the build shipped
