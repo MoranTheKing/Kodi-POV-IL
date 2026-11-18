@@ -1,14 +1,10 @@
 #!/usr/bin/env python
 
-import pkgutil
-import sys
-
-# Regex in python 2 is very slow so we check if the faster 'regex' library is available.
-faster_regex = pkgutil.find_loader("regex")
-if faster_regex is not None and sys.version_info[0] < 3:
-    re = faster_regex.load_module("regex")
-else:
-    re = pkgutil.find_loader("re").load_module("re")
+# (POV IL: upstream looked the module up with pkgutil.find_loader -- for Python 2's faster 'regex' -- and
+# Python 3.14 removed that function: the whole subtitle engine failed at this import there. The add-on runs
+# on Python 3 only, where the lookup always ended with the standard 're'. parse.py and post.py take it
+# from here: "from . import re".)
+import re
 
 from .parse import PTN
 

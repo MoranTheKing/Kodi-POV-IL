@@ -106,6 +106,10 @@ class Router:
             # POV's own favourites: newest first, or by name (the settings' line, Onyx's favourites tab)
             from resources.libs.patches import pov_favorites_order
             pov_favorites_order.toggle()
+        elif mode == 'onyx_tabs':
+            # which screens the top bar of the Onyx home shows (the tile in its settings screen)
+            from resources.libs import onyx_tabs
+            onyx_tabs.choose()
         elif mode in ('player_settings', 'player_change_source', 'player_episodes'):
             from resources.libs import player_styles
             {'player_settings': player_styles.settings,
