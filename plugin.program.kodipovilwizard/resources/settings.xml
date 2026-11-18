@@ -21,8 +21,12 @@
         <setting id="separate" type="bool" label="בטל הפרדה לפי גרסה" default="false"/>
         <setting type="lsep" label="ייצוב הפעלה ראשונה (First Boot):"/>
         <setting id="first_boot_warmup_seconds" type="slider" label="זמן חימום POV בהפעלה הראשונה (שניות)" default="25" range="5,5,120" option="int"/>
-        <setting id="pov_remember_source" type="bool" label="32504" default="true"/>
+        <setting type="lsep" label="המקור האחרון שנוגן (POV ו-Umbrella):"/>
+        <setting id="pov_remember_source" type="bool" label="זכור את המקור שנוגן וסמן אותו ראשון ברשימת המקורות" default="true"/>
+        <setting id="pov_play_remembered" type="bool" label="לחיצה על כותר מנגנת מיד את המקור האחרון שנוגן בו (בלי רשימת המקורות)" default="false" enable="eq(-1,true)"/>
         <setting id="_pov_remember_migrated_v1" type="bool" label="32504" default="false" visible="false"/>
+        <setting id="_pov_palette_v1" type="bool" label="32504" default="false" visible="false"/>
+        <setting id="_umbrella_palette_v1" type="bool" label="32504" default="false" visible="false"/>
         <!-- Hidden Settings -->
         <setting id="first_install" type="bool" label="First Install" visible="false" default="true" />
         <setting id="enable_all" type="bool" label="Enable all Add-ons on Start" visible="false" default="false" />

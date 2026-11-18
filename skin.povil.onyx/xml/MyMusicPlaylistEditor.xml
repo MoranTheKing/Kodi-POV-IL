@@ -71,7 +71,7 @@
 						<top>0</top>
 						<width>600</width>
 						<height>60</height>
-						<texture  border="8">img/MediaButton2.png</texture>
+						<texture  border="14">povil/focus_box.png</texture>
 						<visible>Control.HasFocus(50)</visible>
 					</control>
 					<control type="label">
@@ -257,7 +257,7 @@
 						<top>0</top>
 						<width>600</width>
 						<height>60</height>
-						<texture  border="8">img/MediaButton2.png</texture>
+						<texture  border="14">povil/focus_box.png</texture>
 						<visible>Control.HasFocus(100)</visible>
 					</control>
 					<control type="label">

@@ -3,6 +3,7 @@
 <window>
 	<defaultcontrol always="true">7003</defaultcontrol>
 	<onload condition="!Player.PauseEnabled">SetFocus(7024)</onload>
+	<onload condition="!Player.PauseEnabled + !Control.IsVisible(7024)">SetFocus(7022)</onload>
 	<onunload>Skin.TimerStart(povil_osd_closed)</onunload>
 	<zorder>2</zorder>
 	<controls>
@@ -11,152 +12,264 @@
 			<animation type="WindowOpen"><effect type="fade" start="0" end="100" time="220" /></animation>
 			<animation type="WindowClose"><effect type="fade" start="100" end="0" time="180" /></animation>
 			<animation effect="fade" start="100" end="0" time="160" condition="Window.IsVisible(sliderdialog) | Window.IsVisible(osdsubtitlesettings) | Window.IsVisible(osdvideosettings) | Window.IsVisible(osdaudiosettings) | Window.IsVisible(videobookmarks)">Conditional</animation>
-			<control type="image"><left>-320</left><top>0</top><width>2560</width><height>330</height><texture>povil/grad_top.png</texture></control>
-			<control type="image"><left>-320</left><top>520</top><width>2560</width><height>560</height><texture>povil/grad_bottom.png</texture></control>
-			<control type="button" id="7005"><left>0</left><top>352</top><width>1920</width><height>448</height><texturefocus></texturefocus><texturenofocus></texturenofocus><label></label><onclick>Dialog.Close(VideoOSD)</onclick><onup>7000</onup><ondown>7000</ondown><onleft>7000</onleft><onright>7000</onright></control>
-			<control type="image"><left>1270</left><top>54</top><width>560</width><height>150</height><texture background="true">$VAR[POVIL_OSD_Logo]</texture><aspectratio align="right" aligny="bottom">keep</aspectratio></control>
+			<control type="image"><left>-320</left><top>0</top><width>2560</width><height>360</height><texture>povil/grad_top.png</texture></control>
+			<control type="image"><left>-320</left><top>440</top><width>2560</width><height>640</height><texture>povil/grad_bottom.png</texture></control>
+			<control type="button" id="7005"><left>0</left><top>320</top><width>1920</width><height>452</height><texturefocus></texturefocus><texturenofocus></texturenofocus><label></label><onclick>Dialog.Close(VideoOSD)</onclick><onup condition="Player.PauseEnabled">7000</onup><onup>7007</onup><ondown condition="Player.PauseEnabled">7000</ondown><ondown>7007</ondown><onleft condition="Player.PauseEnabled">7000</onleft><onleft>7007</onleft><onright condition="Player.PauseEnabled">7000</onright><onright>7007</onright></control>
+			<control type="image"><left>1310</left><top>44</top><width>520</width><height>132</height><texture background="true">$VAR[POVIL_OSD_Logo]</texture><aspectratio align="right" aligny="bottom">keep</aspectratio></control>
 			<control type="label" id="7901"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Logo]</label></control>
-			<control type="label"><left>630</left><top>96</top><width>1200</width><height>108</height><font>povil_hero_small</font><textcolor>povil_white</textcolor><align>right</align><aligny>bottom</aligny><label>$VAR[POVIL_OSD_Title]</label><visible>String.IsEmpty(Control.GetLabel(7901))</visible></control>
-			<control type="label"><left>630</left><top>214</top><width>1200</width><height>36</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><align>right</align><aligny>center</aligny><label>$VAR[POVIL_OSD_Episode]</label></control>
-			<control type="label"><left>630</left><top>252</top><width>1200</width><height>36</height><font>povil_meta</font><textcolor>povil_dim</textcolor><align>right</align><aligny>center</aligny><label>$INFO[VideoPlayer.Year]$INFO[VideoPlayer.Genre,  •  ]$VAR[POVIL_OSD_Provider,  •  ]</label></control>
-			<control type="grouplist"><left>630</left><top>298</top><width>1200</width><height>42</height><orientation>horizontal</orientation><align>right</align><itemgap>10</itemgap>
-				<control type="button"><width>auto</width><height>42</height><font>povil_chip</font><textcolor>povil_white</textcolor><disabledcolor>povil_white</disabledcolor><align>center</align><aligny>center</aligny><textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturefocus><label>$VAR[POVIL_OSD_Codec]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(7910))</visible></control>
-				<control type="button"><width>auto</width><height>42</height><font>povil_chip</font><textcolor>povil_white</textcolor><disabledcolor>povil_white</disabledcolor><align>center</align><aligny>center</aligny><textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturefocus><label>$VAR[POVIL_OSD_Audio]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(7911))</visible></control>
-				<control type="button"><width>auto</width><height>42</height><font>povil_chip</font><textcolor>povil_white</textcolor><disabledcolor>povil_white</disabledcolor><align>center</align><aligny>center</aligny><textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturefocus><label>$VAR[POVIL_OSD_Hdr]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(7912))</visible></control>
-				<control type="button"><width>auto</width><height>42</height><font>povil_chip</font><textcolor>povil_white</textcolor><disabledcolor>povil_white</disabledcolor><align>center</align><aligny>center</aligny><textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturefocus><label>$VAR[POVIL_OSD_Fps]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(7913))</visible></control>
-				<control type="button"><width>auto</width><height>42</height><font>povil_chip</font><textcolor>povil_white</textcolor><disabledcolor>povil_white</disabledcolor><align>center</align><aligny>center</aligny><textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturefocus><label>$VAR[POVIL_OSD_Res]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(7914))</visible></control>
+			<control type="label" id="7902"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Episode]</label></control>
+			<control type="label"><left>630</left><top>68</top><width>1200</width><height>108</height><font>povil_hero_small</font><textcolor>povil_white</textcolor><shadowcolor>B3000000</shadowcolor><align>right</align><aligny>bottom</aligny><label>$VAR[POVIL_OSD_Title]</label><visible>String.IsEmpty(Control.GetLabel(7901))</visible></control>
+			<control type="label"><left>630</left><top>188</top><width>1200</width><height>36</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><shadowcolor>B3000000</shadowcolor><align>right</align><aligny>center</aligny><label>$VAR[POVIL_OSD_Episode]</label></control>
+			<control type="group" description="under the episode line">
+				<animation effect="slide" end="0,-38" time="0" condition="String.IsEmpty(Control.GetLabel(7902))">Conditional</animation>
+				<control type="label"><left>630</left><top>226</top><width>1200</width><height>36</height><font>povil_meta</font><textcolor>povil_dim</textcolor><shadowcolor>B3000000</shadowcolor><align>right</align><aligny>center</aligny><label>$INFO[VideoPlayer.Year]$INFO[VideoPlayer.Genre,  •  ]</label></control>
+				<control type="label" id="7920" description="ratings key"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_RatingsKey]</label></control>
+				<control type="grouplist" description="ratings"><left>630</left><top>272</top><width>1200</width><height>32</height><orientation>horizontal</orientation><align>right</align><itemgap>22</itemgap><usecontrolcoords>true</usecontrolcoords>
+					<visible>!String.IsEmpty(Control.GetLabel(7920))</visible>
+					<control type="group" description="letterboxd"><width>134</width><height>32</height>
+						<visible>String.IsEqual(Control.GetLabel(7920),Window(home).Property(povil.rtp.for)) + !String.IsEmpty(Window(home).Property(povil.rtp.letterboxd))</visible>
+						<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+						<control type="image"><left>0</left><top>1</top><width>50</width><height>30</height><texture>povil/ratings/letterboxd.png</texture><aspectratio>keep</aspectratio></control>
+						<control type="label"><left>58</left><top>0</top><width>76</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rtp.letterboxd)][COLOR povil_faint]/5[/COLOR]</label></control>
+					</control>
+					<control type="group" description="trakt"><width>126</width><height>32</height>
+						<visible>String.IsEqual(Control.GetLabel(7920),Window(home).Property(povil.rtp.for)) + !String.IsEmpty(Window(home).Property(povil.rtp.trakt))</visible>
+						<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+						<control type="image"><left>0</left><top>1</top><width>60</width><height>30</height><texture>povil/ratings/trakt.png</texture><aspectratio>keep</aspectratio></control>
+						<control type="label"><left>68</left><top>0</top><width>58</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rtp.trakt)]</label></control>
+					</control>
+					<control type="group" description="meta"><width>82</width><height>32</height>
+						<visible>String.IsEqual(Control.GetLabel(7920),Window(home).Property(povil.rtp.for)) + !String.IsEmpty(Window(home).Property(povil.rtp.meta))</visible>
+						<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+						<control type="image"><left>0</left><top>1</top><width>30</width><height>30</height><texture>povil/ratings/meta.png</texture><aspectratio>keep</aspectratio></control>
+						<control type="image"><left>38</left><top>1</top><width>44</width><height>30</height><texture colordiffuse="FF66CC33">povil/ratings/square.png</texture><visible>String.IsEqual(Window(home).Property(povil.rtp.meta_tone),good)</visible></control>
+						<control type="image"><left>38</left><top>1</top><width>44</width><height>30</height><texture colordiffuse="FFFFCC33">povil/ratings/square.png</texture><visible>String.IsEqual(Window(home).Property(povil.rtp.meta_tone),mixed)</visible></control>
+						<control type="image"><left>38</left><top>1</top><width>44</width><height>30</height><texture colordiffuse="FFFF5544">povil/ratings/square.png</texture><visible>String.IsEqual(Window(home).Property(povil.rtp.meta_tone),bad)</visible></control>
+						<control type="label"><left>38</left><top>0</top><width>44</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_ink</textcolor><align>center</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rtp.meta)]</label></control>
+					</control>
+					<control type="group" description="popcorn"><width>104</width><height>32</height>
+						<visible>String.IsEqual(Control.GetLabel(7920),Window(home).Property(povil.rtp.for)) + !String.IsEmpty(Window(home).Property(povil.rtp.popcorn))</visible>
+						<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+						<control type="image"><left>0</left><top>1</top><width>30</width><height>30</height><texture>povil/ratings/popcorn_$INFO[Window(home).Property(povil.rtp.popcorn_state)].png</texture><aspectratio>keep</aspectratio></control>
+						<control type="label"><left>38</left><top>0</top><width>66</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rtp.popcorn)]</label></control>
+					</control>
+					<control type="group" description="tomato"><width>104</width><height>32</height>
+						<visible>String.IsEqual(Control.GetLabel(7920),Window(home).Property(povil.rtp.for)) + !String.IsEmpty(Window(home).Property(povil.rtp.tomato))</visible>
+						<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+						<control type="image"><left>0</left><top>1</top><width>30</width><height>30</height><texture>povil/ratings/tomato_$INFO[Window(home).Property(povil.rtp.tomato_state)].png</texture><aspectratio>keep</aspectratio></control>
+						<control type="label"><left>38</left><top>0</top><width>66</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rtp.tomato)]</label></control>
+					</control>
+					<control type="group" description="imdb"><width>116</width><height>32</height>
+						<visible>String.IsEqual(Control.GetLabel(7920),Window(home).Property(povil.rtp.for)) + !String.IsEmpty(Window(home).Property(povil.rtp.imdb))</visible>
+						<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+						<control type="image"><left>0</left><top>1</top><width>60</width><height>30</height><texture>povil/ratings/imdb.png</texture><aspectratio>keep</aspectratio></control>
+						<control type="label"><left>68</left><top>0</top><width>48</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rtp.imdb)]</label></control>
+					</control>
+					<control type="group" description="tmdb"><width>116</width><height>32</height>
+						<visible>!String.IsEmpty(Control.GetLabel(7921))</visible>
+						<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+						<control type="image"><left>0</left><top>1</top><width>60</width><height>30</height><texture>povil/ratings/tmdb.png</texture><aspectratio>keep</aspectratio></control>
+						<control type="label"><left>68</left><top>0</top><width>48</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$VAR[POVIL_OSD_RatingsTmdb]</label></control>
+					</control>
+				</control>
+				<control type="label" id="7921"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_RatingsTmdb]</label></control>
 			</control>
-			<control type="label" id="7910"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Codec]</label></control>
-			<control type="label" id="7911"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Audio]</label></control>
-			<control type="label" id="7912"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Hdr]</label></control>
-			<control type="label" id="7913"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Fps]</label></control>
-			<control type="label" id="7914"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Res]</label></control>
-			<control type="label"><left>930</left><top>812</top><width>900</width><height>40</height><font>povil_meta</font><textcolor>povil_dim</textcolor><align>right</align><aligny>center</aligny><label>$INFO[System.Time]$INFO[Player.FinishTime,  •  מסתיים ב-]</label></control>
-			<control type="group"><left>90</left><top>866</top>
-				<visible>!String.IsEmpty(Player.Duration)</visible>
-				<control type="image"><left>-6</left><top>-5</top><width>1752</width><height>18</height><texture border="4" colordiffuse="33FFFFFF">povil/progress.png</texture><visible>Control.HasFocus(7001)</visible></control>
-				<control type="progress"><left>0</left><top>0</top><width>1740</width><height>8</height><info>Player.ProgressCache</info><reveal>false</reveal><lefttexture></lefttexture><righttexture></righttexture><overlaytexture></overlaytexture><texturebg border="4" colordiffuse="33FFFFFF">povil/progress.png</texturebg><midtexture border="4" colordiffuse="40FFFFFF">povil/progress.png</midtexture></control>
-				<control type="progress"><left>0</left><top>0</top><width>1740</width><height>8</height><info>Player.Progress</info><reveal>false</reveal><lefttexture></lefttexture><righttexture></righttexture><overlaytexture></overlaytexture><texturebg border="4" colordiffuse="00FFFFFF">povil/progress.png</texturebg><midtexture border="4" colordiffuse="FFD9B77E">povil/progress.png</midtexture></control>
-				<control type="slider"><left>-11</left><top>-7</top><width>1762</width><height>22</height><texturesliderbar colordiffuse="00FFFFFF">povil/pill.png</texturesliderbar><textureslidernib colordiffuse="povil_white">povil/pill.png</textureslidernib><textureslidernibfocus colordiffuse="povil_gold">povil/pill.png</textureslidernibfocus><info>Player.Progress</info><action>seek</action><visible>Player.SeekEnabled + !Control.HasFocus(7001)</visible></control>
-				<control type="slider"><left>-15</left><top>-11</top><width>1770</width><height>30</height><texturesliderbar colordiffuse="00FFFFFF">povil/pill.png</texturesliderbar><textureslidernib colordiffuse="povil_gold">povil/pill.png</textureslidernib><textureslidernibfocus colordiffuse="povil_gold">povil/pill.png</textureslidernibfocus><info>Player.SeekBar</info><visible>Player.SeekEnabled + Control.HasFocus(7001)</visible></control>
-				<control type="button" id="7001"><left>-400</left><top>0</top><width>1</width><height>1</height><texturefocus></texturefocus><texturenofocus></texturenofocus><label></label><onleft>StepBack</onleft><onright>StepForward</onright><onup>7000</onup><ondown>7000</ondown><onclick>PlayerControl(Play)</onclick><visible>Player.SeekEnabled</visible></control>
-				<control type="label"><left>0</left><top>16</top><width>700</width><height>34</height><font>povil_meta</font><textcolor>povil_white</textcolor><aligny>center</aligny><label>$VAR[POVIL_OSD_Time]</label></control>
-				<control type="label"><left>1340</left><top>16</top><width>400</width><height>34</height><font>povil_meta</font><textcolor>povil_dim</textcolor><align>right</align><aligny>center</aligny><label>$INFO[Player.Duration]</label></control>
+			<control type="label"><left>90</left><top>44</top><width>500</width><height>56</height><font>povil_clock</font><textcolor>povil_white</textcolor><shadowcolor>B3000000</shadowcolor><aligny>center</aligny><label>$INFO[System.Time]</label></control>
+			<control type="label"><left>90</left><top>100</top><width>600</width><height>34</height><font>povil_small</font><textcolor>povil_dim</textcolor><shadowcolor>B3000000</shadowcolor><aligny>center</aligny><label>$INFO[Player.FinishTime,מסתיים ב-]</label><visible>!String.IsEmpty(Player.Duration)</visible></control>
+			<control type="grouplist" description="what is playing"><left>630</left><top>782</top><width>1200</width><height>42</height><orientation>horizontal</orientation><align>right</align><itemgap>10</itemgap>
+				<control type="button"><width>auto</width><height>42</height><font>povil_chip</font><textcolor>povil_gold</textcolor><disabledcolor>povil_gold</disabledcolor><align>center</align><aligny>center</aligny><textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="3DD9B77E">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="3DD9B77E">povil/pill48.png</texturefocus><label>$VAR[POVIL_OSD_Provider]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(7910))</visible></control>
+				<control type="button"><width>auto</width><height>42</height><font>povil_chip</font><textcolor>povil_white</textcolor><disabledcolor>povil_white</disabledcolor><align>center</align><aligny>center</aligny><textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturefocus><label>$VAR[POVIL_OSD_Codec]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(7911))</visible></control>
+				<control type="button"><width>auto</width><height>42</height><font>povil_chip</font><textcolor>povil_white</textcolor><disabledcolor>povil_white</disabledcolor><align>center</align><aligny>center</aligny><textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturefocus><label>$VAR[POVIL_OSD_Audio]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(7912))</visible></control>
+				<control type="button"><width>auto</width><height>42</height><font>povil_chip</font><textcolor>povil_white</textcolor><disabledcolor>povil_white</disabledcolor><align>center</align><aligny>center</aligny><textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturefocus><label>$VAR[POVIL_OSD_Hdr]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(7913))</visible></control>
+				<control type="button"><width>auto</width><height>42</height><font>povil_chip</font><textcolor>povil_white</textcolor><disabledcolor>povil_white</disabledcolor><align>center</align><aligny>center</aligny><textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturefocus><label>$VAR[POVIL_OSD_Fps]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(7914))</visible></control>
+				<control type="button"><width>auto</width><height>42</height><font>povil_chip</font><textcolor>povil_white</textcolor><disabledcolor>povil_white</disabledcolor><align>center</align><aligny>center</aligny><textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="30FFFFFF">povil/pill48.png</texturefocus><label>$VAR[POVIL_OSD_Res]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(7915))</visible></control>
 			</control>
-			<control type="grouplist" id="7000"><left>90</left><top>924</top><width>1740</width><height>96</height>
-				<orientation>horizontal</orientation><align>center</align><itemgap>20</itemgap>
-				<onleft>7000</onleft><onright>7000</onright>
-				<onup>7001</onup>
+			<control type="label" id="7910"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Provider]</label></control>
+			<control type="label" id="7911"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Codec]</label></control>
+			<control type="label" id="7912"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Audio]</label></control>
+			<control type="label" id="7913"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Hdr]</label></control>
+			<control type="label" id="7914"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Fps]</label></control>
+			<control type="label" id="7915"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_OSD_Res]</label></control>
+			<control type="label"><left>90</left><top>782</top><width>1080</width><height>42</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><shadowcolor>B3000000</shadowcolor><aligny>center</aligny><label>$VAR[POVIL_OSD_Focused]</label></control>
+			<control type="grouplist" id="7006"><left>66</left><top>838</top><width>420</width><height>124</height>
+				<orientation>horizontal</orientation><align>left</align><itemgap>14</itemgap><usecontrolcoords>true</usecontrolcoords>
+				<onleft>noop</onleft>
+				<onright condition="Player.SeekEnabled">7002</onright>
+				<onright condition="Player.PauseEnabled">7003</onright>
+				<onright condition="Player.SeekEnabled">7004</onright>
+				<onright condition="!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles">7024</onright>
+				<onright condition="VideoPlayer.Content(episodes) + !VideoPlayer.Content(LiveTV)">7020</onright>
+				<onright condition="[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + !String.Contains(Player.Folderpath,plugin.video.idanplus) + !String.Contains(Player.Folderpath,plugin.video.supertv) + !String.Contains(Player.Folderpath,plugin.video.flashstream)">7021</onright>
+				<onright>7022</onright>
+				<onup>noop</onup><ondown condition="Player.SeekEnabled">7001</ondown><ondown>noop</ondown>
+				<control type="image" id="7090"><width>10</width><height>124</height><texture></texture></control>
 				<control type="button" id="7010">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/stop.png</texturenofocus>
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/stop_nf.png</texturenofocus>
 					<texturefocus>povil/osd/stop_fo.png</texturefocus>
 					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>PlayerControl(Stop)</onclick>
 				</control>
 				<control type="button" id="7011">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/info.png</texturenofocus>
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/info_nf.png</texturenofocus>
 					<texturefocus>povil/osd/info_fo.png</texturefocus>
 					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>Dialog.Close(VideoOSD,true)</onclick>
 					<onclick>Action(Info)</onclick>
 				</control>
 				<control type="button" id="7012">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/settings.png</texturenofocus>
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/settings_nf.png</texturenofocus>
 					<texturefocus>povil/osd/settings_fo.png</texturefocus>
 					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>ActivateWindow(OSDVideoSettings)</onclick>
 				</control>
-				<control type="image" id="7090"><width>56</width><height>96</height><texture></texture></control>
+				<control type="image" id="7091"><width>10</width><height>124</height><texture></texture></control>
+			</control>
+			<control type="grouplist" id="7000"><left>720</left><top>838</top><width>480</width><height>124</height>
+				<orientation>horizontal</orientation><align>center</align><itemgap>14</itemgap><usecontrolcoords>true</usecontrolcoords>
+				<onleft>7012</onleft>
+				<onright condition="!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles">7024</onright>
+				<onright condition="VideoPlayer.Content(episodes) + !VideoPlayer.Content(LiveTV)">7020</onright>
+				<onright condition="[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + !String.Contains(Player.Folderpath,plugin.video.idanplus) + !String.Contains(Player.Folderpath,plugin.video.supertv) + !String.Contains(Player.Folderpath,plugin.video.flashstream)">7021</onright>
+				<onright>7022</onright>
+				<onup>noop</onup><ondown condition="Player.SeekEnabled">7001</ondown><ondown>noop</ondown>
+				<control type="image" id="7092"><width>10</width><height>124</height><texture></texture></control>
 				<control type="button" id="7002">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/skipback.png</texturenofocus>
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/skipback_nf.png</texturenofocus>
 					<texturefocus>povil/osd/skipback_fo.png</texturefocus>
 					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>Seek(-10)</onclick>
 					<visible>Player.SeekEnabled</visible>
 				</control>
 				<control type="togglebutton" id="7003">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/pause.png</texturenofocus>
+					<width>108</width><height>108</height><top>8</top>
+					<texturenofocus>povil/osd/pause_hi.png</texturenofocus>
 					<texturefocus>povil/osd/pause_fo.png</texturefocus>
-					<alttexturenofocus colordiffuse="D9FFFFFF">povil/osd/play.png</alttexturenofocus>
+					<alttexturenofocus>povil/osd/play_hi.png</alttexturenofocus>
 					<alttexturefocus>povil/osd/play_fo.png</alttexturefocus>
 					<usealttexture>Player.Paused | Player.Forwarding | Player.Rewinding</usealttexture>
 					<label></label>
+					<animation effect="zoom" start="100" end="108" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="108" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>PlayerControl(Play)</onclick>
 					<altclick>PlayerControl(Play)</altclick>
 					<visible>Player.PauseEnabled</visible>
 				</control>
 				<control type="button" id="7004">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/skipfwd.png</texturenofocus>
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/skipfwd_nf.png</texturenofocus>
 					<texturefocus>povil/osd/skipfwd_fo.png</texturefocus>
 					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>Seek(30)</onclick>
 					<visible>Player.SeekEnabled</visible>
 				</control>
-				<control type="image" id="7091"><width>56</width><height>96</height><texture></texture></control>
+				<control type="image" id="7093"><width>10</width><height>124</height><texture></texture></control>
+			</control>
+			<control type="grouplist" id="7007"><left>1054</left><top>838</top><width>800</width><height>124</height>
+				<orientation>horizontal</orientation><align>right</align><itemgap>14</itemgap><usecontrolcoords>true</usecontrolcoords>
+				<onleft condition="Player.SeekEnabled">7004</onleft>
+				<onleft condition="Player.PauseEnabled">7003</onleft>
+				<onleft condition="Player.SeekEnabled">7002</onleft>
+				<onleft>7012</onleft>
+				<onright>noop</onright>
+				<onup>noop</onup><ondown condition="Player.SeekEnabled">7001</ondown><ondown>noop</ondown>
+				<control type="image" id="7094"><width>10</width><height>124</height><texture></texture></control>
+				<control type="button" id="7024">
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/subtitles_nf.png</texturenofocus>
+					<texturefocus>povil/osd/subtitles_fo.png</texturefocus>
+					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
+					<onclick>RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
+					<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
+				</control>
 				<control type="button" id="7020">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/episodes.png</texturenofocus>
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/episodes_nf.png</texturenofocus>
 					<texturefocus>povil/osd/episodes_fo.png</texturefocus>
 					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_episodes)</onclick>
 					<visible>VideoPlayer.Content(episodes) + !VideoPlayer.Content(LiveTV)</visible>
 				</control>
 				<control type="button" id="7021">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/source.png</texturenofocus>
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/source_nf.png</texturenofocus>
 					<texturefocus>povil/osd/source_fo.png</texturefocus>
 					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_change_source)</onclick>
 					<visible>[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + !String.Contains(Player.Folderpath,plugin.video.idanplus) + !String.Contains(Player.Folderpath,plugin.video.supertv) + !String.Contains(Player.Folderpath,plugin.video.flashstream)</visible>
 				</control>
 				<control type="button" id="7022">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/audio.png</texturenofocus>
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/audio_nf.png</texturenofocus>
 					<texturefocus>povil/osd/audio_fo.png</texturefocus>
 					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>ActivateWindow(OSDAudioSettings)</onclick>
 				</control>
 				<control type="button" id="7023">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/sync.png</texturenofocus>
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/sync_nf.png</texturenofocus>
 					<texturefocus>povil/osd/sync_fo.png</texturefocus>
 					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>Dialog.Close(VideoOSD)</onclick>
 					<onclick>SubtitleDelay</onclick>
 					<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
 				</control>
 				<control type="button" id="7025">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/subdown.png</texturenofocus>
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/subdown_nf.png</texturenofocus>
 					<texturefocus>povil/osd/subdown_fo.png</texturefocus>
 					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_subs_position&amp;step=down)</onclick>
 					<visible>VideoPlayer.HasSubtitles</visible>
 				</control>
 				<control type="button" id="7026">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/subup.png</texturenofocus>
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/subup_nf.png</texturenofocus>
 					<texturefocus>povil/osd/subup_fo.png</texturefocus>
 					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_subs_position&amp;step=up)</onclick>
 					<visible>VideoPlayer.HasSubtitles</visible>
 				</control>
-				<control type="button" id="7024">
-					<width>84</width><height>84</height><top>6</top>
-					<texturenofocus colordiffuse="D9FFFFFF">povil/osd/subtitles.png</texturenofocus>
-					<texturefocus>povil/osd/subtitles_fo.png</texturefocus>
-					<label></label>
-					<onclick>RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
-					<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
-				</control>
+				<control type="image" id="7095"><width>10</width><height>124</height><texture></texture></control>
 			</control>
-			<control type="label"><left>90</left><top>1022</top><width>1740</width><height>40</height><font>povil_small</font><textcolor>povil_gold</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_OSD_Focused]</label></control>
+			<control type="group"><left>90</left><top>980</top>
+				<visible>!String.IsEmpty(Player.Duration)</visible>
+				<control type="image"><left>-6</left><top>-5</top><width>1752</width><height>18</height><texture border="4" colordiffuse="33FFFFFF">povil/progress.png</texture><visible>Control.HasFocus(7001)</visible></control>
+				<control type="progress"><left>0</left><top>0</top><width>1740</width><height>8</height><info>Player.ProgressCache</info><reveal>false</reveal><lefttexture></lefttexture><righttexture></righttexture><overlaytexture></overlaytexture><texturebg border="4" colordiffuse="38FFFFFF">povil/progress.png</texturebg><midtexture border="4" colordiffuse="47FFFFFF">povil/progress.png</midtexture></control>
+				<control type="progress"><left>0</left><top>0</top><width>1740</width><height>8</height><info>Player.Progress</info><reveal>false</reveal><lefttexture></lefttexture><righttexture></righttexture><overlaytexture></overlaytexture><texturebg border="4" colordiffuse="00FFFFFF">povil/progress.png</texturebg><midtexture border="4" colordiffuse="FFD9B77E">povil/progress.png</midtexture></control>
+				<control type="slider"><left>-11</left><top>-7</top><width>1762</width><height>22</height><texturesliderbar colordiffuse="00FFFFFF">povil/pill.png</texturesliderbar><textureslidernib colordiffuse="povil_white">povil/pill.png</textureslidernib><textureslidernibfocus colordiffuse="povil_gold">povil/pill.png</textureslidernibfocus><info>Player.Progress</info><action>seek</action><visible>Player.SeekEnabled + !Control.HasFocus(7001)</visible></control>
+				<control type="slider"><left>-15</left><top>-11</top><width>1770</width><height>30</height><texturesliderbar colordiffuse="00FFFFFF">povil/pill.png</texturesliderbar><textureslidernib colordiffuse="povil_gold">povil/pill.png</textureslidernib><textureslidernibfocus colordiffuse="povil_gold">povil/pill.png</textureslidernibfocus><info>Player.SeekBar</info><visible>Player.SeekEnabled + Control.HasFocus(7001)</visible></control>
+				<control type="button" id="7001"><left>-400</left><top>0</top><width>1</width><height>1</height><texturefocus></texturefocus><texturenofocus></texturenofocus><label></label><onleft>StepBack</onleft><onright>StepForward</onright><onup>7000</onup><ondown>noop</ondown><onclick>PlayerControl(Play)</onclick><visible>Player.SeekEnabled</visible></control>
+				<control type="label"><left>0</left><top>18</top><width>700</width><height>34</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><aligny>center</aligny><label>$VAR[POVIL_OSD_Time]</label></control>
+				<control type="label"><left>1340</left><top>18</top><width>400</width><height>34</height><font>povil_meta</font><textcolor>povil_dim</textcolor><align>right</align><aligny>center</aligny><label>$INFO[Player.Duration]</label></control>
+			</control>
 		</control>
 	</controls>
 </window>

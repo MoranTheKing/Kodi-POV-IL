@@ -57,7 +57,7 @@
 		<focusedcolor>$VAR[FocusColor]</focusedcolor>
 		<selectedcolor>$VAR[FocusColor]</selectedcolor>
 		<disabledcolor>Disabled</disabledcolor>
-		<texturefocus border="9">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14">povil/focus_box.png</texturefocus>
 		<pulseonselect>false</pulseonselect>
 	</default>
 	<default type="edit">
@@ -73,7 +73,7 @@
 		<selectedcolor>$VAR[FocusColor]</selectedcolor>
 		<disabledcolor>Disabled</disabledcolor>
 		<texturenofocus border="8">img/SettingsButtonNF.png</texturenofocus>
-		<texturefocus border="9">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14">povil/focus_box.png</texturefocus>
 	</default>
 	<default type="togglebutton">
 		<width>450</width>
@@ -88,8 +88,8 @@
 		<selectedcolor>$VAR[FocusColor]</selectedcolor>
 		<altselectedcolor>HL</altselectedcolor>
 		<disabledcolor>Disabled</disabledcolor>
-		<texturefocus border="9">img/MediaButton2.png</texturefocus>
-		<alttexturefocus border="9">img/MediaButton2.png</alttexturefocus>
+		<texturefocus border="14">povil/focus_box.png</texturefocus>
+		<alttexturefocus border="14">povil/focus_box.png</alttexturefocus>
 		<align>center</align>
 		<aligny>center</aligny>
 		<pulseonselect>false</pulseonselect>
@@ -106,7 +106,7 @@
 		<disabledcolor>Disabled</disabledcolor>
 		<radiowidth>30</radiowidth>
 		<radioheight>30</radioheight>
-		<texturefocus border="9">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14">povil/focus_box.png</texturefocus>
 		<textureradiofocus>img/RadioON.png</textureradiofocus>
 		<textureradionofocus></textureradionofocus>
 		<textoffsetx>20</textoffsetx>
@@ -118,7 +118,7 @@
 		<textureupfocus>img/ArrowUpFO.png</textureupfocus>
 		<texturedown>img/ArrowDownNF.png</texturedown>
 		<texturedownfocus>img/ArrowDownFO.png</texturedownfocus>
-		<texturefocus border="9">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14">povil/focus_box.png</texturefocus>
 		<spinwidth>18</spinwidth>
 		<spinheight>18</spinheight>
 		<font>size22</font>
@@ -141,7 +141,7 @@
 		<textureupfocus>img/ArrowUpFO.png</textureupfocus>
 		<texturedown>img/ArrowDownNF.png</texturedown>
 		<texturedownfocus>img/ArrowDownFO.png</texturedownfocus>
-		<texturefocus border="9">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14">povil/focus_box.png</texturefocus>
 		<texturenofocus></texturenofocus>
 		<spinwidth>18</spinwidth>
 		<spinheight>18</spinheight>
@@ -172,7 +172,7 @@
 		<texturesliderbar>HUD/SliderBG.png</texturesliderbar>
 		<textureslidernib>HUD/SliderNibNF.png</textureslidernib>
 		<textureslidernibfocus>HUD/SliderNibFO.png</textureslidernibfocus>
-		<texturefocus border="9">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14">povil/focus_box.png</texturefocus>
 		<texturenofocus></texturenofocus>
 		<font>size22</font>
 		<textcolor>White</textcolor>
@@ -203,7 +203,7 @@
 		<colorheight>76</colorheight>
 		<texturecolormask>picker/color-button-box.png</texturecolormask>
 		<texturecolordisabledmask colordiffuse="Disabled">picker/color-button-box.png</texturecolordisabledmask>
-		<texturefocus border="9">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14">povil/focus_box.png</texturefocus>
 		<texturenofocus></texturenofocus>
 		<font>size22</font>
 		<textcolor>White</textcolor>

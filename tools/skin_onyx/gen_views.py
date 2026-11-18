@@ -14,6 +14,7 @@ import os
 import sys
 
 import gen_home as H
+import ratings_row as RR
 
 NL = chr(10)
 MIN = " דק'"
@@ -64,6 +65,12 @@ def hero_vars(x):
     x(1, '<variable name="POVIL_V_Rating">')
     x(2, '<value condition="Integer.IsGreater(ListItem.Rating,0)">$INFO[ListItem.Rating]</value>')
     x(1, '</variable>')
+    # The ratings row (ratings_row.py): the POV title the view has in its hero
+    x(1, '<variable name="POVIL_V_RatingsKey">')
+    x(2, '<value condition="%s + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]">%s</value>'
+         % (RR.has_key('ListItem'), RR.key('ListItem')))
+    x(1, '</variable>')
+    RR.tmdb_variable(x, 'POVIL_V_RatingsTmdb', H.RATINGS_KEY, H.RATINGS_SLOT, '$VAR[POVIL_V_Rating]')
     x(1, '<variable name="POVIL_V_Plot">')
     x(2, '<value condition="!String.IsEmpty(ListItem.Plot) + !String.IsEqual(ListItem.Plot,ListItem.Label)">$INFO[ListItem.Plot]</value>')
     x(2, '<value condition="!String.IsEmpty(ListItem.PlotOutline)">$INFO[ListItem.PlotOutline]</value>')
@@ -108,12 +115,19 @@ def view(x, vid, label, layout):
     x(4, '<control type="label"><width>auto</width><height>40</height><font>povil_meta</font><textcolor>povil_dim</textcolor>'
          '<aligny>center</aligny><label>$VAR[POVIL_V_Meta]</label></control>')
     x(4, '<control type="label"><width>auto</width><height>40</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor>'
-         '<aligny>center</aligny><label>$VAR[POVIL_V_Rating]</label></control>')
+         '<aligny>center</aligny><label>$VAR[POVIL_V_Rating]</label>'
+         '<visible>String.IsEmpty(Control.GetLabel(%d))</visible></control>' % H.RATINGS_KEY)
+    # (the star and its number are for a title with no ratings row: there TMDb's mark says it)
     x(4, '<control type="image"><top>9</top><width>22</width><height>22</height><texture colordiffuse="povil_gold">povil/star.png</texture>'
-         '<visible>Integer.IsGreater(ListItem.Rating,0)</visible></control>')
+         '<visible>Integer.IsGreater(ListItem.Rating,0) + String.IsEmpty(Control.GetLabel(%d))</visible></control>' % H.RATINGS_KEY)
     x(3, '</control>')
-    x(3, '<control type="textbox"><left>%d</left><top>402</top><width>860</width><height>152</height><font>povil_plot</font>'
-         '<textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label></control>' % (right - 860))
+    RR.key_label(x, 3, H.RATINGS_KEY, '$VAR[POVIL_V_RatingsKey]')
+    RR.row(x, 3, right, 400, H.RATINGS_KEY, H.RATINGS_SLOT, 'POVIL_V_RatingsTmdb')
+    # under the ratings row; with no row the plot follows the details as it always did (402)
+    x(3, '<control type="textbox"><left>%d</left><top>440</top><width>860</width><height>152</height><font>povil_plot</font>'
+         '<textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label>'
+         '<animation effect="slide" end="0,-38" time="140" tween="cubic" easing="out" '
+         'condition="String.IsEmpty(Control.GetLabel(%d))">Conditional</animation></control>' % (right - 860, H.RATINGS_KEY))
     # The row: right to left (reversed by the add-on), whole slots flush with the right margin
     g = H.GEOM['landscape' if layout == 'episodes' else 'poster']
     left, width, _peek = H.rtl_slots(g)

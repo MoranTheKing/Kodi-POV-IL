@@ -386,7 +386,7 @@
 		<width>1260</width>
 		<textoffsetx>20</textoffsetx>
 		<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-		<texturefocus border="5" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 		<!--<textoffsetx>20</textoffsetx>-->
 		<align>left</align>
 		<aligny>center</aligny>
@@ -398,7 +398,7 @@
 		<width>1260</width>
 		<textoffsetx>20</textoffsetx>
 		<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-		<texturefocus border="5" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 		<align>right</align>
 		<aligny>center</aligny>
 		<font>size23</font>
@@ -409,7 +409,7 @@
 		<width>1260</width>
 		<textoffsetx>20</textoffsetx>
 		<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-		<texturefocus border="5" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 		<align>left</align>
 		<aligny>center</aligny>
 		<font>size23</font>

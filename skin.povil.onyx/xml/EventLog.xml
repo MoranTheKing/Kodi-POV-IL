@@ -76,7 +76,7 @@
 							<posy>0</posy>
 							<height>96</height>
 							<width>1576</width>
-							<texture flipy="true" border="3">img/MediaButton2.png</texture>
+							<texture flipy="true" border="14">povil/focus_box.png</texture>
 						</control>
 						<control type="image" description="Logo">
 							<posx>9</posx>

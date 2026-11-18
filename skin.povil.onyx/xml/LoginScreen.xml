@@ -78,7 +78,7 @@
 				<width>112</width>
 				<height>112</height>
 				<aspectratio aligny="center" align="center">stretch</aspectratio>
-				<texture border="9">img/MediaButton2.png</texture>
+				<texture border="14">povil/focus_box.png</texture>
 			</control>
 			<control type="group" description="Labels and button">
 				<posx>0</posx>

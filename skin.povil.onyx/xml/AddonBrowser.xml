@@ -26,7 +26,7 @@
 					<posy>404</posy>
 					<width>660</width>
 					<height>84</height>
-					<texture border="9">img/MediaButton2.png</texture>
+					<texture border="14">povil/focus_box.png</texture>
 					<aspectratio>stretch</aspectratio>
 				</control>
 				<animation condition="Container.Position(0)" effect="slide" start="0,0" end="0,-405" time="0"  easing="inout" reversible="true">Conditional</animation>

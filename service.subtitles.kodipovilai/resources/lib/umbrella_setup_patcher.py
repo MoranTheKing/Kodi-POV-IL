@@ -158,7 +158,20 @@ UMBRELLA_DEFAULTS = (
 UMBRELLA_DEFAULTS_DONE_SETTING = '_umbrella_defaults_v1'
 
 
-MARKER = '# AI_SUBS_UMBRELLA_SOURCE_NAME_v1'
+MARKER = '# AI_SUBS_UMBRELLA_SOURCE_NAME_v2'
+# v2 also hands the source that resolved to the build's source memory (the
+# Wizard's pov_source_remember, shared with POV), when the build is there.
+
+# The viewer's option (the Wizard's setting, off unless chosen): a title whose
+# last source is remembered plays it at once instead of opening the list.
+PICK_MARKER = '# AI_SUBS_UMBRELLA_PLAY_REMEMBERED_v1'
+# The line in play() that decides between Umbrella's list and its autoplay.
+_PICK_ANCHOR = "\t\t\t\tif (preference and not url) or (not preference and select == '0'):\n"
+_PICK_REVERT_RE = re.compile(
+    r"[ \t]*#[ \t]*AI_SUBS_UMBRELLA_PLAY_REMEMBERED_v\d+.*?except Exception: pass[ \t]*\r?\n",
+    re.DOTALL,
+)
+_WIZARD_PATCHES = 'special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'
 
 # The single line in playItem() that means "this picked source resolved".
 _ANCHOR = "\t\t\t\t\tif not self.url: continue\n"
@@ -467,6 +480,36 @@ def _block(eol):
         "\t\t_ai_w.setProperty('subs.player_filename', _ai_n)",
         "\t\t_ai_w.setProperty('pov_picked_source_name', _ai_n)",
         "\t\t_ai_w.setProperty('pov_picked_source_url', self.url or '')",
+        '\timport sys as _ai_s, xbmcvfs as _ai_v',
+        "\t_ai_p = _ai_v.translatePath('" + _WIZARD_PATCHES + "')",
+        '\tif _ai_p not in _ai_s.path: _ai_s.path.append(_ai_p)',
+        '\timport pov_source_remember as _ai_m',
+        '\t_ai_m.umbrella_capture(meta, resolve_items[i])',
+        'except Exception: pass',
+    ]
+    return ''.join(t + ln + eol for ln in raw)
+
+
+def _pick_block(eol):
+    """Before Umbrella decides between its list and its autoplay: when the
+    list was not asked for by name (force_selection) and the viewer chose the
+    option, the remembered source is resolved; if it plays, Umbrella goes
+    straight on to the player, and if it does not the list opens as usual."""
+    t = '\t' * 4
+    raw = [
+        PICK_MARKER + ' -- the viewer\'s option: play the source this title played last',
+        'try:',
+        "\tif not preference and not force_selection and select == '0':",
+        '\t\timport sys as _ai_s, xbmcvfs as _ai_v',
+        "\t\t_ai_p = _ai_v.translatePath('" + _WIZARD_PATCHES + "')",
+        '\t\tif _ai_p not in _ai_s.path: _ai_s.path.append(_ai_p)',
+        '\t\timport pov_source_remember as _ai_m',
+        "\t\t_ai_r = _ai_m.umbrella_pick({'tmdb': tmdb, 'season': season, 'episode': episode}, items)",
+        '\t\tif _ai_r:',
+        '\t\t\t_ai_u = self.sourcesAutoPlay(_ai_r)',
+        "\t\t\tif _ai_u and _ai_u != 'close://':",
+        "\t\t\t\turl, preference = _ai_u, {'povil_remembered': True}",
+        '\t\t\t\t_ai_m.umbrella_published(_ai_r[0], self.url)',
         'except Exception: pass',
     ]
     return ''.join(t + ln + eol for ln in raw)
@@ -491,10 +534,10 @@ def ensure_source_name_published():
     except Exception as e:
         _log('read failed: {0}'.format(e), 'WARNING')
         return 'read_failed'
-    if MARKER in original:
+    if MARKER in original and PICK_MARKER in original:
         return 'unchanged'
     eol = '\r\n' if '\r\n' in original[:4096] else '\n'
-    content = _REVERT_RE.sub('', original)
+    content = _PICK_REVERT_RE.sub('', _REVERT_RE.sub('', original))
     anchor = _ANCHOR if eol == '\n' else _ANCHOR.replace('\n', eol)
     n = content.count(anchor)
     if n != 1:
@@ -503,6 +546,20 @@ def ensure_source_name_published():
              'WARNING')
         return 'unmatched'
     new_content = content.replace(anchor, anchor + _block(eol), 1)
+    # The option's own block: left out, with a line in the log, when Umbrella's
+    # play() no longer has the line it stands before -- the name block above
+    # (subtitle matching) must not wait for it.
+    pick_anchor = _PICK_ANCHOR if eol == '\n' else _PICK_ANCHOR.replace('\n', eol)
+    if new_content.count(pick_anchor) == 1 and 'force_selection' in new_content:
+        new_content = new_content.replace(pick_anchor, _pick_block(eol) + pick_anchor, 1)
+    else:
+        _log('play() list-or-autoplay line found {0} time(s), need 1 -- the '
+             '"play the last source" option stays out of Umbrella'.format(
+                 new_content.count(pick_anchor)), 'WARNING')
+    if new_content == original:
+        # (the option's block has no place in this Umbrella, and the name block
+        # is already the current one: nothing to write at every start)
+        return 'unchanged'
     try:
         compile(new_content, path, 'exec')
     except SyntaxError as e:

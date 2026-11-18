@@ -208,6 +208,14 @@ def run_reorder(sources_self, results):
         if idx is None:
             return False
 
+        # For should_play(): the very release that was played (the same torrent), or only one like it
+        # (same quality from the same scraper)? The second is worth the first row, not a play unasked.
+        try:
+            rhash = _norm(rec.get('hash'))
+            sources_self._povil_same_release = bool(rhash) and _norm(results[idx].get('hash')) == rhash
+        except Exception:
+            pass
+
         item = results.pop(idx)
 
         # Apply the marker to display_name and fallback URLName
@@ -231,3 +239,115 @@ def run_reorder(sources_self, results):
     except Exception as e:
         _log('Reorder error: ' + str(e), xbmc.LOGERROR)
         return False
+
+
+# --------------------------------------------------------------------------
+# "Play the last source at once" -- the viewer's own option, off unless chosen
+# (asked for through the owner, Nov 2026: "click the poster and it plays what
+# was played before", "as a choice, not on by itself", "in POV and in Umbrella").
+# The source a title played is remembered above; with the option on, the next
+# click on that title plays the same source instead of showing the list. The
+# list is still one press away: "change source" in the player, and the add-ons'
+# own "select source" entries, ask for it by name and always get it.
+
+def play_remembered():
+    try:
+        wizard = xbmcaddon.Addon('plugin.program.kodipovilwizard')
+        return (wizard.getSetting('pov_play_remembered') or '').strip().lower() == 'true'
+    except Exception:
+        return False
+
+
+def should_play(sources_self):
+    """POV, right after run_reorder() put the remembered source first: play it, or show the list?"""
+    try:
+        if not (_enabled() and play_remembered()):
+            return False
+        # only the very release that was played; a source that is merely like it (another cut, dub
+        # or encode of the same quality from the same scraper) is first in the list, and the list shows
+        if not getattr(sources_self, '_povil_same_release', False):
+            return False
+        # the list was asked for by name: POV sets this parameter only then
+        return 'autoplay' not in (getattr(sources_self, 'params', None) or {})
+    except Exception:
+        return False
+
+
+def _umbrella_key(ids):
+    """The same file name POV's capture writes, so one memory serves both add-ons."""
+    tmdb = str((ids or {}).get('tmdb') or '').strip()
+    if not tmdb.isdigit() or tmdb == '0':
+        return None
+    season, episode = (ids or {}).get('season'), (ids or {}).get('episode')
+    if str(episode).strip().isdigit() and str(season).strip().isdigit():
+        return 'movie_{0}_s{1}_e{2}'.format(tmdb, int(season), int(episode))  # POV's own name for an episode's file
+    return 'movie_{0}_s0_e0'.format(tmdb)
+
+
+def _umbrella_cached(item):
+    return isinstance(item, dict) and 'uncached' not in str(item.get('source') or '').lower()
+
+
+def umbrella_capture(ids, item):
+    """Umbrella's playItem(), when the picked source resolved: remember it for this title."""
+    try:
+        if not _enabled() or not _umbrella_cached(item):
+            return False
+        key = _umbrella_key(ids)
+        if not key:
+            return False
+        rec = {'name': item.get('name', ''), 'hash': item.get('hash', ''), 'quality': item.get('quality', ''),
+               'provider': item.get('provider', ''), 'debrid': item.get('debrid', ''),
+               'release_title': item.get('name', ''), 'size': item.get('size', 0)}
+        folder = _dir()
+        if not os.path.isdir(folder):
+            os.makedirs(folder)
+        path = os.path.join(folder, key + '.json')
+        with open(path + '.tmp', 'w', encoding='utf-8') as f:
+            f.write(json.dumps(rec, ensure_ascii=False, indent=2))
+        os.replace(path + '.tmp', path)
+        return True
+    except Exception as e:
+        _log('Umbrella capture error: ' + str(e), xbmc.LOGWARNING)
+        return False
+
+
+def umbrella_pick(ids, items):
+    """Umbrella's play(), before its source list: [the remembered source] when the option is on and
+    this scrape returned it, else None (the list is shown as usual)."""
+    try:
+        if not (_enabled() and play_remembered()):
+            return None
+        key = _umbrella_key(ids)
+        if not key:
+            return None
+        path = os.path.join(_dir(), key + '.json')
+        if not os.path.isfile(path):
+            return None
+        with open(path, 'r', encoding='utf-8') as f:
+            rec = json.loads(f.read())
+        candidates = [i for i in (items or []) if _umbrella_cached(i) and not i.get('cloud_folder')]
+        # only the very release that was played (the same torrent): a source that is merely like it
+        # could be another cut, dub or encode, and this plays without asking
+        rhash = _norm(rec.get('hash'))
+        if rhash:
+            for item in candidates:
+                if _norm(item.get('hash')) == rhash:
+                    return [item]
+        return None
+    except Exception as e:
+        _log('Umbrella pick error: ' + str(e), xbmc.LOGWARNING)
+        return None
+
+
+def umbrella_published(item, url):
+    """The remembered source started without Umbrella's list: say what plays, as its list path does."""
+    try:
+        name = (item or {}).get('name') or ''
+        if name:
+            win = xbmcgui.Window(10000)
+            win.setProperty('subs.player_filename', name)
+            win.setProperty('pov_picked_source_name', name)
+            win.setProperty('pov_picked_source_url', url or '')
+    except Exception:
+        pass

@@ -26,6 +26,8 @@ import xbmcplugin
 import xbmcvfs
 
 BASE = 'plugin://plugin.program.kodipovilwizard/'
+FAVOURITE = 'favourites://'
+KODI_SAFE = '-_.!()'          # what Kodi's own URL encoding leaves as it is
 FILE = 'special://profile/favourites.xml'
 
 
@@ -66,14 +68,20 @@ def row(handle):
     if not _child():
         favourites = read()
         for index in reversed(range(len(favourites))):
-            name, thumb, _command = favourites[index]
+            name, thumb, command = favourites[index]
             item = xbmcgui.ListItem(name, offscreen=True)
             if thumb:
                 item.setArt({'thumb': thumb, 'icon': thumb})
                 _blur(item)
             item.setProperty('povil_rtl', '1')
             item.setProperty('IsPlayable', 'false')
-            url = '%s?mode=favourite_run&i=%d&n=%s' % (BASE, index, quote(name))
+            # The favourite's own address, as Kodi's favourites list writes it. Kodi then knows the
+            # item for the favourite it is: its menu offers "remove from favourites", and a press runs
+            # the favourite's command. As a link to this add-on (mode=favourite_run) the item was a
+            # stranger: the menu offered "add to favourites" -- a second, broken copy -- and no way
+            # to remove the real one (field report with a video, Nov 2026).
+            # (Kodi escapes '~' too, and Python's quote never does)
+            url = FAVOURITE + quote(command, safe=KODI_SAFE).replace('~', '%7E')
             items.append((url, item, False))
     if items:
         xbmcplugin.addDirectoryItems(handle, items, len(items))

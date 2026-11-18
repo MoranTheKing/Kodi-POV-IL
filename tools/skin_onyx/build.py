@@ -6,7 +6,7 @@
 Home.xml + Includes_POVIL_Home.xml + RTL timers, the views, then the player
 and Kodi's settings screens (their variables are appended to
 Includes_POVIL_Home.xml, so they run after the home).
-Textures and fonts are separate: gen_textures.py, gen_settings_textures.py, gen_icons.py, gen_fonts.py
+Textures and fonts are separate: gen_textures.py, gen_settings_textures.py, gen_icons.py, gen_ratings.py, gen_fonts.py
 (they need Pillow and fontTools; the XML generators use the standard library
 only, so the tests can run them anywhere).
 """
