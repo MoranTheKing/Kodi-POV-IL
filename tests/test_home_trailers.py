@@ -325,7 +325,8 @@ class DeskTests(unittest.TestCase):
             raise trailers.Asleep()
         desk.resolve = asleep
         self.assertFalse(desk.asked()())
-        self.assertEqual((player.calls, said, desk.given_up), ([], [], {}), 'quietly, and the title may be asked again')
+        self.assertEqual((player.calls, said, desk.given_up), ([], ['the YouTube add-on did not wake its server'], {}),
+                         'nothing on the screen, a line in the log, and the title may be asked again')
 
     def test_a_stream_is_read_here_before_kodis_player_hears_of_it(self):
         # the YouTube add-on shuts its own server down once Kodi has rested half a minute; a stream handed to
@@ -344,34 +345,117 @@ class DeskTests(unittest.TestCase):
         def fetch(address, headers, seconds, span):
             read.append((address.rpartition('?')[2] or address, headers.get('User-Agent'), seconds, span))
             return manifest.encode('utf-8') if span is None else b'x' * 1024
-        self.assertTrue(trailers.answers(STREAM, fetch))
+        self.assertIs(trailers.reachable(STREAM, fetch), STREAM, 'it answers at its own address: handed on as it is')
         self.assertEqual(read, [('http://127.0.0.1:50152/youtube/manifest/dash/x.mpd', 'Kodi 21', trailers.ANSWER_S, None),
                                 ('itag=136&a=1', 'Kodi 21', trailers.ANSWER_S, 'bytes=0-1023'),
                                 ('itag=140', 'Kodi 21', trailers.ANSWER_S, 'bytes=0-1023')])
         self.assertLessEqual(trailers.ANSWER_S, 5, 'a short wait: this is what replaces twenty seconds inside Kodi')
         # the manifest does not come, a stream stays silent, or the read fails: a no, and only the log hears why
         said = []
-        self.assertFalse(trailers.answers(STREAM, lambda a, h, s, span: b'' if span is None else b'x'))
-        self.assertFalse(trailers.answers(STREAM, lambda a, h, s, span: manifest.encode() if span is None else b''))
+        self.assertIsNone(trailers.reachable(STREAM, lambda a, h, s, span: b'' if span is None else b'x', log=said.append))
+        self.assertIsNone(trailers.reachable(STREAM, lambda a, h, s, span: manifest.encode() if span is None else b'', log=said.append))
 
         def refused(address, headers, seconds, span):
             raise ConnectionRefusedError('http://127.0.0.1:50152/secret-address')
-        self.assertFalse(trailers.answers(STREAM, refused, said.append))
-        self.assertEqual(said, ['no answer: ConnectionRefusedError'], 'never the address')
+        self.assertIsNone(trailers.reachable(STREAM, refused, log=said.append))
+        self.assertEqual(said, ['no answer: empty manifest', 'no answer: empty stream',
+                                'no answer: manifest ConnectionRefusedError at a "this device" address'],
+                         'which step and how -- never the address')
         # a plain file address (no manifest): its first bytes
         read[:] = []
-        self.assertTrue(trailers.answers({'url': 'https://x/video.mp4', 'container': 'mp4'}, fetch))
+        plain = {'url': 'https://x/video.mp4', 'container': 'mp4'}
+        self.assertIs(trailers.reachable(plain, fetch), plain)
         self.assertEqual([r[3] for r in read], ['bytes=0-1023'])
         # the desk: a stream that does not answer never reaches the player, and its title rests for a while
         home, player = Home(**{trailers.ASK: ADDRESS}), Player()
         desk = self.desk(home, player)
-        desk.ready = lambda stream: False
+        desk.ready = lambda stream: None
         self.assertFalse(desk.asked()())
         self.assertEqual((player.calls, home.values.get(trailers.ON), home.values.get(trailers.FILE)), ([], None, None))
         self.assertIsNone(desk.asked())
         source = (WIZARD / 'resources/libs/trailers.py').read_text('utf-8')
         self.assertIn('desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready,', source)
+        self.assertIn('return reachable(stream, fetch, save, log)', source)
         self.assertIn('urllib.request.ProxyHandler({})', source, 'an address inside the device is read with no proxy')
+
+    def test_a_server_that_refuses_its_own_address_is_read_through_the_device_itself(self):
+        # the owner's phone, Nov 2026: every trailer ended with an HTTP error on the manifest and none played.
+        # The YouTube add-on's server answers only callers from a home-network address, and names its streams
+        # at the address of the network interface -- on a mobile or a VPN connection not such an address
+        import urllib.error
+        there = 'http://100.82.14.7:50152'
+        stream = dict(STREAM, url=there + '/youtube/manifest/dash?file=x.mpd')
+        manifest = ('<MPD><Period><AdaptationSet mimeType="video/mp4"><Representation><BaseURL>%s/youtube/stream?itag=136&amp;a=1</BaseURL></Representation></AdaptationSet>'
+                    '<AdaptationSet mimeType="audio/mp4"><Representation><BaseURL>%s/youtube/stream?itag=140</BaseURL></Representation></AdaptationSet></Period></MPD>' % (there, there))
+        read, kept, said = [], [], []
+
+        def fetch(address, headers, seconds, span):
+            read.append(address)
+            if address.startswith(there):
+                raise urllib.error.HTTPError(address, 403, 'Forbidden', None, None)
+            return manifest.encode('utf-8') if span is None else b'x' * 1024
+
+        def save(text, address):
+            kept.append(text)
+            name, served = trailers.kept_address(address)
+            self.assertEqual(name, 'povil_x.mpd')
+            return served
+        got = trailers.reachable(stream, fetch, save, said.append)
+        self.assertEqual(got['url'], 'http://127.0.0.1:50152/youtube/manifest/dash?file=povil_x.mpd',
+                         "Kodi's player is handed the turned manifest, served by the same server through the device itself")
+        # (a manifest that is a FILE is not opened by Kodi's adaptive player: seen in the QA Kodi, three ways)
+        self.assertEqual(trailers.kept_address('http://127.0.0.1:50152/youtube/manifest/dash?file=..%2Fx.mpd'), (None, None))
+        self.assertEqual(trailers.kept_address('http://127.0.0.1:50152/youtube/manifest/dash'), (None, None))
+        self.assertEqual(got['headers'], STREAM['headers'])
+        self.assertEqual(read, [there + '/youtube/manifest/dash?file=x.mpd', 'http://127.0.0.1:50152/youtube/manifest/dash?file=x.mpd',
+                                'http://127.0.0.1:50152/youtube/stream?itag=136&a=1', 'http://127.0.0.1:50152/youtube/stream?itag=140'])
+        self.assertNotIn('100.82.14.7', kept[0], 'every stream address in it is turned the same way')
+        self.assertEqual(kept[0].count('http://127.0.0.1:50152/youtube/stream?'), 2)
+        self.assertEqual(said, ['manifest HTTP 403 at a "other" address: read through this device instead'], 'the log says why, never where')
+        # the server does not answer through the device either (it listens on one address only): no trailer
+        said[:] = []
+
+        def nowhere(address, headers, seconds, span):
+            raise urllib.error.HTTPError(address, 403, 'Forbidden', None, None) if address.startswith(there) else ConnectionRefusedError()
+        self.assertIsNone(trailers.reachable(stream, nowhere, save, said.append))
+        self.assertEqual(said, ['no answer: manifest HTTP 403 at a "other" address, ConnectionRefusedError through this device'])
+        # the kinds of address the log names
+        for url, kind in (('http://127.0.0.1:50152/x', 'this device'), ('http://localhost/x', 'this device'), ('http://192.168.1.20:50152/x', 'home network'),
+                          ('http://10.0.0.5/x', 'home network'), ('http://172.20.1.1/x', 'home network'), ('http://192.0.0.4:50152/x', 'other'),
+                          ('http://100.82.14.7/x', 'other'), ('http://172.40.1.1/x', 'other'), ('not an address', 'other')):
+            self.assertEqual(trailers.address_kind(url), kind, url)
+        self.assertIsNone(trailers.through_this_device('http://127.0.0.1:50152/x'))
+        self.assertIsNone(trailers.through_this_device('https://rr1.example/videoplayback'))
+        source = (WIZARD / 'resources/libs/trailers.py').read_text('utf-8')
+        self.assertIn('return reachable(stream, fetch, save, log)', source)
+        self.assertIn('os.path.join(xbmcvfs.translatePath(TEMP_PATH), name)', source, "kept in the folder the add-on's server serves from")
+
+    def test_three_trailers_in_a_row_that_do_not_play_and_the_trailers_rest(self):
+        # a device they do not work on is not asked of YouTube at every title
+        home, player = Home(), Player()
+        now = [1000.0]
+        said = []
+        desk = trailers.Desk(home, player, lambda video: [STREAM], lambda url, stream: ('item', url), lambda: True,
+                             log=said.append, clock=lambda: now[0], ready=lambda stream: None)
+        desk.born = 0.0
+        resolved = []
+        desk.resolve = lambda video: (resolved.append(video), [STREAM])[1]
+        for n in range(trailers.FAILS):
+            home.values[trailers.ASK] = ADDRESS.replace('hoRHBV0m1hw', 'aaaaaaaaaa%d' % n)
+            self.assertFalse(desk.asked()())
+        self.assertEqual(said[-1], '%d trailers in a row did not play: none is tried for %d minutes' % (trailers.FAILS, trailers.REST_S // 60))
+        home.values[trailers.ASK] = ADDRESS
+        self.assertIsNone(desk.asked(), 'resting')
+        self.assertEqual(len(resolved), trailers.FAILS)
+        now[0] += trailers.REST_S
+        self.assertIsNotNone(desk.asked(), 'and tried again later')
+        # one that plays in between: the count starts again
+        desk = trailers.Desk(home, player, lambda video: [STREAM], lambda url, stream: ('item', url), lambda: True, clock=lambda: now[0])
+        desk.born = 0.0
+        desk.failed = trailers.FAILS - 1
+        self.assertTrue(desk.asked()())
+        desk.playback_started()
+        self.assertEqual(desk.failed, 0)
 
     def test_a_player_that_is_still_opening_is_never_told_to_stop(self):
         # seen twice in one hour in the QA Kodi: the viewer moved on in the second the trailer opened, the

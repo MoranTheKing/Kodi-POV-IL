@@ -33,7 +33,12 @@ able to run it ... it has to work in every situation". What that took, each seen
     Kodi's whole screen waits with it the moment the player is told to stop (twice in one hour,
     several minutes each). So: the server is woken first (light_streams), and before Kodi's
     player hears of the trailer this module reads the stream's first bytes itself, with a short
-    wait (answers). A stream that does not answer is never handed to Kodi.
+    wait (reachable). A stream that does not answer is never handed to Kodi. That server also
+    refuses callers that are not on a home-network address -- its own address on a phone's mobile
+    connection is not one (the owner's phone, Nov 2026: no trailer played at all): the manifest
+    is then read, and played, through 127.0.0.1 (reachable). Three trailers in a row that do not
+    play and the trailers rest ten minutes, so a device they do not work on is not asked of
+    YouTube at every title.
   * THE STOP IS NEVER PYTHON'S OWN Player.stop(). That call waits, holding Python, until Kodi has
     stopped; Kodi, stopping, asks the YouTube add-on's server about the stream (the player's
     open parts, the file's date for Kodi's own records) -- and that server is Python too, so
@@ -62,6 +67,7 @@ able to run it ... it has to work in every situation". What that took, each seen
   * Kodi asked every row of the home again whenever a playback started or stopped: the skin's rows
     now carry an order Kodi does not re-ask for (gen_home.py, follows_no_playback).
 """
+import os
 import re
 import threading
 
@@ -81,6 +87,8 @@ OPEN_LIMIT_S = 120              # ... and after this long the opening is taken t
 STALL_S = 8                     # the clock of a playing trailer standing still this long: given up
 GIVEN_UP_S = 30 * 60            # a title whose trailer was given up is not asked again for this long
 FAILURE_BOX_S = 4.0             # how long Kodi's "playback failed" box is looked for after a trailer failed to open
+LOOPBACK = '127.0.0.1'
+FAILS, REST_S = 3, 10 * 60      # this many trailers in a row that did not play: none is tried for this long
 # Kodi's own box for a play that did not open: its heading is Kodi's string 16026 ("Playback failed");
 # any other OK box that happens to be up is not this module's to close
 FAILURE_BOX = 'Window.IsActive(okdialog) + String.IsEqual(Control.GetLabel(1),$LOCALIZE[16026])'
@@ -144,29 +152,128 @@ def first_addresses(manifest):
     return [found[kind] for kind in ('video', 'audio') if kind in found]
 
 
-def answers(stream, fetch, log=lambda text: None):
-    """Does the stream answer -- read HERE, with a short wait, before Kodi's player hears of it?
+def _host(url):
+    from urllib.parse import urlsplit
+    try:
+        return urlsplit(url).hostname or ''
+    except Exception:
+        return ''
+
+
+def address_kind(url):
+    """What kind of address a stream is read at -- for the log, which never carries the address itself."""
+    host = _host(url)
+    parts = host.split('.')
+    if host in ('localhost', '::1') or parts[0] == '127':
+        return 'this device'
+    try:
+        first, second = int(parts[0]), int(parts[1])
+    except Exception:
+        return 'other'
+    if first == 10 or (first == 172 and 16 <= second <= 31) or (first == 192 and second == 168):
+        return 'home network'
+    return 'other'
+
+
+def through_this_device(url):
+    """The same address reached through the device's own loopback, or None when it already is (or cannot be)."""
+    from urllib.parse import urlsplit, urlunsplit
+    try:
+        parts = urlsplit(url)
+        if parts.scheme != 'http' or not parts.hostname or address_kind(url) == 'this device':
+            return None
+        netloc = LOOPBACK + (':%d' % parts.port if parts.port else '')
+        return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    except Exception:
+        return None
+
+
+def _origin(url):
+    from urllib.parse import urlsplit
+    parts = urlsplit(url)
+    return '%s://%s' % (parts.scheme, parts.netloc)
+
+
+def _why(exc):
+    code = getattr(exc, 'code', None)
+    return 'HTTP %s' % code if isinstance(code, int) else type(exc).__name__
+
+
+def reachable(stream, fetch, save=None, log=lambda text: None):
+    """The stream to hand to Kodi's player -- read HERE first, with a short wait -- or None.
 
     fetch(address, headers, seconds, byte range or None) returns what was read. For a DASH
     manifest: the manifest itself, then the first bytes of its first picture stream and of its
-    first sound stream. Anything that fails or stays silent is a no.
+    first sound stream. Anything that fails or stays silent is a no, and the log says which step
+    and how (never the address).
+
+    THE YOUTUBE ADD-ON'S SERVER MAY REFUSE ITS OWN ADDRESS. It names its streams at the address of
+    the device's network interface and answers only callers from a home-network address. On the
+    owner's phone (Nov 2026) every trailer ended here with an HTTP error on the manifest: on a
+    mobile or a VPN connection that address is not a home-network one. The server listens on
+    every interface, so the same manifest is then read through 127.0.0.1, its stream addresses
+    are turned the same way, and save(text, address) keeps it where that server serves manifests
+    from and returns the address it now has there (Kodi's player does not open a manifest that
+    is a file: seen in the QA Kodi, three ways). The stream comes back with that address.
     """
     url, headers = stream.get('url') or '', stream.get('headers') or {}
     if isinstance(headers, str):
         headers = {}
     try:
         if str(stream.get('container') or '').lower() != 'mpd':
-            return bool(fetch(url, headers, ANSWER_S, 'bytes=0-1023'))
-        manifest = fetch(url, headers, ANSWER_S, None)
-        if not manifest:
-            return False
-        for address in first_addresses(manifest.decode('utf-8', 'replace')):
-            if not fetch(address, headers, ANSWER_S, 'bytes=0-1023'):
-                return False
-        return True
+            return stream if fetch(url, headers, ANSWER_S, 'bytes=0-1023') else None
     except Exception as exc:
-        log('no answer: %s' % type(exc).__name__)
-        return False
+        log('no answer: stream %s' % _why(exc))
+        return None
+    turned = None
+    try:
+        manifest = fetch(url, headers, ANSWER_S, None)
+    except Exception as first:
+        turned = through_this_device(url) if save is not None else None
+        if turned is None:
+            log('no answer: manifest %s at a "%s" address' % (_why(first), address_kind(url)))
+            return None
+        try:
+            manifest = fetch(turned, headers, ANSWER_S, None)
+        except Exception as second:
+            log('no answer: manifest %s at a "%s" address, %s through this device' % (_why(first), address_kind(url), _why(second)))
+            return None
+        log('manifest %s at a "%s" address: read through this device instead' % (_why(first), address_kind(url)))
+    if not manifest:
+        log('no answer: empty manifest')
+        return None
+    text = manifest.decode('utf-8', 'replace')
+    if turned:
+        text = text.replace(_origin(url), _origin(turned))
+    try:
+        for address in first_addresses(text):
+            if not fetch(address, headers, ANSWER_S, 'bytes=0-1023'):
+                log('no answer: empty stream')
+                return None
+    except Exception as exc:
+        log('no answer: stream %s' % _why(exc))
+        return None
+    if not turned:
+        return stream
+    try:
+        kept = save(text, turned)
+    except Exception as exc:
+        log('no answer: manifest not kept (%s)' % type(exc).__name__)
+        return None
+    return dict(stream, url=kept) if kept else None
+
+
+def kept_address(address, prefix='povil_'):
+    """(file name, address) for a turned manifest kept beside the one the YouTube add-on wrote: the
+    add-on's server serves the file named in the address's `file` field from its own folder."""
+    from urllib.parse import urlsplit, urlunsplit, parse_qs, urlencode
+    parts = urlsplit(address)
+    query = parse_qs(parts.query)
+    name = (query.get('file') or [''])[0]
+    if not name or name != os.path.basename(name) or not name.endswith('.mpd'):
+        return None, None
+    query['file'] = [prefix + name]
+    return prefix + name, urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query, doseq=True), ''))
 
 
 def close_failure_box(visible, run, wait, seconds=FAILURE_BOX_S, step=0.1):
@@ -200,7 +307,7 @@ class Desk(object):
     """Starts and stops the home's trailer. Kodi's pieces are handed in, so it runs without Kodi."""
 
     def __init__(self, home, player, resolve, make_item, enabled, log=lambda text: None, clock=None,
-                 ready=lambda stream: True, halt=None):
+                 ready=lambda stream: stream, halt=None):
         import time
         self.home, self.player, self.resolve, self.make_item = home, player, resolve, make_item
         self.enabled, self.log, self.ready = enabled, log, ready
@@ -215,6 +322,8 @@ class Desk(object):
         self.opening = None         # when the player was told to play, until its first picture (or its failing)
         self.stop_wanted = False    # the viewer moved on while it was opening: stopped at its first picture
         self.given_up = {}          # the ask of a trailer that did not play -> when it was given up
+        self.failed = 0             # trailers in a row that did not play
+        self.resting = 0.0          # ... and until when none is tried because of it
         self.let_go = None          # the address of a trailer this desk forgot before it was seen to end
         self.ticket = 0
         self.lock = threading.Lock()
@@ -256,8 +365,8 @@ class Desk(object):
         video = video_id(key)
         if not video or not self.enabled() or self._busy_with_another():
             return None
-        if self.clock() - self.given_up.get(key, -GIVEN_UP_S) < GIVEN_UP_S:
-            return None             # it did not play a moment ago: the still stays
+        if self.clock() - self.given_up.get(key, -GIVEN_UP_S) < GIVEN_UP_S or self.clock() < self.resting:
+            return None             # it did not play a moment ago (or none does on this device now): the still stays
         with self.lock:
             if self.ours and self.key == key and (self.is_ours() or self._opening()):
                 # it plays, or is opening: the viewer came back to it before it was stopped
@@ -287,16 +396,18 @@ class Desk(object):
         try:
             stream = pick(self.resolve(video))
         except Asleep:
+            self._did_not_play('the YouTube add-on did not wake its server')
             return False
         except Exception as exc:
-            self.log('%s: %s' % (type(exc).__name__, str(exc)[:160]))
+            self._did_not_play('%s: %s' % (type(exc).__name__, str(exc)[:160]))
             return False
         if stream is None or not self._wanted(key, ticket):
             return False
-        if not self.ready(stream):
+        stream = self.ready(stream)
+        if not stream:
             # it does not answer: never handed to Kodi's player, and this title rests for a while
             self.given_up[key] = self.clock()
-            self.log('given up (no answer): %s' % video)
+            self._did_not_play('given up (no answer): %s' % video)
             return False
         with self.lock:
             # the answer took a moment: only if this is still the title on screen, and nothing else began
@@ -311,6 +422,15 @@ class Desk(object):
             self.home.setProperty(OPENING, '1')
             self.player.play(url, self.make_item(url, stream), True)
         return True
+
+    def _did_not_play(self, why):
+        """One more trailer that did not play; FAILS of them in a row and the trailers rest."""
+        self.failed += 1
+        self.log(why)
+        if self.failed >= FAILS:
+            self.failed = 0
+            self.resting = self.clock() + REST_S
+            self.log('%d trailers in a row did not play: none is tried for %d minutes' % (FAILS, REST_S // 60))
 
     def guard(self, tick=1.0):
         """Watches the trailer this desk has just started, on the thread that started it. One that
@@ -346,7 +466,7 @@ class Desk(object):
                         self._forget()
                         if ours:
                             self.halt()
-                self.log('given up (%s): %s' % ('stood still' if seen else 'no picture', video_id(key)))
+                self._did_not_play('given up (%s): %s' % ('stood still' if seen else 'no picture', video_id(key)))
                 return True
         return False
 
@@ -389,6 +509,8 @@ class Desk(object):
         the viewer moved on meanwhile), or something else (then the player is someone else's)."""
         with self.lock:
             self.home.clearProperty(OPENING)
+            if self.ours and self.is_ours():
+                self.failed = 0     # a trailer shows its picture: they work on this device
             if not self.ours or not self.is_ours():
                 try:
                     orphan = bool(self.let_go) and self.player.isPlaying() and self.player.getPlayingFile() == self.let_go
@@ -439,8 +561,18 @@ def watch():
         with opener.open(request, timeout=seconds) as answer:
             return answer.read(1024 if span else 2 * 1024 * 1024)
 
+    def save(text, address):
+        # beside the manifest the YouTube add-on wrote, in the folder its server serves them from
+        from youtube_plugin.kodion.constants import TEMP_PATH
+        name, kept = kept_address(address)
+        if not name:
+            return None
+        with open(os.path.join(xbmcvfs.translatePath(TEMP_PATH), name), 'w', encoding='utf-8') as handle:
+            handle.write(text)
+        return kept
+
     def ready(stream):
-        return answers(stream, fetch, log)
+        return reachable(stream, fetch, save, log)
 
     def make_item(url, stream):
         item = xbmcgui.ListItem(path=url, offscreen=True)
@@ -462,7 +594,7 @@ def watch():
 
     def over():
         if desk.playback_over():
-            log('did not open')
+            desk._did_not_play('did not open')
             threading.Thread(target=close_failure_box, name='POVILTrailerBox',
                              args=(xbmc.getCondVisibility, xbmc.executebuiltin, listener.waitForAbort)).start()
 
