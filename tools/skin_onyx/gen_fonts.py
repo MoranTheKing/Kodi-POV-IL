@@ -16,6 +16,8 @@ FONTS = [
     ('povil_meta_bold', SB, 26), ('povil_plot', L, 28), ('povil_menu', M, 31),
     ('povil_row', M, 27), ('povil_chip', M, 23), ('povil_small', R, 21), ('povil_tiny', M, 18),
     ('povil_clock', L, 40), ('povil_badge', SB, 19), ('povil_info_title', L, 58),
+    # the numeral beside a poster in a row that ranks its titles (a service's page)
+    ('povil_rank', B, 150),
 ]
 ARIAL = {'Heebo-Regular.ttf': ('arial.ttf', ''), 'Heebo-Medium.ttf': ('arial.ttf', ''),
          'Heebo-Light.ttf': ('arial.ttf', ''), 'Heebo-SemiBold.ttf': ('arial.ttf', 'bold'),

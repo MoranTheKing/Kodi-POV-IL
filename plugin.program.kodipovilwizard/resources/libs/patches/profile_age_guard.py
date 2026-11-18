@@ -258,6 +258,13 @@ def install_directory_guard():
 
 
 def permit_play(meta, host, url=''):
+    # (POV and Umbrella call this right before they start their player: the home's trailer, if one
+    # runs, is gone first -- home_trailer_gone.py)
+    try:
+        import home_trailer_gone
+        home_trailer_gone.before_play()
+    except Exception:
+        pass
     policy = active_policy()
     if policy is None:
         return True
