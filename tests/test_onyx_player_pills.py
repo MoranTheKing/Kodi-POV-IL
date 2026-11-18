@@ -196,9 +196,10 @@ class SubtitlePositionTests(unittest.TestCase):
         home = ET.parse(XML / 'Home.xml').getroot()
         power = next(c for c in home.iter('control') if c.get('id') == '9099')
         self.assertEqual(power.findtext('onclick'), 'ActivateWindow(ShutdownMenu)')
-        last_tab = power.findtext('onright')
-        self.assertEqual(next(c for c in home.iter('control') if c.get('id') == last_tab).findtext('onleft'), '9099',
-                         'one step left of the last tab')
+        # (Onyx 1.0.18: the tabs are the buttons of a list, and the list sends "left" of its first button here)
+        bar = next(c for c in home.iter('control') if c.get('id') == '9000')
+        self.assertEqual([c.get('id') for c in bar if c.tag == 'control'][0], power.findtext('onright'))
+        self.assertEqual(bar.findtext('onleft'), '9099', 'one step left of the last tab')
         for name in ('clock', 'date'):
             label = next(c for c in home.iter('control') if c.get('description') == name)
             self.assertLessEqual(int(label.findtext('left')) + int(label.findtext('width')), int(power.findtext('left')),

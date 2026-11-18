@@ -48,20 +48,22 @@ class HubTests(unittest.TestCase):
 
     def test_the_page_has_no_button_in_the_tab_bar_and_back_leaves_it(self):
         tabs = self.controls['9000']
-        buttons = [c for c in tabs if c.tag == 'control' and c.get('type') == 'button']
-        self.assertEqual(len(buttons), 8)
+        # (Onyx 1.0.18: the bar is a list of the tabs' buttons; nine tabs)
+        buttons = [c for c in tabs.iter('control') if c.get('type') == 'togglebutton']
+        self.assertEqual(len(buttons), 9)
         self.assertNotIn('hub', ' '.join(c.get('description') for c in buttons))
         for chip in self.chips('hub'):
             self.assertEqual((chip.findtext('onup'), chip.findtext('onback')), ('9000', '9000'), chip.findtext('label'))
         for rid in ROWS:
             self.assertEqual(self.controls[rid].findtext('onback'), '9000')
-        # the power button still sits beside the last tab that has a button
-        self.assertEqual(self.controls['9099'].findtext('onright'), buttons[-1].get('id'))
+        # the power button still sits beside the leftmost tab, the settings (the first cell of the list)
+        self.assertEqual(buttons[0].get('description'), 'tab settings')
+        self.assertEqual(self.controls['9099'].findtext('onright'), buttons[0].get('id'))
 
     def test_the_pressed_chip_leaving_the_screen_does_not_bring_its_tab_back(self):
         # Kodi hands the focus to the window's default -- a tab's button -- when the chip that was pressed
         # goes with its tab (seen in the QA Kodi: the page flashed and the films tab was back)
-        for button in (c for c in self.controls['9000'] if c.tag == 'control' and c.get('type') == 'button'):
+        for button in (c for c in self.controls['9000'].iter('control') if c.get('type') == 'togglebutton'):
             switching = [n for n in button.findall('onfocus') if 'SetProperty(povil.tab' in n.text]
             self.assertEqual(len(switching), 2)
             for node in switching:
