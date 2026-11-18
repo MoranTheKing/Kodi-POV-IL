@@ -86,10 +86,10 @@ PREBUILD_MAX_FILES = 300
 WATCH_DBS = ('watched.db', 'traktcache.db', 'mdblcache.db')
 WATCH_TABLES = ('watched_status', 'progress', 'dropped', 'favorites')
 # (povil_favorites_order: the viewer's order for POV's own favourites, pov_favorites_order.py)
-# (povil_trailer_pick_v1: written once the series POV had cached were let go for the new choice of trailers,
+# (povil_trailer_pick_v2: written once the series POV had cached were let go for the new choice of trailers,
 # pov_trailer_pick.purge_once -- the saved lists then build again behind their first showing)
 HASHED_FILES = ('settings.xml', 'povil_dropped_trakt.json', 'povil_dropped_mdblist.json', 'povil_favorites_order',
-                'povil_trailer_pick_v1')
+                'povil_trailer_pick_v2')
 # Sizes and times of every file above (and POV's list cache): unchanged files
 # mean unchanged dependencies, without opening a database.
 STAT_FILES = HASHED_FILES + (ACCTMGR_SETTINGS,) + tuple(
@@ -1264,6 +1264,9 @@ def _marked(snap, marks, win=None):
     return out or snap
 
 
+ACTION_PROPERTY = 'povil.pov.action'       # when POV was last asked to do something that is not a list
+
+
 def serve_early(argv):
     """From POV's router.py, BEFORE POV is imported: True when a fresh saved
     list was shown (the caller exits), False to continue as usual. Importing
@@ -1277,6 +1280,14 @@ def serve_early(argv):
         argv = list(argv)
         params = _query(argv)
         handle = int(argv[1]) if len(argv) > 1 else -1
+        if handle < 0:
+            # POV was asked to DO something (a menu's action, a title pressed): the home's trailers stay
+            # away for a moment (trailers.py) -- an action that asks a question, or a film about to start,
+            # must not find a trailer opening under it
+            try:
+                xbmcgui.Window(10000).setProperty(ACTION_PROPERTY, '%.3f' % time.time())
+            except Exception:
+                pass
         if params is not None and handle < 0 and params.get('mode') in MARK_MODES:
             # A title is being marked (a RunPlugin, no list to answer): note it and show it now.
             # Only where saved lists are shown at all; POV goes on and does the marking itself.

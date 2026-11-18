@@ -7,8 +7,10 @@ a thread, nothing is shown and the stream plays in Kodi's preview mode behind th
 """
 import importlib.util
 import re
+import sys
 import types
 import unittest
+from unittest import mock
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -346,7 +348,8 @@ class DeskTests(unittest.TestCase):
         def fetch(address, headers, seconds, span):
             read.append((address.rpartition('?')[2] or address, headers.get('User-Agent'), seconds, span))
             return manifest.encode('utf-8') if span is None else b'x' * 1024
-        self.assertIs(trailers.reachable(STREAM, fetch), STREAM, 'it answers at its own address: handed on as it is')
+        self.assertEqual(trailers.reachable(STREAM, fetch), dict(STREAM, seconds=None),
+                         'it answers at its own address: handed on as it is (this manifest does not say how long)')
         self.assertEqual(read, [('http://127.0.0.1:50152/youtube/manifest/dash/x.mpd', 'Kodi 21', trailers.ANSWER_S, None),
                                 ('itag=136&a=1', 'Kodi 21', trailers.ANSWER_S, 'bytes=0-1023'),
                                 ('itag=140', 'Kodi 21', trailers.ANSWER_S, 'bytes=0-1023')])
@@ -527,7 +530,132 @@ class DeskTests(unittest.TestCase):
             desk.stop()
             player.playing = None
             desk.playback_over()
+            now[0] += trailers.OPENS_S          # (each visit to the title a while after the last)
         self.assertEqual(said, [])
+
+    def test_one_titles_trailer_is_opened_twice_a_minute_at_most(self):
+        # the owner, after every fix above: removing a series from "next episode" still opened the trailer five
+        # times and left the screen stuck -- a case the QA Kodi would not show. Whatever stops a trailer and
+        # asks for it again, it cannot do so more than twice
+        home, player, said, now = Home(**{trailers.ASK: ADDRESS}), Player(), [], [1000.0]
+        desk = trailers.Desk(home, player, lambda video: [STREAM], lambda url, stream: ('item', url), lambda: True,
+                             log=said.append, clock=lambda: now[0])
+        desk.born = 0.0
+        for n in range(trailers.OPENS):
+            home.values[trailers.ASK] = ADDRESS
+            self.assertTrue(desk.asked()(), n)
+            # (stopped before its first picture each time -- by another add-on's play, say -- so neither the
+            # desk's own "stopped as it began" nor anything else has counted it)
+            player.playing = None
+            desk.opening = None
+            desk._forget()
+        home.values[trailers.ASK] = ADDRESS
+        self.assertFalse(desk.asked()())
+        self.assertEqual(said, ['opened %d times in %d s: hoRHBV0m1hw' % (trailers.OPENS, trailers.OPENS_S)])
+        self.assertEqual(sum(1 for call in player.calls if call[0] == 'play'), trailers.OPENS)
+        self.assertIsNone(desk.asked(), 'the title rests')
+        other = ADDRESS.replace('hoRHBV0m1hw', 'aaaaaaaaaaa')
+        home.values[trailers.ASK] = other
+        self.assertTrue(desk.asked()(), 'another title is opened as always')
+        # the owner: "someone browsing sees four, five trailers a minute, even more" -- a trailer that was watched
+        # for a few seconds is not counted at all: back and forth between two titles, as often as one likes
+        home, player, said, now = Home(), Player(), [], [1000.0]
+        desk = trailers.Desk(home, player, lambda video: [STREAM], lambda url, stream: ('item', url), lambda: True,
+                             log=said.append, clock=lambda: now[0])
+        desk.born = 0.0
+        for n in range(8):
+            home.values[trailers.ASK] = ADDRESS if n % 2 == 0 else other
+            self.assertTrue(desk.asked()(), n)
+            desk.playback_started()
+            now[0] += 4.0
+            home.values[trailers.ASK] = ''
+            desk.stop()
+            player.playing = None
+            desk.playback_over()
+        self.assertEqual(said, [])
+        self.assertEqual(sum(1 for call in player.calls if call[0] == 'play'), 8)
+
+    def test_no_trailer_starts_while_pov_carries_out_an_action(self):
+        # a menu's action may ask a question a few seconds later (a slow box), a pressed title starts a film:
+        # neither may find a trailer opening under it. POV's router notes every action before POV loads
+        acting = [True]
+        home, player = Home(**{trailers.ASK: ADDRESS}), Player()
+        desk = trailers.Desk(home, player, lambda video: [STREAM], lambda url, stream: ('item', url), lambda: True,
+                             acting=lambda: acting[0])
+        desk.born = 0.0
+        self.assertIsNone(desk.asked())
+        acting[0] = False
+        job = desk.asked()
+        acting[0] = True                            # the action began while the stream was being named
+        self.assertFalse(job())
+        self.assertEqual(player.calls, [])
+        with mock.patch.dict(sys.modules, {'xbmc': types.SimpleNamespace(log=lambda *a: None, LOGINFO=1, LOGWARNING=2)}):
+            spec_s = importlib.util.spec_from_file_location('snap_action_test', WIZARD / 'resources/libs/patches/pov_list_snapshot.py')
+            snap = importlib.util.module_from_spec(spec_s)
+            spec_s.loader.exec_module(snap)
+        self.assertEqual(snap.ACTION_PROPERTY, trailers.ACTION)
+        source = (WIZARD / 'resources/libs/patches/pov_list_snapshot.py').read_text('utf-8')
+        early = source[source.index('def serve_early(argv):'):]
+        self.assertLess(early.index("setProperty(ACTION_PROPERTY, '%.3f' % time.time())"), early.index('if params is not None and handle < 0 and params.get'),
+                        'for every route that is not a list, before anything else')
+        code = (WIZARD / 'resources/libs/trailers.py').read_text('utf-8')
+        self.assertIn('float(home.getProperty(ACTION) or 0) < ACTION_REST_S', code)
+
+    def test_a_real_trailer_not_a_ten_second_spot(self):
+        # the owner: "how am I to know in ten seconds whether I want to watch?" The Hebrew "trailer" TMDb names
+        # for a film is often a distributor's short spot
+        self.assertEqual(trailers.video_ids(ADDRESS), ['hoRHBV0m1hw'])
+        named = ADDRESS + '&povil_alt=bbbbbbbbbbb.ccccccccccc.not-an-id.hoRHBV0m1hw'
+        self.assertEqual(trailers.video_ids(named), ['hoRHBV0m1hw', 'bbbbbbbbbbb', 'ccccccccccc'])
+        self.assertEqual(trailers.video_id(named), 'hoRHBV0m1hw')
+        self.assertEqual(trailers.video_ids('plugin://plugin.video.pov/?x&povil_alt=bbbbbbbbbbb'), [])
+        for text, seconds in (('<MPD mediaPresentationDuration="PT10.5S">', 10.5), ('<MPD mediaPresentationDuration="PT2M30S">', 150.0),
+                              ('<MPD mediaPresentationDuration="PT1H2M3.5S">', 3723.5), ('<MPD>', None), ('', None)):
+            self.assertEqual(trailers.manifest_seconds(text), seconds, text)
+        lengths = {'hoRHBV0m1hw': 10.0, 'bbbbbbbbbbb': 30.0, 'ccccccccccc': 150.0}
+
+        def desk_for(home, player, lengths):
+            resolved = []
+            desk = trailers.Desk(home, player, lambda video: (resolved.append(video), [dict(STREAM, url='http://x/%s.mpd' % video)])[1],
+                                 lambda url, stream: ('item', url), lambda: True,
+                                 ready=lambda stream: dict(stream, seconds=lengths[stream['url'][9:20]]))
+            desk.born = 0.0
+            return desk, resolved
+        home, player = Home(**{trailers.ASK: named}), Player()
+        desk, resolved = desk_for(home, player, lengths)
+        self.assertTrue(desk.asked()())
+        self.assertEqual(resolved, ['hoRHBV0m1hw', 'bbbbbbbbbbb', 'ccccccccccc'], 'ten seconds, thirty seconds, then a real one')
+        self.assertEqual(player.calls, [('play', 'http://x/ccccccccccc.mpd', True)])
+        self.assertEqual(home.values[trailers.ON], named, 'for the skin it is the title\'s trailer whichever of them plays')
+        # the next visit asks for the one found, alone
+        desk.playback_started()
+        home.values[trailers.ASK] = ''
+        desk.stop()
+        player.playing = None
+        desk.playback_over()
+        home.values[trailers.ASK] = named
+        desk.clock = lambda: 5000.0
+        self.assertTrue(desk.asked()())
+        self.assertEqual(resolved[3:], ['ccccccccccc'])
+        # none is long enough: the longest of those read
+        home, player = Home(**{trailers.ASK: named}), Player()
+        desk, resolved = desk_for(home, player, {'hoRHBV0m1hw': 20.0, 'bbbbbbbbbbb': 30.0, 'ccccccccccc': 12.0})
+        self.assertTrue(desk.asked()())
+        self.assertEqual(player.calls, [('play', 'http://x/bbbbbbbbbbb.mpd', True)])
+        # the first is long enough: nothing else is asked of YouTube
+        home, player = Home(**{trailers.ASK: named}), Player()
+        desk, resolved = desk_for(home, player, {'hoRHBV0m1hw': 95.0})
+        self.assertTrue(desk.asked()())
+        self.assertEqual(resolved, ['hoRHBV0m1hw'])
+        # the viewer moved on while the alternatives were being read: nothing plays, nothing more is asked
+        home, player = Home(**{trailers.ASK: named}), Player()
+        desk, resolved = desk_for(home, player, lengths)
+        job = desk.asked()
+        keep = desk.ready
+        desk.ready = lambda stream: (home.values.update({trailers.ASK: ''}), keep(stream))[1]
+        self.assertFalse(job())
+        self.assertEqual((resolved, player.calls), (['hoRHBV0m1hw'], []))
+        self.assertLessEqual(trailers.TRIES, 3, 'each alternative costs a second or two before the trailer starts')
 
     def test_three_trailers_in_a_row_that_do_not_play_and_the_trailers_rest(self):
         # a device they do not work on is not asked of YouTube at every title
