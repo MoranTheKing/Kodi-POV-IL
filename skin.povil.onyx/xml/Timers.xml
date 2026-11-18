@@ -377,8 +377,8 @@
 	</timer>
 	<timer>
 		<name>povil_trailer</name>
-		<start reset="true">Window.IsActive(home) + !Skin.HasSetting(POVILNoTrailers) + !System.HasActiveModalDialog + !Window.IsVisible(extendedprogressdialog) + System.IdleTime(3) + !String.IsEmpty(Control.GetLabel(9808)) + !String.IsEqual(Control.GetLabel(9808),Window(home).Property(povil.tr.ask)) + [!Player.HasMedia | !String.IsEmpty(Window(home).Property(povil.tr.on))]</start>
-		<onstart>SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(9808)],home)</onstart>
+		<start reset="true">Window.IsActive(home) + !Skin.HasSetting(POVILNoTrailers) + !System.HasActiveModalDialog + !Window.IsVisible(extendedprogressdialog) + System.IdleTime(3) + !String.IsEmpty(Control.GetLabel(9809)) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask)) + [!Player.HasMedia | !String.IsEmpty(Window(home).Property(povil.tr.on))]</start>
+		<onstart>SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(9809)],home)</onstart>
 		<onstart>NotifyAll(povil.trailer,ask)</onstart>
 		<stop>true</stop>
 	</timer>
@@ -389,7 +389,7 @@
 	</timer>
 	<timer>
 		<name>povil_trailer_stop</name>
-		<start reset="true">!String.IsEmpty(Window(home).Property(povil.tr.ask)) + [!Window.IsActive(home) | [System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)] | Skin.HasSetting(POVILNoTrailers) | !String.IsEqual(Control.GetLabel(9808),Window(home).Property(povil.tr.ask))]</start>
+		<start reset="true">!String.IsEmpty(Window(home).Property(povil.tr.ask)) + [!Window.IsActive(home) | [System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)] | Skin.HasSetting(POVILNoTrailers) | [!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask))]]</start>
 		<onstart>ClearProperty(povil.tr.ask,home)</onstart>
 		<onstart>NotifyAll(povil.trailer,stop)</onstart>
 		<stop>true</stop>
