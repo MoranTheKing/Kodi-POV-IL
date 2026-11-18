@@ -48,6 +48,17 @@ PATCH_CONFIG = [
      'target_file': 'resources/lib/menus/seasons.py', 'marker': '# WIZARD_POV_TRAILER_SEASON_v1',
      'anchor': 'infotag.setCast(make_cast_list(show.cast))', 'action': 'append_after',
      'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_trailer_pick\n\t_povil_trailer = pov_trailer_pick.for_season(show.meta, season_number)\n\tif _povil_trailer: infotag.setTrailer(_povil_trailer)\nexcept Exception:\n\tpass\n"},
+    # YouTube refuses every read past about a minute of a stream it handed to the add-on's 'android_vr' client
+    # (403; add-on 7.4.4, its issues 1481/1483, open since Aug 2026), and that client's addresses are the ones
+    # the add-on plays: a video stood still some fifteen seconds in. The client stays in the request (the
+    # watch history of a signed-in viewer rides on it, and so do its other answers); only its adaptive streams
+    # -- the part YouTube cuts short -- are not taken, so the complete adaptive streams of the add-on's other
+    # clients are played. Optional: a later add-on that changed this code is left alone.
+    {'id': 'youtube_whole_streams', 'name': 'YouTube plays past the first minute (no streams from the client YouTube cuts short)',
+     'addon_id': 'plugin.video.youtube', 'enabled': True, 'optional': True,
+     'target_file': 'resources/lib/youtube_plugin/youtube/client/player_client.py', 'marker': '# WIZARD_YOUTUBE_WHOLE_STREAMS_v1',
+     'anchor': "if (not client_data.get('_auth_required')", 'action': 'prepend_before',
+     'hook': "if _client_name == 'android_vr':\n    responses[_client_name]['adaptive_fmts'] = None\n"},
     {'id': 'pov_logo_for_ui', 'name': 'Logo that suits a Hebrew screen (povil_logo art)',
      'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
      'target_file': 'resources/lib/indexers/metadata.py', 'marker': '# WIZARD_POV_LOGO_FOR_UI_v3',
