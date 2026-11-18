@@ -46,7 +46,9 @@ env:
 
 jobs:
   build-and-release:
-    runs-on: ubuntu-latest
+    # (pinned: "ubuntu-latest" began to move to Ubuntu 26 in Oct 2026, whose Python 3.14 is not the
+    # Python the build is tested on; the move is made on purpose, after the suite passes there)
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Validate release inputs
