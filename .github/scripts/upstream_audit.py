@@ -52,6 +52,9 @@ AUDITED = {
         'https://raw.githubusercontent.com/fishenzon/repo/master/zips/',),
     'script.module.acctmgr': (
         'https://raw.githubusercontent.com/Zaxxon709/zaxxon/main/zips/',),
+    # Kodi's own repository (the mirror director sends each request to a mirror)
+    'plugin.video.youtube': (
+        'https://mirrors.kodi.tv/addons/omega/',),
 }
 TITLE = 'Upstream {0}: our patches need attention'
 
