@@ -86,7 +86,10 @@ PREBUILD_MAX_FILES = 300
 WATCH_DBS = ('watched.db', 'traktcache.db', 'mdblcache.db')
 WATCH_TABLES = ('watched_status', 'progress', 'dropped', 'favorites')
 # (povil_favorites_order: the viewer's order for POV's own favourites, pov_favorites_order.py)
-HASHED_FILES = ('settings.xml', 'povil_dropped_trakt.json', 'povil_dropped_mdblist.json', 'povil_favorites_order')
+# (povil_trailer_pick_v1: written once the series POV had cached were let go for the new choice of trailers,
+# pov_trailer_pick.purge_once -- the saved lists then build again behind their first showing)
+HASHED_FILES = ('settings.xml', 'povil_dropped_trakt.json', 'povil_dropped_mdblist.json', 'povil_favorites_order',
+                'povil_trailer_pick_v1')
 # Sizes and times of every file above (and POV's list cache): unchanged files
 # mean unchanged dependencies, without opening a database.
 STAT_FILES = HASHED_FILES + (ACCTMGR_SETTINGS,) + tuple(
