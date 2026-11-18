@@ -31,6 +31,12 @@ SEASONS = [{'season_number': 0, 'air_date': '2019-12-01'}, {'season_number': 1, 
 SHOW = {'seasons': SEASONS}
 
 
+def first(*args):
+    """The trailer named first (what follows it in the address are its alternatives)."""
+    named = tp.pick(*args)
+    return named.split('&')[0] if named else None
+
+
 def patches():
     spec_c = importlib.util.spec_from_file_location('patches_config_trailer_test', WIZARD / 'resources/libs/patches/patches_config.py')
     config = importlib.util.module_from_spec(spec_c)
@@ -65,13 +71,13 @@ class SeasonOfATrailer(unittest.TestCase):
 class TheChoice(unittest.TestCase):
     def test_a_film_hebrew_first_else_the_original(self):
         videos = [video('en1', 'en', 'Official Trailer'), video('he1', 'he', 'טריילר מתורגם'), video('en2', 'en', 'Teaser', kind='Teaser')]
-        self.assertEqual(tp.pick(videos, {}, 'he', 'movie'), 'he1')
-        self.assertEqual(tp.pick(videos[:1] + videos[2:], {}, 'he', 'movie'), 'en1', 'a title with no Hebrew trailer has one now')
-        self.assertEqual(tp.pick([video('en2', 'en', 'Teaser', kind='Teaser'), video('en1', 'en', 'Trailer')], {}, 'he', 'movie'), 'en1',
+        self.assertEqual(first(videos, {}, 'he', 'movie'), 'he1')
+        self.assertEqual(first(videos[:1] + videos[2:], {}, 'he', 'movie'), 'en1', 'a title with no Hebrew trailer has one now')
+        self.assertEqual(first([video('en2', 'en', 'Teaser', kind='Teaser'), video('en1', 'en', 'Trailer')], {}, 'he', 'movie'), 'en1',
                          'a trailer before a teaser')
-        self.assertIsNone(tp.pick([video('x', 'en', 'Clip', kind='Clip'), video('v', 'he', 'Trailer', site='Vimeo')], {}, 'he', 'movie'))
-        self.assertIsNone(tp.pick([], {}, 'he', 'movie'))
-        self.assertIsNone(tp.pick(None, None, None, 'movie'))
+        self.assertIsNone(first([video('x', 'en', 'Clip', kind='Clip'), video('v', 'he', 'Trailer', site='Vimeo')], {}, 'he', 'movie'))
+        self.assertIsNone(first([], {}, 'he', 'movie'))
+        self.assertIsNone(first(None, None, None, 'movie'))
 
     def test_a_series_its_first_season_before_a_later_one(self):
         he3 = video('he3', 'he', 'עונה 3 | טריילר רשמי מתורגם', '2023-04-01')
@@ -79,35 +85,52 @@ class TheChoice(unittest.TestCase):
         en1 = video('en1', 'en', 'Official Trailer', '2019-05-15')
         en2 = video('en2', 'en', 'Season 2 Official Trailer', '2021-05-01')
         # the viewer's case: the only Hebrew trailer is a later season's -> the original first-season trailer
-        self.assertEqual(tp.pick([he3, en2, en1], SHOW, 'he', 'tvshow'), 'en1')
+        self.assertEqual(first([he3, en2, en1], SHOW, 'he', 'tvshow'), 'en1')
         # a Hebrew trailer of the first season is there: it comes first
-        self.assertEqual(tp.pick([he3, en1, he1], SHOW, 'he', 'tvshow'), 'he1')
+        self.assertEqual(first([he3, en1, he1], SHOW, 'he', 'tvshow'), 'he1')
         # nothing of the first season at all: a Hebrew trailer before an original one
-        self.assertEqual(tp.pick([en2, he3], SHOW, 'he', 'tvshow'), 'he3')
-        self.assertEqual(tp.pick([en2], SHOW, 'he', 'tvshow'), 'en2')
+        self.assertEqual(first([en2, he3], SHOW, 'he', 'tvshow'), 'he3')
+        self.assertEqual(first([en2], SHOW, 'he', 'tvshow'), 'en2')
         # a later season told only by its date
         late = video('late', 'he', 'טריילר רשמי מתורגם', '2023-04-10')
-        self.assertEqual(tp.pick([late, en1], SHOW, 'he', 'tvshow'), 'en1')
+        self.assertEqual(first([late, en1], SHOW, 'he', 'tvshow'), 'en1')
         # an old series whose trailers were uploaded years later: the Hebrew one, as before
         old = {'seasons': [{'season_number': 1, 'air_date': '1994-09-22'}, {'season_number': 2, 'air_date': '1995-09-21'}]}
-        self.assertEqual(tp.pick([video('en', 'en', 'Trailer', '2012-03-01'), video('he', 'he', 'טריילר', '2015-01-01')], old, 'he', 'tvshow'), 'he')
+        self.assertEqual(first([video('en', 'en', 'Trailer', '2012-03-01'), video('he', 'he', 'טריילר', '2015-01-01')], old, 'he', 'tvshow'), 'he')
         # the cached form of a series (POV's own meta) carries the seasons under another name
-        self.assertEqual(tp.pick([he3, en1], {'season_data': SEASONS}, 'he', 'tvshow'), 'en1')
+        self.assertEqual(first([he3, en1], {'season_data': SEASONS}, 'he', 'tvshow'), 'en1')
         # a series TMDb gives no seasons for: nothing to tell by, Hebrew first
-        self.assertEqual(tp.pick([en1, he1], {}, 'he', 'tvshow'), 'he1')
+        self.assertEqual(first([en1, he1], {}, 'he', 'tvshow'), 'he1')
 
     def test_a_season_gets_its_own_trailer_hebrew_first(self):
         meta = {'season_data': SEASONS, 'all_trailers': [
             video('en1', 'en', 'Official Trailer', '2019-05-15'), video('en3', 'en', 'Season 3 Trailer', '2023-03-01'),
             video('he3', 'he', 'עונה 3 | טריילר מתורגם', '2023-04-01'), video('en2', 'en', 'Season 2 Official Trailer', '2021-05-01')]}
         address = 'plugin://plugin.video.youtube/play/?video_id=%s'
-        self.assertEqual(tp.for_season(meta, 3), address % 'he3')
+        self.assertEqual(tp.for_season(meta, 3), address % 'he3&povil_alt=en3', 'the Hebrew one, the original as its alternative')
         self.assertEqual(tp.for_season(meta, 2), address % 'en2')
         self.assertEqual(tp.for_season(meta, '1'), address % 'en1')
         self.assertIsNone(tp.for_season(meta, 4), "no trailer of that season: the series' own stands")
         self.assertIsNone(tp.for_season(meta, 0))
         self.assertIsNone(tp.for_season({}, 1))
         self.assertIsNone(tp.for_season(None, 'x'))
+
+
+class TheAlternatives(unittest.TestCase):
+    def test_the_address_carries_the_next_trailers_in_the_same_order_of_preference(self):
+        # the owner: "the trailers are really short -- surely a film has several; play the regular or the long
+        # ones, not a ten-second clip". TMDb does not say how long a video is: the home's trailer desk learns it
+        # when it reads the stream, and needs the alternatives to choose among
+        videos = [video('en1', 'en', 'Official Trailer'), video('he1', 'he', 'ספוט'), video('en2', 'en', 'Final Trailer'),
+                  video('he2', 'he', 'טריילר מתורגם'), video('en3', 'en', 'Teaser', kind='Teaser'), video('en4', 'en', 'Trailer 3')]
+        self.assertEqual(tp.ranked(videos, {}, 'he', 'movie'), ['he1', 'he2', 'en1', 'en2', 'en4', 'en3'])
+        self.assertEqual(tp.pick(videos, {}, 'he', 'movie'), 'he1&povil_alt=he2.en1.en2', 'the first, then three more at most')
+        self.assertEqual(tp.pick(videos[:1], {}, 'he', 'movie'), 'en1', 'one trailer only: nothing is added')
+        self.assertEqual(tp.ALTERNATIVES, 3)
+        # a series: its first season's trailers first, the later seasons' after them
+        he3 = video('he3', 'he', 'עונה 3 | טריילר', '2023-04-01')
+        en1 = video('en1', 'en', 'Official Trailer', '2019-05-15')
+        self.assertEqual(tp.pick([he3, en1], SHOW, 'he', 'tvshow'), 'en1&povil_alt=he3')
 
 
 class TheHooks(unittest.TestCase):
@@ -133,7 +156,7 @@ class TheHooks(unittest.TestCase):
         me = types.SimpleNamespace(data=SHOW, lang='he', mediatype='tvshow')
         videos = [video('he3', 'he', 'עונה 3', '2023-04-01'), video('en1', 'en', 'Official Trailer', '2019-05-15')]
         with mock.patch.dict(sys.modules, {'pov_trailer_pick': tp, 'xbmcvfs': types.SimpleNamespace(translatePath=lambda p: p)}):
-            self.assertEqual(scope['get_trailer'](me, videos), scope['youtube_url'] % 'en1')
+            self.assertEqual(scope['get_trailer'](me, videos), scope['youtube_url'] % 'en1&povil_alt=he3')
             self.assertEqual(scope['get_trailer'](me, []), '')
         # the Wizard's module missing or failing: POV's own choice, as before
         broken = types.ModuleType('pov_trailer_pick')
@@ -165,15 +188,16 @@ class TheRefresh(unittest.TestCase):
                             [('tvshow', '1', 'x'), ('tvshow', '2', 'x'),
                              ('movie', '3', '{"title": "a", "trailer": "plugin://plugin.video.youtube/play/?video_id=he1"}'),
                              ('movie', '4', '{"title": "b", "trailer": ""}'), ('movie', '5', '{"title": "c"}'),
-                             ('movie', '6', 'not json: left alone')])
+                             ('movie', '6', 'not json: left alone'),
+                             ('movie', '7', '{"title": "d", "trailer": "plugin://plugin.video.youtube/play/?video_id=he1&povil_alt=en1"}')])
             con.commit()
             con.close()
             said = []
-            self.assertEqual(tp.purge_once(folder, log=said.append), 4)
+            self.assertEqual(tp.purge_once(folder, log=said.append), 5)
             con = sqlite3.connect(os.path.join(folder, 'metacache.db'))
-            # a film that names a trailer names its Hebrew one and stays; one with none has an original to gain
-            self.assertEqual(con.execute('SELECT db_type, tmdb_id FROM metadata ORDER BY tmdb_id').fetchall(), [('movie', '3'), ('movie', '6')])
-            self.assertEqual(said, ['trailer pick: 2 series and 2 films with no trailer will be asked again'])
+            # a film stays only when its trailer was already named with its alternatives (or it cannot be read)
+            self.assertEqual(con.execute('SELECT db_type, tmdb_id FROM metadata ORDER BY tmdb_id').fetchall(), [('movie', '6'), ('movie', '7')])
+            self.assertEqual(said, ['trailer pick: 2 series and 3 films will be asked again'])
             con.execute("INSERT INTO metadata (db_type, tmdb_id, meta) VALUES ('tvshow', '9', 'x')")
             con.commit()
             con.close()

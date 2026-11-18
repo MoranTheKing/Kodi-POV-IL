@@ -61,6 +61,13 @@ able to run it ... it has to work in every situation". What that took, each seen
     plays on and the skin's question is put back. A trailer that IS stopped as it begins, twice
     for the same title, leaves that title alone for a while. The log says what the screen looked
     like when the stop came.
+  * NOTHING CAN OPEN A TRAILER OVER AND OVER. After the fixes above the owner still saw one case
+    (removing a series from "next episode": five opens, a stuck screen, and the removal did not
+    happen) that the QA Kodi could not be made to show. So, whatever the cause: one title's
+    trailer is opened at most OPENS times in OPENS_S seconds and the title then rests; and no
+    trailer starts within ACTION_REST_S seconds of POV being asked to DO something (a menu's
+    action, a pressed title -- pov_list_snapshot.serve_early notes it before POV even loads), so
+    an action's question or a starting film never finds a trailer opening under it.
   * EVERY DEVICE: left to itself the YouTube add-on names the best stream its own settings allow
     -- of ten trailers three came as 1080p AV1 and one as 4K VP9, which a small box decodes in
     software. The trailer asks for H.264 up to 720p instead (light_streams): every box decodes
@@ -107,12 +114,21 @@ FAILURE_BOX_S = 4.0             # how long Kodi's "playback failed" box is looke
 LOOPBACK = '127.0.0.1'
 FAILS, REST_S = 3, 10 * 60      # this many trailers in a row that did not play: none is tried for this long
 SETTLE_S = 0.5                  # a stop that came while the trailer opened is looked at again this long after the first picture
+ACTION = 'povil.pov.action'     # when POV was last asked to do something (pov_list_snapshot.serve_early writes it)
+ACTION_REST_S = 12              # no trailer starts this long after it: the action may ask a question, or start a film
+OPENS, OPENS_S = 2, 60          # one title's trailer is opened this many times within this long, never more --
+#                                 counting only opens that were stopped as they began (a trailer that was watched
+#                                 for a while is not counted: browsing back and forth is not a loop)
 QUICK_S = 1.0                   # a trailer stopped sooner than this after its first picture was stopped "as it began"
 #                                 (the loop on the phone stopped it within 0.13 s; a viewer browsing takes longer to move on)
 # Kodi's own box for a play that did not open: its heading is Kodi's string 16026 ("Playback failed");
 # any other OK box that happens to be up is not this module's to close
 FAILURE_BOX = 'Window.IsActive(okdialog) + String.IsEqual(Control.GetLabel(1),$LOCALIZE[16026])'
+MIN_TRAILER_S = 45              # a trailer shorter than this is a spot: an alternative is tried
+TRIES = 3                       # ... this many of a title's trailers at most, each costs a second or two
 _VIDEO_ID = re.compile(r'[?&]video_id=([\w-]{11})(?:&|$)')
+_ALTERNATIVES = re.compile(r'[?&]povil_alt=([\w.-]+)')
+_LENGTH = re.compile(r'mediaPresentationDuration="PT(?:(\d+)H)?(?:(\d+)M)?(?:([\d.]+)S)?"')
 _SET = re.compile(r'<AdaptationSet\b(.*?)</AdaptationSet>', re.S)
 _KIND = re.compile(r'(?:mimeType|contentType)="(video|audio)')
 _BASE = re.compile(r'<BaseURL>(.*?)</BaseURL>', re.S)
@@ -129,6 +145,25 @@ def video_id(address):
         return None
     found = _VIDEO_ID.search(address)
     return found.group(1) if found else None
+
+
+def video_ids(address):
+    """The trailers a title's address names: the chosen one, then its alternatives (pov_trailer_pick.py)."""
+    first = video_id(address)
+    if not first:
+        return []
+    found = _ALTERNATIVES.search(address or '')
+    rest = [part for part in (found.group(1).split('.') if found else []) if re.match(r'^[\w-]{11}$', part)]
+    return [first] + [part for part in rest if part != first]
+
+
+def manifest_seconds(manifest):
+    """How long the video of a DASH manifest is, in seconds, or None when it does not say."""
+    found = _LENGTH.search(manifest or '')
+    if not found or not any(found.groups()):
+        return None
+    hours, minutes, seconds = (float(part) if part else 0.0 for part in found.groups())
+    return hours * 3600 + minutes * 60 + seconds
 
 
 def pick(streams):
@@ -263,6 +298,7 @@ def reachable(stream, fetch, save=None, log=lambda text: None):
         log('no answer: empty manifest')
         return None
     text = manifest.decode('utf-8', 'replace')
+    stream = dict(stream, seconds=manifest_seconds(text))
     if turned:
         text = text.replace(_origin(url), _origin(turned))
     try:
@@ -327,7 +363,8 @@ class Desk(object):
     """Starts and stops the home's trailer. Kodi's pieces are handed in, so it runs without Kodi."""
 
     def __init__(self, home, player, resolve, make_item, enabled, log=lambda text: None, clock=None,
-                 ready=lambda stream: stream, halt=None, wanted_now=lambda key: False, look=lambda key: '', settle=0.0):
+                 ready=lambda stream: stream, halt=None, wanted_now=lambda key: False, look=lambda key: '', settle=0.0,
+                 acting=lambda: False):
         import time
         self.home, self.player, self.resolve, self.make_item = home, player, resolve, make_item
         self.enabled, self.log, self.ready = enabled, log, ready
@@ -338,6 +375,9 @@ class Desk(object):
         # look(key): the same in words, for the log. settle: how long after the first picture a stop
         # that came during the opening is looked at again (0: at once, on the caller's thread).
         self.wanted_now, self.look, self.settle = wanted_now, look, settle
+        self.acting = acting        # is POV carrying out an action right now (or was a moment ago)?
+        self.opened = {}            # the ask -> when its trailer was handed to the player, the last few times
+        self.choice = {}            # the ask -> the one of its trailers that was found long enough (or the longest)
         self.shown = None           # when the trailer on the player showed its first picture
         self.quick = {}             # the ask of a trailer stopped as it began -> how many times in a row
         self.said = 0               # how many times the log was told of a stop during an opening
@@ -395,6 +435,8 @@ class Desk(object):
             return None
         if self.clock() - self.given_up.get(key, -GIVEN_UP_S) < GIVEN_UP_S or self.clock() < self.resting:
             return None             # it did not play a moment ago (or none does on this device now): the still stays
+        if self.acting():
+            return None             # POV is doing something the viewer asked for: nothing starts under it
         with self.lock:
             if self.ours and self.key == key and (self.is_ours() or self._opening()):
                 # it plays, or is opening: the viewer came back to it before it was stopped
@@ -421,26 +463,55 @@ class Desk(object):
         while self._opening():
             if self.waiting.wait(0.2) or not self._wanted(key, ticket):
                 return False
-        try:
-            stream = pick(self.resolve(video))
-        except Asleep:
-            self._did_not_play('the YouTube add-on did not wake its server')
+        # A REAL TRAILER: the title's address names its chosen trailer and a few alternatives; the first
+        # that is MIN_TRAILER_S long is played, else the longest of those read (the owner: "a ten-second
+        # clip tells me nothing"). The one found is remembered, so the next visit asks for it alone.
+        stream, why = None, None
+        for number, candidate in enumerate(([self.choice[key]] if key in self.choice else video_ids(key))[:TRIES]):
+            if number and not self._wanted(key, ticket):
+                return False
+            try:
+                found = pick(self.resolve(candidate))
+            except Asleep:
+                self._did_not_play('the YouTube add-on did not wake its server')
+                return False
+            except Exception as exc:
+                why = '%s: %s' % (type(exc).__name__, str(exc)[:160])
+                continue
+            if found is None:
+                continue
+            if not self._wanted(key, ticket):
+                return False
+            found = self.ready(found)
+            if not found:
+                why = 'given up (no answer): %s' % candidate
+                self.choice.pop(key, None)      # (the one remembered no longer answers: its alternatives next time)
+                continue
+            found = dict(found, video=candidate)
+            seconds = found.get('seconds')
+            if stream is None or (seconds or 0) > (stream.get('seconds') or 0):
+                stream = found
+            if seconds is None or seconds >= MIN_TRAILER_S:
+                break
+        if stream is None:
+            if why:
+                # none answers: never handed to Kodi's player, and this title rests for a while
+                self.given_up[key] = self.clock()
+                self._did_not_play(why)
             return False
-        except Exception as exc:
-            self._did_not_play('%s: %s' % (type(exc).__name__, str(exc)[:160]))
-            return False
-        if stream is None or not self._wanted(key, ticket):
-            return False
-        stream = self.ready(stream)
-        if not stream:
-            # it does not answer: never handed to Kodi's player, and this title rests for a while
-            self.given_up[key] = self.clock()
-            self._did_not_play('given up (no answer): %s' % video)
-            return False
+        self.choice[key] = stream['video']
         with self.lock:
             # the answer took a moment: only if this is still the title on screen, and nothing else began
-            if not self._wanted(key, ticket) or self._busy_with_another() or self._opening():
+            if not self._wanted(key, ticket) or self._busy_with_another() or self._opening() or self.acting():
                 return False
+            times = [at for at in self.opened.get(key, []) if self.clock() - at < OPENS_S]
+            if len(times) >= OPENS:
+                # whatever keeps stopping and asking for it would do so again
+                self.given_up[key] = self.clock()
+                self.opened.pop(key, None)
+                self._did_not_play('opened %d times in %d s: %s' % (OPENS, OPENS_S, video))
+                return False
+            self.opened[key] = times + [self.clock()]
             url = stream['url']
             self.ours, self.key, self.opening, self.stop_wanted = url, key, self.clock(), False
             # (set before the player starts: the subtitles add-on reads it when the playback begins)
@@ -527,7 +598,10 @@ class Desk(object):
         """A trailer is being stopped: was it as it began? Twice in a row for one title and the title is
         left alone for a while -- whatever stops it would stop it again (seen: five times in ten seconds)."""
         if self.shown is not None and self.clock() - self.shown >= QUICK_S:
+            # it was watched for a while: neither "as it began" nor one of the opens that are counted --
+            # a viewer going back and forth between two titles sees their trailers every time
             self.quick.pop(key, None)
+            self.opened.pop(key, None)
             return
         self.quick[key] = self.quick.get(key, 0) + 1
         if self.quick[key] >= 2:
@@ -556,6 +630,7 @@ class Desk(object):
                 return
             ours = self.is_ours()
             if ours:
+                self.shown = None       # stopped because of what happened while it opened: "as it began"
                 self._stopped_early(key)
             self._forget()
             if ours:
@@ -569,6 +644,8 @@ class Desk(object):
                 failed = self.opening is not None
                 if failed:
                     self.given_up[self.key] = self.clock()
+                elif self.shown is not None and self.clock() - self.shown >= QUICK_S:
+                    self.opened.pop(self.key, None)     # it played and ended: not an open to count
                 self._forget()
                 return failed
             if not self.ours:
@@ -606,6 +683,7 @@ class Desk(object):
 def watch():
     """The Wizard's start-up service runs this as one of its threads, for as long as Kodi runs."""
     import sys
+    import time
     import xbmc
     import xbmcgui
     import xbmcvfs
@@ -706,8 +784,14 @@ def watch():
             xbmc.getCondVisibility('Window.IsActive(home)'), xbmc.getCondVisibility(DIALOG), xbmc.getCondVisibility(BUSY),
             'same' if label == key else ('none' if not label else 'another'), xbmc.getInfoLabel('System.CurrentControlId') or 'none')
 
+    def acting():
+        try:
+            return time.time() - float(home.getProperty(ACTION) or 0) < ACTION_REST_S
+        except Exception:
+            return False
+
     player = Events()
-    desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready,
+    desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready, acting=acting,
                 halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)'),
                 wanted_now=wanted_now, look=look, settle=SETTLE_S)
 

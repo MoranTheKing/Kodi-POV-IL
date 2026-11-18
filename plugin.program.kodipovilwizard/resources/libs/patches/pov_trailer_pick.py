@@ -19,6 +19,15 @@ before: include_video_language), and the choice is:
 was published for -- the first one that began no more than six weeks before the trailer came out.
 A trailer published more than a year after the last season began says nothing that way (an old
 series whose trailers were uploaded later): it counts as the series' own.
+
+THE ALTERNATIVES (0.5.11). The owner, a day into the home's trailers: "the trailers are really
+short -- surely a film has several; play the regular or the long ones, not a ten-second clip. How
+am I to know in ten seconds whether I want to watch?" TMDb does not say how long a video is, and
+the Hebrew "trailer" of a film is often a distributor's ten-second spot. So the address POV names
+carries, after the chosen trailer, up to ALTERNATIVES more in the same order of preference
+(...video_id=FIRST&povil_alt=SECOND.THIRD -- the YouTube add-on ignores the extra field, seen in
+the QA Kodi), and the home's trailer desk, which learns each one's length when it reads its
+stream, plays the first that is long enough (trailers.py).
 """
 import re
 
@@ -39,7 +48,9 @@ _WORDS = (
     (8, ('eighth season', 'season eight', 'העונה השמינית', 'עונה שמינית')),
     (LAST, ('final season', 'last season', 'העונה האחרונה', 'עונה אחרונה', 'עונת הסיום')),
 )
-PURGE_FLAG = 'povil_trailer_pick_v1'
+PURGE_FLAG = 'povil_trailer_pick_v2'      # (v2: every cached title is asked again -- its trailer gets its alternatives)
+ALTERNATIVES = 3
+ALT_FIELD = '&povil_alt='
 
 
 def named_season(name):
@@ -94,27 +105,38 @@ def trailers(videos):
     return sorted(found, key=lambda v: KINDS.index(v['type']))
 
 
-def _first(found, lang, wanted):
-    """The key of the first Hebrew trailer wanted(video) accepts, else of the first other one."""
+def _all(found, lang, wanted):
+    """The keys of the trailers wanted(video) accepts: the Hebrew ones, then the others."""
+    keys = []
     for hebrew in (True, False):
         for video in found:
-            if ((video.get('iso_639_1') or '') == lang) == hebrew and wanted(video):
-                return video['key']
-    return None
+            if ((video.get('iso_639_1') or '') == lang) == hebrew and wanted(video) and video['key'] not in keys:
+                keys.append(video['key'])
+    return keys
+
+
+def ranked(videos, data=None, lang='he', mediatype='movie'):
+    """Every trailer of a film or a series, the one to name first."""
+    found = trailers(videos)
+    lang = (lang or 'he')[:2]
+    keys = []
+    if mediatype != 'movie':
+        seasons = (data or {}).get('seasons') or (data or {}).get('season_data')
+        keys = _all(found, lang, lambda v: season_of(v, seasons) in (1, None))
+    return keys + [key for key in _all(found, lang, lambda v: True) if key not in keys]
+
+
+def with_alternatives(keys):
+    """What follows "video_id=" in the address: the first key, then the next few as alternatives."""
+    if not keys:
+        return None
+    rest = keys[1:1 + ALTERNATIVES]
+    return keys[0] + (ALT_FIELD + '.'.join(rest) if rest else '')
 
 
 def pick(videos, data=None, lang='he', mediatype='movie'):
-    """The key of the trailer to name for a film or a series, or None when it has none."""
-    found = trailers(videos)
-    if not found:
-        return None
-    lang = (lang or 'he')[:2]
-    if mediatype != 'movie':
-        seasons = (data or {}).get('seasons') or (data or {}).get('season_data')
-        early = _first(found, lang, lambda v: season_of(v, seasons) in (1, None))
-        if early:
-            return early
-    return _first(found, lang, lambda v: True)
+    """The trailer to name for a film or a series -- its key, with its alternatives -- or None when it has none."""
+    return with_alternatives(ranked(videos, data, lang, mediatype))
 
 
 def for_season(meta, season, lang='he', address='plugin://plugin.video.youtube/play/?video_id=%s'):
@@ -124,15 +146,17 @@ def for_season(meta, season, lang='he', address='plugin://plugin.video.youtube/p
     except Exception:
         return None
     seasons = (meta or {}).get('season_data')
-    key = _first(trailers((meta or {}).get('all_trailers')), (lang or 'he')[:2], lambda v: season_of(v, seasons) == season)
-    return address % key if key else None
+    named = with_alternatives(_all(trailers((meta or {}).get('all_trailers')), (lang or 'he')[:2],
+                                   lambda v: season_of(v, seasons) == season))
+    return address % named if named else None
 
 
-def _no_trailer(meta):
-    """Does a cached title (POV keeps it as JSON) name no trailer? An entry that cannot be read is left alone."""
+def _to_renew(meta):
+    """Is a cached film (POV keeps it as JSON) to be asked again -- it names no trailer, or names one without
+    having been given its alternatives? An entry that cannot be read is left alone."""
     import json
     try:
-        return not json.loads(meta).get('trailer')
+        return ALT_FIELD not in (json.loads(meta).get('trailer') or '')
     except Exception:
         return False
 
@@ -156,12 +180,12 @@ def purge_once(folder, connect=None, log=lambda text: None):
     try:
         gone = con.execute("DELETE FROM metadata WHERE db_type = 'tvshow'").rowcount
         films = [(tmdb,) for tmdb, meta in con.execute("SELECT tmdb_id, meta FROM metadata WHERE db_type = 'movie'").fetchall()
-                 if _no_trailer(meta)]
+                 if _to_renew(meta)]
         con.executemany("DELETE FROM metadata WHERE db_type = 'movie' AND tmdb_id = ?", films)
         con.commit()
     finally:
         con.close()
     with open(flag, 'w') as handle:
         handle.write('1')
-    log('trailer pick: %d series and %d films with no trailer will be asked again' % (gone, len(films)))
+    log('trailer pick: %d series and %d films will be asked again' % (gone, len(films)))
     return gone + len(films)
