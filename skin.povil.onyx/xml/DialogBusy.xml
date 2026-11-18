@@ -6,7 +6,7 @@
 	<controls>
 		<control type="group">
 			<left>912</left><top>492</top>
-			<visible>String.IsEmpty(Window(home).Property(povil.tr.opening))</visible>
+			<visible>String.IsEmpty(Window(home).Property(povil.tr.opening)) | Integer.IsGreater(Skin.TimerElapsedSecs(povil_trailer_opening),5)</visible>
 			<control type="image"><left>-36</left><top>-36</top><width>168</width><height>168</height><texture colordiffuse="B3000000">povil/pill.png</texture></control>
 			<control type="image"><left>0</left><top>0</top><width>96</width><height>96</height><texture colordiffuse="26FFFFFF">povil/spinner_track.png</texture></control>
 			<control type="image"><left>0</left><top>0</top><width>96</width><height>96</height><texture colordiffuse="povil_gold">povil/spinner.png</texture><animation effect="rotate" start="0" end="-360" center="48,48" time="900" loop="true" condition="true">Conditional</animation></control>

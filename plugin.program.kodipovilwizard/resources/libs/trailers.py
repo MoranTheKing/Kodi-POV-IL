@@ -140,6 +140,9 @@ WEBOS_VIDEO = 'vp9'
 # so and turns them back on): the player hung opening there, and would at every start. Kept with the Kodi
 # version it happened on -- a TV whose Kodi is upgraded gets its trailers back once.
 WEBOS_OFF_FILE = 'trailers_webos_off.json'
+# (0.5.15: VP9 was refused there in the same way -- "codec id: 167 ... Load failed" -- so it is not the codec.
+# Films play on that TV; a trailer -- YouTube's adaptive stream through inputstream.adaptive, behind the home --
+# does not, on Kodi 21.0 with webOS 26. VP9 stays: LG's own YouTube app plays it, and no worse than H.264 there.)
 TRIES = 3                       # ... this many of a title's trailers at most, each costs a second or two
 _VIDEO_ID = re.compile(r'[?&]video_id=([\w-]{11})(?:&|$)')
 _ALTERNATIVES = re.compile(r'[?&]povil_alt=([\w.-]+)')
@@ -607,8 +610,12 @@ class Desk(object):
         last, moved, seen = None, self.clock(), False
         while not self.waiting.wait(tick):
             with self.lock:
-                if ticket != self.ticket or self.ours != url:
-                    return False    # stopped, ended, or something else has the player
+                # ended, or something else has the player; or the viewer moved on after its first picture. A
+                # viewer moving on while it still OPENS changes nothing here: the stop waits for that picture,
+                # and one that never comes is still a trailer that showed no picture (the owner's LG, 0.5.14:
+                # the player hung opening, he moved on after nine seconds, and nothing counted it)
+                if self.ours != url or (ticket != self.ticket and self.opening is None):
+                    return False
             try:
                 now = self.player.getTime() if self.is_ours() else None
             except Exception:
@@ -617,7 +624,7 @@ class Desk(object):
                 last, moved, seen = now, self.clock(), True
             elif self.clock() - moved >= (STALL_S if seen else OPEN_S):
                 with self.lock:
-                    if ticket != self.ticket or self.ours != url:
+                    if self.ours != url or (ticket != self.ticket and self.opening is None):
                         return False
                     self.given_up[key] = self.clock()
                     self.home.clearProperty(ON)
