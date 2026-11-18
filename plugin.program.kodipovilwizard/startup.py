@@ -1008,6 +1008,22 @@ def _trailers_watch():
 
 _start_watch('POVILTrailers', _trailers_watch)
 
+# KODI-POV-IL - the trailer POV names for a title (patches/pov_trailer_pick.py): the
+# series POV already holds in its cache were asked for Hebrew videos only, and a
+# finished series stays there half a year. Once per device they are let go, so
+# each is asked again the next time it is shown.
+def _trailer_pick_refresh():
+    try:
+        import xbmcvfs
+        from resources.libs.patches import pov_trailer_pick as _pick
+        _pick.purge_once(xbmcvfs.translatePath('special://profile/addon_data/plugin.video.pov/'),
+                         log=lambda text: xbmc.log('[POV IL] ' + text, xbmc.LOGINFO))
+    except Exception as _exc:
+        xbmc.log('[POV IL] trailer pick refresh: %r' % (_exc,), xbmc.LOGWARNING)
+
+
+__import__('threading').Thread(target=_trailer_pick_refresh, name='POVILTrailerPick', daemon=True).start()
+
 # KODI-POV-IL - the build's subtitles without the box behind them: a device
 # whose background and border settings are still the ones the build shipped
 # gets the outline (once per profile; see subtitle_style.py).
