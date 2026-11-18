@@ -125,6 +125,12 @@ QUICK_S = 1.0                   # a trailer stopped sooner than this after its f
 # any other OK box that happens to be up is not this module's to close
 FAILURE_BOX = 'Window.IsActive(okdialog) + String.IsEqual(Control.GetLabel(1),$LOCALIZE[16026])'
 MIN_TRAILER_S = 45              # a trailer shorter than this is a spot: an alternative is tried
+# The YouTube add-on asks YouTube for a video as several kinds of client and plays the addresses of the last
+# that answered. YouTube cuts the streams of this one short: every read past about a minute of the stream is
+# refused (403), the player stops asking for anything and the trailer stands still some fifteen seconds in
+# (the owner's phone and the QA Kodi, Nov 2026; anxdpanic/plugin.video.youtube issues 1481 and 1483, open
+# since Aug 2026 with add-on 7.4.4). Without it the add-on plays the complete streams of its other clients.
+CUT_SHORT = ('android_vr',)
 TRIES = 3                       # ... this many of a title's trailers at most, each costs a second or two
 _VIDEO_ID = re.compile(r'[?&]video_id=([\w-]{11})(?:&|$)')
 _ALTERNATIVES = re.compile(r'[?&]povil_alt=([\w.-]+)')
@@ -174,13 +180,19 @@ def pick(streams):
     return None
 
 
+def whole_streams(groups, cut_short=CUT_SHORT):
+    """The YouTube add-on's groups of clients without those whose streams YouTube cuts short."""
+    return tuple((name, tuple(client for client in clients if client not in cut_short)) for name, clients in groups)
+
+
 def light_streams(video, provider_class, context_class, wake):
     """What the YouTube add-on answers for a trailer when asked for H.264 up to MAX_HEIGHT.
 
     First its server is woken, as its own player does before it plays (raises Asleep if it is
     not). Then its settings object is asked two things on the way to a stream: which heights and
     which kinds of stream. Both are answered here, on the object of THIS interpreter -- nothing
-    is written.
+    is written. So is which of its clients' streams are taken (whole_streams), on the client
+    object of this interpreter: the add-on's own playback is as it was.
     """
     provider, context = provider_class(), context_class()
     if not context.ipc_exec(wake, timeout=WAKE_S):
@@ -192,7 +204,11 @@ def light_streams(video, provider_class, context_class, wake):
     kinds = frozenset(kind for kind in settings.stream_features() if kind not in HEAVY) | frozenset(('avc1', 'mp4a'))
     settings.mpd_video_qualities = lambda value=None: heights
     settings.stream_features = lambda value=None, raw_values=False: sorted(kinds) if raw_values else kinds
-    streams, _ = provider.get_client(context=context).load_stream_info(video_id=video)
+    client = provider.get_client(context=context)
+    groups = getattr(client, '_client_groups', None)
+    if groups:
+        client._client_groups = whole_streams(groups)
+    streams, _ = client.load_stream_info(video_id=video)
     return sorted(streams or [], key=lambda stream: stream.get('sort', (0, 0)))
 
 
