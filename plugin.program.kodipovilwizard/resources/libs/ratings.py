@@ -523,6 +523,16 @@ def watch():
     for worker in workers:
         worker.start()
     listener = Listener()
+    # The skin asks once per title, the moment the home shows it -- and this thread starts only once the
+    # home has settled, so the first title of every start had been asked before anyone listened: it showed
+    # TMDb's rating alone (the list's own) until the viewer moved away and back (the owner, Nov 2026: "the
+    # first screen on every device shows only the TMDb rating ... moving forward and back shows them all").
+    # What the skin asked is still in its property: answered now.
+    for slot in SLOTS:
+        try:
+            desk.asked(slot)
+        except Exception as exc:
+            xbmc.log('[POV IL ratings] first ask %s: %r' % (slot, exc), xbmc.LOGWARNING)
     try:
         # callbacks are delivered while this thread waits here
         while not listener.waitForAbort(600):
