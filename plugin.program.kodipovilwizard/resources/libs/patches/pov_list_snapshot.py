@@ -16,7 +16,10 @@ When a saved list may be used:
   (watched/progress/Trakt/MDBList, dropped shows) differ from when it was
   saved: watching an episode, marking something watched, a setting or a sync
   makes every saved list rebuild at once (personal lists also follow POV's
-  list cache); a POV or Wizard update starts over as well;
+  list cache); a POV or Wizard update starts over as well. A film or an
+  episode the viewer marks from a list is the one exception that is not
+  waited for: the copy is shown at once with the mark applied, and rebuilt
+  behind it (see "a mark shown at once");
 * while fresh (general lists such as popular/new 3 hours, personal lists 30
   minutes) it is simply shown;
 * while merely old (up to a week -- e.g. the first list after Kodi starts
@@ -82,7 +85,8 @@ PREBUILD_MAX_FILES = 300
 # saved list. Watch state = row count, last row and last watch per table.
 WATCH_DBS = ('watched.db', 'traktcache.db', 'mdblcache.db')
 WATCH_TABLES = ('watched_status', 'progress', 'dropped', 'favorites')
-HASHED_FILES = ('settings.xml', 'povil_dropped_trakt.json', 'povil_dropped_mdblist.json')
+# (povil_favorites_order: the viewer's order for POV's own favourites, pov_favorites_order.py)
+HASHED_FILES = ('settings.xml', 'povil_dropped_trakt.json', 'povil_dropped_mdblist.json', 'povil_favorites_order')
 # Sizes and times of every file above (and POV's list cache): unchanged files
 # mean unchanged dependencies, without opening a database.
 STAT_FILES = HASHED_FILES + (ACCTMGR_SETTINGS,) + tuple(
@@ -251,6 +255,10 @@ def eligible(params):
     if params.get('mode') in SHOW_MODES and not (params.get('tmdb_id') or '').isdigit():
         return False
     action = (params.get('action') or '')
+    if action == 'tmdb_media_discover' and params.get('povil_hub') == '1':
+        # The rows of a streaming service's page in Onyx's home (gen_home.py "service hubs"): a fixed
+        # set of discover lists the skin asks for, not a search the viewer typed -- kept like any list
+        return True
     return not any(word in action for word in ('search', 'discover'))
 
 
@@ -1064,6 +1072,195 @@ def _adult_fast(xbmc, xbmcvfs):
     return not xbmc.getCondVisibility('Skin.HasSetting(POVILChild)')
 
 
+# ------------------------------------------------- a mark shown at once --
+# The owner (Nov 2026): "marking watched in POV takes a while to show -- I want it
+# at once". What it took (QA Kodi, a fast PC, 2.3 s; a box several times that):
+# POV loads to write the mark, asks the list again, the saved copy -- still without
+# the mark -- is shown, the rebuild waits 1.5 s for the home rows to be quiet, POV
+# loads again and builds, and only its refresh shows the mark.
+#
+# Now the route that marks is seen HERE, before POV is loaded (every POV call comes
+# through serve_early): the mark is noted in a home-window property and the list is
+# asked again at once. Every saved list shown while a mark is pending is shown with
+# it applied -- the title's play count, its resume point, its menu entry -- so the
+# mark is on the screen one replay after the press. POV then does its own work
+# (database, Trakt) and asks again as it always did; the rebuild behind that copy
+# runs without the wait, and refreshes only if it differs from what is shown.
+MARK_PROPERTY = 'povil.mark.pending'
+MARK_LABELS_PROPERTY = 'povil.mark.labels.'
+MARK_MODES = {'mark_as_watched_unwatched_movie': 'movie', 'mark_as_watched_unwatched_episode': 'episode'}
+MARK_ACTIONS = {'mark_as_watched': True, 'mark_as_unwatched': False}
+MARK_LIFE_S = 30.0
+MARK_KEEP = 8
+
+
+def _mark_of(params):
+    """(kind, tmdb, season, episode, watched) for a route that marks one film or one episode
+    and refreshes the list, else None."""
+    kind = MARK_MODES.get(params.get('mode'))
+    watched = MARK_ACTIONS.get(params.get('action'))
+    tmdb = params.get('tmdb_id', '')
+    if kind is None or watched is None or not tmdb.isdigit():
+        return None
+    if params.get('refresh', 'true') != 'true' or params.get('from_playback', 'false') == 'true':
+        return None           # the player's own mark at the end of a video: no list is waiting on it
+    season, episode = params.get('season', ''), params.get('episode', '')
+    if kind == 'episode':
+        if not (season.isdigit() and episode.isdigit()) or int(season) == 0:
+            return None
+        return kind, tmdb, str(int(season)), str(int(episode)), watched
+    return kind, tmdb, '', '', watched
+
+
+def _pending_marks(win, now=None):
+    """The marks noted in the last MARK_LIFE_S seconds, oldest first."""
+    now = time.time() if now is None else now
+    marks = []
+    for part in (win.getProperty(MARK_PROPERTY) or '').split(';'):
+        fields = part.split('|')
+        if len(fields) != 6:
+            continue
+        try:
+            at = float(fields[5])
+        except ValueError:
+            continue
+        # (the time is kept to a millisecond, rounded: a mark read at once may seem a moment ahead)
+        if -1.0 <= now - at < MARK_LIFE_S and fields[0] in ('movie', 'episode') and fields[4] in ('0', '1'):
+            marks.append((fields[0], fields[1], fields[2], fields[3], fields[4] == '1', at))
+    return marks
+
+
+def _note_mark(xbmc, win, params, now=None):
+    """A route that marks a title is starting: note it and ask for the list again now, not after
+    POV has loaded and written it. True when a mark was noted."""
+    mark = _mark_of(params)
+    if mark is None:
+        return False
+    now = time.time() if now is None else now
+    kept = [m for m in _pending_marks(win, now) if m[:4] != mark[:4]][-(MARK_KEEP - 1):]
+    kept.append(mark + (now,))
+    win.setProperty(MARK_PROPERTY, ';'.join(
+        '%s|%s|%s|%s|%d|%.3f' % (m[0], m[1], m[2], m[3], 1 if m[4] else 0, m[5]) for m in kept))
+    # as POV itself chooses between its two refreshes
+    if 'pov' in xbmc.getInfoLabel('Container.PluginName'):
+        xbmc.executebuiltin('Container.Refresh')
+    else:
+        xbmc.executebuiltin('UpdateLibrary(video,special://skin/foo)')
+    return True
+
+
+def _entry(entry):
+    """A recorded context-menu entry as [label, action], whichever way it was recorded."""
+    if isinstance(entry, dict) and set(entry) == {'__tuple__'}:
+        entry = entry['__tuple__']
+    if isinstance(entry, list) and len(entry) == 2 and all(isinstance(v, str) for v in entry):
+        return entry
+    return None
+
+
+def _same_shape(entry, pair):
+    return {'__tuple__': pair} if isinstance(entry, dict) else pair
+
+
+def _op_value(ops, kind, name):
+    for op in ops:
+        if op[0] == kind and op[1] == name and op[2]:
+            return op[2][0]
+    return None
+
+
+def _is_title(ops, mark):
+    kind, tmdb, season, episode = mark[:4]
+    if _op_value(ops, 't', 'setMediaType') != kind:
+        return False
+    ids = _op_value(ops, 't', 'setUniqueIDs')
+    if not isinstance(ids, dict) or str(ids.get('tmdb')) != tmdb:
+        return False
+    if kind == 'episode':
+        return (str(_op_value(ops, 't', 'setSeason')) == season and
+                str(_op_value(ops, 't', 'setEpisode')) == episode)
+    return True
+
+
+def _mark_labels(items, kind, win=None):
+    """{True: the menu label that marks watched, False: the one that marks unwatched} as far as the
+    lists seen in this Kodi session showed them (POV's words, in the viewer's language)."""
+    labels = {}
+    if win is not None:
+        known = (win.getProperty(MARK_LABELS_PROPERTY + kind) or '').split('\x1f')
+        if len(known) == 2:
+            labels = {True: known[0], False: known[1]}
+            labels = {k: v for k, v in labels.items() if v}
+    needle = 'mode=mark_as_watched_unwatched_%s&' % kind
+    for ops in items:
+        if len(labels) == 2:
+            break
+        menu = _op_value(ops, 'L', 'addContextMenuItems')
+        for entry in menu if isinstance(menu, list) else []:
+            pair = _entry(entry)
+            if pair and needle in pair[1]:
+                labels.setdefault('action=mark_as_watched&' in pair[1] + '&', pair[0])
+    if win is not None and labels:
+        win.setProperty(MARK_LABELS_PROPERTY + kind, '%s\x1f%s' % (labels.get(True, ''), labels.get(False, '')))
+    return labels
+
+
+def _mark_ops(ops, mark, labels):
+    """One title's recorded calls with the mark applied: its play count, no resume point, and the
+    menu entry turned into its opposite (as POV builds a title in that state)."""
+    kind, watched = mark[0], mark[4]
+    out, counted = [], False
+    for op in ops:
+        if op[0] == 't' and op[1] == 'setPlaycount':
+            op, counted = ['t', 'setPlaycount', [1 if watched else 0], {}], True
+        elif op[0] == 't' and op[1] == 'setResumePoint':
+            continue                # marking either way clears the place the title was stopped at
+        elif op[0] == 'L' and op[1] == 'setProperties' and op[2] and isinstance(op[2][0], dict) and 'watchedprogress' in op[2][0]:
+            op = ['L', 'setProperties', [dict(op[2][0], watchedprogress='0')] + list(op[2][1:]), op[3]]
+        elif op[0] == 'L' and op[1] == 'addContextMenuItems' and op[2] and isinstance(op[2][0], list):
+            menu = []
+            for entry in op[2][0]:
+                pair = _entry(entry)
+                if pair and 'mode=watched_unwatched_erase_bookmark&' in pair[1]:
+                    continue        # the title's "clear progress": there is none now
+                if pair and ('mode=mark_as_watched_unwatched_%s&' % kind) in pair[1]:
+                    old, new = ('action=mark_as_watched&', 'action=mark_as_unwatched&') if watched else (
+                        'action=mark_as_unwatched&', 'action=mark_as_watched&')
+                    if old in pair[1]:
+                        # the entry now offers the opposite; its label too when POV's word for it is known
+                        entry = _same_shape(entry, [labels.get(not watched, pair[0]), pair[1].replace(old, new)])
+                menu.append(entry)
+            op = ['L', 'addContextMenuItems', [menu] + list(op[2][1:]), op[3]]
+        out.append(op)
+    if watched and not counted:
+        out.append(['t', 'setPlaycount', [1], {}])     # (POV sets no play count on an unwatched episode)
+    return out
+
+
+def _marked(snap, marks, win=None):
+    """The saved list as it is with the pending marks applied: a copy when something changed, the
+    record itself when nothing did (the title is not in this list, or already shows the mark)."""
+    out = None
+    try:
+        for mark in marks:
+            items = (out or snap)['items']
+            labels = None
+            for index, ops in enumerate(items):
+                if not _is_title(ops, mark):
+                    continue
+                if labels is None:
+                    labels = _mark_labels(items, mark[0], win)
+                new = _mark_ops(ops, mark, labels)
+                if new != ops:
+                    if out is None:
+                        out = dict(snap)
+                        out['items'] = list(snap['items'])
+                    out['items'][index] = new
+    except Exception:
+        return snap           # a record of another shape: shown as it is
+    return out or snap
+
+
 def serve_early(argv):
     """From POV's router.py, BEFORE POV is imported: True when a fresh saved
     list was shown (the caller exits), False to continue as usual. Importing
@@ -1077,6 +1274,14 @@ def serve_early(argv):
         argv = list(argv)
         params = _query(argv)
         handle = int(argv[1]) if len(argv) > 1 else -1
+        if params is not None and handle < 0 and params.get('mode') in MARK_MODES:
+            # A title is being marked (a RunPlugin, no list to answer): note it and show it now.
+            # Only where saved lists are shown at all; POV goes on and does the marking itself.
+            if not os.path.exists(xbmcvfs.translatePath(KILL_SWITCH)):
+                adult = _adult_fast(xbmc, xbmcvfs)
+                if (_adult_profile() if adult is None else adult):
+                    _note_mark(xbmc, xbmcgui.Window(10000), params)
+            return False
         if (params is None or handle < 0 or not eligible(params)
                 or os.path.exists(xbmcvfs.translatePath(KILL_SWITCH))):
             return False
@@ -1113,6 +1318,13 @@ def serve_early(argv):
             else:
                 checked = (deps, sig)
         stale = watch_changed or _stale(snap, age, personal)
+        # titles marked a moment ago: shown with their marks (the databases may not have them yet)
+        try:
+            home = xbmcgui.Window(10000)
+            marks = _pending_marks(home, now)
+        except Exception:
+            home, marks = None, []
+        shown = _marked(snap, marks, home) if marks else snap
     except Exception:
         return False
     started = time.perf_counter()
@@ -1121,7 +1333,7 @@ def serve_early(argv):
         from modules import kodi_utils
         return kodi_utils
     try:
-        count = replay(snap, handle, pov_utils, xbmc, xbmcgui, xbmcplugin, widget=_context(labels, params)[0])
+        count = replay(shown, handle, pov_utils, xbmc, xbmcgui, xbmcplugin, widget=_context(labels, params)[0])
     except BadRecord:
         _discard(path, xbmc)
         return False          # nothing sent: POV builds it as usual
@@ -1133,10 +1345,10 @@ def serve_early(argv):
         xbmc.log('[POV IL snapshot] early replay failed: %s' % type(exc).__name__, xbmc.LOGWARNING)
         return True           # this handle was already answered (partly)
     stamp(xbmcgui)
-    xbmc.log('[POV IL snapshot] hit early mode=%s items=%d age_s=%d ms=%d check_ms=%d%s%s' % (
+    xbmc.log('[POV IL snapshot] hit early mode=%s items=%d age_s=%d ms=%d check_ms=%d%s%s%s' % (
         params.get('mode'), count, age, round((time.perf_counter() - started) * 1000),
         round((started - begun) * 1000), ' (files)' if checked is None else ' (content)',
-        ' (refreshing)' if stale else ''), xbmc.LOGINFO)
+        ' (refreshing)' if stale else '', ' (marked)' if shown is not snap else ''), xbmc.LOGINFO)
     if checked is not None and checked[1] is not None and not stale:
         # Same content, newer file times: record them so the next visit is
         # proven by the files alone. Already on screen; best effort.
@@ -1146,9 +1358,11 @@ def serve_early(argv):
         except Exception:
             pass
     if stale:
-        if not _wait_rows_quiet(xbmc):
+        # After a mark the viewer just made, the rebuild does not wait for the home rows to be
+        # quiet (1.5 s at least): the copy on screen already shows the mark, the rest should follow.
+        if not _wait_rows_quiet(xbmc, quiet=0.0 if (marks and watch_changed) else 1.5):
             return True       # shown; rebuilt on a later visit
-        EARLY[handle] = (snap, labels, watch_changed)
+        EARLY[handle] = (shown, labels, watch_changed)
         return False          # POV loads and rebuilds it; nothing more is shown
     return True
 
@@ -1674,6 +1888,13 @@ def wrap(original, native):
             shown = early[0]
         elif snap is not None:
             started = time.perf_counter()
+            marks = []
+            try:
+                marks = _pending_marks(xbmcgui.Window(10000))
+                if marks:
+                    snap = _marked(snap, marks, xbmcgui.Window(10000))
+            except Exception:
+                pass
             try:
                 count = replay(snap, handle, ku, xbmc, xbmcgui, xbmcplugin, widget=context[0])
             except BadRecord:
@@ -1696,7 +1917,7 @@ def wrap(original, native):
                     ' (refreshing)' if stale else ''), xbmc.LOGINFO)
                 if not stale:
                     return None
-                if not _wait_rows_quiet(xbmc):
+                if not _wait_rows_quiet(xbmc, quiet=0.0 if (marks and watch_stale) else 1.5):
                     return None
                 shadow = True      # shown already; rebuild today's list
                 shown = snap

@@ -27,6 +27,9 @@ def busy():
     x(1, '<controls>')
     x(2, '<control type="group">')
     x(3, '<left>912</left><top>492</top>')
+    # Kodi brings this dialog up while any playback opens, the home's trailer too (the Wizard's
+    # trailers.py names that moment in a home-window property): nothing turns over a title being read
+    x(3, '<visible>String.IsEmpty(Window(home).Property(povil.tr.opening))</visible>')
     x(3, '<control type="image"><left>-36</left><top>-36</top><width>168</width><height>168</height>'
          '<texture colordiffuse="B3000000">povil/pill.png</texture></control>')
     x(3, '<control type="image"><left>0</left><top>0</top><width>96</width><height>96</height>'

@@ -997,6 +997,17 @@ def _ratings_watch():
 
 _start_watch('POVILRatings', _ratings_watch)
 
+
+# KODI-POV-IL - a title's trailer behind the home's hero (Onyx): the skin asks once
+# the screen rests on a title, this thread has the YouTube add-on name the stream
+# and plays it in Kodi's preview mode (trailers.py). It sleeps until asked.
+def _trailers_watch():
+    from resources.libs import trailers as _trailers
+    _trailers.watch()
+
+
+_start_watch('POVILTrailers', _trailers_watch)
+
 # KODI-POV-IL - the build's subtitles without the box behind them: a device
 # whose background and border settings are still the ones the build shipped
 # gets the outline (once per profile; see subtitle_style.py).

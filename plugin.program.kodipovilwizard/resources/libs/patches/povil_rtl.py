@@ -155,6 +155,17 @@ def _name_key(listitem, ignore_the=False):
     return [(0, int(part), '') if part.isdecimal() else (1, 0, part) for part in re.split(r'(\d+)', name) if part]
 
 
+def _favourites_by_name(query):
+    """This list is POV's own favourites and the viewer chose them by name."""
+    if 'action=favorites_' not in (query or ''):
+        return False
+    try:
+        import pov_favorites_order
+        return pov_favorites_order.current() == pov_favorites_order.BY_NAME
+    except Exception:
+        return False
+
+
 def _pinned(listitem):
     """Where the add-on pinned an item (SpecialSort: top / bottom), if anywhere."""
     try:
@@ -283,6 +294,19 @@ def _wrap(xbmcplugin, state):
                     reverse = _full_screen_view(state['content'], state['addon'], state['query'])
                 except Exception:
                     reverse = False
+        if succeeded and items and _favourites_by_name(state.get('query')):
+            # POV's own favourites, by name when the viewer chose that (pov_favorites_order.py): by the
+            # name on screen. POV's query orders them by the name it stored when the title was saved,
+            # which may be the title in another language (seen in the QA Kodi: a film saved under its
+            # English name stood first among Hebrew ones).
+            try:
+                ends = {'top': [], 'bottom': []}
+                middle = []
+                for entry in items:
+                    ends.get(_pinned(entry[1]), middle).append(entry)
+                items = ends['top'] + sorted(middle, key=lambda entry: _name_key(entry[1], True)) + ends['bottom']
+            except Exception:
+                pass                 # never lose a list over a name: POV's own order
         if reverse and first in by_name:
             try:
                 # items the add-on pinned (a next page) keep their end
@@ -303,6 +327,9 @@ def _wrap(xbmcplugin, state):
             for index, (_url, listitem, _folder) in enumerate(items):
                 try:
                     listitem.setProperty('povil_rtl', '1')
+                    # the item's place in the add-on's own order (the first is 1): Onyx writes it
+                    # beside the picture in a row that ranks its titles
+                    listitem.setProperty('povil_rank', str(len(items) - index))
                     # Kodi would move a pinned item (Umbrella's next page:
                     # SpecialSort=bottom) back to the end, the row's first place
                     listitem.setProperty('SpecialSort', '')

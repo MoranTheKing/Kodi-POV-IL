@@ -9,8 +9,9 @@ below, not the generated XML.
 Layout (1920x1080): tabs top right (right to left, the first tab is the
 rightmost), clock top left, a hero for the focused item on the right
 (fanart backdrop, clear logo or title, details, plot), shortcut chips under
-it, then up to three rows per tab. Rows of a tab only exist while that tab is
+it, then the tab's rows. Rows of a tab only exist while that tab is
 selected, so a tab's lists load the first time it is shown and stay loaded.
+One tab has no button: a streaming service's page (see "service hubs").
 """
 import os
 import sys
@@ -56,6 +57,23 @@ def personal(path):
 # (the label after it tests TMDb's number), and the home-window properties the answer comes in. The
 # player's are its own: what is playing is another title than the one the home has in its hero.
 RATINGS_KEY, RATINGS_SLOT = 9807, 'povil.rt.'
+# The trailer behind the hero (the Wizard's trailers.py): the hidden label that holds the address of the
+# hero title's trailer, the viewer's switch, and how long the screen rests on a title before it is asked.
+# The switch says OFF: a skin setting is unset until someone sets it, and the trailers are on for everyone
+# until the viewer says otherwise (the owner, Nov 2026).
+TRAILER_KEY, TRAILER_OFF_SWITCH, TRAILER_REST_S = 9808, 'POVILNoTrailers', 3
+TRAILERS_ON, TRAILERS_OFF = '!Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH, 'Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH
+TRAILER_SHOWN = ('Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + '
+                 'String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask))')
+# The trailer to itself (the owner, Nov 2026: "so the viewer can watch the trailer if they want, and read
+# it" -- POV names a title's Hebrew trailer when TMDb has one, and its words are in the picture): once
+# the trailer has been on for a few seconds and the remote is still, everything over the picture fades
+# away and the whole screen is the trailer. Any key brings the home back.
+TRAILER_ALONE_AFTER_S, TRAILER_STILL_S = 4, 3
+TRAILER_ALONE = ('%s + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),%d) + System.IdleTime(%d)'
+                 % (TRAILER_SHOWN, TRAILER_ALONE_AFTER_S, TRAILER_STILL_S))
+TRAILER_FADE = ('<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="%s">Conditional</animation>'
+                % TRAILER_ALONE)
 PLAYER_RATINGS_KEY, PLAYER_RATINGS_SLOT = 7920, 'povil.rtp.'
 
 
@@ -82,6 +100,95 @@ MOVIE_GENRE = lambda gid: videos(pov_movies('tmdb_movies_genres', genre_id=gid))
 TV_GENRE = lambda gid: videos(pov_tv('tmdb_tv_genres', genre_id=gid))
 MOVIE_NET = lambda nid: videos(pov_movies('tmdb_movies_networks', network_id=nid))
 TV_NET = lambda nid: videos(pov_tv('tmdb_tv_networks', network_id=nid))
+# ---------------------------------------------------------------- service hubs
+# A streaming service's own page (a viewer sent another app's: "the same view as the home, filtered to
+# Netflix / Disney / Apple, with films / series / all at the top" -- and its author: "take it"). It is a
+# tab of the home that has no button: a service's chip names the service in home-window properties and
+# shows it. One tab serves every service and all three choices: each row's address carries the service
+# (povil.hub.id, TMDb's watch provider; povil.hub.net, its network) and follows povil.hub.type, so
+# choosing films, series or another service only changes what the same rows ask for.
+# The lists are TMDb's discover through POV (tmdb_media_discover); povil_hub=1 lets the Wizard keep them
+# as saved lists and keeps them out of POV's own discover history.
+HUB = 'hub'
+HUB_TYPES = ('all', 'movie', 'tv')
+# (chip label, the name shown, TMDb watch provider id, TMDb network id)
+SERVICES = [('נטפליקס', 'Netflix', 8, 213), ('דיסני+', 'Disney+', 337, 2739), ('Apple TV+', 'Apple TV+', 350, 2552),
+            ('Prime Video', 'Prime Video', 9, 1024), ('HBO Max', 'HBO Max', 1899, 3186)]
+# (Paramount+ is not here: its provider id, 531, answered two series in the QA Kodi on 18 Nov 2026 -- TMDb
+# lists the service under newer ids now; a page that is nearly empty is worse than no page)
+# ("new" lists end with this month, not today: the address is the saved list's name, and a date in it
+# would keep a new copy of every such row every day)
+TODAY = '$INFO[System.Date(yyyy-mm)]-28'
+
+
+def hub_prop(name):
+    return '$INFO[Window(home).Property(povil.hub.%s)]' % name
+
+
+def hub_type(kind):
+    return 'String.IsEqual(Window(home).Property(povil.hub.type),%s)' % kind
+
+
+def hub_service(provider):
+    return 'String.IsEqual(Window(home).Property(povil.hub.id),%d)' % provider
+
+
+def hub_open(service, kind=None):
+    """What a service's chip does: name the service (and, from a tab, what to show of it) and show the page."""
+    _label, name, provider, network = service
+    steps = ['SetProperty(povil.hub.id,%d,home)' % provider, 'SetProperty(povil.hub.net,%d,home)' % network,
+             'SetProperty(povil.hub.name,%s,home)' % name]
+    if kind:
+        # (the page's lower rows wait again for the viewer to go down to them: another service is nine new lists)
+        steps += ['ClearProperty(povil.deep.%s,home)' % HUB, 'ClearProperty(povil.far.%s,home)' % HUB,
+                  'SetProperty(povil.hub.type,%s,home)' % kind, 'SetProperty(povil.tab.%s,1,home)' % HUB,
+                  'SetProperty(povil.tab,%s,home)' % HUB,
+                  # the page's chips are not on the screen until the next frame: a timer moves the focus (povil_hub_enter)
+                  'SetProperty(povil.hub.enter,1,home)']
+    return steps
+
+
+def hub_list(kind, title, extra, provider=True):
+    """(title, address) of one list of the service: TMDb's discover for films or series, through POV."""
+    query = 'discover/%s?language=en-US&region=US' % ('movie' if kind == 'movie' else 'tv')
+    if provider:
+        query += '&watch_region=US&with_watch_monetization_types=flatrate&with_watch_providers=' + hub_prop('id')
+    query += extra + '&page=%s'
+    mode = 'build_movie_list' if kind == 'movie' else 'build_tvshow_list'
+    # ($INFO[...] stays as it is for Kodi to fill; everything else is one parameter's value)
+    return title, POV + '?mode=%s&action=tmdb_media_discover&povil_hub=1&name=%s&query=%s' % (
+        mode, quote(title), quote(query, safe='$[]().-'))
+
+
+def _hub_rows():
+    m_pop, t_pop = '&sort_by=popularity.desc', '&sort_by=popularity.desc'
+    m_new = '&sort_by=primary_release_date.desc&primary_release_date.lte=%s&vote_count.gte=15' % TODAY
+    t_new = '&sort_by=first_air_date.desc&first_air_date.lte=%s&vote_count.gte=10' % TODAY
+    m_top = '&sort_by=vote_average.desc&vote_count.gte=400'
+    t_top = '&sort_by=vote_average.desc&vote_count.gte=200'
+    originals = '&sort_by=popularity.desc&with_networks=' + hub_prop('net')
+    genre = lambda ids: '&sort_by=popularity.desc&with_genres=' + ids
+    film = lambda title, extra: hub_list('movie', title, extra)
+    show = lambda title, extra, provider=True: hub_list('tv', title, extra, provider)
+    # per row: its tiles' shape, and what it lists for each choice (all / films / series)
+    return [
+        ('ranked', dict(all=film('הסרטים המובילים', m_pop), movie=film('המובילים עכשיו', m_pop), tv=show('המובילות עכשיו', t_pop))),
+        ('landscape', dict(all=show('סדרות פופולריות', t_pop), movie=film('חדשים', m_new), tv=show('חדשות', t_new))),
+        ('poster', dict(all=film('סרטים חדשים', m_new), movie=film('המדורגים ביותר', m_top), tv=show('הפקות מקור', originals, False))),
+        ('landscape', dict(all=show('סדרות חדשות', t_new), movie=film('אקשן והרפתקאות', genre('28|12')), tv=show('המדורגות ביותר', t_top))),
+        ('poster', dict(all=show('הפקות מקור', originals, False), movie=film('קומדיה', genre('35')), tv=show('דרמה', genre('18')))),
+        ('landscape', dict(all=film('סרטים שאהבו במיוחד', m_top), movie=film('דרמה', genre('18')), tv=show('קומדיה', genre('35')))),
+        ('poster', dict(all=show('סדרות שאהבו במיוחד', t_top), movie=film('מדע בדיוני ופנטזיה', genre('878|14')), tv=show('פשע ומסתורין', genre('80|9648')))),
+        ('landscape', dict(all=film('אקשן והרפתקאות', genre('28|12')), movie=film('מתח ואימה', genre('53|27')), tv=show('מדע בדיוני ופנטזיה', genre('10765')))),
+        ('poster', dict(all=show('דרמה', genre('18')), movie=film('לכל המשפחה', genre('10751|16')), tv=show('ילדים ומשפחה', genre('10762|10751')))),
+    ]
+
+
+HUB_ROWS = _hub_rows()
+# The rows of the page beyond its third wait until the viewer goes down into the rows (nine lists at
+# once would be nine POV calls the moment the page opens)
+HUB_NEAR_ROWS = 3
+
 IDAN_KESHET_VOD = ('plugin://plugin.video.idanplus/?name=%5BB%5D%D7%9B%D7%9C+%D7%94%D7%AA%D7%9B%D7%A0%D7%99%D7%95%D7%AA'
                    '%5B%2FB%5D&url=https%253A%252F%252Fwww.mako.co.il%252Fmako-vod-index&mode=1&iconimage=mako.png'
                    '&module=keshet&moredata=')
@@ -104,7 +211,7 @@ TABS = [
          rows=[('פופולריים עכשיו', pov_movies('tmdb_movies_popular'), 'poster', False),
                ('טרנדיים השבוע', pov_movies('tmdb_movies_trending'), 'landscape', False),
                ('ממשיכים לצפות', pov_movies('in_progress_movies'), 'landscape', True)],
-         chips=[('נטפליקס', MOVIE_NET(8)), ('דיסני+', MOVIE_NET(337)), ('בכורות', videos(pov_movies('tmdb_movies_premieres'))),
+         chips=[(s[0], hub_open(s, 'movie')) for s in SERVICES[:4]] + [('בכורות', videos(pov_movies('tmdb_movies_premieres'))),
                 ('אקשן', MOVIE_GENRE(28)), ('קומדיה', MOVIE_GENRE(35)), ('דרמה', MOVIE_GENRE(18)),
                 ('מתח', MOVIE_GENRE(53)), ('אימה', MOVIE_GENRE(27)), ('מדע בדיוני', MOVIE_GENRE(878)),
                 ('כל הסרטים', videos(pov_mode('navigator.main', action='MovieList'))),
@@ -114,7 +221,7 @@ TABS = [
          rows=[('טרנדיות עכשיו', pov_tv('trakt_tv_trending'), 'poster', False),
                ('פופולריות', pov_tv('tmdb_tv_popular'), 'landscape', False),
                ('הפרק הבא', pov_mode('build_next_episode'), 'landscape', True)],
-         chips=[('נטפליקס', TV_NET(213)), ('דיסני+', TV_NET(2739)),
+         chips=[(s[0], hub_open(s, 'tv')) for s in SERVICES[:4]] + [
                 ('ישראליות', videos(pov_tv('tmdb_tv_languages', language='he'))),
                 ('דרמה', TV_GENRE(18)), ('קומדיה', TV_GENRE(35)), ('פשע', TV_GENRE(80)),
                 ('מסתורין', TV_GENRE(9648)), ('מדע בדיוני', TV_GENRE(10765)), ('ריאליטי', TV_GENRE(10764)),
@@ -174,6 +281,9 @@ TABS = [
          # Trakt and MDBList only, and the two POV rows had no way to open in full)
          chips=[('סרטים ב-POV', videos(pov_movies('favorites_movies'))),
                 ('סדרות ב-POV', videos(pov_tv('favorites_tvshows'))),
+                # POV's own favourites newest first or by name (a viewer: "the ascending / descending order
+                # does nothing -- it needs an A-to-Z setting"); the Wizard switches and says which
+                ('מיון: א-ב / חדש קודם', plugin_run(WIZARD + '?mode=pov_favorites_order')),
                 ('סרטים ב-Trakt', videos(pov_movies('trakt_my_movies'))),
                 ('סדרות ב-Trakt', videos(pov_tv('trakt_my_tvshows'))),
                 ('סרטים ב-MDBList', videos(pov_movies('mdblist_my_movies')), MDBLIST_ON),
@@ -193,6 +303,16 @@ TABS = [
          blurb='הוויזארד, הכתוביות, POV ו-Umbrella במקום אחד.',
          rows=[('קיצורי דרך', 'static:settings', 'square', False)],
          chips=[]),
+    # A streaming service's page: no button in the tab bar (hidden) -- a service's chip shows it. Its
+    # first chip names the service and shows all of it; then films and series, the other services, back.
+    dict(id=HUB, hidden=True, label=hub_prop('name'), click='noop',
+         blurb='מה שיש לצפות בו בשירות הזה: בחרו הכול, סרטים או סדרות.',
+         rows=[('$VAR[POVIL_HubTitle_%d]' % k, 'hub:%d' % k, kind, False) for k, (kind, _lists) in enumerate(HUB_ROWS)],
+         chips=[(hub_prop('name') + '  ·  הכול', ['SetProperty(povil.hub.type,all,home)'], None, hub_type('all')),
+                ('סרטים', ['SetProperty(povil.hub.type,movie,home)'], None, hub_type('movie')),
+                ('סדרות', ['SetProperty(povil.hub.type,tv,home)'], None, hub_type('tv'))] +
+               [(s[0], hub_open(s), None, hub_service(s[2])) for s in SERVICES] +
+               [('חזרה', ['SetFocus(9000)'])]),
 ]
 
 SETTINGS_ITEMS = [
@@ -206,6 +326,9 @@ SETTINGS_ITEMS = [
     ('הגדרות Umbrella', '$INFO[System.AddonIcon(plugin.video.umbrella)]', 'Addon.OpenSettings(plugin.video.umbrella)', 'System.HasAddon(plugin.video.umbrella)'),
     # POV's own clear-all-cache (the owner, 17 Nov 2026: the other skins have the button, Onyx had none)
     ('ניקוי קאש', 'DefaultAddonRepository.png', plugin_run(POV + '?mode=clear_all_cache&isFolder=false'), 'System.HasAddon(plugin.video.pov)'),
+    # the trailer behind the hero (trailers.py): on unless switched off here; the tile says which
+    ('$VAR[POVIL_TrailersTile]', 'DefaultAddonVideo.png', 'Skin.ToggleSetting(%s)' % TRAILER_OFF_SWITCH,
+     'System.HasAddon(plugin.video.youtube)'),
     ('הגדרות הסקין', 'DefaultAddonSkin.png', 'ActivateWindow(SkinSettings)', ''),
     ('הגדרות קודי', 'DefaultAddonService.png', 'ActivateWindow(Settings)', ''),
     ('הרחבות', 'DefaultAddonsInstalled.png', 'ActivateWindow(AddonBrowser)', ''),
@@ -226,7 +349,17 @@ GEOM = {
     'poster': dict(list_h=340, block=402, w=196, h=294, step=226),
     'landscape': dict(list_h=300, block=362, w=352, h=198, step=382),
     'square': dict(list_h=290, block=352, w=200, h=200, step=230),
+    # posters with their place in the list beside them, as large as the poster is tall: a poster's
+    # size, a wider step for the numeral (the first row of a service's page)
+    # (edge: what of a slot lies past the right margin -- for the other rows the gap between two tiles;
+    # here the numeral is the slot's right part and must end at the margin)
+    'ranked': dict(list_h=340, block=402, w=196, h=294, step=330, edge=16),
 }
+
+
+def shape(kind):
+    """The shape of a row's pictures: a ranked row's are posters."""
+    return 'poster' if kind == 'ranked' else kind
 GOLD = 'povil_gold'
 
 
@@ -235,6 +368,10 @@ def tab_cond(tab):
 
 
 POWER_BUTTON = 9099
+# the tabs with a button in the tab bar; a hidden tab (a service's page) comes after them all, so a
+# shown tab's place in TABS is its place in the bar
+SHOWN_TABS = [tab for tab in TABS if not tab.get('hidden')]
+assert TABS[:len(SHOWN_TABS)] == SHOWN_TABS
 
 
 def tab_button(ti):
@@ -292,8 +429,23 @@ def named(text, label):
     return re.sub(r'plugin://plugin\.video\.pov/[^"]*', fix, text)
 
 
+def is_hub(path):
+    return path.startswith('hub:')
+
+
+def follows_no_playback(path):
+    """A POV row whose titles no playback changes: not the viewer's own (LISTS_TOKEN), not what is in
+    progress or next, not a history."""
+    if is_hub(path):
+        return True
+    if not path.startswith(POV) or LISTS_TOKEN in path:
+        return False
+    return not any(word in path for word in ('in_progress', 'next_episode', 'favorites_', 'watched_', 'history',
+                                              'mdblist_my', 'trakt_my', 'tmdb_my'))
+
+
 def is_rtl(path):
-    return path.startswith('plugin://') or path.startswith('static:')
+    return path.startswith('plugin://') or path.startswith('static:') or is_hub(path)
 
 
 def rtl_path(path):
@@ -316,12 +468,45 @@ def rtl_waiting(cid, home=True):
 def gen_timers():
     x = X()
     x(1, '<!-- POVIL RTL BEGIN: generated by tools/skin_onyx/gen_home.py -->')
-    # Ratings from several sites for the title on screen: asked once per title after a second's rest
+    # Ratings from several sites for the title on screen: asked once per title, the moment it is shown
     # (the home's hero; the views, the info screen and the player have their own key labels)
     RR.timer(x, 'povil_ratings', RATINGS_KEY, RATINGS_SLOT, 'home',
              '[Window.IsActive(home) | Window.IsActive(videos) | Window.IsActive(movieinformation)]')
     RR.timer(x, 'povil_ratings_player', PLAYER_RATINGS_KEY, PLAYER_RATINGS_SLOT, 'player',
              '[Window.IsActive(fullscreenvideo) | Window.IsActive(videoosd)] + Player.HasVideo')
+    # The trailer behind the hero: asked once the screen has rested on a title, and only while nothing
+    # else plays; told to stop the moment the title changes, a dialog opens or the home is left.
+    asked = 'Window(home).Property(povil.tr.ask)'
+    x(1, '<timer>')
+    x(2, '<name>povil_trailer</name>')
+    # (none while an add-on is finding or opening a title's sources under Kodi's background progress:
+    # the viewer pressed a title, a film is about to start -- review, Nov 2026)
+    x(2, '<start reset="true">Window.IsActive(home) + %s + !System.HasActiveModalDialog + '
+         '!Window.IsVisible(extendedprogressdialog) + System.IdleTime(%d) + '
+         '!String.IsEmpty(Control.GetLabel(%d)) + !String.IsEqual(Control.GetLabel(%d),%s) + '
+         '[!Player.HasMedia | !String.IsEmpty(Window(home).Property(povil.tr.on))]</start>'
+      % (TRAILERS_ON, TRAILER_REST_S, TRAILER_KEY, TRAILER_KEY, asked))
+    x(2, '<onstart>SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(%d)],home)</onstart>' % TRAILER_KEY)
+    x(2, '<onstart>NotifyAll(povil.trailer,ask)</onstart>')
+    x(2, '<stop>true</stop>')
+    x(1, '</timer>')
+    # how long the trailer has been on the screen (TRAILER_ALONE counts from it)
+    x(1, '<timer>')
+    x(2, '<name>povil_trailer_shown</name>')
+    x(2, '<start reset="true">Window.IsActive(home) + %s</start>' % TRAILER_SHOWN)
+    x(2, '<stop>!Window.IsActive(home) | ![%s]</stop>' % TRAILER_SHOWN)
+    x(1, '</timer>')
+    x(1, '<timer>')
+    x(2, '<name>povil_trailer_stop</name>')
+    # (Kodi's own busy dialog comes up for a moment while any playback opens -- the trailer's too: it is
+    # not a dialog the viewer opened; seen in the QA Kodi stopping the very trailer it announced)
+    dialog = '[System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)]'
+    x(2, '<start reset="true">!String.IsEmpty(%s) + [!Window.IsActive(home) | %s | '
+         '%s | !String.IsEqual(Control.GetLabel(%d),%s)]</start>' % (asked, dialog, TRAILERS_OFF, TRAILER_KEY, asked))
+    x(2, '<onstart>ClearProperty(povil.tr.ask,home)</onstart>')
+    x(2, '<onstart>NotifyAll(povil.trailer,stop)</onstart>')
+    x(2, '<stop>true</stop>')
+    x(1, '</timer>')
     # A swipe on a phone (the touch keymap) names its direction; Onyx moves the focus
     x(1, '<timer>')
     x(2, '<name>povil_swipe</name>')
@@ -393,6 +578,39 @@ def gen_timers():
             x(2, '<onstop condition="%s + String.IsEqual(%s,1)">SetProperty(povil.retry.%d,2,home)</onstop>' % (empty, prop, rid))
             x(2, '<onstop condition="%s + String.IsEmpty(%s)">SetProperty(povil.retry.%d,1,home)</onstop>' % (empty, prop, rid))
             x(1, '</timer>')
+    for ti, tab in enumerate(TABS):
+        if not tab.get('hidden'):
+            continue
+        ids = chip_ids(ti, tab)
+        # A service's chip named the service and chose the page; its chips are on the screen a frame
+        # later, and only then can one take the focus: the one of what is shown (all / films / series)
+        x(1, '<timer>')
+        x(2, '<name>povil_%s_enter</name>' % tab['id'])
+        x(2, '<start reset="true">Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.%s.enter),1) + Control.IsVisible(%d)</start>'
+          % (tab['id'], ids[0]))
+        x(2, '<onstart>ClearProperty(povil.%s.enter,home)</onstart>' % tab['id'])
+        for n, kind in enumerate(HUB_TYPES):
+            x(2, '<onstart condition="%s">SetFocus(%d)</onstart>' % (hub_type(kind), ids[n]))
+        x(2, '<stop>true</stop>')
+        x(1, '</timer>')
+        # the mark never outlives the entering (while it is set the tab buttons do not choose their tabs)
+        x(1, '<timer>')
+        x(2, '<name>povil_%s_enter_guard</name>' % tab['id'])
+        # ... whatever happens to the page meanwhile: two seconds at most
+        x(2, '<start reset="true">String.IsEqual(Window(home).Property(povil.%s.enter),1)</start>' % tab['id'])
+        x(2, '<stop>String.IsEmpty(Window(home).Property(povil.%s.enter)) | !Window.IsActive(home) | !%s | '
+             'Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_%s_enter_guard),2)</stop>' % (tab['id'], tab_cond(tab), tab['id']))
+        x(2, '<onstop>ClearProperty(povil.%s.enter,home)</onstop>' % tab['id'])
+        x(1, '</timer>')
+        # the rows beyond the third open once the focus is on one of the page's rows
+        rows_focused = ' | '.join('Control.HasFocus(%d)' % row_id(ti, ri) for ri in range(len(tab['rows'])))
+        x(1, '<timer>')
+        x(2, '<name>povil_far_%s</name>' % tab['id'])
+        x(2, '<start reset="true">Window.IsActive(home) + %s + [%s] + String.IsEmpty(Window(home).Property(povil.far.%s))</start>'
+          % (tab_cond(tab), rows_focused, tab['id']))
+        x(2, '<onstart>SetProperty(povil.far.%s,1,home)</onstart>' % tab['id'])
+        x(2, '<stop>true</stop>')
+        x(1, '</timer>')
     # One per tab: a condition cannot name a property through $INFO
     for tab in TABS:
         if len(tab['rows']) < 2:
@@ -483,7 +701,7 @@ def gen_includes():
     for ti, tab in enumerate(TABS):
         for ri, row in enumerate(tab['rows']):
             sources.append((row_focus(ti, ri), row_id(ti, ri)))
-            kinds[row_id(ti, ri)] = row[2]
+            kinds[row_id(ti, ri)] = shape(row[2])
     for ti, tab in enumerate(TABS):
         if tab['rows']:
             sources.append((tab_cond(tab), row_id(ti, 0)))
@@ -615,6 +833,18 @@ def gen_includes():
         x(2, '<value condition="%s"></value>' % cond)
     x(1, '</variable>')
     RR.tmdb_variable(x, 'POVIL_RatingsTmdb', RATINGS_KEY, RATINGS_SLOT, '$VAR[POVIL_HeroRating]')
+    # The trailer POV names for the title in the hero (the YouTube add-on's address); nothing for any
+    # other item, so nothing is asked for an Israeli show, a channel or a "more" tile
+    x(1, '<variable name="POVIL_HeroTrailer">')
+    for cond, cid in sources:
+        x(2, '<value condition="%s + %s + String.StartsWith(Container(%d).ListItem.Trailer,plugin://plugin.video.youtube/)">'
+             '$INFO[Container(%d).ListItem.Trailer]</value>' % (cond, more_page % (cid, cid), cid, cid))
+        x(2, '<value condition="%s"></value>' % cond)
+    x(1, '</variable>')
+    x(1, '<variable name="POVIL_TrailersTile">')
+    x(2, '<value condition="%s">טריילרים במסך הבית: כבוי</value>' % TRAILERS_OFF)
+    x(2, '<value>טריילרים במסך הבית: פועל</value>')
+    x(1, '</variable>')
     x(1, '<variable name="POVIL_HeroPlot">')
     detail('plot')
     for cond, cid in sources:
@@ -666,6 +896,16 @@ def gen_includes():
                 continue
             x(1, '<variable name="POVIL_Path_%d">' % row_id(ti, ri))
             gate = row_gate(ti, ri)
+            if is_hub(row[1]):
+                # one address per choice (all / films / series); the service is in the address itself
+                opened = '!String.IsEmpty(Window(home).Property(%s))' % gate
+                for kind in HUB_TYPES:
+                    path = rtl_path(HUB_ROWS[int(row[1][4:])][1][kind][1])
+                    x(2, '<value condition="%s + %s + !String.IsEmpty(Window(home).Property(povil.retry.%d))">%s</value>'
+                      % (opened, hub_type(kind), row_id(ti, ri), e(path + '&povil_retry=$INFO[Window(home).Property(povil.retry.%d)]' % row_id(ti, ri))))
+                    x(2, '<value condition="%s + %s">%s</value>' % (opened, hub_type(kind), e(path)))
+                x(1, '</variable>')
+                continue
             path = rtl_path(named(row[1], row[0]))
             if retries(row):
                 # a row that came back empty asks again (povil_retry_<id>): a new
@@ -683,6 +923,19 @@ def gen_includes():
             x(2, '<value condition="%s">povil_white</value>' % row_focus(ti, ri))
             x(2, '<value>povil_dim</value>')
             x(1, '</variable>')
+    for k, (_kind, lists) in enumerate(HUB_ROWS):
+        x(1, '<variable name="POVIL_HubTitle_%d">' % k)
+        for kind in HUB_TYPES:
+            x(2, '<value condition="%s">%s</value>' % (hub_type(kind), e(lists[kind][0])))
+        x(1, '</variable>')
+    for ti, tab in enumerate(TABS):
+        for cid, chip in zip(chip_ids(ti, tab), tab['chips']):
+            if len(chip) > 3 and chip[3]:
+                for name, on, off in (('Text', 'povil_gold', 'povil_white'), ('Fill', '4DD9B77E', '24FFFFFF')):
+                    x(1, '<variable name="POVIL_Chip%s_%d">' % (name, cid))
+                    x(2, '<value condition="%s">%s</value>' % (chip[3], on))
+                    x(2, '<value>%s</value>' % off)
+                    x(1, '</variable>')
     for tab in TABS:
         x(1, '<variable name="POVIL_TabColor_%s">' % tab['id'])
         x(2, '<value condition="%s">povil_white</value>' % tab_cond(tab))
@@ -709,7 +962,7 @@ ITEM_RATED = ('Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder +
 
 
 def item_layouts(x):
-    for kind in ('poster', 'landscape', 'square'):
+    for kind in ('poster', 'landscape', 'square', 'ranked'):
         item_layout(x, 'POVIL_Item_%s' % kind, kind)
     item_layout(x, 'POVIL_ViewItem_poster', 'poster', VIEW_COND['poster'])
     item_layout(x, 'POVIL_ViewItem_landscape', 'landscape', VIEW_COND['landscape'])
@@ -721,6 +974,7 @@ def item_layouts(x):
 def item_layout(x, name, kind, cond=None, title='POVIL_ItemTitle', subtitle='POVIL_ItemSubtitle'):
     if True:
         g = GEOM[kind]
+        ranked, kind = kind == 'ranked', shape(kind)
         w, h, step = g['w'], g['h'], g['step']
         top = 22
         x(1, '<include name="%s">' % name)
@@ -735,6 +989,16 @@ def item_layout(x, name, kind, cond=None, title='POVIL_ItemTitle', subtitle='POV
             if focused:
                 x(5, '<animation effect="zoom" start="100" end="%d" center="%d,%d" time="240" tween="cubic" easing="out" condition="Control.HasFocus($PARAM[id])">Conditional</animation>'
                   % (106 if kind == 'poster' else 105, PAD + w // 2, top + h // 2))
+            if ranked:
+                # The title's place in the list (povil_rank, the Wizard's povil_rtl), to the right of its
+                # poster -- read first, right to left -- and partly behind it: drawn before the poster.
+                # Faint at rest, gold on the focused title; never beside POV's "more" tile.
+                x(5, '<control type="label" description="rank">')
+                x(6, '<left>%d</left><top>%d</top><width>%d</width><height>%d</height>' % (w - 62, top + h - 206, step - w + 46, 220))
+                x(6, '<font>povil_rank</font><align>center</align><aligny>center</aligny>')
+                x(6, '<textcolor>%s</textcolor><label>$INFO[ListItem.Property(povil_rank)]</label>' % (GOLD if focused else '4DF5F2EC'))
+                x(6, '<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>')
+                x(5, '</control>')
             # drop shadow
             x(5, '<control type="image">')
             x(6, '<left>-30</left><top>%d</top><width>%d</width><height>%d</height>' % (top - 22, w + 60, h + 60))
@@ -868,6 +1132,7 @@ def gen_home():
     # povil.swipe, the timer povil_swipe moves; once per session). A swipe left over
     # from another skin does not move anything here.
     x(1, '<onload>ClearProperty(povil.swipe,home)</onload>')
+    x(1, '<onload>ClearProperty(povil.%s.enter,home)</onload>' % HUB)
     x(1, '<onload condition="System.Platform.Android + String.IsEmpty(Window(home).Property(povil.touchmap))">'
          'RunScript(special://skin/scripts/onyx_tools.py,touchkeymap)</onload>')
     x(1, '<onload condition="System.Platform.Android">SetProperty(povil.touchmap,1,home)</onload>')
@@ -894,10 +1159,14 @@ def gen_home():
     x(1, '<onload>ClearProperty(povil.rtl.view.prev,home)</onload>')
     x(1, '<controls>')
     backdrop(x, 2)
-    top_bar(x, 2)
-    hero(x, 2)
-    chips(x, 2)
-    rows(x, 2)
+    # everything over the picture is one group: it fades away while a trailer has the screen to itself
+    x(2, '<control type="group" description="over the picture">')
+    x(3, TRAILER_FADE)
+    top_bar(x, 3)
+    hero(x, 3)
+    chips(x, 3)
+    rows(x, 3)
+    x(2, '</control>')
     x(1, '</controls>')
     x(0, '</window>')
     return x.text()
@@ -914,6 +1183,24 @@ def backdrop(x, d):
     x(d + 1, '<aspectratio>scale</aspectratio><fadetime>420</fadetime>')
     x(d, '</control>')
     ambient(x, d)
+    # The title's trailer, once the Wizard has started it (trailers.py): Kodi's preview picture, over the
+    # backdrop and under every shade, so the hero's text stays as clear as on a still. Only while the
+    # trailer that plays is the one of the title on screen.
+    # (black under it: a trailer of another shape than the screen leaves no strip of the still showing)
+    x(d, '<control type="image" description="under the trailer">')
+    x(d + 1, '<left>0</left><top>0</top><width>1920</width><height>1080</height>')
+    x(d + 1, '<texture colordiffuse="FF000000">povil/white.png</texture>')
+    x(d + 1, '<visible>%s</visible>' % TRAILER_SHOWN)
+    x(d + 1, '<animation effect="fade" start="0" end="100" time="400">Visible</animation>')
+    x(d, '</control>')
+    x(d, '<control type="videowindow" description="trailer">')
+    x(d + 1, '<left>0</left><top>0</top><width>1920</width><height>1080</height>')
+    x(d + 1, '<visible>%s</visible>' % TRAILER_SHOWN)
+    x(d + 1, '<animation effect="fade" start="0" end="100" time="600">Visible</animation>')
+    x(d + 1, '<animation effect="fade" start="100" end="0" time="250">Hidden</animation>')
+    x(d, '</control>')
+    x(d, '<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
+         '<label>$VAR[POVIL_HeroTrailer]</label></control>' % TRAILER_KEY)
     # a shade only 8 pixels across fades out over its last half pixel at both ends
     # (120 screen pixels when stretched over the screen): each is drawn past the screen's edges
     for desc, l, t, w, h, tex in (('hero shade', 520, -160, 1400, 1400, 'povil/grad_right.png'),
@@ -923,6 +1210,7 @@ def backdrop(x, d):
         x(d, '<control type="image" description="%s">' % desc)
         x(d + 1, '<left>%d</left><top>%d</top><width>%d</width><height>%d</height>' % (l, t, w, h))
         x(d + 1, '<texture>%s</texture>' % tex)
+        x(d + 1, TRAILER_FADE)          # the trailer to itself: no shade over it
         x(d, '</control>')
 
 
@@ -979,7 +1267,7 @@ def top_bar(x, d):
     x(d + 1, '<left>350</left><top>32</top><width>60</width><height>60</height>')
     x(d + 1, '<texturenofocus colordiffuse="B3FFFFFF">povil/osd/power.png</texturenofocus><texturefocus>povil/osd/power_fo.png</texturefocus>')
     x(d + 1, '<label></label><onclick>ActivateWindow(ShutdownMenu)</onclick>')
-    x(d + 1, '<onright>%d</onright><ondown>%d</ondown><onleft>noop</onleft><onup>noop</onup>' % (tab_button(len(TABS) - 1), tab_button(len(TABS) - 1)))
+    x(d + 1, '<onright>%d</onright><ondown>%d</ondown><onleft>noop</onleft><onup>noop</onup>' % (tab_button(len(SHOWN_TABS) - 1), tab_button(len(SHOWN_TABS) - 1)))
     x(d, '</control>')
     x(d, '<control type="list" id="%d" description="Kodi favourites, counted for the favourites row">' % FAV_COUNT)
     x(d + 1, '<left>-4000</left><top>0</top><width>20</width><height>20</height>')
@@ -990,11 +1278,11 @@ def top_bar(x, d):
     # control is the first tab's button, so the home opens on it at once -- also
     # under a dialog (the skin-change confirmation) and after a skin reload.
     # A focused tab names itself in Window(home).Property(povil.tab).
-    n = len(TABS)
+    n = len(SHOWN_TABS)
     x(d, '<control type="group" id="9000" description="tabs">')
     x(d + 1, '<left>%d</left><top>34</top><width>%d</width><height>72</height>' % (1920 - MARGIN - n * TAB_W, n * TAB_W))
     x(d + 1, '<defaultcontrol>%d</defaultcontrol>' % tab_button(0))
-    for ti, tab in enumerate(TABS):
+    for ti, tab in enumerate(SHOWN_TABS):
         left = (n - 1 - ti) * TAB_W
         target = chip_ids(ti, tab)[0] if tab['chips'] else (row_id(ti, 0) if tab['rows'] else tab_button(ti))
         x(d + 1, '<control type="button" id="%d" description="tab %s">' % (tab_button(ti), tab['id']))
@@ -1003,8 +1291,12 @@ def top_bar(x, d):
         x(d + 2, '<font>povil_menu</font><align>center</align><aligny>center</aligny>')
         x(d + 2, '<textcolor>$VAR[POVIL_TabColor_%s]</textcolor><focusedcolor>povil_white</focusedcolor>' % tab['id'])
         x(d + 2, '<label>%s</label>' % e(tab['label']))
-        x(d + 2, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
-        x(d + 2, '<onfocus>SetProperty(povil.tab.%s,1,home)</onfocus>' % tab['id'])
+        # (not while a service's page is being entered: the chip that was pressed leaves the screen with
+        # its tab, Kodi hands the focus to the window's default -- a tab's button -- and that must not
+        # bring its tab back; the timer povil_hub_enter then gives the focus to the page's chips)
+        entering = 'String.IsEmpty(Window(home).Property(povil.%s.enter))' % HUB
+        x(d + 2, '<onfocus condition="%s">SetProperty(povil.tab,%s,home)</onfocus>' % (entering, tab['id']))
+        x(d + 2, '<onfocus condition="%s">SetProperty(povil.tab.%s,1,home)</onfocus>' % (entering, tab['id']))
         x(d + 2, '<onfocus>SetProperty(povil.focus,%d,home)</onfocus>' % tab_button(ti))
         # a row whose retries ran out (a box that started before its network) asks
         # again when its tab is chosen again
@@ -1092,6 +1384,9 @@ def hero(x, d):
     x(d + 2, '<animation effect="slide" end="0,-40" time="140" tween="cubic" easing="out" '
              'condition="String.IsEmpty(Control.GetLabel(%d))">Conditional</animation>' % RATINGS_KEY)
     x(d + 2, '<font>povil_plot</font><textcolor>povil_dim</textcolor><align>right</align>')
+    # while the title's trailer plays the plot steps aside: moving pictures behind three lines of text
+    # read as neither (the title, its details and its ratings stay)
+    x(d + 2, '<animation effect="fade" start="100" end="0" time="400" condition="%s">Conditional</animation>' % TRAILER_SHOWN)
     x(d + 2, '<label>$VAR[POVIL_HeroPlot]</label>')
     x(d + 1, '</control>')
     x(d, '</control>')
@@ -1099,7 +1394,7 @@ def hero(x, d):
 
 def chips(x, d):
     for tab in TABS:
-        assert not tab['chips'] or len(tab['chips'][0]) < 3, 'a tab\'s first chip must always show: %s' % tab['id']
+        assert not tab['chips'] or not (tab['chips'][0] + (None,))[2], 'a tab\'s first chip must always show: %s' % tab['id']
     x(d, '<control type="grouplist" id="9100" description="chips">')
     x(d + 1, '<left>%d</left><top>538</top><width>%d</width><height>50</height>' % (MARGIN, 1920 - 2 * MARGIN))
     x(d + 1, '<orientation>horizontal</orientation><align>right</align><itemgap>14</itemgap>')
@@ -1110,20 +1405,32 @@ def chips(x, d):
         down = row_id(ti, 0) if tab['rows'] else ''
         # XML order is left to right: last chip first, so the first chip is the rightmost
         for ci in reversed(range(len(tab['chips']))):
-            chip = tab['chips'][ci]
-            label, click = chip[0], named(chip[1], chip[0])
-            vis = tab_cond(tab) + (' + ' + chip[2] if len(chip) > 2 else '')
+            chip = tuple(tab['chips'][ci]) + (None, None)
+            label = chip[0]
+            # one action, or several in order (a service's chip names the service, then shows its page)
+            clicks = [named(c, label) for c in (chip[1] if isinstance(chip[1], list) else [chip[1]])]
+            vis = tab_cond(tab) + (' + ' + chip[2] if chip[2] else '')
             x(d + 1, '<control type="button" id="%d">' % ids[ci])
             x(d + 2, '<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>')
             x(d + 2, '<font>povil_chip</font><align>center</align><aligny>center</aligny>')
-            x(d + 2, '<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>')
-            x(d + 2, '<texturenofocus border="24" colordiffuse="24FFFFFF">povil/pill48.png</texturenofocus>')
+            if chip[3]:
+                # a choice that is on (films / series / all, the service shown): gold-tinted while it is
+                x(d + 2, '<textcolor>$VAR[POVIL_ChipText_%d]</textcolor><focusedcolor>povil_ink</focusedcolor>' % ids[ci])
+                x(d + 2, '<texturenofocus border="24" colordiffuse="$VAR[POVIL_ChipFill_%d]">povil/pill48.png</texturenofocus>' % ids[ci])
+            else:
+                x(d + 2, '<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>')
+                x(d + 2, '<texturenofocus border="24" colordiffuse="24FFFFFF">povil/pill48.png</texturenofocus>')
             x(d + 2, '<texturefocus border="24" colordiffuse="%s">povil/pill48.png</texturefocus>' % GOLD)
             x(d + 2, '<label>%s</label>' % e(label))
-            x(d + 2, '<onclick>%s</onclick>' % e(click))
+            for click in clicks:
+                x(d + 2, '<onclick>%s</onclick>' % e(click))
             x(d + 2, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
             x(d + 2, '<onfocus>SetProperty(povil.focus,%d,home)</onfocus>' % ids[ci])
-            x(d + 2, '<onup>%d</onup>' % tab_button(ti))
+            if tab.get('hidden'):
+                # no button of its own in the tab bar: Up and Back leave the page for the tabs
+                x(d + 2, '<onup>9000</onup><onback>9000</onback>')
+            else:
+                x(d + 2, '<onup>%d</onup>' % tab_button(ti))
             if down:
                 x(d + 2, '<ondown>%d</ondown>' % down)
             x(d + 2, '<visible>%s</visible>' % vis)
@@ -1137,7 +1444,7 @@ def rtl_slots(g):
     by the screen edge would hold the row's far end ("עוד" included) half off
     screen. Returns the list's left and width (PAD wider on each side), and the
     left of the tile before the first one (the peek)."""
-    gap = g['step'] - g['w']
+    gap = g.get('edge', g['step'] - g['w'])
     end = 1920 - MARGIN + gap
     slots = end // g['step']
     left = end - slots * g['step']
@@ -1169,6 +1476,7 @@ def peek(x, d, cid, kind, top):
     if left + g['w'] <= 0:
         return
     item = 'Container(%d).ListItemPosition(-1)' % cid
+    kind = shape(kind)
     art = ('thumb', 'poster') if kind == 'poster' else ('thumb', 'fanart')
     x(d, '<control type="group" description="peek">')
     x(d + 1, '<left>%d</left><top>%d</top>' % (left, top + 22))
@@ -1188,11 +1496,13 @@ def retries(row):
     """Rows that are never empty by design and come from an add-on: when one
     comes back empty, the request failed and is worth asking again."""
     title, path, kind, optional = row
-    return path.startswith('plugin://') and not optional
+    return (path.startswith('plugin://') or is_hub(path)) and not optional
 
 
 def row_gate(ti, ri):
     """The home property that opens a row's path (lazy loading, POVIL_Path_<id>)."""
+    if TABS[ti].get('hidden') and ri >= HUB_NEAR_ROWS:
+        return 'povil.far.%s' % TABS[ti]['id']       # set once the focus is on one of the page's rows
     return 'povil.tab.%s' % TABS[ti]['id'] if ri == 0 else 'povil.deep.%s' % TABS[ti]['id']
 
 
@@ -1286,6 +1596,8 @@ def rows(x, d):
             # Kodi wraps a list with no action at its edge: the row's far end would
             # jump back to its start (and the start, on the right, to the far end)
             x(d + 3, '<onleft>noop</onleft><onright>noop</onright>')
+            if tab.get('hidden'):
+                x(d + 3, '<onback>9000</onback>')
             # Focus decides the tab: Kodi's skin reload gives the focus back to the
             # control that had it, after the first tab's button took it
             x(d + 3, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
@@ -1309,7 +1621,13 @@ def rows(x, d):
                     x(d + 4, '</item>')
                 x(d + 3, '</content>')
             else:
-                x(d + 3, '<content target="videos">$VAR[POVIL_Path_%d]</content>' % rid)
+                # Kodi asks a list with no sort order again whenever any playback starts or stops (it may be
+                # "recently played"). A row of titles that no playback changes -- popular, a genre, a
+                # service's page -- is given an order that changes nothing: by size, which is 0 for every
+                # item, and the sort is stable (a reversed row's "more" tile, a folder, is first already).
+                # The viewer's own rows (in progress, the next episode, saved lists) keep following playback.
+                quiet = ' sortby="size"' if follows_no_playback(path) else ''
+                x(d + 3, '<content target="videos"%s>$VAR[POVIL_Path_%d]</content>' % (quiet, rid))
             x(d + 2, '</control>')
             if is_rtl(path):
                 peek(x, d + 2, rid, kind, 40)

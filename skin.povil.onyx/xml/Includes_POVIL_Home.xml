@@ -27,6 +27,15 @@
 		<value condition="[Control.HasFocus(5071) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5071)]]"></value>
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]"></value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]"></value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]]"></value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]]"></value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]]"></value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]]"></value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]]"></value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]]"></value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]]"></value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]]"></value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]]"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli) + ![String.Contains(Container(5031).ListItem.FolderPath,new_page=) | String.Contains(Container(5031).ListItem.FolderPath,Page&amp;url=)] + String.IsEqual(Container(5031).ListItem.Art(fanart),Container(5031).ListItem.Art(thumb))">$INFO[Container(5031).ListItem.FolderPath]</value>
@@ -36,6 +45,7 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)"></value>
 	</variable>
 	<variable name="POVIL_HeroDetailsNear">
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]]"></value>
@@ -63,6 +73,15 @@
 		<value condition="[Control.HasFocus(5071) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5071)]]"></value>
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]"></value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]"></value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]]"></value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]]"></value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]]"></value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]]"></value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]]"></value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]]"></value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]]"></value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]]"></value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]]"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli)">$INFO[Container(5031).ListItem(-2).FolderPath] $INFO[Container(5031).ListItem(-1).FolderPath] $INFO[Container(5031).ListItem(1).FolderPath] $INFO[Container(5031).ListItem(2).FolderPath]</value>
@@ -72,6 +91,7 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)"></value>
 	</variable>
 	<variable name="POVIL_HeroFanart">
 		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))">$INFO[Window(home).Property(povil.details.fanart)]</value>
@@ -117,6 +137,28 @@
 		<value condition="[Control.HasFocus(5064) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5064)]] + ![String.Contains(Container(5064).ListItem.FolderPath,new_page=) | String.Contains(Container(5064).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5064).ListItem.Art(landscape)) + !String.IsEqual(Container(5064).ListItem.Art(landscape),Container(5064).ListItem.Art(thumb))">$INFO[Container(5064).ListItem.Art(landscape)]</value>
 		<value condition="[Control.HasFocus(5065) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5065)]] + ![String.Contains(Container(5065).ListItem.FolderPath,new_page=) | String.Contains(Container(5065).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5065).ListItem.Art(fanart)) + !String.IsEqual(Container(5065).ListItem.Art(fanart),Container(5065).ListItem.Art(thumb))">$INFO[Container(5065).ListItem.Art(fanart)]</value>
 		<value condition="[Control.HasFocus(5065) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5065)]] + ![String.Contains(Container(5065).ListItem.FolderPath,new_page=) | String.Contains(Container(5065).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5065).ListItem.Art(landscape)) + !String.IsEqual(Container(5065).ListItem.Art(landscape),Container(5065).ListItem.Art(thumb))">$INFO[Container(5065).ListItem.Art(landscape)]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5091).ListItem.Art(fanart)) + !String.IsEqual(Container(5091).ListItem.Art(fanart),Container(5091).ListItem.Art(thumb))">$INFO[Container(5091).ListItem.Art(fanart)]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5091).ListItem.Art(landscape)) + !String.IsEqual(Container(5091).ListItem.Art(landscape),Container(5091).ListItem.Art(thumb))">$INFO[Container(5091).ListItem.Art(landscape)]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + ![String.Contains(Container(5092).ListItem.FolderPath,new_page=) | String.Contains(Container(5092).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5092).ListItem.Art(fanart))">$INFO[Container(5092).ListItem.Art(fanart)]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + ![String.Contains(Container(5092).ListItem.FolderPath,new_page=) | String.Contains(Container(5092).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5092).ListItem.Art(landscape))">$INFO[Container(5092).ListItem.Art(landscape)]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + ![String.Contains(Container(5092).ListItem.FolderPath,new_page=) | String.Contains(Container(5092).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5092).ListItem.Art(thumb))">$INFO[Container(5092).ListItem.Art(thumb)]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + ![String.Contains(Container(5093).ListItem.FolderPath,new_page=) | String.Contains(Container(5093).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5093).ListItem.Art(fanart)) + !String.IsEqual(Container(5093).ListItem.Art(fanart),Container(5093).ListItem.Art(thumb))">$INFO[Container(5093).ListItem.Art(fanart)]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + ![String.Contains(Container(5093).ListItem.FolderPath,new_page=) | String.Contains(Container(5093).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5093).ListItem.Art(landscape)) + !String.IsEqual(Container(5093).ListItem.Art(landscape),Container(5093).ListItem.Art(thumb))">$INFO[Container(5093).ListItem.Art(landscape)]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + ![String.Contains(Container(5094).ListItem.FolderPath,new_page=) | String.Contains(Container(5094).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5094).ListItem.Art(fanart))">$INFO[Container(5094).ListItem.Art(fanart)]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + ![String.Contains(Container(5094).ListItem.FolderPath,new_page=) | String.Contains(Container(5094).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5094).ListItem.Art(landscape))">$INFO[Container(5094).ListItem.Art(landscape)]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + ![String.Contains(Container(5094).ListItem.FolderPath,new_page=) | String.Contains(Container(5094).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5094).ListItem.Art(thumb))">$INFO[Container(5094).ListItem.Art(thumb)]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + ![String.Contains(Container(5095).ListItem.FolderPath,new_page=) | String.Contains(Container(5095).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5095).ListItem.Art(fanart)) + !String.IsEqual(Container(5095).ListItem.Art(fanart),Container(5095).ListItem.Art(thumb))">$INFO[Container(5095).ListItem.Art(fanart)]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + ![String.Contains(Container(5095).ListItem.FolderPath,new_page=) | String.Contains(Container(5095).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5095).ListItem.Art(landscape)) + !String.IsEqual(Container(5095).ListItem.Art(landscape),Container(5095).ListItem.Art(thumb))">$INFO[Container(5095).ListItem.Art(landscape)]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + ![String.Contains(Container(5096).ListItem.FolderPath,new_page=) | String.Contains(Container(5096).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5096).ListItem.Art(fanart))">$INFO[Container(5096).ListItem.Art(fanart)]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + ![String.Contains(Container(5096).ListItem.FolderPath,new_page=) | String.Contains(Container(5096).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5096).ListItem.Art(landscape))">$INFO[Container(5096).ListItem.Art(landscape)]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + ![String.Contains(Container(5096).ListItem.FolderPath,new_page=) | String.Contains(Container(5096).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5096).ListItem.Art(thumb))">$INFO[Container(5096).ListItem.Art(thumb)]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + ![String.Contains(Container(5097).ListItem.FolderPath,new_page=) | String.Contains(Container(5097).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5097).ListItem.Art(fanart)) + !String.IsEqual(Container(5097).ListItem.Art(fanart),Container(5097).ListItem.Art(thumb))">$INFO[Container(5097).ListItem.Art(fanart)]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + ![String.Contains(Container(5097).ListItem.FolderPath,new_page=) | String.Contains(Container(5097).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5097).ListItem.Art(landscape)) + !String.IsEqual(Container(5097).ListItem.Art(landscape),Container(5097).ListItem.Art(thumb))">$INFO[Container(5097).ListItem.Art(landscape)]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + ![String.Contains(Container(5098).ListItem.FolderPath,new_page=) | String.Contains(Container(5098).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5098).ListItem.Art(fanart))">$INFO[Container(5098).ListItem.Art(fanart)]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + ![String.Contains(Container(5098).ListItem.FolderPath,new_page=) | String.Contains(Container(5098).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5098).ListItem.Art(landscape))">$INFO[Container(5098).ListItem.Art(landscape)]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + ![String.Contains(Container(5098).ListItem.FolderPath,new_page=) | String.Contains(Container(5098).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5098).ListItem.Art(thumb))">$INFO[Container(5098).ListItem.Art(thumb)]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + ![String.Contains(Container(5099).ListItem.FolderPath,new_page=) | String.Contains(Container(5099).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5099).ListItem.Art(fanart)) + !String.IsEqual(Container(5099).ListItem.Art(fanart),Container(5099).ListItem.Art(thumb))">$INFO[Container(5099).ListItem.Art(fanart)]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + ![String.Contains(Container(5099).ListItem.FolderPath,new_page=) | String.Contains(Container(5099).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5099).ListItem.Art(landscape)) + !String.IsEqual(Container(5099).ListItem.Art(landscape),Container(5099).ListItem.Art(thumb))">$INFO[Container(5099).ListItem.Art(landscape)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5011).ListItem.Art(fanart)) + !String.IsEqual(Container(5011).ListItem.Art(fanart),Container(5011).ListItem.Art(thumb))">$INFO[Container(5011).ListItem.Art(fanart)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5011).ListItem.Art(landscape)) + !String.IsEqual(Container(5011).ListItem.Art(landscape),Container(5011).ListItem.Art(thumb))">$INFO[Container(5011).ListItem.Art(landscape)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv) + ![String.Contains(Container(5021).ListItem.FolderPath,new_page=) | String.Contains(Container(5021).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5021).ListItem.Art(fanart)) + !String.IsEqual(Container(5021).ListItem.Art(fanart),Container(5021).ListItem.Art(thumb))">$INFO[Container(5021).ListItem.Art(fanart)]</value>
@@ -125,6 +167,8 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli) + ![String.Contains(Container(5031).ListItem.FolderPath,new_page=) | String.Contains(Container(5031).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5031).ListItem.Art(landscape)) + !String.IsEqual(Container(5031).ListItem.Art(landscape),Container(5031).ListItem.Art(thumb))">$INFO[Container(5031).ListItem.Art(landscape)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),kids) + ![String.Contains(Container(5051).ListItem.FolderPath,new_page=) | String.Contains(Container(5051).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5051).ListItem.Art(fanart)) + !String.IsEqual(Container(5051).ListItem.Art(fanart),Container(5051).ListItem.Art(thumb))">$INFO[Container(5051).ListItem.Art(fanart)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),kids) + ![String.Contains(Container(5051).ListItem.FolderPath,new_page=) | String.Contains(Container(5051).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5051).ListItem.Art(landscape)) + !String.IsEqual(Container(5051).ListItem.Art(landscape),Container(5051).ListItem.Art(thumb))">$INFO[Container(5051).ListItem.Art(landscape)]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5091).ListItem.Art(fanart)) + !String.IsEqual(Container(5091).ListItem.Art(fanart),Container(5091).ListItem.Art(thumb))">$INFO[Container(5091).ListItem.Art(fanart)]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(5091).ListItem.Art(landscape)) + !String.IsEqual(Container(5091).ListItem.Art(landscape),Container(5091).ListItem.Art(thumb))">$INFO[Container(5091).ListItem.Art(landscape)]</value>
 	</variable>
 	<variable name="POVIL_HeroAmbient">
 		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))"></value>
@@ -172,6 +216,20 @@
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]"></value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + ![String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)]">$INFO[Container(5081).ListItem.Art(povil_blur)]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]"></value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5091).ListItem.Art(fanart)) | String.IsEqual(Container(5091).ListItem.Art(fanart),Container(5091).ListItem.Art(thumb))] + String.IsEmpty(Container(5091).ListItem.Art(landscape))">$INFO[Container(5091).ListItem.Art(povil_blur)]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]]"></value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]]"></value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + ![String.Contains(Container(5093).ListItem.FolderPath,new_page=) | String.Contains(Container(5093).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5093).ListItem.Art(fanart)) | String.IsEqual(Container(5093).ListItem.Art(fanart),Container(5093).ListItem.Art(thumb))] + String.IsEmpty(Container(5093).ListItem.Art(landscape))">$INFO[Container(5093).ListItem.Art(povil_blur)]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]]"></value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]]"></value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + ![String.Contains(Container(5095).ListItem.FolderPath,new_page=) | String.Contains(Container(5095).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5095).ListItem.Art(fanart)) | String.IsEqual(Container(5095).ListItem.Art(fanart),Container(5095).ListItem.Art(thumb))] + String.IsEmpty(Container(5095).ListItem.Art(landscape))">$INFO[Container(5095).ListItem.Art(povil_blur)]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]]"></value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]]"></value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + ![String.Contains(Container(5097).ListItem.FolderPath,new_page=) | String.Contains(Container(5097).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5097).ListItem.Art(fanart)) | String.IsEqual(Container(5097).ListItem.Art(fanart),Container(5097).ListItem.Art(thumb))] + String.IsEmpty(Container(5097).ListItem.Art(landscape))">$INFO[Container(5097).ListItem.Art(povil_blur)]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]]"></value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]]"></value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + ![String.Contains(Container(5099).ListItem.FolderPath,new_page=) | String.Contains(Container(5099).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5099).ListItem.Art(fanart)) | String.IsEqual(Container(5099).ListItem.Art(fanart),Container(5099).ListItem.Art(thumb))] + String.IsEmpty(Container(5099).ListItem.Art(landscape))">$INFO[Container(5099).ListItem.Art(povil_blur)]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]]"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5011).ListItem.Art(fanart)) | String.IsEqual(Container(5011).ListItem.Art(fanart),Container(5011).ListItem.Art(thumb))] + String.IsEmpty(Container(5011).ListItem.Art(landscape))">$INFO[Container(5011).ListItem.Art(povil_blur)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv) + ![String.Contains(Container(5021).ListItem.FolderPath,new_page=) | String.Contains(Container(5021).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5021).ListItem.Art(fanart)) | String.IsEqual(Container(5021).ListItem.Art(fanart),Container(5021).ListItem.Art(thumb))] + String.IsEmpty(Container(5021).ListItem.Art(landscape))">$INFO[Container(5021).ListItem.Art(povil_blur)]</value>
@@ -188,6 +246,8 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + ![String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)]">$INFO[Container(5081).ListItem.Art(povil_blur)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5091).ListItem.Art(fanart)) | String.IsEqual(Container(5091).ListItem.Art(fanart),Container(5091).ListItem.Art(thumb))] + String.IsEmpty(Container(5091).ListItem.Art(landscape))">$INFO[Container(5091).ListItem.Art(povil_blur)]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)"></value>
 	</variable>
 	<variable name="POVIL_HeroAmbientFile">
 		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))"></value>
@@ -235,6 +295,20 @@
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]"></value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + ![String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)]">$INFO[Container(5081).ListItem.Art(povil_blurfile)]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]"></value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5091).ListItem.Art(fanart)) | String.IsEqual(Container(5091).ListItem.Art(fanart),Container(5091).ListItem.Art(thumb))] + String.IsEmpty(Container(5091).ListItem.Art(landscape))">$INFO[Container(5091).ListItem.Art(povil_blurfile)]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]]"></value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]]"></value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + ![String.Contains(Container(5093).ListItem.FolderPath,new_page=) | String.Contains(Container(5093).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5093).ListItem.Art(fanart)) | String.IsEqual(Container(5093).ListItem.Art(fanart),Container(5093).ListItem.Art(thumb))] + String.IsEmpty(Container(5093).ListItem.Art(landscape))">$INFO[Container(5093).ListItem.Art(povil_blurfile)]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]]"></value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]]"></value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + ![String.Contains(Container(5095).ListItem.FolderPath,new_page=) | String.Contains(Container(5095).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5095).ListItem.Art(fanart)) | String.IsEqual(Container(5095).ListItem.Art(fanart),Container(5095).ListItem.Art(thumb))] + String.IsEmpty(Container(5095).ListItem.Art(landscape))">$INFO[Container(5095).ListItem.Art(povil_blurfile)]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]]"></value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]]"></value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + ![String.Contains(Container(5097).ListItem.FolderPath,new_page=) | String.Contains(Container(5097).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5097).ListItem.Art(fanart)) | String.IsEqual(Container(5097).ListItem.Art(fanart),Container(5097).ListItem.Art(thumb))] + String.IsEmpty(Container(5097).ListItem.Art(landscape))">$INFO[Container(5097).ListItem.Art(povil_blurfile)]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]]"></value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]]"></value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + ![String.Contains(Container(5099).ListItem.FolderPath,new_page=) | String.Contains(Container(5099).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5099).ListItem.Art(fanart)) | String.IsEqual(Container(5099).ListItem.Art(fanart),Container(5099).ListItem.Art(thumb))] + String.IsEmpty(Container(5099).ListItem.Art(landscape))">$INFO[Container(5099).ListItem.Art(povil_blurfile)]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]]"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5011).ListItem.Art(fanart)) | String.IsEqual(Container(5011).ListItem.Art(fanart),Container(5011).ListItem.Art(thumb))] + String.IsEmpty(Container(5011).ListItem.Art(landscape))">$INFO[Container(5011).ListItem.Art(povil_blurfile)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv) + ![String.Contains(Container(5021).ListItem.FolderPath,new_page=) | String.Contains(Container(5021).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5021).ListItem.Art(fanart)) | String.IsEqual(Container(5021).ListItem.Art(fanart),Container(5021).ListItem.Art(thumb))] + String.IsEmpty(Container(5021).ListItem.Art(landscape))">$INFO[Container(5021).ListItem.Art(povil_blurfile)]</value>
@@ -251,6 +325,8 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + ![String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)]">$INFO[Container(5081).ListItem.Art(povil_blurfile)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5091).ListItem.Art(fanart)) | String.IsEqual(Container(5091).ListItem.Art(fanart),Container(5091).ListItem.Art(thumb))] + String.IsEmpty(Container(5091).ListItem.Art(landscape))">$INFO[Container(5091).ListItem.Art(povil_blurfile)]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)"></value>
 	</variable>
 	<variable name="POVIL_HeroAmbientPng">
 		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.fanart))"></value>
@@ -298,6 +374,20 @@
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]"></value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + ![String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)]">$INFO[Container(5081).ListItem.Art(povil_blurpng)]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]"></value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5091).ListItem.Art(fanart)) | String.IsEqual(Container(5091).ListItem.Art(fanart),Container(5091).ListItem.Art(thumb))] + String.IsEmpty(Container(5091).ListItem.Art(landscape))">$INFO[Container(5091).ListItem.Art(povil_blurpng)]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]]"></value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]]"></value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + ![String.Contains(Container(5093).ListItem.FolderPath,new_page=) | String.Contains(Container(5093).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5093).ListItem.Art(fanart)) | String.IsEqual(Container(5093).ListItem.Art(fanart),Container(5093).ListItem.Art(thumb))] + String.IsEmpty(Container(5093).ListItem.Art(landscape))">$INFO[Container(5093).ListItem.Art(povil_blurpng)]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]]"></value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]]"></value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + ![String.Contains(Container(5095).ListItem.FolderPath,new_page=) | String.Contains(Container(5095).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5095).ListItem.Art(fanart)) | String.IsEqual(Container(5095).ListItem.Art(fanart),Container(5095).ListItem.Art(thumb))] + String.IsEmpty(Container(5095).ListItem.Art(landscape))">$INFO[Container(5095).ListItem.Art(povil_blurpng)]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]]"></value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]]"></value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + ![String.Contains(Container(5097).ListItem.FolderPath,new_page=) | String.Contains(Container(5097).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5097).ListItem.Art(fanart)) | String.IsEqual(Container(5097).ListItem.Art(fanart),Container(5097).ListItem.Art(thumb))] + String.IsEmpty(Container(5097).ListItem.Art(landscape))">$INFO[Container(5097).ListItem.Art(povil_blurpng)]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]]"></value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]]"></value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + ![String.Contains(Container(5099).ListItem.FolderPath,new_page=) | String.Contains(Container(5099).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5099).ListItem.Art(fanart)) | String.IsEqual(Container(5099).ListItem.Art(fanart),Container(5099).ListItem.Art(thumb))] + String.IsEmpty(Container(5099).ListItem.Art(landscape))">$INFO[Container(5099).ListItem.Art(povil_blurpng)]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]]"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5011).ListItem.Art(fanart)) | String.IsEqual(Container(5011).ListItem.Art(fanart),Container(5011).ListItem.Art(thumb))] + String.IsEmpty(Container(5011).ListItem.Art(landscape))">$INFO[Container(5011).ListItem.Art(povil_blurpng)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv) + ![String.Contains(Container(5021).ListItem.FolderPath,new_page=) | String.Contains(Container(5021).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5021).ListItem.Art(fanart)) | String.IsEqual(Container(5021).ListItem.Art(fanart),Container(5021).ListItem.Art(thumb))] + String.IsEmpty(Container(5021).ListItem.Art(landscape))">$INFO[Container(5021).ListItem.Art(povil_blurpng)]</value>
@@ -314,6 +404,8 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + ![String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)]">$INFO[Container(5081).ListItem.Art(povil_blurpng)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + [String.IsEmpty(Container(5091).ListItem.Art(fanart)) | String.IsEqual(Container(5091).ListItem.Art(fanart),Container(5091).ListItem.Art(thumb))] + String.IsEmpty(Container(5091).ListItem.Art(landscape))">$INFO[Container(5091).ListItem.Art(povil_blurpng)]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)"></value>
 	</variable>
 	<variable name="POVIL_HeroLogo">
 		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.logo))">$INFO[Window(home).Property(povil.details.logo)]</value>
@@ -344,6 +436,15 @@
 		<value condition="[Control.HasFocus(5071) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5071)]]">$INFO[Container(5071).ListItem.Art(povil_logo)]</value>
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]">$INFO[Container(5072).ListItem.Art(povil_logo)]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]">$INFO[Container(5081).ListItem.Art(povil_logo)]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]]">$INFO[Container(5091).ListItem.Art(povil_logo)]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]]">$INFO[Container(5092).ListItem.Art(povil_logo)]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]]">$INFO[Container(5093).ListItem.Art(povil_logo)]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]]">$INFO[Container(5094).ListItem.Art(povil_logo)]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]]">$INFO[Container(5095).ListItem.Art(povil_logo)]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]]">$INFO[Container(5096).ListItem.Art(povil_logo)]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]]">$INFO[Container(5097).ListItem.Art(povil_logo)]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]]">$INFO[Container(5098).ListItem.Art(povil_logo)]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]]">$INFO[Container(5099).ListItem.Art(povil_logo)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)">$INFO[Container(5011).ListItem.Art(povil_logo)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv)">$INFO[Container(5021).ListItem.Art(povil_logo)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli)">$INFO[Container(5031).ListItem.Art(povil_logo)]</value>
@@ -352,6 +453,7 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites)">$INFO[Container(5061).ListItem.Art(povil_logo)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)">$INFO[Container(5071).ListItem.Art(povil_logo)]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)">$INFO[Container(5081).ListItem.Art(povil_logo)]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)">$INFO[Container(5091).ListItem.Art(povil_logo)]</value>
 	</variable>
 	<variable name="POVIL_HeroTitle">
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + [String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
@@ -377,6 +479,15 @@
 		<value condition="[Control.HasFocus(5071) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5071)]] + [String.Contains(Container(5071).ListItem.FolderPath,new_page=) | String.Contains(Container(5071).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]] + [String.Contains(Container(5072).ListItem.FolderPath,new_page=) | String.Contains(Container(5072).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + [String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + [String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + [String.Contains(Container(5092).ListItem.FolderPath,new_page=) | String.Contains(Container(5092).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + [String.Contains(Container(5093).ListItem.FolderPath,new_page=) | String.Contains(Container(5093).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + [String.Contains(Container(5094).ListItem.FolderPath,new_page=) | String.Contains(Container(5094).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + [String.Contains(Container(5095).ListItem.FolderPath,new_page=) | String.Contains(Container(5095).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + [String.Contains(Container(5096).ListItem.FolderPath,new_page=) | String.Contains(Container(5096).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + [String.Contains(Container(5097).ListItem.FolderPath,new_page=) | String.Contains(Container(5097).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + [String.Contains(Container(5098).ListItem.FolderPath,new_page=) | String.Contains(Container(5098).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + [String.Contains(Container(5099).ListItem.FolderPath,new_page=) | String.Contains(Container(5099).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + [String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv) + [String.Contains(Container(5021).ListItem.FolderPath,new_page=) | String.Contains(Container(5021).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli) + [String.Contains(Container(5031).ListItem.FolderPath,new_page=) | String.Contains(Container(5031).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
@@ -385,6 +496,7 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites) + [String.Contains(Container(5061).ListItem.FolderPath,new_page=) | String.Contains(Container(5061).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search) + [String.Contains(Container(5071).ListItem.FolderPath,new_page=) | String.Contains(Container(5071).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + [String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + [String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + String.IsEqual(Container(5011).ListItem.DBType,episode)">$INFO[Container(5011).ListItem.TVShowTitle]</value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + !String.IsEmpty(Container(5011).ListItem.Title)">$INFO[Container(5011).ListItem.Title]</value>
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]]">$INFO[Container(5011).ListItem.Label]</value>
@@ -454,6 +566,33 @@
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + String.IsEqual(Container(5081).ListItem.DBType,episode)">$INFO[Container(5081).ListItem.TVShowTitle]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + !String.IsEmpty(Container(5081).ListItem.Title)">$INFO[Container(5081).ListItem.Title]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]">$INFO[Container(5081).ListItem.Label]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + String.IsEqual(Container(5091).ListItem.DBType,episode)">$INFO[Container(5091).ListItem.TVShowTitle]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + !String.IsEmpty(Container(5091).ListItem.Title)">$INFO[Container(5091).ListItem.Title]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]]">$INFO[Container(5091).ListItem.Label]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + String.IsEqual(Container(5092).ListItem.DBType,episode)">$INFO[Container(5092).ListItem.TVShowTitle]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + !String.IsEmpty(Container(5092).ListItem.Title)">$INFO[Container(5092).ListItem.Title]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]]">$INFO[Container(5092).ListItem.Label]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + String.IsEqual(Container(5093).ListItem.DBType,episode)">$INFO[Container(5093).ListItem.TVShowTitle]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + !String.IsEmpty(Container(5093).ListItem.Title)">$INFO[Container(5093).ListItem.Title]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]]">$INFO[Container(5093).ListItem.Label]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + String.IsEqual(Container(5094).ListItem.DBType,episode)">$INFO[Container(5094).ListItem.TVShowTitle]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + !String.IsEmpty(Container(5094).ListItem.Title)">$INFO[Container(5094).ListItem.Title]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]]">$INFO[Container(5094).ListItem.Label]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + String.IsEqual(Container(5095).ListItem.DBType,episode)">$INFO[Container(5095).ListItem.TVShowTitle]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + !String.IsEmpty(Container(5095).ListItem.Title)">$INFO[Container(5095).ListItem.Title]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]]">$INFO[Container(5095).ListItem.Label]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + String.IsEqual(Container(5096).ListItem.DBType,episode)">$INFO[Container(5096).ListItem.TVShowTitle]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + !String.IsEmpty(Container(5096).ListItem.Title)">$INFO[Container(5096).ListItem.Title]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]]">$INFO[Container(5096).ListItem.Label]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + String.IsEqual(Container(5097).ListItem.DBType,episode)">$INFO[Container(5097).ListItem.TVShowTitle]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + !String.IsEmpty(Container(5097).ListItem.Title)">$INFO[Container(5097).ListItem.Title]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]]">$INFO[Container(5097).ListItem.Label]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + String.IsEqual(Container(5098).ListItem.DBType,episode)">$INFO[Container(5098).ListItem.TVShowTitle]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + !String.IsEmpty(Container(5098).ListItem.Title)">$INFO[Container(5098).ListItem.Title]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]]">$INFO[Container(5098).ListItem.Label]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + String.IsEqual(Container(5099).ListItem.DBType,episode)">$INFO[Container(5099).ListItem.TVShowTitle]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + !String.IsEmpty(Container(5099).ListItem.Title)">$INFO[Container(5099).ListItem.Title]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]]">$INFO[Container(5099).ListItem.Label]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + String.IsEqual(Container(5011).ListItem.DBType,episode)">$INFO[Container(5011).ListItem.TVShowTitle]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + !String.IsEmpty(Container(5011).ListItem.Title)">$INFO[Container(5011).ListItem.Title]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)">$INFO[Container(5011).ListItem.Label]</value>
@@ -478,6 +617,9 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + String.IsEqual(Container(5081).ListItem.DBType,episode)">$INFO[Container(5081).ListItem.TVShowTitle]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + !String.IsEmpty(Container(5081).ListItem.Title)">$INFO[Container(5081).ListItem.Title]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)">$INFO[Container(5081).ListItem.Label]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + String.IsEqual(Container(5091).ListItem.DBType,episode)">$INFO[Container(5091).ListItem.TVShowTitle]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + !String.IsEmpty(Container(5091).ListItem.Title)">$INFO[Container(5091).ListItem.Title]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)">$INFO[Container(5091).ListItem.Label]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)">סרטים</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv)">סדרות</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli)">ישראלי</value>
@@ -486,6 +628,7 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites)">מועדפים</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)">חיפוש</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)">הגדרות</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)">$INFO[Window(home).Property(povil.hub.name)]</value>
 	</variable>
 	<variable name="POVIL_HeroEpisode">
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + String.IsEqual(Container(5011).ListItem.DBType,episode)">$INFO[Container(5011).ListItem.Season,עונה , · ]$INFO[Container(5011).ListItem.Episode,פרק ]$INFO[Container(5011).ListItem.Title,  ·  ]</value>
@@ -511,6 +654,15 @@
 		<value condition="[Control.HasFocus(5071) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5071)]] + String.IsEqual(Container(5071).ListItem.DBType,episode)">$INFO[Container(5071).ListItem.Season,עונה , · ]$INFO[Container(5071).ListItem.Episode,פרק ]$INFO[Container(5071).ListItem.Title,  ·  ]</value>
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]] + String.IsEqual(Container(5072).ListItem.DBType,episode)">$INFO[Container(5072).ListItem.Season,עונה , · ]$INFO[Container(5072).ListItem.Episode,פרק ]$INFO[Container(5072).ListItem.Title,  ·  ]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + String.IsEqual(Container(5081).ListItem.DBType,episode)">$INFO[Container(5081).ListItem.Season,עונה , · ]$INFO[Container(5081).ListItem.Episode,פרק ]$INFO[Container(5081).ListItem.Title,  ·  ]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + String.IsEqual(Container(5091).ListItem.DBType,episode)">$INFO[Container(5091).ListItem.Season,עונה , · ]$INFO[Container(5091).ListItem.Episode,פרק ]$INFO[Container(5091).ListItem.Title,  ·  ]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + String.IsEqual(Container(5092).ListItem.DBType,episode)">$INFO[Container(5092).ListItem.Season,עונה , · ]$INFO[Container(5092).ListItem.Episode,פרק ]$INFO[Container(5092).ListItem.Title,  ·  ]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + String.IsEqual(Container(5093).ListItem.DBType,episode)">$INFO[Container(5093).ListItem.Season,עונה , · ]$INFO[Container(5093).ListItem.Episode,פרק ]$INFO[Container(5093).ListItem.Title,  ·  ]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + String.IsEqual(Container(5094).ListItem.DBType,episode)">$INFO[Container(5094).ListItem.Season,עונה , · ]$INFO[Container(5094).ListItem.Episode,פרק ]$INFO[Container(5094).ListItem.Title,  ·  ]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + String.IsEqual(Container(5095).ListItem.DBType,episode)">$INFO[Container(5095).ListItem.Season,עונה , · ]$INFO[Container(5095).ListItem.Episode,פרק ]$INFO[Container(5095).ListItem.Title,  ·  ]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + String.IsEqual(Container(5096).ListItem.DBType,episode)">$INFO[Container(5096).ListItem.Season,עונה , · ]$INFO[Container(5096).ListItem.Episode,פרק ]$INFO[Container(5096).ListItem.Title,  ·  ]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + String.IsEqual(Container(5097).ListItem.DBType,episode)">$INFO[Container(5097).ListItem.Season,עונה , · ]$INFO[Container(5097).ListItem.Episode,פרק ]$INFO[Container(5097).ListItem.Title,  ·  ]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + String.IsEqual(Container(5098).ListItem.DBType,episode)">$INFO[Container(5098).ListItem.Season,עונה , · ]$INFO[Container(5098).ListItem.Episode,פרק ]$INFO[Container(5098).ListItem.Title,  ·  ]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + String.IsEqual(Container(5099).ListItem.DBType,episode)">$INFO[Container(5099).ListItem.Season,עונה , · ]$INFO[Container(5099).ListItem.Episode,פרק ]$INFO[Container(5099).ListItem.Title,  ·  ]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + String.IsEqual(Container(5011).ListItem.DBType,episode)">$INFO[Container(5011).ListItem.Season,עונה , · ]$INFO[Container(5011).ListItem.Episode,פרק ]$INFO[Container(5011).ListItem.Title,  ·  ]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv) + String.IsEqual(Container(5021).ListItem.DBType,episode)">$INFO[Container(5021).ListItem.Season,עונה , · ]$INFO[Container(5021).ListItem.Episode,פרק ]$INFO[Container(5021).ListItem.Title,  ·  ]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli) + String.IsEqual(Container(5031).ListItem.DBType,episode)">$INFO[Container(5031).ListItem.Season,עונה , · ]$INFO[Container(5031).ListItem.Episode,פרק ]$INFO[Container(5031).ListItem.Title,  ·  ]</value>
@@ -519,6 +671,7 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites) + String.IsEqual(Container(5061).ListItem.DBType,episode)">$INFO[Container(5061).ListItem.Season,עונה , · ]$INFO[Container(5061).ListItem.Episode,פרק ]$INFO[Container(5061).ListItem.Title,  ·  ]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search) + String.IsEqual(Container(5071).ListItem.DBType,episode)">$INFO[Container(5071).ListItem.Season,עונה , · ]$INFO[Container(5071).ListItem.Episode,פרק ]$INFO[Container(5071).ListItem.Title,  ·  ]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + String.IsEqual(Container(5081).ListItem.DBType,episode)">$INFO[Container(5081).ListItem.Season,עונה , · ]$INFO[Container(5081).ListItem.Episode,פרק ]$INFO[Container(5081).ListItem.Title,  ·  ]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + String.IsEqual(Container(5091).ListItem.DBType,episode)">$INFO[Container(5091).ListItem.Season,עונה , · ]$INFO[Container(5091).ListItem.Episode,פרק ]$INFO[Container(5091).ListItem.Title,  ·  ]</value>
 	</variable>
 	<variable name="POVIL_HeroMeta">
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + !String.IsEmpty(Container(5011).ListItem.Year)">$INFO[Container(5011).ListItem.Year]$INFO[Container(5011).ListItem.Genre,  •  ]$INFO[Container(5011).ListItem.Duration(mins),  •  , דק']$INFO[Container(5011).ListItem.MPAA,  •  ]</value>
@@ -567,6 +720,24 @@
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]">$INFO[Container(5072).ListItem.Genre]$INFO[Container(5072).ListItem.Duration(mins),  •  , דק']</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + !String.IsEmpty(Container(5081).ListItem.Year)">$INFO[Container(5081).ListItem.Year]$INFO[Container(5081).ListItem.Genre,  •  ]$INFO[Container(5081).ListItem.Duration(mins),  •  , דק']$INFO[Container(5081).ListItem.MPAA,  •  ]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]">$INFO[Container(5081).ListItem.Genre]$INFO[Container(5081).ListItem.Duration(mins),  •  , דק']</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + !String.IsEmpty(Container(5091).ListItem.Year)">$INFO[Container(5091).ListItem.Year]$INFO[Container(5091).ListItem.Genre,  •  ]$INFO[Container(5091).ListItem.Duration(mins),  •  , דק']$INFO[Container(5091).ListItem.MPAA,  •  ]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]]">$INFO[Container(5091).ListItem.Genre]$INFO[Container(5091).ListItem.Duration(mins),  •  , דק']</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + !String.IsEmpty(Container(5092).ListItem.Year)">$INFO[Container(5092).ListItem.Year]$INFO[Container(5092).ListItem.Genre,  •  ]$INFO[Container(5092).ListItem.Duration(mins),  •  , דק']$INFO[Container(5092).ListItem.MPAA,  •  ]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]]">$INFO[Container(5092).ListItem.Genre]$INFO[Container(5092).ListItem.Duration(mins),  •  , דק']</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + !String.IsEmpty(Container(5093).ListItem.Year)">$INFO[Container(5093).ListItem.Year]$INFO[Container(5093).ListItem.Genre,  •  ]$INFO[Container(5093).ListItem.Duration(mins),  •  , דק']$INFO[Container(5093).ListItem.MPAA,  •  ]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]]">$INFO[Container(5093).ListItem.Genre]$INFO[Container(5093).ListItem.Duration(mins),  •  , דק']</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + !String.IsEmpty(Container(5094).ListItem.Year)">$INFO[Container(5094).ListItem.Year]$INFO[Container(5094).ListItem.Genre,  •  ]$INFO[Container(5094).ListItem.Duration(mins),  •  , דק']$INFO[Container(5094).ListItem.MPAA,  •  ]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]]">$INFO[Container(5094).ListItem.Genre]$INFO[Container(5094).ListItem.Duration(mins),  •  , דק']</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + !String.IsEmpty(Container(5095).ListItem.Year)">$INFO[Container(5095).ListItem.Year]$INFO[Container(5095).ListItem.Genre,  •  ]$INFO[Container(5095).ListItem.Duration(mins),  •  , דק']$INFO[Container(5095).ListItem.MPAA,  •  ]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]]">$INFO[Container(5095).ListItem.Genre]$INFO[Container(5095).ListItem.Duration(mins),  •  , דק']</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + !String.IsEmpty(Container(5096).ListItem.Year)">$INFO[Container(5096).ListItem.Year]$INFO[Container(5096).ListItem.Genre,  •  ]$INFO[Container(5096).ListItem.Duration(mins),  •  , דק']$INFO[Container(5096).ListItem.MPAA,  •  ]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]]">$INFO[Container(5096).ListItem.Genre]$INFO[Container(5096).ListItem.Duration(mins),  •  , דק']</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + !String.IsEmpty(Container(5097).ListItem.Year)">$INFO[Container(5097).ListItem.Year]$INFO[Container(5097).ListItem.Genre,  •  ]$INFO[Container(5097).ListItem.Duration(mins),  •  , דק']$INFO[Container(5097).ListItem.MPAA,  •  ]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]]">$INFO[Container(5097).ListItem.Genre]$INFO[Container(5097).ListItem.Duration(mins),  •  , דק']</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + !String.IsEmpty(Container(5098).ListItem.Year)">$INFO[Container(5098).ListItem.Year]$INFO[Container(5098).ListItem.Genre,  •  ]$INFO[Container(5098).ListItem.Duration(mins),  •  , דק']$INFO[Container(5098).ListItem.MPAA,  •  ]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]]">$INFO[Container(5098).ListItem.Genre]$INFO[Container(5098).ListItem.Duration(mins),  •  , דק']</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + !String.IsEmpty(Container(5099).ListItem.Year)">$INFO[Container(5099).ListItem.Year]$INFO[Container(5099).ListItem.Genre,  •  ]$INFO[Container(5099).ListItem.Duration(mins),  •  , דק']$INFO[Container(5099).ListItem.MPAA,  •  ]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]]">$INFO[Container(5099).ListItem.Genre]$INFO[Container(5099).ListItem.Duration(mins),  •  , דק']</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + !String.IsEmpty(Container(5011).ListItem.Year)">$INFO[Container(5011).ListItem.Year]$INFO[Container(5011).ListItem.Genre,  •  ]$INFO[Container(5011).ListItem.Duration(mins),  •  , דק']$INFO[Container(5011).ListItem.MPAA,  •  ]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)">$INFO[Container(5011).ListItem.Genre]$INFO[Container(5011).ListItem.Duration(mins),  •  , דק']</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv) + !String.IsEmpty(Container(5021).ListItem.Year)">$INFO[Container(5021).ListItem.Year]$INFO[Container(5021).ListItem.Genre,  •  ]$INFO[Container(5021).ListItem.Duration(mins),  •  , דק']$INFO[Container(5021).ListItem.MPAA,  •  ]</value>
@@ -583,6 +754,8 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)">$INFO[Container(5071).ListItem.Genre]$INFO[Container(5071).ListItem.Duration(mins),  •  , דק']</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + !String.IsEmpty(Container(5081).ListItem.Year)">$INFO[Container(5081).ListItem.Year]$INFO[Container(5081).ListItem.Genre,  •  ]$INFO[Container(5081).ListItem.Duration(mins),  •  , דק']$INFO[Container(5081).ListItem.MPAA,  •  ]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)">$INFO[Container(5081).ListItem.Genre]$INFO[Container(5081).ListItem.Duration(mins),  •  , דק']</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + !String.IsEmpty(Container(5091).ListItem.Year)">$INFO[Container(5091).ListItem.Year]$INFO[Container(5091).ListItem.Genre,  •  ]$INFO[Container(5091).ListItem.Duration(mins),  •  , דק']$INFO[Container(5091).ListItem.MPAA,  •  ]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)">$INFO[Container(5091).ListItem.Genre]$INFO[Container(5091).ListItem.Duration(mins),  •  , דק']</value>
 	</variable>
 	<variable name="POVIL_HeroRating">
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + Integer.IsGreater(Container(5011).ListItem.Rating,0)">$INFO[Container(5011).ListItem.Rating]</value>
@@ -608,6 +781,15 @@
 		<value condition="[Control.HasFocus(5071) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5071)]] + Integer.IsGreater(Container(5071).ListItem.Rating,0)">$INFO[Container(5071).ListItem.Rating]</value>
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]] + Integer.IsGreater(Container(5072).ListItem.Rating,0)">$INFO[Container(5072).ListItem.Rating]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + Integer.IsGreater(Container(5081).ListItem.Rating,0)">$INFO[Container(5081).ListItem.Rating]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + Integer.IsGreater(Container(5091).ListItem.Rating,0)">$INFO[Container(5091).ListItem.Rating]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + Integer.IsGreater(Container(5092).ListItem.Rating,0)">$INFO[Container(5092).ListItem.Rating]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + Integer.IsGreater(Container(5093).ListItem.Rating,0)">$INFO[Container(5093).ListItem.Rating]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + Integer.IsGreater(Container(5094).ListItem.Rating,0)">$INFO[Container(5094).ListItem.Rating]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + Integer.IsGreater(Container(5095).ListItem.Rating,0)">$INFO[Container(5095).ListItem.Rating]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + Integer.IsGreater(Container(5096).ListItem.Rating,0)">$INFO[Container(5096).ListItem.Rating]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + Integer.IsGreater(Container(5097).ListItem.Rating,0)">$INFO[Container(5097).ListItem.Rating]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + Integer.IsGreater(Container(5098).ListItem.Rating,0)">$INFO[Container(5098).ListItem.Rating]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + Integer.IsGreater(Container(5099).ListItem.Rating,0)">$INFO[Container(5099).ListItem.Rating]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + Integer.IsGreater(Container(5011).ListItem.Rating,0)">$INFO[Container(5011).ListItem.Rating]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv) + Integer.IsGreater(Container(5021).ListItem.Rating,0)">$INFO[Container(5021).ListItem.Rating]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli) + Integer.IsGreater(Container(5031).ListItem.Rating,0)">$INFO[Container(5031).ListItem.Rating]</value>
@@ -616,6 +798,7 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites) + Integer.IsGreater(Container(5061).ListItem.Rating,0)">$INFO[Container(5061).ListItem.Rating]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search) + Integer.IsGreater(Container(5071).ListItem.Rating,0)">$INFO[Container(5071).ListItem.Rating]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + Integer.IsGreater(Container(5081).ListItem.Rating,0)">$INFO[Container(5081).ListItem.Rating]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + Integer.IsGreater(Container(5091).ListItem.Rating,0)">$INFO[Container(5091).ListItem.Rating]</value>
 	</variable>
 	<variable name="POVIL_RatingsKey">
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5011).ListItem.UniqueID(imdb),tt)">$INFO[Container(5011).ListItem.UniqueID(imdb)]|$INFO[Container(5011).ListItem.DBType]|$INFO[Container(5011).ListItem.Season]|$INFO[Container(5011).ListItem.Episode]</value>
@@ -664,6 +847,24 @@
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]"></value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + ![String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5081).ListItem.UniqueID(imdb),tt)">$INFO[Container(5081).ListItem.UniqueID(imdb)]|$INFO[Container(5081).ListItem.DBType]|$INFO[Container(5081).ListItem.Season]|$INFO[Container(5081).ListItem.Episode]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]"></value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5091).ListItem.UniqueID(imdb),tt)">$INFO[Container(5091).ListItem.UniqueID(imdb)]|$INFO[Container(5091).ListItem.DBType]|$INFO[Container(5091).ListItem.Season]|$INFO[Container(5091).ListItem.Episode]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]]"></value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + ![String.Contains(Container(5092).ListItem.FolderPath,new_page=) | String.Contains(Container(5092).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5092).ListItem.UniqueID(imdb),tt)">$INFO[Container(5092).ListItem.UniqueID(imdb)]|$INFO[Container(5092).ListItem.DBType]|$INFO[Container(5092).ListItem.Season]|$INFO[Container(5092).ListItem.Episode]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]]"></value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + ![String.Contains(Container(5093).ListItem.FolderPath,new_page=) | String.Contains(Container(5093).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5093).ListItem.UniqueID(imdb),tt)">$INFO[Container(5093).ListItem.UniqueID(imdb)]|$INFO[Container(5093).ListItem.DBType]|$INFO[Container(5093).ListItem.Season]|$INFO[Container(5093).ListItem.Episode]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]]"></value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + ![String.Contains(Container(5094).ListItem.FolderPath,new_page=) | String.Contains(Container(5094).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5094).ListItem.UniqueID(imdb),tt)">$INFO[Container(5094).ListItem.UniqueID(imdb)]|$INFO[Container(5094).ListItem.DBType]|$INFO[Container(5094).ListItem.Season]|$INFO[Container(5094).ListItem.Episode]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]]"></value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + ![String.Contains(Container(5095).ListItem.FolderPath,new_page=) | String.Contains(Container(5095).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5095).ListItem.UniqueID(imdb),tt)">$INFO[Container(5095).ListItem.UniqueID(imdb)]|$INFO[Container(5095).ListItem.DBType]|$INFO[Container(5095).ListItem.Season]|$INFO[Container(5095).ListItem.Episode]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]]"></value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + ![String.Contains(Container(5096).ListItem.FolderPath,new_page=) | String.Contains(Container(5096).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5096).ListItem.UniqueID(imdb),tt)">$INFO[Container(5096).ListItem.UniqueID(imdb)]|$INFO[Container(5096).ListItem.DBType]|$INFO[Container(5096).ListItem.Season]|$INFO[Container(5096).ListItem.Episode]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]]"></value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + ![String.Contains(Container(5097).ListItem.FolderPath,new_page=) | String.Contains(Container(5097).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5097).ListItem.UniqueID(imdb),tt)">$INFO[Container(5097).ListItem.UniqueID(imdb)]|$INFO[Container(5097).ListItem.DBType]|$INFO[Container(5097).ListItem.Season]|$INFO[Container(5097).ListItem.Episode]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]]"></value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + ![String.Contains(Container(5098).ListItem.FolderPath,new_page=) | String.Contains(Container(5098).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5098).ListItem.UniqueID(imdb),tt)">$INFO[Container(5098).ListItem.UniqueID(imdb)]|$INFO[Container(5098).ListItem.DBType]|$INFO[Container(5098).ListItem.Season]|$INFO[Container(5098).ListItem.Episode]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]]"></value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + ![String.Contains(Container(5099).ListItem.FolderPath,new_page=) | String.Contains(Container(5099).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5099).ListItem.UniqueID(imdb),tt)">$INFO[Container(5099).ListItem.UniqueID(imdb)]|$INFO[Container(5099).ListItem.DBType]|$INFO[Container(5099).ListItem.Season]|$INFO[Container(5099).ListItem.Episode]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]]"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5011).ListItem.UniqueID(imdb),tt)">$INFO[Container(5011).ListItem.UniqueID(imdb)]|$INFO[Container(5011).ListItem.DBType]|$INFO[Container(5011).ListItem.Season]|$INFO[Container(5011).ListItem.Episode]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv) + ![String.Contains(Container(5021).ListItem.FolderPath,new_page=) | String.Contains(Container(5021).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5021).ListItem.UniqueID(imdb),tt)">$INFO[Container(5021).ListItem.UniqueID(imdb)]|$INFO[Container(5021).ListItem.DBType]|$INFO[Container(5021).ListItem.Season]|$INFO[Container(5021).ListItem.Episode]</value>
@@ -680,10 +881,100 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)"></value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + ![String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5081).ListItem.UniqueID(imdb),tt)">$INFO[Container(5081).ListItem.UniqueID(imdb)]|$INFO[Container(5081).ListItem.DBType]|$INFO[Container(5081).ListItem.Season]|$INFO[Container(5081).ListItem.Episode]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5091).ListItem.UniqueID(imdb),tt)">$INFO[Container(5091).ListItem.UniqueID(imdb)]|$INFO[Container(5091).ListItem.DBType]|$INFO[Container(5091).ListItem.Season]|$INFO[Container(5091).ListItem.Episode]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)"></value>
 	</variable>
 	<variable name="POVIL_RatingsTmdb">
 		<value condition="String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.tmdb))">$INFO[Window(home).Property(povil.rt.tmdb)]</value>
 		<value condition="!String.IsEmpty(Control.GetLabel(9807))">$VAR[POVIL_HeroRating]</value>
+	</variable>
+	<variable name="POVIL_HeroTrailer">
+		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5011).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5011).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]]"></value>
+		<value condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]] + ![String.Contains(Container(5012).ListItem.FolderPath,new_page=) | String.Contains(Container(5012).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5012).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5012).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]]"></value>
+		<value condition="[Control.HasFocus(5013) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5013)]] + ![String.Contains(Container(5013).ListItem.FolderPath,new_page=) | String.Contains(Container(5013).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5013).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5013).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5013) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5013)]]"></value>
+		<value condition="[Control.HasFocus(5021) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5021)]] + ![String.Contains(Container(5021).ListItem.FolderPath,new_page=) | String.Contains(Container(5021).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5021).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5021).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5021) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5021)]]"></value>
+		<value condition="[Control.HasFocus(5022) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5022)]] + ![String.Contains(Container(5022).ListItem.FolderPath,new_page=) | String.Contains(Container(5022).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5022).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5022).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5022) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5022)]]"></value>
+		<value condition="[Control.HasFocus(5023) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5023)]] + ![String.Contains(Container(5023).ListItem.FolderPath,new_page=) | String.Contains(Container(5023).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5023).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5023).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5023) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5023)]]"></value>
+		<value condition="[Control.HasFocus(5031) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5031)]] + ![String.Contains(Container(5031).ListItem.FolderPath,new_page=) | String.Contains(Container(5031).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5031).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5031).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5031) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5031)]]"></value>
+		<value condition="[Control.HasFocus(5032) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5032)]] + ![String.Contains(Container(5032).ListItem.FolderPath,new_page=) | String.Contains(Container(5032).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5032).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5032).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5032) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5032)]]"></value>
+		<value condition="[Control.HasFocus(5033) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5033)]] + ![String.Contains(Container(5033).ListItem.FolderPath,new_page=) | String.Contains(Container(5033).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5033).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5033).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5033) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5033)]]"></value>
+		<value condition="[Control.HasFocus(5041) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5041)]] + ![String.Contains(Container(5041).ListItem.FolderPath,new_page=) | String.Contains(Container(5041).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5041).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5041).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5041) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5041)]]"></value>
+		<value condition="[Control.HasFocus(5042) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5042)]] + ![String.Contains(Container(5042).ListItem.FolderPath,new_page=) | String.Contains(Container(5042).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5042).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5042).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5042) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5042)]]"></value>
+		<value condition="[Control.HasFocus(5043) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5043)]] + ![String.Contains(Container(5043).ListItem.FolderPath,new_page=) | String.Contains(Container(5043).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5043).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5043).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5043) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5043)]]"></value>
+		<value condition="[Control.HasFocus(5051) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5051)]] + ![String.Contains(Container(5051).ListItem.FolderPath,new_page=) | String.Contains(Container(5051).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5051).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5051).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5051) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5051)]]"></value>
+		<value condition="[Control.HasFocus(5052) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5052)]] + ![String.Contains(Container(5052).ListItem.FolderPath,new_page=) | String.Contains(Container(5052).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5052).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5052).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5052) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5052)]]"></value>
+		<value condition="[Control.HasFocus(5053) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5053)]] + ![String.Contains(Container(5053).ListItem.FolderPath,new_page=) | String.Contains(Container(5053).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5053).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5053).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5053) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5053)]]"></value>
+		<value condition="[Control.HasFocus(5061) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5061)]] + ![String.Contains(Container(5061).ListItem.FolderPath,new_page=) | String.Contains(Container(5061).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5061).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5061).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5061) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5061)]]"></value>
+		<value condition="[Control.HasFocus(5062) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5062)]] + ![String.Contains(Container(5062).ListItem.FolderPath,new_page=) | String.Contains(Container(5062).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5062).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5062).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5062) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5062)]]"></value>
+		<value condition="[Control.HasFocus(5063) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5063)]] + ![String.Contains(Container(5063).ListItem.FolderPath,new_page=) | String.Contains(Container(5063).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5063).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5063).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5063) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5063)]]"></value>
+		<value condition="[Control.HasFocus(5064) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5064)]] + ![String.Contains(Container(5064).ListItem.FolderPath,new_page=) | String.Contains(Container(5064).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5064).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5064).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5064) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5064)]]"></value>
+		<value condition="[Control.HasFocus(5065) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5065)]] + ![String.Contains(Container(5065).ListItem.FolderPath,new_page=) | String.Contains(Container(5065).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5065).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5065).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5065) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5065)]]"></value>
+		<value condition="[Control.HasFocus(5071) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5071)]] + ![String.Contains(Container(5071).ListItem.FolderPath,new_page=) | String.Contains(Container(5071).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5071).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5071).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5071) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5071)]]"></value>
+		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]] + ![String.Contains(Container(5072).ListItem.FolderPath,new_page=) | String.Contains(Container(5072).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5072).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5072).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]"></value>
+		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + ![String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5081).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5081).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]"></value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5091).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5091).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]]"></value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + ![String.Contains(Container(5092).ListItem.FolderPath,new_page=) | String.Contains(Container(5092).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5092).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5092).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]]"></value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + ![String.Contains(Container(5093).ListItem.FolderPath,new_page=) | String.Contains(Container(5093).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5093).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5093).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]]"></value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + ![String.Contains(Container(5094).ListItem.FolderPath,new_page=) | String.Contains(Container(5094).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5094).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5094).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]]"></value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + ![String.Contains(Container(5095).ListItem.FolderPath,new_page=) | String.Contains(Container(5095).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5095).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5095).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]]"></value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + ![String.Contains(Container(5096).ListItem.FolderPath,new_page=) | String.Contains(Container(5096).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5096).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5096).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]]"></value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + ![String.Contains(Container(5097).ListItem.FolderPath,new_page=) | String.Contains(Container(5097).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5097).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5097).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]]"></value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + ![String.Contains(Container(5098).ListItem.FolderPath,new_page=) | String.Contains(Container(5098).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5098).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5098).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]]"></value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + ![String.Contains(Container(5099).ListItem.FolderPath,new_page=) | String.Contains(Container(5099).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5099).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5099).ListItem.Trailer]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]]"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + ![String.Contains(Container(5011).ListItem.FolderPath,new_page=) | String.Contains(Container(5011).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5011).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5011).ListItem.Trailer]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv) + ![String.Contains(Container(5021).ListItem.FolderPath,new_page=) | String.Contains(Container(5021).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5021).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5021).ListItem.Trailer]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli) + ![String.Contains(Container(5031).ListItem.FolderPath,new_page=) | String.Contains(Container(5031).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5031).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5031).ListItem.Trailer]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),live) + ![String.Contains(Container(5041).ListItem.FolderPath,new_page=) | String.Contains(Container(5041).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5041).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5041).ListItem.Trailer]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),live)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),kids) + ![String.Contains(Container(5051).ListItem.FolderPath,new_page=) | String.Contains(Container(5051).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5051).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5051).ListItem.Trailer]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),kids)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites) + ![String.Contains(Container(5061).ListItem.FolderPath,new_page=) | String.Contains(Container(5061).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5061).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5061).ListItem.Trailer]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),search) + ![String.Contains(Container(5071).ListItem.FolderPath,new_page=) | String.Contains(Container(5071).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5071).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5071).ListItem.Trailer]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + ![String.Contains(Container(5081).ListItem.FolderPath,new_page=) | String.Contains(Container(5081).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5081).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5081).ListItem.Trailer]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)"></value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + ![String.Contains(Container(5091).ListItem.FolderPath,new_page=) | String.Contains(Container(5091).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5091).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5091).ListItem.Trailer]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)"></value>
+	</variable>
+	<variable name="POVIL_TrailersTile">
+		<value condition="Skin.HasSetting(POVILNoTrailers)">טריילרים במסך הבית: כבוי</value>
+		<value>טריילרים במסך הבית: פועל</value>
 	</variable>
 	<variable name="POVIL_HeroPlot">
 		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.plot))">$INFO[Window(home).Property(povil.details.plot)]</value>
@@ -737,6 +1028,24 @@
 		<value condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]] + !String.IsEmpty(Container(5072).ListItem.PlotOutline)">$INFO[Container(5072).ListItem.PlotOutline]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + !String.IsEmpty(Container(5081).ListItem.Plot) + !String.IsEqual(Container(5081).ListItem.Plot,Container(5081).ListItem.Label)">$INFO[Container(5081).ListItem.Plot]</value>
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]] + !String.IsEmpty(Container(5081).ListItem.PlotOutline)">$INFO[Container(5081).ListItem.PlotOutline]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + !String.IsEmpty(Container(5091).ListItem.Plot) + !String.IsEqual(Container(5091).ListItem.Plot,Container(5091).ListItem.Label)">$INFO[Container(5091).ListItem.Plot]</value>
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]] + !String.IsEmpty(Container(5091).ListItem.PlotOutline)">$INFO[Container(5091).ListItem.PlotOutline]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + !String.IsEmpty(Container(5092).ListItem.Plot) + !String.IsEqual(Container(5092).ListItem.Plot,Container(5092).ListItem.Label)">$INFO[Container(5092).ListItem.Plot]</value>
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]] + !String.IsEmpty(Container(5092).ListItem.PlotOutline)">$INFO[Container(5092).ListItem.PlotOutline]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + !String.IsEmpty(Container(5093).ListItem.Plot) + !String.IsEqual(Container(5093).ListItem.Plot,Container(5093).ListItem.Label)">$INFO[Container(5093).ListItem.Plot]</value>
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]] + !String.IsEmpty(Container(5093).ListItem.PlotOutline)">$INFO[Container(5093).ListItem.PlotOutline]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + !String.IsEmpty(Container(5094).ListItem.Plot) + !String.IsEqual(Container(5094).ListItem.Plot,Container(5094).ListItem.Label)">$INFO[Container(5094).ListItem.Plot]</value>
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]] + !String.IsEmpty(Container(5094).ListItem.PlotOutline)">$INFO[Container(5094).ListItem.PlotOutline]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + !String.IsEmpty(Container(5095).ListItem.Plot) + !String.IsEqual(Container(5095).ListItem.Plot,Container(5095).ListItem.Label)">$INFO[Container(5095).ListItem.Plot]</value>
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]] + !String.IsEmpty(Container(5095).ListItem.PlotOutline)">$INFO[Container(5095).ListItem.PlotOutline]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + !String.IsEmpty(Container(5096).ListItem.Plot) + !String.IsEqual(Container(5096).ListItem.Plot,Container(5096).ListItem.Label)">$INFO[Container(5096).ListItem.Plot]</value>
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]] + !String.IsEmpty(Container(5096).ListItem.PlotOutline)">$INFO[Container(5096).ListItem.PlotOutline]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + !String.IsEmpty(Container(5097).ListItem.Plot) + !String.IsEqual(Container(5097).ListItem.Plot,Container(5097).ListItem.Label)">$INFO[Container(5097).ListItem.Plot]</value>
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]] + !String.IsEmpty(Container(5097).ListItem.PlotOutline)">$INFO[Container(5097).ListItem.PlotOutline]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + !String.IsEmpty(Container(5098).ListItem.Plot) + !String.IsEqual(Container(5098).ListItem.Plot,Container(5098).ListItem.Label)">$INFO[Container(5098).ListItem.Plot]</value>
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]] + !String.IsEmpty(Container(5098).ListItem.PlotOutline)">$INFO[Container(5098).ListItem.PlotOutline]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + !String.IsEmpty(Container(5099).ListItem.Plot) + !String.IsEqual(Container(5099).ListItem.Plot,Container(5099).ListItem.Label)">$INFO[Container(5099).ListItem.Plot]</value>
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]] + !String.IsEmpty(Container(5099).ListItem.PlotOutline)">$INFO[Container(5099).ListItem.PlotOutline]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + !String.IsEmpty(Container(5011).ListItem.Plot) + !String.IsEqual(Container(5011).ListItem.Plot,Container(5011).ListItem.Label)">$INFO[Container(5011).ListItem.Plot]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies) + !String.IsEmpty(Container(5011).ListItem.PlotOutline)">$INFO[Container(5011).ListItem.PlotOutline]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv) + !String.IsEmpty(Container(5021).ListItem.Plot) + !String.IsEqual(Container(5021).ListItem.Plot,Container(5021).ListItem.Label)">$INFO[Container(5021).ListItem.Plot]</value>
@@ -753,6 +1062,8 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search) + !String.IsEmpty(Container(5071).ListItem.PlotOutline)">$INFO[Container(5071).ListItem.PlotOutline]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + !String.IsEmpty(Container(5081).ListItem.Plot) + !String.IsEqual(Container(5081).ListItem.Plot,Container(5081).ListItem.Label)">$INFO[Container(5081).ListItem.Plot]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings) + !String.IsEmpty(Container(5081).ListItem.PlotOutline)">$INFO[Container(5081).ListItem.PlotOutline]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + !String.IsEmpty(Container(5091).ListItem.Plot) + !String.IsEqual(Container(5091).ListItem.Plot,Container(5091).ListItem.Label)">$INFO[Container(5091).ListItem.Plot]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub) + !String.IsEmpty(Container(5091).ListItem.PlotOutline)">$INFO[Container(5091).ListItem.PlotOutline]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)">סרטים חדשים, פופולריים וכל מה שאתם באמצע לראות.</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv)">הסדרות שכולם מדברים עליהן, והפרק הבא שלכם.</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli)">כאן, קשת, רשת ועוד: התוכניות והסדרות הישראליות.</value>
@@ -761,6 +1072,7 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites)">הקיצורים והרשימות ששמרתם.</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)">סרטים, סדרות, שחקנים ותוכן ישראלי. במקלדת יש כפתור חיפוש קולי.</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)">הוויזארד, הכתוביות, POV ו-Umbrella במקום אחד.</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)">מה שיש לצפות בו בשירות הזה: בחרו הכול, סרטים או סדרות.</value>
 	</variable>
 	<variable name="POVIL_ItemLandscape">
 		<value condition="String.IsEqual(ListItem.DBType,episode) + !String.IsEmpty(ListItem.Art(thumb))">$INFO[ListItem.Art(thumb)]</value>
@@ -872,6 +1184,78 @@
 	<variable name="POVIL_Path_5072">
 		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.search))">plugin://plugin.video.pov/?mode=search_history&amp;action=tvshow&amp;name=%D7%97%D7%99%D7%A4%D7%95%D7%A9%D7%99%20%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%90%D7%97%D7%A8%D7%95%D7%A0%D7%99%D7%9D&amp;povil_rtl=1</value>
 	</variable>
+	<variable name="POVIL_Path_5091">
+		<value condition="!String.IsEmpty(Window(home).Property(povil.tab.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all) + !String.IsEmpty(Window(home).Property(povil.retry.5091))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%94%D7%9E%D7%95%D7%91%D7%99%D7%9C%D7%99%D7%9D&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5091)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.tab.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%94%D7%9E%D7%95%D7%91%D7%99%D7%9C%D7%99%D7%9D&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.tab.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie) + !String.IsEmpty(Window(home).Property(povil.retry.5091))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%9E%D7%95%D7%91%D7%99%D7%9C%D7%99%D7%9D%20%D7%A2%D7%9B%D7%A9%D7%99%D7%95&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5091)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.tab.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%9E%D7%95%D7%91%D7%99%D7%9C%D7%99%D7%9D%20%D7%A2%D7%9B%D7%A9%D7%99%D7%95&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.tab.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv) + !String.IsEmpty(Window(home).Property(povil.retry.5091))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%9E%D7%95%D7%91%D7%99%D7%9C%D7%95%D7%AA%20%D7%A2%D7%9B%D7%A9%D7%99%D7%95&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5091)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.tab.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%9E%D7%95%D7%91%D7%99%D7%9C%D7%95%D7%AA%20%D7%A2%D7%9B%D7%A9%D7%99%D7%95&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26page%3D%25s&amp;povil_rtl=1</value>
+	</variable>
+	<variable name="POVIL_Path_5092">
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all) + !String.IsEmpty(Window(home).Property(povil.retry.5092))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%A4%D7%95%D7%A4%D7%95%D7%9C%D7%A8%D7%99%D7%95%D7%AA&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5092)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%A4%D7%95%D7%A4%D7%95%D7%9C%D7%A8%D7%99%D7%95%D7%AA&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie) + !String.IsEmpty(Window(home).Property(povil.retry.5092))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%97%D7%93%D7%A9%D7%99%D7%9D&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dprimary_release_date.desc%26primary_release_date.lte%3D$INFO[System.Date(yyyy-mm)]-28%26vote_count.gte%3D15%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5092)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%97%D7%93%D7%A9%D7%99%D7%9D&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dprimary_release_date.desc%26primary_release_date.lte%3D$INFO[System.Date(yyyy-mm)]-28%26vote_count.gte%3D15%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv) + !String.IsEmpty(Window(home).Property(povil.retry.5092))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%97%D7%93%D7%A9%D7%95%D7%AA&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dfirst_air_date.desc%26first_air_date.lte%3D$INFO[System.Date(yyyy-mm)]-28%26vote_count.gte%3D10%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5092)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%97%D7%93%D7%A9%D7%95%D7%AA&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dfirst_air_date.desc%26first_air_date.lte%3D$INFO[System.Date(yyyy-mm)]-28%26vote_count.gte%3D10%26page%3D%25s&amp;povil_rtl=1</value>
+	</variable>
+	<variable name="POVIL_Path_5093">
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all) + !String.IsEmpty(Window(home).Property(povil.retry.5093))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%97%D7%93%D7%A9%D7%99%D7%9D&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dprimary_release_date.desc%26primary_release_date.lte%3D$INFO[System.Date(yyyy-mm)]-28%26vote_count.gte%3D15%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5093)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%97%D7%93%D7%A9%D7%99%D7%9D&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dprimary_release_date.desc%26primary_release_date.lte%3D$INFO[System.Date(yyyy-mm)]-28%26vote_count.gte%3D15%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie) + !String.IsEmpty(Window(home).Property(povil.retry.5093))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%9E%D7%93%D7%95%D7%A8%D7%92%D7%99%D7%9D%20%D7%91%D7%99%D7%95%D7%AA%D7%A8&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dvote_average.desc%26vote_count.gte%3D400%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5093)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%9E%D7%93%D7%95%D7%A8%D7%92%D7%99%D7%9D%20%D7%91%D7%99%D7%95%D7%AA%D7%A8&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dvote_average.desc%26vote_count.gte%3D400%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv) + !String.IsEmpty(Window(home).Property(povil.retry.5093))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%A4%D7%A7%D7%95%D7%AA%20%D7%9E%D7%A7%D7%95%D7%A8&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26sort_by%3Dpopularity.desc%26with_networks%3D$INFO[Window(home).Property(povil.hub.net)]%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5093)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%A4%D7%A7%D7%95%D7%AA%20%D7%9E%D7%A7%D7%95%D7%A8&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26sort_by%3Dpopularity.desc%26with_networks%3D$INFO[Window(home).Property(povil.hub.net)]%26page%3D%25s&amp;povil_rtl=1</value>
+	</variable>
+	<variable name="POVIL_Path_5094">
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all) + !String.IsEmpty(Window(home).Property(povil.retry.5094))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%97%D7%93%D7%A9%D7%95%D7%AA&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dfirst_air_date.desc%26first_air_date.lte%3D$INFO[System.Date(yyyy-mm)]-28%26vote_count.gte%3D10%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5094)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%97%D7%93%D7%A9%D7%95%D7%AA&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dfirst_air_date.desc%26first_air_date.lte%3D$INFO[System.Date(yyyy-mm)]-28%26vote_count.gte%3D10%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie) + !String.IsEmpty(Window(home).Property(povil.retry.5094))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%90%D7%A7%D7%A9%D7%9F%20%D7%95%D7%94%D7%A8%D7%A4%D7%AA%D7%A7%D7%90%D7%95%D7%AA&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D28%7C12%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5094)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%90%D7%A7%D7%A9%D7%9F%20%D7%95%D7%94%D7%A8%D7%A4%D7%AA%D7%A7%D7%90%D7%95%D7%AA&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D28%7C12%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv) + !String.IsEmpty(Window(home).Property(povil.retry.5094))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%9E%D7%93%D7%95%D7%A8%D7%92%D7%95%D7%AA%20%D7%91%D7%99%D7%95%D7%AA%D7%A8&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dvote_average.desc%26vote_count.gte%3D200%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5094)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%9E%D7%93%D7%95%D7%A8%D7%92%D7%95%D7%AA%20%D7%91%D7%99%D7%95%D7%AA%D7%A8&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dvote_average.desc%26vote_count.gte%3D200%26page%3D%25s&amp;povil_rtl=1</value>
+	</variable>
+	<variable name="POVIL_Path_5095">
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all) + !String.IsEmpty(Window(home).Property(povil.retry.5095))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%A4%D7%A7%D7%95%D7%AA%20%D7%9E%D7%A7%D7%95%D7%A8&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26sort_by%3Dpopularity.desc%26with_networks%3D$INFO[Window(home).Property(povil.hub.net)]%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5095)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%94%D7%A4%D7%A7%D7%95%D7%AA%20%D7%9E%D7%A7%D7%95%D7%A8&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26sort_by%3Dpopularity.desc%26with_networks%3D$INFO[Window(home).Property(povil.hub.net)]%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie) + !String.IsEmpty(Window(home).Property(povil.retry.5095))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A7%D7%95%D7%9E%D7%93%D7%99%D7%94&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D35%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5095)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A7%D7%95%D7%9E%D7%93%D7%99%D7%94&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D35%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv) + !String.IsEmpty(Window(home).Property(povil.retry.5095))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%93%D7%A8%D7%9E%D7%94&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D18%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5095)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%93%D7%A8%D7%9E%D7%94&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D18%26page%3D%25s&amp;povil_rtl=1</value>
+	</variable>
+	<variable name="POVIL_Path_5096">
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all) + !String.IsEmpty(Window(home).Property(povil.retry.5096))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%A9%D7%90%D7%94%D7%91%D7%95%20%D7%91%D7%9E%D7%99%D7%95%D7%97%D7%93&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dvote_average.desc%26vote_count.gte%3D400%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5096)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D%20%D7%A9%D7%90%D7%94%D7%91%D7%95%20%D7%91%D7%9E%D7%99%D7%95%D7%97%D7%93&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dvote_average.desc%26vote_count.gte%3D400%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie) + !String.IsEmpty(Window(home).Property(povil.retry.5096))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%93%D7%A8%D7%9E%D7%94&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D18%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5096)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%93%D7%A8%D7%9E%D7%94&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D18%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv) + !String.IsEmpty(Window(home).Property(povil.retry.5096))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A7%D7%95%D7%9E%D7%93%D7%99%D7%94&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D35%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5096)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A7%D7%95%D7%9E%D7%93%D7%99%D7%94&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D35%26page%3D%25s&amp;povil_rtl=1</value>
+	</variable>
+	<variable name="POVIL_Path_5097">
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all) + !String.IsEmpty(Window(home).Property(povil.retry.5097))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%A9%D7%90%D7%94%D7%91%D7%95%20%D7%91%D7%9E%D7%99%D7%95%D7%97%D7%93&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dvote_average.desc%26vote_count.gte%3D200%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5097)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA%20%D7%A9%D7%90%D7%94%D7%91%D7%95%20%D7%91%D7%9E%D7%99%D7%95%D7%97%D7%93&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dvote_average.desc%26vote_count.gte%3D200%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie) + !String.IsEmpty(Window(home).Property(povil.retry.5097))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%9E%D7%93%D7%A2%20%D7%91%D7%93%D7%99%D7%95%D7%A0%D7%99%20%D7%95%D7%A4%D7%A0%D7%98%D7%96%D7%99%D7%94&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D878%7C14%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5097)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%9E%D7%93%D7%A2%20%D7%91%D7%93%D7%99%D7%95%D7%A0%D7%99%20%D7%95%D7%A4%D7%A0%D7%98%D7%96%D7%99%D7%94&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D878%7C14%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv) + !String.IsEmpty(Window(home).Property(povil.retry.5097))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A4%D7%A9%D7%A2%20%D7%95%D7%9E%D7%A1%D7%AA%D7%95%D7%A8%D7%99%D7%9F&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D80%7C9648%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5097)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%A4%D7%A9%D7%A2%20%D7%95%D7%9E%D7%A1%D7%AA%D7%95%D7%A8%D7%99%D7%9F&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D80%7C9648%26page%3D%25s&amp;povil_rtl=1</value>
+	</variable>
+	<variable name="POVIL_Path_5098">
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all) + !String.IsEmpty(Window(home).Property(povil.retry.5098))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%90%D7%A7%D7%A9%D7%9F%20%D7%95%D7%94%D7%A8%D7%A4%D7%AA%D7%A7%D7%90%D7%95%D7%AA&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D28%7C12%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5098)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%90%D7%A7%D7%A9%D7%9F%20%D7%95%D7%94%D7%A8%D7%A4%D7%AA%D7%A7%D7%90%D7%95%D7%AA&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D28%7C12%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie) + !String.IsEmpty(Window(home).Property(povil.retry.5098))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%9E%D7%AA%D7%97%20%D7%95%D7%90%D7%99%D7%9E%D7%94&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D53%7C27%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5098)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%9E%D7%AA%D7%97%20%D7%95%D7%90%D7%99%D7%9E%D7%94&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D53%7C27%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv) + !String.IsEmpty(Window(home).Property(povil.retry.5098))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%9E%D7%93%D7%A2%20%D7%91%D7%93%D7%99%D7%95%D7%A0%D7%99%20%D7%95%D7%A4%D7%A0%D7%98%D7%96%D7%99%D7%94&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D10765%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5098)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%9E%D7%93%D7%A2%20%D7%91%D7%93%D7%99%D7%95%D7%A0%D7%99%20%D7%95%D7%A4%D7%A0%D7%98%D7%96%D7%99%D7%94&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D10765%26page%3D%25s&amp;povil_rtl=1</value>
+	</variable>
+	<variable name="POVIL_Path_5099">
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all) + !String.IsEmpty(Window(home).Property(povil.retry.5099))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%93%D7%A8%D7%9E%D7%94&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D18%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5099)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),all)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%93%D7%A8%D7%9E%D7%94&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D18%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie) + !String.IsEmpty(Window(home).Property(povil.retry.5099))">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%9C%D7%9B%D7%9C%20%D7%94%D7%9E%D7%A9%D7%A4%D7%97%D7%94&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D10751%7C16%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5099)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),movie)">plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%9C%D7%9B%D7%9C%20%D7%94%D7%9E%D7%A9%D7%A4%D7%97%D7%94&amp;query=discover%2Fmovie%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D10751%7C16%26page%3D%25s&amp;povil_rtl=1</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv) + !String.IsEmpty(Window(home).Property(povil.retry.5099))">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%99%D7%9C%D7%93%D7%99%D7%9D%20%D7%95%D7%9E%D7%A9%D7%A4%D7%97%D7%94&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D10762%7C10751%26page%3D%25s&amp;povil_rtl=1&amp;povil_retry=$INFO[Window(home).Property(povil.retry.5099)]</value>
+		<value condition="!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.hub.type),tv)">plugin://plugin.video.pov/?mode=build_tvshow_list&amp;action=tmdb_media_discover&amp;povil_hub=1&amp;name=%D7%99%D7%9C%D7%93%D7%99%D7%9D%20%D7%95%D7%9E%D7%A9%D7%A4%D7%97%D7%94&amp;query=discover%2Ftv%3Flanguage%3Den-US%26region%3DUS%26watch_region%3DUS%26with_watch_monetization_types%3Dflatrate%26with_watch_providers%3D$INFO[Window(home).Property(povil.hub.id)]%26sort_by%3Dpopularity.desc%26with_genres%3D10762%7C10751%26page%3D%25s&amp;povil_rtl=1</value>
+	</variable>
 	<variable name="POVIL_RowTitleColor_5011">
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]]">povil_white</value>
 		<value>povil_dim</value>
@@ -964,6 +1348,151 @@
 		<value condition="[Control.HasFocus(5081) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5081)]]">povil_white</value>
 		<value>povil_dim</value>
 	</variable>
+	<variable name="POVIL_RowTitleColor_5091">
+		<value condition="[Control.HasFocus(5091) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5091)]]">povil_white</value>
+		<value>povil_dim</value>
+	</variable>
+	<variable name="POVIL_RowTitleColor_5092">
+		<value condition="[Control.HasFocus(5092) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5092)]]">povil_white</value>
+		<value>povil_dim</value>
+	</variable>
+	<variable name="POVIL_RowTitleColor_5093">
+		<value condition="[Control.HasFocus(5093) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5093)]]">povil_white</value>
+		<value>povil_dim</value>
+	</variable>
+	<variable name="POVIL_RowTitleColor_5094">
+		<value condition="[Control.HasFocus(5094) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5094)]]">povil_white</value>
+		<value>povil_dim</value>
+	</variable>
+	<variable name="POVIL_RowTitleColor_5095">
+		<value condition="[Control.HasFocus(5095) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5095)]]">povil_white</value>
+		<value>povil_dim</value>
+	</variable>
+	<variable name="POVIL_RowTitleColor_5096">
+		<value condition="[Control.HasFocus(5096) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5096)]]">povil_white</value>
+		<value>povil_dim</value>
+	</variable>
+	<variable name="POVIL_RowTitleColor_5097">
+		<value condition="[Control.HasFocus(5097) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5097)]]">povil_white</value>
+		<value>povil_dim</value>
+	</variable>
+	<variable name="POVIL_RowTitleColor_5098">
+		<value condition="[Control.HasFocus(5098) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5098)]]">povil_white</value>
+		<value>povil_dim</value>
+	</variable>
+	<variable name="POVIL_RowTitleColor_5099">
+		<value condition="[Control.HasFocus(5099) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5099)]]">povil_white</value>
+		<value>povil_dim</value>
+	</variable>
+	<variable name="POVIL_HubTitle_0">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),all)">הסרטים המובילים</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),movie)">המובילים עכשיו</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),tv)">המובילות עכשיו</value>
+	</variable>
+	<variable name="POVIL_HubTitle_1">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),all)">סדרות פופולריות</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),movie)">חדשים</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),tv)">חדשות</value>
+	</variable>
+	<variable name="POVIL_HubTitle_2">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),all)">סרטים חדשים</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),movie)">המדורגים ביותר</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),tv)">הפקות מקור</value>
+	</variable>
+	<variable name="POVIL_HubTitle_3">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),all)">סדרות חדשות</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),movie)">אקשן והרפתקאות</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),tv)">המדורגות ביותר</value>
+	</variable>
+	<variable name="POVIL_HubTitle_4">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),all)">הפקות מקור</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),movie)">קומדיה</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),tv)">דרמה</value>
+	</variable>
+	<variable name="POVIL_HubTitle_5">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),all)">סרטים שאהבו במיוחד</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),movie)">דרמה</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),tv)">קומדיה</value>
+	</variable>
+	<variable name="POVIL_HubTitle_6">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),all)">סדרות שאהבו במיוחד</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),movie)">מדע בדיוני ופנטזיה</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),tv)">פשע ומסתורין</value>
+	</variable>
+	<variable name="POVIL_HubTitle_7">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),all)">אקשן והרפתקאות</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),movie)">מתח ואימה</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),tv)">מדע בדיוני ופנטזיה</value>
+	</variable>
+	<variable name="POVIL_HubTitle_8">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),all)">דרמה</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),movie)">לכל המשפחה</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),tv)">ילדים ומשפחה</value>
+	</variable>
+	<variable name="POVIL_ChipText_9208">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),all)">povil_gold</value>
+		<value>povil_white</value>
+	</variable>
+	<variable name="POVIL_ChipFill_9208">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),all)">4DD9B77E</value>
+		<value>24FFFFFF</value>
+	</variable>
+	<variable name="POVIL_ChipText_9209">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),movie)">povil_gold</value>
+		<value>povil_white</value>
+	</variable>
+	<variable name="POVIL_ChipFill_9209">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),movie)">4DD9B77E</value>
+		<value>24FFFFFF</value>
+	</variable>
+	<variable name="POVIL_ChipText_9210">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),tv)">povil_gold</value>
+		<value>povil_white</value>
+	</variable>
+	<variable name="POVIL_ChipFill_9210">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.type),tv)">4DD9B77E</value>
+		<value>24FFFFFF</value>
+	</variable>
+	<variable name="POVIL_ChipText_9211">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.id),8)">povil_gold</value>
+		<value>povil_white</value>
+	</variable>
+	<variable name="POVIL_ChipFill_9211">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.id),8)">4DD9B77E</value>
+		<value>24FFFFFF</value>
+	</variable>
+	<variable name="POVIL_ChipText_9212">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.id),337)">povil_gold</value>
+		<value>povil_white</value>
+	</variable>
+	<variable name="POVIL_ChipFill_9212">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.id),337)">4DD9B77E</value>
+		<value>24FFFFFF</value>
+	</variable>
+	<variable name="POVIL_ChipText_9213">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.id),350)">povil_gold</value>
+		<value>povil_white</value>
+	</variable>
+	<variable name="POVIL_ChipFill_9213">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.id),350)">4DD9B77E</value>
+		<value>24FFFFFF</value>
+	</variable>
+	<variable name="POVIL_ChipText_9214">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.id),9)">povil_gold</value>
+		<value>povil_white</value>
+	</variable>
+	<variable name="POVIL_ChipFill_9214">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.id),9)">4DD9B77E</value>
+		<value>24FFFFFF</value>
+	</variable>
+	<variable name="POVIL_ChipText_9215">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.id),1899)">povil_gold</value>
+		<value>povil_white</value>
+	</variable>
+	<variable name="POVIL_ChipFill_9215">
+		<value condition="String.IsEqual(Window(home).Property(povil.hub.id),1899)">4DD9B77E</value>
+		<value>24FFFFFF</value>
+	</variable>
 	<variable name="POVIL_TabColor_movies">
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)">povil_white</value>
 		<value>povil_faint</value>
@@ -994,6 +1523,10 @@
 	</variable>
 	<variable name="POVIL_TabColor_settings">
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)">povil_white</value>
+		<value>povil_faint</value>
+	</variable>
+	<variable name="POVIL_TabColor_hub">
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)">povil_white</value>
 		<value>povil_faint</value>
 	</variable>
 	<include name="POVIL_Item_poster">
@@ -1367,6 +1900,152 @@
 						<left>0</left><top>234</top><width>200</width><height>58</height>
 						<font>povil_small</font><align>center</align>
 						<textcolor>povil_white</textcolor><label>$VAR[POVIL_ItemTitle]</label>
+					</control>
+				</control>
+			</focusedlayout>
+		</definition>
+	</include>
+	<include name="POVIL_Item_ranked">
+		<param name="id" />
+		<definition>
+			<itemlayout width="330" height="340">
+				<control type="group">
+					<left>42</left><top>0</top>
+					<control type="label" description="rank">
+						<left>134</left><top>110</top><width>180</width><height>220</height>
+						<font>povil_rank</font><align>center</align><aligny>center</aligny>
+						<textcolor>4DF5F2EC</textcolor><label>$INFO[ListItem.Property(povil_rank)]</label>
+						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
+					</control>
+					<control type="image">
+						<left>-30</left><top>0</top><width>256</width><height>354</height>
+						<texture border="54">povil/shadow.png</texture>
+					</control>
+					<control type="image">
+						<left>0</left><top>22</top><width>196</width><height>294</height>
+						<texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture>
+					</control>
+					<control type="label">
+						<left>16</left><top>22</top><width>164</width><height>294</height>
+						<font>povil_small</font><align>center</align><aligny>center</aligny><wrapmultiline>true</wrapmultiline>
+						<textcolor>povil_dim</textcolor><label>$INFO[ListItem.Label]</label>
+						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
+					</control>
+					<control type="image">
+						<left>0</left><top>22</top><width>196</width><height>294</height>
+						<texture background="true" diffuse="povil/mask_poster.png" colordiffuse="4DFFFFFF">$VAR[POVIL_ItemPoster]</texture>
+						<aspectratio scalediffuse="false">scale</aspectratio>
+						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
+					</control>
+					<control type="image">
+						<left>0</left><top>22</top><width>196</width><height>294</height>
+						<texture background="true" diffuse="povil/mask_poster.png" colordiffuse="FFFFFFFF">$VAR[POVIL_ItemPoster]</texture>
+						<aspectratio scalediffuse="false">keep</aspectratio>
+						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
+					</control>
+					<control type="group"><left>0</left><top>22</top><visible>[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture border="30" colordiffuse="1AD9B77E">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>66</left><top>91</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
+						<control type="label"><left>0</left><top>161</top><width>196</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
+					</control>
+					<control type="group"><left>0</left><top>22</top><visible>ListItem.IsParentFolder</visible>
+						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>66</left><top>91</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
+						<control type="label"><left>0</left><top>161</top><width>196</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
+					</control>
+					<control type="progress">
+						<left>14</left><top>298</top><width>168</width><height>6</height>
+						<texturebg border="3" colordiffuse="99000000">povil/progress.png</texturebg>
+						<midtexture border="3" colordiffuse="povil_gold">povil/progress.png</midtexture>
+						<info>ListItem.PercentPlayed</info>
+						<reveal>false</reveal><lefttexture></lefttexture><righttexture></righttexture><overlaytexture></overlaytexture>
+						<visible>Integer.IsGreater(ListItem.PercentPlayed,0)</visible>
+					</control>
+					<control type="image">
+						<left>10</left><top>32</top><width>34</width><height>34</height>
+						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
+					</control>
+					<control type="group" description="rating on the picture">
+						<left>108</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+					</control>
+				</control>
+			</itemlayout>
+			<focusedlayout width="330" height="340">
+				<control type="group">
+					<left>42</left><top>0</top>
+					<animation effect="zoom" start="100" end="106" center="140,169" time="240" tween="cubic" easing="out" condition="Control.HasFocus($PARAM[id])">Conditional</animation>
+					<control type="label" description="rank">
+						<left>134</left><top>110</top><width>180</width><height>220</height>
+						<font>povil_rank</font><align>center</align><aligny>center</aligny>
+						<textcolor>povil_gold</textcolor><label>$INFO[ListItem.Property(povil_rank)]</label>
+						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
+					</control>
+					<control type="image">
+						<left>-30</left><top>0</top><width>256</width><height>354</height>
+						<texture border="54">povil/shadow.png</texture>
+					</control>
+					<control type="image">
+						<left>-36</left><top>-14</top><width>268</width><height>366</height>
+						<texture border="60" colordiffuse="99D9B77E">povil/focus_glow.png</texture>
+						<visible>Control.HasFocus($PARAM[id])</visible>
+					</control>
+					<control type="image">
+						<left>0</left><top>22</top><width>196</width><height>294</height>
+						<texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture>
+					</control>
+					<control type="label">
+						<left>16</left><top>22</top><width>164</width><height>294</height>
+						<font>povil_small</font><align>center</align><aligny>center</aligny><wrapmultiline>true</wrapmultiline>
+						<textcolor>povil_dim</textcolor><label>$INFO[ListItem.Label]</label>
+						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
+					</control>
+					<control type="image">
+						<left>0</left><top>22</top><width>196</width><height>294</height>
+						<texture background="true" diffuse="povil/mask_poster.png" colordiffuse="4DFFFFFF">$VAR[POVIL_ItemPoster]</texture>
+						<aspectratio scalediffuse="false">scale</aspectratio>
+						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
+					</control>
+					<control type="image">
+						<left>0</left><top>22</top><width>196</width><height>294</height>
+						<texture background="true" diffuse="povil/mask_poster.png" colordiffuse="FFFFFFFF">$VAR[POVIL_ItemPoster]</texture>
+						<aspectratio scalediffuse="false">keep</aspectratio>
+						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
+					</control>
+					<control type="group"><left>0</left><top>22</top><visible>[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture border="30" colordiffuse="33D9B77E">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>66</left><top>91</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
+						<control type="label"><left>0</left><top>161</top><width>196</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
+					</control>
+					<control type="group"><left>0</left><top>22</top><visible>ListItem.IsParentFolder</visible>
+						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture border="30" colordiffuse="33FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>66</left><top>91</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
+						<control type="label"><left>0</left><top>161</top><width>196</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
+					</control>
+					<control type="image">
+						<left>-6</left><top>16</top><width>208</width><height>306</height>
+						<texture border="30" colordiffuse="povil_gold">povil/focus_ring.png</texture>
+						<visible>Control.HasFocus($PARAM[id])</visible>
+					</control>
+					<control type="progress">
+						<left>14</left><top>298</top><width>168</width><height>6</height>
+						<texturebg border="3" colordiffuse="99000000">povil/progress.png</texturebg>
+						<midtexture border="3" colordiffuse="povil_gold">povil/progress.png</midtexture>
+						<info>ListItem.PercentPlayed</info>
+						<reveal>false</reveal><lefttexture></lefttexture><righttexture></righttexture><overlaytexture></overlaytexture>
+						<visible>Integer.IsGreater(ListItem.PercentPlayed,0)</visible>
+					</control>
+					<control type="image">
+						<left>10</left><top>32</top><width>34</width><height>34</height>
+						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
+					</control>
+					<control type="group" description="rating on the picture">
+						<left>108</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
 					</control>
 				</control>
 			</focusedlayout>

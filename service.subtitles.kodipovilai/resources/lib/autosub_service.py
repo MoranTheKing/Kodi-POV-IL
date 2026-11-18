@@ -1043,6 +1043,18 @@ def playback_over():
 if xbmc is not None:
     class AutoSubPlayer(xbmc.Player):
         def onAVStarted(self):
+            # The build's home plays a title's trailer behind its hero (the Wizard's trailers.py names
+            # it in this property before it starts): not a film to snapshot or to find subtitles for --
+            # a search by a trailer's title ran for six seconds each time (QA Kodi, Nov 2026).
+            # By the trailer's own address: a film that takes the player over from a running trailer
+            # is a film, whichever add-on hears of it first.
+            try:
+                import xbmcgui
+                _trailer = xbmcgui.Window(10000).getProperty('povil.tr.file')
+                if _trailer and self.getPlayingFile() == _trailer:
+                    return
+            except Exception:
+                pass
             # Always snapshot; auto-search only when the user asked for it.
             try:
                 threading.Thread(target=snapshot_on_play, daemon=True).start()

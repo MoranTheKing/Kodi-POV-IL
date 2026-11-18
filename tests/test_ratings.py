@@ -219,6 +219,207 @@ class AnswerTests(unittest.TestCase):
         self.assertNotIn('povil.rt.for', home.properties)
 
 
+class DeskTests(unittest.TestCase):
+    """The owner, Nov 2026: TMDb's number was there at once and the others two seconds later --
+    "all of them at once, instantly"."""
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.asked = []
+        self.now = [1_700_000_000.0]
+
+        def fetch(path):
+            self.asked.append(path)
+            return 200, FILM
+        self.store = ratings.Store(folder.name, fetch, clock=lambda: self.now[0])
+
+    def test_a_known_title_is_answered_where_the_question_arrives_with_no_request(self):
+        self.store.lookup('tt1375666|movie||')
+        self.asked.clear()
+        home = Home(**{'povil.rt.ask': 'tt1375666|movie||'})
+        desk = ratings.Desk(home, self.store)
+        self.assertTrue(desk.asked('home'))
+        self.assertEqual(home.properties['povil.rt.imdb'], '8.8')
+        self.assertEqual(home.properties['povil.rt.for'], 'tt1375666|movie||')
+        self.assertEqual((self.asked, desk.jobs), ([], []), 'no request and no job')
+        # a new store (Kodi started again) finds it in the title's file
+        again = ratings.Store(self.store.folder, lambda path: self.fail('asked again'), clock=lambda: self.now[0])
+        home = Home(**{'povil.rt.ask': 'tt1375666|movie||'})
+        self.assertTrue(ratings.Desk(home, again).asked('home'))
+
+    def test_a_title_not_known_is_asked_by_a_worker_and_answered_if_still_on_screen(self):
+        home = Home(**{'povil.rt.ask': 'tt1375666|movie||'})
+        desk = ratings.Desk(home, self.store)
+        self.assertFalse(desk.asked('home'))
+        self.assertEqual(home.writes, [])
+        self.assertTrue(desk.step())
+        self.assertEqual(self.asked, ['/movies/tt1375666/ratings'])
+        self.assertEqual(home.properties['povil.rt.for'], 'tt1375666|movie||')
+        self.assertFalse(desk.step(), 'nothing left')
+        # the skin moved on while Trakt was asked: kept for later, not written
+        home = Home(**{'povil.rt.ask': 'tt2|movie||'})
+        desk = ratings.Desk(home, self.store)
+        desk.asked('home')
+        home.properties['povil.rt.ask'] = 'tt3|movie||'
+        desk.step()
+        self.assertEqual(home.writes, [])
+        self.assertEqual(self.store.known('tt2|movie||')[1], True)
+
+    def test_the_newest_question_is_asked_first(self):
+        home = Home()
+        desk = ratings.Desk(home, self.store)
+        for imdb in ('tt1', 'tt2', 'tt3'):
+            home.properties['povil.rt.ask'] = imdb + '|movie||'
+            desk.asked('home')
+        desk.step()
+        self.assertEqual(self.asked, ['/movies/tt3/ratings'], 'where the viewer stopped, not where the scroll began')
+        self.assertEqual(home.properties['povil.rt.for'], 'tt3|movie||')
+
+    def test_what_is_known_but_old_is_shown_at_once_and_asked_again_behind_it(self):
+        self.store.lookup('tt1375666|movie||')
+        self.asked.clear()
+        self.now[0] += ratings.KEEP + 60
+        home = Home(**{'povil.rt.ask': 'tt1375666|movie||'})
+        desk = ratings.Desk(home, self.store)
+        self.assertTrue(desk.asked('home'), 'shown from the file')
+        self.assertEqual(len(desk.jobs), 1)
+        desk.step()
+        self.assertEqual(self.asked, ['/movies/tt1375666/ratings'])
+
+    def test_the_titles_beside_the_focused_one_are_asked_ahead_nearest_first(self):
+        row = {0: 'tt100', 1: 'tt101', 2: 'tt102', 3: 'tt103', -1: 'tt099', 4: '', 5: 'tt105'}
+
+        def read(label):
+            if label == 'System.CurrentControlID':
+                return '5010'
+            item, _dot, field = label.rpartition('.')
+            offset = int(item[item.index('ListItemNoWrap(') + 15:-1])
+            self.assertTrue(item.startswith('Container(5010).'))
+            if field == 'UniqueID(imdb)':
+                return row.get(offset, '')
+            return 'movie' if field == 'DBType' else ''
+        self.assertEqual(ratings.neighbours(read)[:4], ['tt101|movie||', 'tt099|movie||', 'tt102|movie||', 'tt103|movie||'])
+        self.assertEqual(ratings.neighbours(lambda label: ''), [], 'the focus is not on a list')
+        self.store.lookup('tt101|movie||')          # one of them is known already
+        self.asked.clear()
+        home = Home(**{'povil.rt.ask': 'tt100|movie||'})
+        desk = ratings.Desk(home, self.store, read)
+        desk.asked('home')
+        while desk.step():
+            pass
+        self.assertEqual(self.asked[0], '/movies/tt100/ratings', 'the title on screen before any asked ahead')
+        self.assertEqual(self.asked[1], '/movies/tt099/ratings', 'then the nearest one not known')
+        self.assertEqual(sorted(self.asked[1:]), sorted('/movies/%s/ratings' % i for i in ('tt099', 'tt102', 'tt103', 'tt105')))
+        # the focus moves on to one of them: answered at once
+        home.properties['povil.rt.ask'] = 'tt102|movie||'
+        self.asked.clear()
+        self.assertTrue(desk.asked('home'))
+        self.assertEqual(home.properties['povil.rt.for'], 'tt102|movie||')
+        # the player's slot asks nothing ahead
+        player = ratings.Desk(Home(**{'povil.rtp.ask': 'tt100|movie||'}), self.store, read)
+        player.asked('player')
+        self.assertEqual(player.jobs, [])
+
+    def test_the_other_rows_on_the_screen_are_asked_ahead_too(self):
+        # the owner: "on a phone one can go to a title that is not a neighbour"
+        rows = {5021: ['tt200', 'tt201', 'tt202'], 5022: ['tt300', 'tt301'], 5023: [], 5031: ['tt900']}
+        focus = {'control': '5021', 'at': 0}
+        reads = []
+
+        def read(label):
+            reads.append(label)
+            if label == 'System.CurrentControlID':
+                return focus['control']
+            container = int(label[label.index('(') + 1:label.index(')')])
+            if label.endswith('.NumItems'):
+                return str(len(rows.get(container, [])))
+            offset = int(label[label.index('ListItemNoWrap(') + 15:label.index(').', label.index('ListItemNoWrap('))])
+            field = label.rpartition('.')[2]
+            index = offset + (focus['at'] if container == int(focus['control']) else 0)
+            titles = rows.get(container, [])
+            if field == 'UniqueID(imdb)':
+                return titles[index] if 0 <= index < len(titles) else ''
+            return 'movie' if field == 'DBType' else ''
+        keys = ratings.neighbours(read, rows=True)
+        self.assertEqual(keys, ['tt201|movie||', 'tt202|movie||', 'tt300|movie||', 'tt301|movie||'],
+                         'its own row first, then the other rows of the same tab -- not another tab\'s')
+        self.assertEqual(ratings.neighbours(read), ['tt201|movie||', 'tt202|movie||'], 'only when asked to')
+        home = Home(**{'povil.rt.ask': 'tt200|movie||'})
+        desk = ratings.Desk(home, self.store, read)
+        desk.asked('home')
+        while desk.step():
+            pass
+        self.assertEqual(sorted(self.asked), sorted('/movies/%s/ratings' % t for t in ('tt200', 'tt201', 'tt202', 'tt300', 'tt301')))
+        # the focus stays in the row: the other rows are not read again at every press
+        del reads[:]
+        focus['at'] = 1
+        home.properties['povil.rt.ask'] = 'tt201|movie||'
+        self.assertTrue(desk.asked('home'), 'known: answered at once')
+        while desk.step():
+            pass
+        self.assertFalse([r for r in reads if r.startswith('Container(5022)')])
+        # ... but they are after a while, and when the focus comes to another row
+        self.now[0] += ratings.ROWS_EVERY + 1
+        desk.asked('home')
+        while desk.step():
+            pass
+        self.assertTrue([r for r in reads if r.startswith('Container(5022)')])
+        # a tap on a title of another row: it was asked ahead
+        focus['control'], focus['at'] = '5022', 1
+        home.properties['povil.rt.ask'] = 'tt301|movie||'
+        self.assertTrue(desk.asked('home'))
+        self.assertEqual(home.properties['povil.rt.for'], 'tt301|movie||')
+
+    def test_titles_asked_ahead_go_one_at_a_time_and_one_look_at_the_screen_is_enough(self):
+        # review, Nov 2026: a tab seen for the first time is some ninety titles; Trakt answers a burst with
+        # "too many requests", and then even the focused title waits five minutes
+        home = Home()
+        desk = ratings.Desk(home, self.store, lambda label: '')
+        for n in range(5):
+            desk._put(desk.AHEAD, 'tt%d|movie||' % (n + 1), None)
+        self.assertFalse(desk.step(urgent_only=True), 'a worker for the title on screen leaves them alone')
+        self.assertEqual(len(desk.jobs), 5)
+        home.properties['povil.rt.ask'] = 'tt9|movie||'
+        desk.asked('home')
+        self.assertTrue(desk.step(urgent_only=True))        # the look at the screen
+        self.assertTrue(desk.step(urgent_only=True))        # the title on screen
+        self.assertEqual(self.asked, ['/movies/tt9/ratings'])
+        self.assertFalse(desk.step(urgent_only=True))
+        # every question asks for a look at the screen; an older look still waiting is dropped
+        for imdb in ('tt11', 'tt12', 'tt13'):
+            home.properties['povil.rt.ask'] = imdb + '|movie||'
+            desk.asked('home')
+        self.assertEqual(len([job for job in desk.jobs if job[2] is None]), 1)
+
+    def test_a_long_scroll_does_not_pile_up_and_a_title_is_never_asked_twice_at_once(self):
+        home = Home()
+        desk = ratings.Desk(home, self.store)
+        for n in range(ratings.QUEUE * 2):
+            desk._put(desk.AHEAD, 'tt%d|movie||' % (n + 1), None)
+        self.assertEqual(len(desk.jobs), ratings.QUEUE)
+        self.assertEqual(desk.jobs[0][2], 'tt%d|movie||' % (ratings.QUEUE * 2), 'the newest stay')
+        desk.jobs[:] = []
+        desk.busy.add('tt7|movie||')
+        desk._put(desk.URGENT, 'tt7|movie||', 'home')
+        self.assertTrue(desk.step())
+        self.assertEqual(self.asked, [], 'the worker already asking it answers when it is done')
+        desk.close()
+        self.assertFalse(desk.step(wait=5), 'a closing desk hands out nothing and does not wait')
+
+    def test_two_answers_never_mix_and_the_line_to_trakt_is_kept_open(self):
+        home = Home(**{'povil.rt.ask': 'tt2|movie||'})
+        self.assertFalse(ratings.publish(home, 'povil.rt.', 'tt1|movie||', ratings.shape(FILM)))
+        self.assertEqual(home.writes, [])
+        self.assertTrue(ratings.publish(home, 'povil.rt.', 'tt2|movie||', {}))
+        self.assertEqual(home.writes[-1], 'povil.rt.for')
+        source = (WIZARD / 'resources/libs/ratings.py').read_text('utf-8')
+        fetch = source[source.index('def trakt_fetch(path):'):source.index('_WRITING = ')]
+        self.assertIn('http.client.HTTPSConnection(HOST, timeout=TIMEOUT)', fetch)
+        self.assertIn('_LINES.line = None', fetch, 'a line closed at the far end is opened again, once')
+        self.assertNotIn('urlopen', source)
+
+
 class WiringTests(unittest.TestCase):
     def test_the_wizards_service_runs_the_watch_as_a_thread_and_nothing_polls(self):
         startup = (WIZARD / 'startup.py').read_text('utf-8')
@@ -226,8 +427,11 @@ class WiringTests(unittest.TestCase):
         source = (WIZARD / 'resources/libs/ratings.py').read_text('utf-8')
         watch = source[source.index('def watch():'):]
         self.assertIn('def onNotification(self, sender, method, data):', watch)
-        self.assertIn('wake.wait()', watch)
-        self.assertNotIn('getInfoLabel', source, 'the skin names the title; nothing here reads the screen in a loop')
+        self.assertIn('desk.asked(slot)', watch, 'answered where the question arrives')
+        self.assertIn('desk.step(wait=60, urgent_only=urgent_only)', watch, 'the workers sleep until there is a job: nothing polls')
+        self.assertNotIn('sleep(', source)
+        # the screen is read only when the skin asked: for the titles beside the focused one
+        self.assertEqual(source.count('getInfoLabel'), 1)
         self.assertIn("xbmcaddon.Addon('plugin.video.pov').getSetting('trakt.client_id')", source)
         self.assertNotRegex(source, r"['\"][0-9a-f]{40,}['\"]", 'no key is written here: POV carries its own')
 
