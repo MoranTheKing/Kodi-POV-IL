@@ -183,6 +183,11 @@
 			<size>58</size>
 		</font>
 		<font>
+			<name>povil_rank</name>
+			<filename>Heebo-Bold.ttf</filename>
+			<size>150</size>
+		</font>
+		<font>
 			<name>Mono30</name>
 			<filename>Heebo-Regular.ttf</filename>
 			<size>28</size>
@@ -377,6 +382,12 @@
 			<name>povil_info_title</name>
 			<filename>arial.ttf</filename>
 			<size>57</size>
+		</font>
+		<font>
+			<name>povil_rank</name>
+			<filename>arial.ttf</filename>
+			<size>149</size>
+			<style>bold</style>
 		</font>
 		<font>
 			<name>Mono30</name>

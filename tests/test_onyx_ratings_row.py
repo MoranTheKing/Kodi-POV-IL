@@ -87,13 +87,14 @@ class AskingTests(unittest.TestCase):
         root = ET.parse(XML / 'Timers.xml').getroot()
         return {t.findtext('name'): t for t in root.iter('timer')}
 
-    def test_a_title_is_asked_once_after_a_seconds_rest_and_the_timer_is_ready_for_the_next(self):
+    def test_a_title_is_asked_once_the_moment_it_is_shown_and_the_timer_is_ready_for_the_next(self):
         timers = self.timers()
         for name, key, prefix, slot in (('povil_ratings', 9807, 'povil.rt.', 'home'),
                                         ('povil_ratings_player', 7920, 'povil.rtp.', 'player')):
             timer = timers[name]
             start = timer.findtext('start')
-            self.assertIn('System.IdleTime(1)', start)
+            # the owner, Nov 2026: "all of them at once, instantly" -- no rest before the question
+            self.assertNotIn('IdleTime', start)
             self.assertIn('!String.IsEmpty(Control.GetLabel(%d))' % key, start)
             self.assertIn('!String.IsEqual(Control.GetLabel(%d),Window(home).Property(%sask))' % (key, prefix), start)
             self.assertEqual([a.text for a in timer.findall('onstart')],
@@ -171,7 +172,7 @@ class PosterBadgeTests(unittest.TestCase):
 
     def test_every_poster_and_wide_tile_carries_its_rating_top_right(self):
         layouts = self.layouts()
-        self.assertEqual(len(layouts), 7)
+        self.assertEqual(len(layouts), 8)
         for name, layout in layouts.items():
             badges = [c for c in layout.iter('control') if c.get('description') == 'rating on the picture']
             if name.endswith('square'):

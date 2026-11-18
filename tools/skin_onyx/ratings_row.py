@@ -8,9 +8,8 @@ Letterboxd -- for a film, a show and a single episode, wherever Onyx shows a tit
 How it gets its numbers (the Wizard's ratings.py answers; nothing here polls):
   * a hidden label holds the title's key -- "<imdb id>|<kind>|<season>|<episode>",
     empty for anything that is not a POV title;
-  * a timer notices a key that was not asked yet once the screen has rested on it for a
-    second, writes it to Window(home).Property(<slot>ask) and announces it
-    (NotifyAll(povil.ratings,<slot name>));
+  * a timer notices a key that was not asked yet, writes it to
+    Window(home).Property(<slot>ask) and announces it (NotifyAll(povil.ratings,<slot name>));
   * the Wizard writes the sites' numbers to <slot><site> and LAST the key to <slot>for;
   * a mark shows only while <slot>for is still the key on screen, so a slow answer
     never appears beside another title.
@@ -71,10 +70,12 @@ def tmdb_variable(x, name, cid, prefix, list_rating):
 
 
 def timer(x, name, cid, prefix, slot, where):
-    """Ask once per key, after a second's rest on it."""
+    """Ask once per key, the moment it is on the screen (the owner, Nov 2026: "all of them at once,
+    instantly" -- the second's rest that was here came before every answer, known or not; the Wizard
+    now answers a known title in milliseconds and asks the titles beside it ahead)."""
     x(1, '<timer>')
     x(2, '<name>%s</name>' % name)
-    x(2, '<start reset="true">%s + System.IdleTime(1) + !String.IsEmpty(Control.GetLabel(%d)) + '
+    x(2, '<start reset="true">%s + !String.IsEmpty(Control.GetLabel(%d)) + '
          '!String.IsEqual(Control.GetLabel(%d),Window(home).Property(%sask))</start>' % (where, cid, cid, prefix))
     x(2, '<onstart>SetProperty(%sask,$ESCINFO[Control.GetLabel(%d)],home)</onstart>' % (prefix, cid))
     x(2, '<onstart>NotifyAll(povil.ratings,%s)</onstart>' % slot)
