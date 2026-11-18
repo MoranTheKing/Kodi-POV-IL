@@ -45,7 +45,9 @@ env:
 jobs:
   build-and-release:
     if: github.repository == 'MoranTheKing/Kodi-POV-IL'
-    runs-on: ubuntu-latest
+    # (pinned: "ubuntu-latest" began to move to Ubuntu 26 in Oct 2026, whose Python 3.14 is not the
+    # Python the build is tested on; the move is made on purpose, after the suite passes there)
+    runs-on: ubuntu-24.04
     steps:
       # This repository allows only owner-authored Actions. The runner already
       # includes Git, Python 3 and gh, so no third-party Action is necessary.
@@ -103,8 +105,24 @@ jobs:
 
       - name: Verify modular migration and update rules
         run: |
-          python -m pip install -q -r tests/requirements.txt
-          python -m unittest discover -s tests
+          # A failure is named in an annotation of the run (readable without the log): the suite passes on the
+          # developer's machine, so a failure here is about THIS machine and has to say what it was and on
+          # which Python. (The output is kept outside the checkout: nothing of it reaches a commit.)
+          version="$(python --version 2>&1)"
+          if ! python -m pip install -q -r tests/requirements.txt 2> "$RUNNER_TEMP/pip_output.txt"; then
+            echo "::error::the tests' requirements did not install on $version: $(tail -n 3 "$RUNNER_TEMP/pip_output.txt" | tr '\n' ' ' | cut -c1-400)"
+            cat "$RUNNER_TEMP/pip_output.txt"
+            exit 1
+          fi
+          out="$RUNNER_TEMP/test_output.txt"
+          if ! python -m unittest discover -s tests 2> "$out"; then
+            echo "::error::the tests failed on $version: $(tail -n 1 "$out")"
+            grep -E '^(FAIL|ERROR): ' "$out" | head -20 | while IFS= read -r line; do echo "::error::$line"; done || true
+            grep -E '^[A-Za-z.]*(Error|Exception): ' "$out" | head -10 | while IFS= read -r line; do echo "::error::${line:0:300}"; done || true
+            tail -n 120 "$out"
+            exit 1
+          fi
+          tail -n 4 "$out"
 
       - name: Verify hooks against the pinned official POV before publishing
         run: python .github/scripts/verify_pov_patches.py
