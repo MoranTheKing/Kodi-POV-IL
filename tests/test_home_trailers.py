@@ -430,6 +430,104 @@ class DeskTests(unittest.TestCase):
         self.assertIn('return reachable(stream, fetch, save, log)', source)
         self.assertIn('os.path.join(xbmcvfs.translatePath(TEMP_PATH), name)', source, "kept in the folder the add-on's server serves from")
 
+    def test_a_stop_that_comes_while_the_trailer_opens_is_looked_at_again(self):
+        # the owner's phone, his second log: the same trailer opened five times in a row, each stopped within a
+        # tenth of a second of its first picture, and the fifth stop froze the screen for twenty seconds. The
+        # skin said "stop" during the opening (Kodi's busy dialog is over the home then), the stop was carried
+        # out at the first picture, the skin asked again, and so on
+        def desk_on(home, player, wanted, said, now):
+            desk = trailers.Desk(home, player, lambda video: [STREAM], lambda url, stream: ('item', url), lambda: True,
+                                 log=said.append, clock=lambda: now[0], wanted_now=wanted, look=lambda key: 'home=1 dialog=0 busy=1 title=none focus=none')
+            desk.born = 0.0
+            return desk
+        home, player, said, now = Home(**{trailers.ASK: ADDRESS}), Player(), [], [1000.0]
+        seen = []
+        desk = desk_on(home, player, lambda key: (seen.append(key), True)[1], said, now)
+        self.assertTrue(desk.asked()())
+        home.values[trailers.ASK] = ''              # the skin: ClearProperty + "stop"
+        desk.stop()
+        self.assertEqual(said, ['stop while opening (home=1 dialog=0 busy=1 title=none focus=none)'], 'what the screen looked like, for the log')
+        desk.playback_started()                      # the first picture: the home is asked again
+        self.assertEqual(seen, [ADDRESS])
+        self.assertEqual(player.calls, [('play', STREAM['url'], True)], 'not stopped: the title is still the one on screen')
+        self.assertEqual((home.values[trailers.ASK], home.values[trailers.ON]), (ADDRESS, ADDRESS),
+                         "the skin's question is put back: it neither asks again nor hides the picture")
+        self.assertEqual(said[-1], 'a stop that came while the trailer opened was not meant: it plays on')
+        self.assertIsNone(desk.asked(), 'and nothing is asked of YouTube a second time')
+        # ... and when the viewer did move on, it is stopped as before
+        home, player, said, now = Home(**{trailers.ASK: ADDRESS}), Player(), [], [1000.0]
+        desk = desk_on(home, player, lambda key: False, said, now)
+        desk.asked()()
+        home.values[trailers.ASK] = ''
+        desk.stop()
+        desk.playback_started()
+        self.assertEqual(player.calls[-1], ('stop',))
+        self.assertNotIn(trailers.ON, home.values)
+        # the home cannot be read (Kodi closing, an error): stopped, never left playing unseen
+        home, player, said, now = Home(**{trailers.ASK: ADDRESS}), Player(), [], [1000.0]
+        desk = desk_on(home, player, lambda key: 1 / 0, said, now)
+        desk.asked()()
+        home.values[trailers.ASK] = ''
+        desk.stop()
+        desk.playback_started()
+        self.assertEqual(player.calls[-1], ('stop',))
+        # in Kodi the second look is half a second after the first picture, off the thread Kodi speaks on
+        source = (WIZARD / 'resources/libs/trailers.py').read_text('utf-8')
+        self.assertIn('wanted_now=wanted_now, look=look, settle=SETTLE_S)', source)
+        self.assertIn("threading.Thread(target=self._late_stop, args=late, name='POVILTrailerLook').start()", source)
+        self.assertIn("xbmc.getInfoLabel('Control.GetLabel(%d)' % HERO_LABEL) == key", source)
+        self.assertEqual(trailers.HERO_LABEL, 9809)
+        home_xml = (XML / 'Home.xml').read_text('utf-8')
+        self.assertEqual(home_xml.count('<control type="label" id="9809">'), 1)
+        # an id of its own: until Onyx 1.0.17 it shared 9808 with the ratings row's hidden TMDb label
+        self.assertEqual(home_xml.count('id="9808"'), 1)
+        self.assertIn('id="9808"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_RatingsTmdb]</label>', home_xml)
+        # the log is told of a stop during an opening five times at most
+        home, player, said, now = Home(**{trailers.ASK: ADDRESS}), Player(), [], [1000.0]
+        desk = desk_on(home, player, lambda key: True, said, now)
+        for _ in range(8):
+            home.values[trailers.ASK] = ADDRESS
+            desk.ours, desk.key, desk.opening = STREAM['url'], ADDRESS, now[0]
+            desk.stop()
+        self.assertEqual(sum(1 for line in said if line.startswith('stop while opening')), 5)
+
+    def test_a_title_whose_trailer_is_stopped_as_it_begins_twice_is_left_alone(self):
+        # whatever stops it would stop it again: on the phone it was five times in ten seconds
+        home, player, said, now = Home(**{trailers.ASK: ADDRESS}), Player(), [], [1000.0]
+        desk = trailers.Desk(home, player, lambda video: [STREAM], lambda url, stream: ('item', url), lambda: True,
+                             log=said.append, clock=lambda: now[0])
+        desk.born = 0.0
+        for n in range(2):
+            home.values[trailers.ASK] = ADDRESS
+            self.assertTrue(desk.asked()(), n)
+            desk.playback_started()
+            now[0] += 0.2                           # a moment after its first picture
+            home.values[trailers.ASK] = ''
+            self.assertTrue(desk.stop())
+            player.playing = None
+            desk.playback_over()
+        self.assertEqual(said, ['stopped as it began, twice: hoRHBV0m1hw'])
+        home.values[trailers.ASK] = ADDRESS
+        self.assertIsNone(desk.asked(), 'this title rests')
+        other = ADDRESS.replace('hoRHBV0m1hw', 'aaaaaaaaaaa')
+        home.values[trailers.ASK] = other
+        self.assertIsNotNone(desk.asked(), 'another title is tried as always')
+        # a trailer watched for a while and then left is not "as it began": the count starts again
+        home, player, said, now = Home(**{trailers.ASK: ADDRESS}), Player(), [], [1000.0]
+        desk = trailers.Desk(home, player, lambda video: [STREAM], lambda url, stream: ('item', url), lambda: True,
+                             log=said.append, clock=lambda: now[0])
+        desk.born = 0.0
+        for seconds in (0.2, trailers.QUICK_S + 5, 0.2):
+            home.values[trailers.ASK] = ADDRESS
+            self.assertTrue(desk.asked()())
+            desk.playback_started()
+            now[0] += seconds
+            home.values[trailers.ASK] = ''
+            desk.stop()
+            player.playing = None
+            desk.playback_over()
+        self.assertEqual(said, [])
+
     def test_three_trailers_in_a_row_that_do_not_play_and_the_trailers_rest(self):
         # a device they do not work on is not asked of YouTube at every title
         home, player = Home(), Player()
@@ -594,14 +692,17 @@ class SkinTests(unittest.TestCase):
         for part in ('Window.IsActive(home)', '!Skin.HasSetting(POVILNoTrailers)', '!System.HasActiveModalDialog', 'System.IdleTime(3)',
                      # none while an add-on is finding a pressed title's sources (a film is about to start)
                      '!Window.IsVisible(extendedprogressdialog)',
-                     '!String.IsEmpty(Control.GetLabel(9808))',
+                     '!String.IsEmpty(Control.GetLabel(9809))',
                      '[!Player.HasMedia | !String.IsEmpty(Window(home).Property(povil.tr.on))]'):
             self.assertIn(part, start)
         self.assertEqual([n.text for n in timers['povil_trailer'].findall('onstart')],
-                         ['SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(9808)],home)', 'NotifyAll(povil.trailer,ask)'])
+                         ['SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(9809)],home)', 'NotifyAll(povil.trailer,ask)'])
         stop = timers['povil_trailer_stop'].findtext('start')
         for part in ('!Window.IsActive(home)', '| Skin.HasSetting(POVILNoTrailers) |',
-                     '!String.IsEqual(Control.GetLabel(9808),Window(home).Property(povil.tr.ask))',
+                     # the title is compared only with no busy dialog over the home: under one the label reads
+                     # empty (the owner's phone: the trailer stopped at its first picture, five times in a row)
+                     '[!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + '
+                     '!String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask))]',
                      # Kodi's own busy dialog comes up while the trailer itself opens: it must not stop it
                      # (seen in the QA Kodi: the trailer was stopped by the dialog its own start brought up)
                      '[System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)]'):

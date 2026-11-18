@@ -61,7 +61,9 @@ RATINGS_KEY, RATINGS_SLOT = 9807, 'povil.rt.'
 # hero title's trailer, the viewer's switch, and how long the screen rests on a title before it is asked.
 # The switch says OFF: a skin setting is unset until someone sets it, and the trailers are on for everyone
 # until the viewer says otherwise (the owner, Nov 2026).
-TRAILER_KEY, TRAILER_OFF_SWITCH, TRAILER_REST_S = 9808, 'POVILNoTrailers', 3
+# (9809: 9808 is the ratings row's hidden TMDb label, RATINGS_KEY + 1 -- the two shared an id until 1.0.17,
+# and Kodi hands out whichever control of an id is visible first)
+TRAILER_KEY, TRAILER_OFF_SWITCH, TRAILER_REST_S = 9809, 'POVILNoTrailers', 3
 TRAILERS_ON, TRAILERS_OFF = '!Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH, 'Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH
 TRAILER_SHOWN = ('Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + '
                  'String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask))')
@@ -501,8 +503,16 @@ def gen_timers():
     # (Kodi's own busy dialog comes up for a moment while any playback opens -- the trailer's too: it is
     # not a dialog the viewer opened; seen in the QA Kodi stopping the very trailer it announced)
     dialog = '[System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)]'
+    # ... and while it is up NOTHING of the home can be read: Control.GetLabel answers for the dialog on top,
+    # so the title's label reads empty. That was "the title changed" -- the trailer was stopped at its first
+    # picture and asked for again, over and over, on a device slow enough for the dialog to come up at every
+    # start (the owner's phone, Nov 2026: five times in ten seconds, then a frozen screen; reproduced in the
+    # QA Kodi by opening the busy dialog over a playing trailer). The title is compared only with no busy
+    # dialog on the screen.
+    changed = ('[!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + '
+               '!String.IsEqual(Control.GetLabel(%d),%s)]' % (TRAILER_KEY, asked))
     x(2, '<start reset="true">!String.IsEmpty(%s) + [!Window.IsActive(home) | %s | '
-         '%s | !String.IsEqual(Control.GetLabel(%d),%s)]</start>' % (asked, dialog, TRAILERS_OFF, TRAILER_KEY, asked))
+         '%s | %s]</start>' % (asked, dialog, TRAILERS_OFF, changed))
     x(2, '<onstart>ClearProperty(povil.tr.ask,home)</onstart>')
     x(2, '<onstart>NotifyAll(povil.trailer,stop)</onstart>')
     x(2, '<stop>true</stop>')
