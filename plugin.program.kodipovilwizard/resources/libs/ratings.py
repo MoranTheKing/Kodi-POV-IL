@@ -237,7 +237,37 @@ class Store(object):
             pass
 
 
-_LINES = threading.local()
+# The lines to Trakt, shared by the workers. Each worker used to keep its own: the one that asks
+# titles ahead used its line all the time, while the two that take only the title on screen let
+# theirs go cold -- and a title the viewer jumped to (the owner, on a phone: "skipping a few
+# posters ahead the ratings are back to one or two seconds") was asked on a line Trakt had
+# closed: a failed try, then a new secure connection. Now a title on screen takes the line used
+# LAST, and a title asked ahead the one used longest ago -- which keeps every line warm while
+# there is anything to ask ahead.
+_LINES = threading.local()      # .urgent: is this worker asking for the title on screen now?
+_POOL = []                      # [last used, line] of the lines no worker holds
+_POOL_LOCK = threading.Lock()
+POOL = 3
+SLOW_S = 0.7                    # an answer for the title on screen slower than this is said in the log
+
+
+def _take_line(urgent):
+    with _POOL_LOCK:
+        if not _POOL:
+            return None
+        _POOL.sort(key=lambda entry: entry[0])
+        return (_POOL.pop() if urgent else _POOL.pop(0))[1]
+
+
+def _give_line(line):
+    with _POOL_LOCK:
+        _POOL.append([time.time(), line])
+        extra = [] if len(_POOL) <= POOL else [_POOL.pop(0)[1]]
+    for old in extra:
+        try:
+            old.close()
+        except Exception:
+            pass
 
 
 _KEY = []
@@ -267,14 +297,17 @@ def trakt_fetch(path):
         return 0, None
     headers = {'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': key,
                'User-Agent': 'Kodi', 'Connection': 'keep-alive'}
+    _LINES.how = ''
     for attempt in (0, 1):
-        line = getattr(_LINES, 'line', None)
+        line = _take_line(getattr(_LINES, 'urgent', True)) if attempt == 0 else None
         try:
             if line is None:
-                line = _LINES.line = http.client.HTTPSConnection(HOST, timeout=TIMEOUT)
+                _LINES.how = 'new line' if attempt == 0 else 'kept line was closed, new line'
+                line = http.client.HTTPSConnection(HOST, timeout=TIMEOUT)
             line.request('GET', path + '?extended=all', headers=headers)
             reply = line.getresponse()
             body = reply.read()
+            _give_line(line)
             if reply.status != 200:
                 return reply.status, None
             return 200, json.loads(body.decode('utf-8'))
@@ -284,7 +317,6 @@ def trakt_fetch(path):
                 line.close()
             except Exception:
                 pass
-            _LINES.line = None
     return 0, None
 
 
@@ -365,8 +397,8 @@ class Desk(object):
     """
     URGENT, AHEAD = 0, 1
 
-    def __init__(self, home, store, read=None):
-        self.home, self.store, self.read = home, store, read
+    def __init__(self, home, store, read=None, log=None):
+        self.home, self.store, self.read, self.log = home, store, read, log
         self.jobs = []                  # (rank, order, key, slot) -- taken smallest first
         self.count = 0
         self.busy = set()
@@ -437,11 +469,18 @@ class Desk(object):
                 if ratings is None or not fresh:
                     self._put(self.AHEAD, near, None)
             return True
+        _LINES.urgent = rank == self.URGENT
+        began = time.time()
         try:
             ratings = self.store.lookup(key)
         finally:
             with self.lock:
                 self.busy.discard(key)
+                waiting = len(self.jobs)
+        took = time.time() - began
+        if self.log is not None and rank == self.URGENT and took >= SLOW_S:
+            self.log('slow answer for the title on screen: %d ms (%s), %d waiting' % (
+                took * 1000, getattr(_LINES, 'how', '') or 'kept line', waiting))
         for name, prefix in SLOTS.items():
             # whichever slot asks for this title now gets it (a title asked ahead that the focus reached)
             if self.home.getProperty(prefix + 'ask') == key and self.home.getProperty(prefix + 'for') != key:
@@ -459,7 +498,8 @@ def watch():
     import xbmc
     import xbmcgui
     import xbmcvfs
-    desk = Desk(xbmcgui.Window(10000), Store(xbmcvfs.translatePath(STORE), trakt_fetch), xbmc.getInfoLabel)
+    desk = Desk(xbmcgui.Window(10000), Store(xbmcvfs.translatePath(STORE), trakt_fetch), xbmc.getInfoLabel,
+                log=lambda text: xbmc.log('[POV IL ratings] ' + text, xbmc.LOGINFO))
 
     class Listener(xbmc.Monitor):
         def onNotification(self, sender, method, data):
