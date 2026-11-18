@@ -13,7 +13,7 @@
 				<top>84</top>
 				<width>1220</width>
 				<height>690</height>
-				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 			</control>
 			<control type="label" description="Header">
 				<left>64</left>

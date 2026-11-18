@@ -101,7 +101,7 @@
 				<control type="togglebutton" id="4" description="Sort asc">
 					<include>9000ButtonsBlade</include>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-					<alttexturefocus border="5" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</alttexturefocus>
+					<alttexturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</alttexturefocus>
 					<alttexturenofocus></alttexturenofocus>
 					<label>584</label>
 					<altlabel>585</altlabel>
@@ -484,7 +484,7 @@
 							<posy>315</posy>
 							<width>1749</width>
 							<height>144</height>
-							<texture border="26">img/MediaButton2.png</texture>
+							<texture border="14">povil/focus_box.png</texture>
 							<aspectratio>stretch</aspectratio>
 						</control>
 						<animation condition="Container.Position(0)" effect="slide" start="0,0" end="0,-333" time="0" easing="inout" reversible="true">Conditional</animation>
@@ -651,7 +651,7 @@
 							<posy>315</posy>
 							<width>1749</width>
 							<height>144</height>
-							<texture border="26">img/MediaButton2.png</texture>
+							<texture border="14">povil/focus_box.png</texture>
 							<aspectratio>stretch</aspectratio>
 						</control>
 						<animation condition="Container.Position(0)" effect="slide" start="0,0" end="0,-333" time="0" easing="inout" reversible="true">Conditional</animation>
@@ -834,7 +834,7 @@
 								<posy>366</posy>
 								<width>1749</width>
 								<height>153</height>
-								<texture border="26">img/MediaButton2.png</texture>
+								<texture border="14">povil/focus_box.png</texture>
 								<aspectratio>stretch</aspectratio>
 							</control>
 							<animation condition="Container.Position(0)" effect="slide" start="0,0" end="0,-378" time="0" easing="inout" reversible="true">Conditional</animation>

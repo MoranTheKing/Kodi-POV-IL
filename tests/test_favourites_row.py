@@ -70,12 +70,19 @@ class FavouritesRowTests(unittest.TestCase):
         self.assertEqual([i[1].label for i in items], ['Settings', 'Umbrella', '[B]POV[/B]'])
         self.assertTrue(all(i[1].props['povil_rtl'] == '1' and i[2] is False for i in items))
         self.assertEqual(items[-1][1].art['thumb'], 'special://home/pov.png')
-        query = dict(parse_qsl(items[-1][0].split('?', 1)[1]))
-        self.assertEqual((query['mode'], query['i'], query['n']), ('favourite_run', '0', '[B]POV[/B]'))
+        # The favourite's own address, as Kodi's favourites list writes it: Kodi then offers "remove",
+        # "rename" and "move" on the tile and runs its command on a press. As a link to the Wizard the
+        # menu offered "add to favourites" (a second, broken copy) and no way to remove the real one
+        # (field report with a video, Nov 2026).
+        from urllib.parse import unquote
+        self.assertTrue(all(i[0].startswith('favourites://') for i in items))
+        self.assertEqual(unquote(items[-1][0][len('favourites://'):]), 'ActivateWindow(10025,"plugin://plugin.video.pov/",return)')
+        self.assertNotIn('"', items[-1][0])
+        self.assertIn('ActivateWindow(10025', items[-1][0], 'Kodi leaves ( ) as they are, and so does this')
 
-    def test_a_tap_runs_the_favourites_own_command(self):
-        url = self.row()[-1][0]
-        self.mod.run(5, dict(parse_qsl(url.split('?', 1)[1])))
+    def test_a_row_kept_from_before_still_runs_the_favourites_own_command(self):
+        """mode=favourite_run: the address the tiles had until Wizard 0.5.5 (a row may be older than the Wizard)."""
+        self.mod.run(5, {'i': '0', 'n': '[B]POV[/B]'})
         self.assertIn(('resolved', False), self.calls)
         self.assertIn(('builtin', 'ActivateWindow(10025,"plugin://plugin.video.pov/",return)'), self.calls)
 

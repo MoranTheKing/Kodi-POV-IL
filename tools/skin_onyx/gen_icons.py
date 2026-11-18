@@ -3,8 +3,10 @@
 
     python gen_icons.py ../../skin.povil.onyx/media/povil
 
-Each icon is drawn at 4x and reduced: <name>.png is the white icon (not
-focused), <name>_fo.png the focused button (a gold disc with a dark icon).
+Each icon is drawn at 4x and reduced: <name>.png is the white icon alone,
+<name>_nf.png the player's button at rest (the icon on a glass chip),
+<name>_fo.png the focused button (a gold disc with a dark icon), and for
+play and pause <name>_hi.png, the main button at rest (a light disc).
 """
 import math
 import os
@@ -169,4 +171,21 @@ for name, draw in ICONS.items():
     fo.paste(Image.new('RGBA', (SIZE, SIZE), GOLD), (0, 0), disc)
     fo.paste(Image.new('RGBA', (SIZE, SIZE), INK), (0, 0), mask)
     fo.save(os.path.join(OUT, name + '_fo.png'), optimize=True)
+    # The player's button at rest: a glass chip -- a faint disc with a hairline -- under the white icon
+    # (the owner, Nov 2026: "the player looks dated"; bare icons on the picture were lost on a bright scene)
+    glass = Image.new('L', (S, S), 0)
+    gd = ImageDraw.Draw(glass)
+    gd.ellipse((P(1), P(1), S - P(1) - 1, S - P(1) - 1), fill=96)
+    gd.ellipse((P(2.5), P(2.5), S - P(2.5) - 1, S - P(2.5) - 1), fill=40)
+    glass = glass.resize((SIZE, SIZE), Image.LANCZOS)
+    nf = Image.new('RGBA', (SIZE, SIZE), (255, 255, 255, 0))
+    nf.putalpha(glass)
+    nf = Image.alpha_composite(nf, white)
+    nf.save(os.path.join(OUT, name + '_nf.png'), optimize=True)
+    if name in ('play', 'pause'):
+        # the main button at rest: a light disc with a dark icon, a size above the others
+        hi = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
+        hi.paste(Image.new('RGBA', (SIZE, SIZE), (245, 242, 236, 235)), (0, 0), disc)
+        hi.paste(Image.new('RGBA', (SIZE, SIZE), INK), (0, 0), mask)
+        hi.save(os.path.join(OUT, name + '_hi.png'), optimize=True)
 print('icons:', ', '.join(ICONS))

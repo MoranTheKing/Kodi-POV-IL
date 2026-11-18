@@ -77,7 +77,7 @@
 						<visible>!Skin.HasSetting(NoFocusBox)</visible>
 						<width>930</width>
 						<height>75</height>
-						<texture border="9">img/MediaButton2.png</texture>
+						<texture border="14">povil/focus_box.png</texture>
 					</control>
 					<control type="label" description="Path label">
 						<textcolor>$VAR[RowFocusMediaSource]</textcolor>

@@ -12,7 +12,7 @@
 			<centertop>540</centertop>
 			<width>1460</width>
 			<height>760</height>
-			<texture colordiffuse="$VAR[OSDTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[OSDTransperancy]" border="128">povil/panel.png</texture>
 			<visible>Window.IsVisible(VideoFullScreen.xml)</visible>
 		</control>
 		<control type="image">
@@ -20,7 +20,7 @@
 			<centertop>540</centertop>
 			<width>1460</width>
 			<height>760</height>
-			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 			<visible>!Window.IsVisible(VideoFullScreen.xml)</visible>
 		</control>
 		<control type="group">

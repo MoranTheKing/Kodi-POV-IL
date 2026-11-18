@@ -383,7 +383,7 @@
 								<top>0</top>
 								<width>1260</width>
 								<height>80</height>
-								<texture border="7">img/MediaButton2.png</texture>
+								<texture border="14">povil/focus_box.png</texture>
 								<visible>ControlGroup(3303).HasFocus()</visible>
 							</control>
 							<control type="label"><align>right</align>
@@ -467,7 +467,7 @@
 								<top>0</top>
 								<width>1260</width>
 								<height>80</height>
-								<texture border="7">img/MediaButton2.png</texture>
+								<texture border="14">povil/focus_box.png</texture>
 								<visible>ControlGroup(3305).HasFocus()</visible>
 							</control>
 							<control type="label"><align>right</align>

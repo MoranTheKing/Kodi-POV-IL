@@ -989,11 +989,11 @@ PATCH_CONFIG = [
     {
         "id": "pov_reorder_sources",
         "name": "Remember Source Auto-Pick Reorder",
-        "description": "Moves previously picked sources to the top of the UI list with a visual marker.",
+        "description": "Moves previously picked sources to the top of the UI list with a visual marker; with the viewer's option on, plays that source at once.",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/sources.py",
-        "marker": "# WIZARD_POV_REORDER_SOURCES_v3",
+        "marker": "# WIZARD_POV_REORDER_SOURCES_v4",
         "anchor": "window_style = results_xml_style()",
         "action": "prepend_before",
         "hook": (
@@ -1001,7 +1001,12 @@ PATCH_CONFIG = [
             "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
             "\tsys.path.append(p) if p not in sys.path else None;\n"
             "\timport pov_source_remember;\n"
-            "\tpov_source_remember.run_reorder(self, results)\n"
+            # v4: the viewer's option (off unless chosen): the remembered source plays at
+            # once; play_file() goes on to the next source if it does not resolve.
+            # getattr: POV keeps this hook when the Wizard beside it is an older one (QA,
+            # Nov 2026: a Wizard without should_play() took POV's source list down with an
+            # AttributeError) -- then the list is shown, as before.
+            "\tif pov_source_remember.run_reorder(self, results) and getattr(pov_source_remember, 'should_play', lambda _s: False)(self): return self.play_file(results, results[0])\n"
         )
     },
     {

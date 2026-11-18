@@ -91,7 +91,7 @@
 								<posy>0</posy>
 								<width>840</width>
 								<height>63</height>
-								<texture border="9">img/MediaButton2.png</texture>
+								<texture border="14">povil/focus_box.png</texture>
 							</control>
 							<control type="label">
 								<textcolor>$VAR[RowFocusSmartPlaylist]</textcolor>

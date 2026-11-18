@@ -102,7 +102,7 @@
 						<top>0</top>
 						<width>810</width>
 						<height>110</height>
-						<texture  border="8">img/MediaButton2.png</texture>
+						<texture  border="14">povil/focus_box.png</texture>
 						<visible>Control.HasFocus(20)</visible>
 					</control>
 					<control type="label" description="Main Label">
@@ -195,7 +195,7 @@
 						<shadowcolor>black</shadowcolor>
 						<align>left</align>
 						<aligny>center</aligny>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<pulseonselect>no</pulseonselect>
 						<label>19074</label>
@@ -214,7 +214,7 @@
 						<textcolor>white</textcolor>
 						<focusedcolor>white</focusedcolor>
 						<shadowcolor>black</shadowcolor>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<label>19201</label>
 						<onright>20</onright>
@@ -229,7 +229,7 @@
 						<width>570</width>
 						<height>52</height>
 						<font>size18</font>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<label>19202</label>
 						<onleft>20</onleft>
@@ -258,7 +258,7 @@
 						<shadowcolor>black</shadowcolor>
 						<align>left</align>
 						<aligny>center</aligny>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<pulseonselect>no</pulseonselect>
 						<label>19206</label>
@@ -274,7 +274,7 @@
 						<width>570</width>
 						<height>52</height>
 						<font>size18</font>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<label>19200</label>
 						<onright>20</onright>
@@ -294,7 +294,7 @@
 						<shadowcolor>black</shadowcolor>
 						<align>left</align>
 						<aligny>center</aligny>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<pulseonselect>no</pulseonselect>
 						<label>19267</label>
@@ -326,7 +326,7 @@
 						<width>285</width>
 						<height>52</height>
 						<font>size18</font>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<align>center</align>
 						<label>19205</label>
@@ -344,7 +344,7 @@
 						<height>52</height>
 						<font>size18</font>
 						<visible>String.IsEmpty(Window.Property(IsRadio))</visible>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<align>center</align>
 						<label>19024</label>
@@ -361,7 +361,7 @@
 						<height>52</height>
 						<font>size18</font>
 						<visible>!String.IsEmpty(Window.Property(IsRadio))</visible>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<align>center</align>
 						<label>19023</label>
@@ -377,7 +377,7 @@
 						<width>570</width>
 						<height>52</height>
 						<font>size18</font>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<align>center</align>
 						<label>19203</label>
@@ -393,7 +393,7 @@
 						<width>570</width>
 						<height>52</height>
 						<font>size18</font>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<align>center</align>
 						<label>19211</label>
@@ -409,7 +409,7 @@
 						<width>570</width>
 						<height>52</height>
 						<font>size18</font>
-						<texturefocus border="5">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14">povil/focus_box.png</texturefocus>
 						<texturenofocus border="5">img/ListNF.png</texturenofocus>
 						<align>center</align>
 						<label>19204</label>

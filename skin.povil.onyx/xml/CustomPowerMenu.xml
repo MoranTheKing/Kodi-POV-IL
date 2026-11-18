@@ -11,7 +11,7 @@
 				<centertop>540</centertop>
 				<width>760</width>
 				<height>1010</height>
-				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 			</control>
 			<control type="label" description="Dialog heading">
 				<centerleft>960</centerleft>
@@ -40,7 +40,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[13009]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuHideQuit)</onclick>
 						<selected>!Skin.HasSetting(PowerMenuHideQuit)</selected>
 					</control>
@@ -50,7 +50,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[31961]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuRestartApp)</onclick>
 						<selected>Skin.HasSetting(PowerMenuRestartApp)</selected>
 					</control>
@@ -60,7 +60,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[13014]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuMinimise)</onclick>
 						<selected>Skin.HasSetting(PowerMenuMinimise)</selected>
 					</control>
@@ -70,7 +70,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[13005]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuHideShutdown)</onclick>
 						<selected>!Skin.HasSetting(PowerMenuHideShutdown)</selected>
 					</control>
@@ -80,7 +80,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[13011]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuHideSuspend)</onclick>
 						<selected>!Skin.HasSetting(PowerMenuHideSuspend)</selected>
 					</control>
@@ -90,7 +90,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[13010]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuHibernate)</onclick>
 						<selected>Skin.HasSetting(PowerMenuHibernate)</selected>
 					</control>
@@ -100,7 +100,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[13013]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuHideReboot)</onclick>
 						<selected>!Skin.HasSetting(PowerMenuHideReboot)</selected>
 					</control>
@@ -110,7 +110,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[31962]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuTimer)</onclick>
 						<selected>Skin.HasSetting(PowerMenuTimer)</selected>
 					</control>
@@ -120,7 +120,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[20126]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuLogOff)</onclick>
 						<selected>Skin.HasSetting(PowerMenuLogOff)</selected>
 					</control>
@@ -130,7 +130,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[12360]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuMasterMode)</onclick>
 						<selected>Skin.HasSetting(PowerMenuMasterMode)</selected>
 					</control>
@@ -140,7 +140,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[31972]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuReloadSkin)</onclick>
 						<selected>Skin.HasSetting(PowerMenuReloadSkin)</selected>
 					</control>
@@ -150,7 +150,7 @@
 						<font>size22</font>
 						<label>$LOCALIZE[20077]</label>
 						<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-						<texturefocus border="9" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+						<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 						<onclick>Skin.ToggleSetting(PowerMenuSettings)</onclick>
 						<selected>Skin.HasSetting(PowerMenuSettings)</selected>
 					</control>

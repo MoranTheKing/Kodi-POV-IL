@@ -17,7 +17,7 @@
 			<centertop>540</centertop>
 			<width>800</width>
 			<height>400</height>
-			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 		</control>
 		<control type="image" description="Background for 5 items">
 			<visible>Integer.IsEqual(Container(9000).NumItems,5)</visible>
@@ -25,7 +25,7 @@
 			<centertop>540</centertop>
 			<width>880</width>
 			<height>400</height>
-			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 		</control>
 		<control type="image" description="Background for 6 items">
 			<visible>Integer.IsEqual(Container(9000).NumItems,6)</visible>
@@ -33,7 +33,7 @@
 			<centertop>540</centertop>
 			<width>1024</width>
 			<height>400</height>
-			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 		</control>
 		<control type="image" description="Background for 7 items">
 			<visible>Integer.IsEqual(Container(9000).NumItems,7)</visible>
@@ -41,7 +41,7 @@
 			<centertop>540</centertop>
 			<width>1168</width>
 			<height>400</height>
-			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 		</control>
 		<control type="image" description="Background for 8 items">
 			<visible>Integer.IsEqual(Container(9000).NumItems,8)</visible>
@@ -49,7 +49,7 @@
 			<centertop>540</centertop>
 			<width>1312</width>
 			<height>400</height>
-			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 		</control>
 		<control type="image" description="Background for 9 items">
 			<visible>Integer.IsEqual(Container(9000).NumItems,9)</visible>
@@ -57,7 +57,7 @@
 			<centertop>540</centertop>
 			<width>1456</width>
 			<height>400</height>
-			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 		</control>
 		<control type="image" description="Background for 10 items">
 			<visible>Integer.IsEqual(Container(9000).NumItems,10)</visible>
@@ -65,7 +65,7 @@
 			<centertop>540</centertop>
 			<width>1600</width>
 			<height>400</height>
-			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 		</control>
 		<control type="image" description="Background for 11 items">
 			<visible>Integer.IsEqual(Container(9000).NumItems,11)</visible>
@@ -73,7 +73,7 @@
 			<centertop>540</centertop>
 			<width>1744</width>
 			<height>400</height>
-			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 		</control>
 		<control type="image" description="Background for 12 items">
 			<visible>Integer.IsEqual(Container(9000).NumItems,12)</visible>
@@ -81,7 +81,7 @@
 			<centertop>540</centertop>
 			<width>1888</width>
 			<height>400</height>
-			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 		</control>
 		<control type="label" description="Name of the focused item">
 			<centerleft>960</centerleft>

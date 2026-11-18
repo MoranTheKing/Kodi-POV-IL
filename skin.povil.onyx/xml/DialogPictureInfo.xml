@@ -9,7 +9,7 @@
 				<centertop>540</centertop>
 				<width>1080</width>
 				<height>1030</height>
-				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 			</control>
 			<control type="label" description="Heading">
 				<centerleft>960</centerleft>
@@ -54,7 +54,7 @@
 							<visible>!Skin.HasSetting(NoFocusBox)</visible>
 							<height>70</height>
 							<width>930</width>
-							<texture border="9">img/MediaButton2.png</texture>
+							<texture border="14">povil/focus_box.png</texture>
 						</control>
 						<control type="label">
 							<textcolor>$VAR[RowFocusPictureInfo]</textcolor>

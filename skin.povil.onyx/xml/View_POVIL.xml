@@ -38,6 +38,13 @@
 	<variable name="POVIL_V_Rating">
 		<value condition="Integer.IsGreater(ListItem.Rating,0)">$INFO[ListItem.Rating]</value>
 	</variable>
+	<variable name="POVIL_V_RatingsKey">
+		<value condition="String.StartsWith(ListItem.UniqueID(imdb),tt) + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]">$INFO[ListItem.UniqueID(imdb)]|$INFO[ListItem.DBType]|$INFO[ListItem.Season]|$INFO[ListItem.Episode]</value>
+	</variable>
+	<variable name="POVIL_V_RatingsTmdb">
+		<value condition="String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.tmdb))">$INFO[Window(home).Property(povil.rt.tmdb)]</value>
+		<value condition="!String.IsEmpty(Control.GetLabel(9807))">$VAR[POVIL_V_Rating]</value>
+	</variable>
 	<variable name="POVIL_V_Plot">
 		<value condition="!String.IsEmpty(ListItem.Plot) + !String.IsEqual(ListItem.Plot,ListItem.Label)">$INFO[ListItem.Plot]</value>
 		<value condition="!String.IsEmpty(ListItem.PlotOutline)">$INFO[ListItem.PlotOutline]</value>
@@ -60,10 +67,60 @@
 			<control type="label"><left>730</left><top>322</top><width>1100</width><height>34</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><align>right</align><aligny>center</aligny><label>$VAR[POVIL_V_Episode]</label></control>
 			<control type="grouplist"><left>730</left><top>356</top><width>1100</width><height>40</height><orientation>horizontal</orientation><align>right</align><itemgap>16</itemgap><usecontrolcoords>true</usecontrolcoords>
 				<control type="label"><width>auto</width><height>40</height><font>povil_meta</font><textcolor>povil_dim</textcolor><aligny>center</aligny><label>$VAR[POVIL_V_Meta]</label></control>
-				<control type="label"><width>auto</width><height>40</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><aligny>center</aligny><label>$VAR[POVIL_V_Rating]</label></control>
-				<control type="image"><top>9</top><width>22</width><height>22</height><texture colordiffuse="povil_gold">povil/star.png</texture><visible>Integer.IsGreater(ListItem.Rating,0)</visible></control>
+				<control type="label"><width>auto</width><height>40</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><aligny>center</aligny><label>$VAR[POVIL_V_Rating]</label><visible>String.IsEmpty(Control.GetLabel(9807))</visible></control>
+				<control type="image"><top>9</top><width>22</width><height>22</height><texture colordiffuse="povil_gold">povil/star.png</texture><visible>Integer.IsGreater(ListItem.Rating,0) + String.IsEmpty(Control.GetLabel(9807))</visible></control>
 			</control>
-			<control type="textbox"><left>970</left><top>402</top><width>860</width><height>152</height><font>povil_plot</font><textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label></control>
+			<control type="label" id="9807" description="ratings key"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_V_RatingsKey]</label></control>
+			<control type="grouplist" description="ratings"><left>730</left><top>400</top><width>1100</width><height>32</height><orientation>horizontal</orientation><align>right</align><itemgap>22</itemgap><usecontrolcoords>true</usecontrolcoords>
+				<visible>!String.IsEmpty(Control.GetLabel(9807))</visible>
+				<control type="group" description="letterboxd"><width>134</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.letterboxd))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>50</width><height>30</height><texture>povil/ratings/letterboxd.png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>58</left><top>0</top><width>76</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.letterboxd)][COLOR povil_faint]/5[/COLOR]</label></control>
+				</control>
+				<control type="group" description="trakt"><width>126</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.trakt))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>60</width><height>30</height><texture>povil/ratings/trakt.png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>68</left><top>0</top><width>58</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.trakt)]</label></control>
+				</control>
+				<control type="group" description="meta"><width>82</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.meta))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>30</width><height>30</height><texture>povil/ratings/meta.png</texture><aspectratio>keep</aspectratio></control>
+					<control type="image"><left>38</left><top>1</top><width>44</width><height>30</height><texture colordiffuse="FF66CC33">povil/ratings/square.png</texture><visible>String.IsEqual(Window(home).Property(povil.rt.meta_tone),good)</visible></control>
+					<control type="image"><left>38</left><top>1</top><width>44</width><height>30</height><texture colordiffuse="FFFFCC33">povil/ratings/square.png</texture><visible>String.IsEqual(Window(home).Property(povil.rt.meta_tone),mixed)</visible></control>
+					<control type="image"><left>38</left><top>1</top><width>44</width><height>30</height><texture colordiffuse="FFFF5544">povil/ratings/square.png</texture><visible>String.IsEqual(Window(home).Property(povil.rt.meta_tone),bad)</visible></control>
+					<control type="label"><left>38</left><top>0</top><width>44</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_ink</textcolor><align>center</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.meta)]</label></control>
+				</control>
+				<control type="group" description="popcorn"><width>104</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.popcorn))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>30</width><height>30</height><texture>povil/ratings/popcorn_$INFO[Window(home).Property(povil.rt.popcorn_state)].png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>38</left><top>0</top><width>66</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.popcorn)]</label></control>
+				</control>
+				<control type="group" description="tomato"><width>104</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.tomato))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>30</width><height>30</height><texture>povil/ratings/tomato_$INFO[Window(home).Property(povil.rt.tomato_state)].png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>38</left><top>0</top><width>66</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.tomato)]</label></control>
+				</control>
+				<control type="group" description="imdb"><width>116</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.imdb))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>60</width><height>30</height><texture>povil/ratings/imdb.png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>68</left><top>0</top><width>48</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.imdb)]</label></control>
+				</control>
+				<control type="group" description="tmdb"><width>116</width><height>32</height>
+					<visible>!String.IsEmpty(Control.GetLabel(9808))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>60</width><height>30</height><texture>povil/ratings/tmdb.png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>68</left><top>0</top><width>48</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$VAR[POVIL_V_RatingsTmdb]</label></control>
+				</control>
+			</control>
+			<control type="label" id="9808"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_V_RatingsTmdb]</label></control>
+			<control type="textbox"><left>970</left><top>440</top><width>860</width><height>152</height><font>povil_plot</font><textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label><animation effect="slide" end="0,-38" time="140" tween="cubic" easing="out" condition="String.IsEmpty(Control.GetLabel(9807))">Conditional</animation></control>
 			<control type="list" id="51">
 				<left>10</left><top>640</top><width>1850</width><height>380</height>
 				<viewtype label="תצוגת יוקרה">wrap</viewtype>
@@ -123,10 +180,60 @@
 			<control type="label"><left>730</left><top>322</top><width>1100</width><height>34</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><align>right</align><aligny>center</aligny><label>$VAR[POVIL_V_Episode]</label></control>
 			<control type="grouplist"><left>730</left><top>356</top><width>1100</width><height>40</height><orientation>horizontal</orientation><align>right</align><itemgap>16</itemgap><usecontrolcoords>true</usecontrolcoords>
 				<control type="label"><width>auto</width><height>40</height><font>povil_meta</font><textcolor>povil_dim</textcolor><aligny>center</aligny><label>$VAR[POVIL_V_Meta]</label></control>
-				<control type="label"><width>auto</width><height>40</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><aligny>center</aligny><label>$VAR[POVIL_V_Rating]</label></control>
-				<control type="image"><top>9</top><width>22</width><height>22</height><texture colordiffuse="povil_gold">povil/star.png</texture><visible>Integer.IsGreater(ListItem.Rating,0)</visible></control>
+				<control type="label"><width>auto</width><height>40</height><font>povil_meta_bold</font><textcolor>povil_gold</textcolor><aligny>center</aligny><label>$VAR[POVIL_V_Rating]</label><visible>String.IsEmpty(Control.GetLabel(9807))</visible></control>
+				<control type="image"><top>9</top><width>22</width><height>22</height><texture colordiffuse="povil_gold">povil/star.png</texture><visible>Integer.IsGreater(ListItem.Rating,0) + String.IsEmpty(Control.GetLabel(9807))</visible></control>
 			</control>
-			<control type="textbox"><left>970</left><top>402</top><width>860</width><height>152</height><font>povil_plot</font><textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label></control>
+			<control type="label" id="9807" description="ratings key"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_V_RatingsKey]</label></control>
+			<control type="grouplist" description="ratings"><left>730</left><top>400</top><width>1100</width><height>32</height><orientation>horizontal</orientation><align>right</align><itemgap>22</itemgap><usecontrolcoords>true</usecontrolcoords>
+				<visible>!String.IsEmpty(Control.GetLabel(9807))</visible>
+				<control type="group" description="letterboxd"><width>134</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.letterboxd))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>50</width><height>30</height><texture>povil/ratings/letterboxd.png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>58</left><top>0</top><width>76</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.letterboxd)][COLOR povil_faint]/5[/COLOR]</label></control>
+				</control>
+				<control type="group" description="trakt"><width>126</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.trakt))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>60</width><height>30</height><texture>povil/ratings/trakt.png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>68</left><top>0</top><width>58</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.trakt)]</label></control>
+				</control>
+				<control type="group" description="meta"><width>82</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.meta))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>30</width><height>30</height><texture>povil/ratings/meta.png</texture><aspectratio>keep</aspectratio></control>
+					<control type="image"><left>38</left><top>1</top><width>44</width><height>30</height><texture colordiffuse="FF66CC33">povil/ratings/square.png</texture><visible>String.IsEqual(Window(home).Property(povil.rt.meta_tone),good)</visible></control>
+					<control type="image"><left>38</left><top>1</top><width>44</width><height>30</height><texture colordiffuse="FFFFCC33">povil/ratings/square.png</texture><visible>String.IsEqual(Window(home).Property(povil.rt.meta_tone),mixed)</visible></control>
+					<control type="image"><left>38</left><top>1</top><width>44</width><height>30</height><texture colordiffuse="FFFF5544">povil/ratings/square.png</texture><visible>String.IsEqual(Window(home).Property(povil.rt.meta_tone),bad)</visible></control>
+					<control type="label"><left>38</left><top>0</top><width>44</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_ink</textcolor><align>center</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.meta)]</label></control>
+				</control>
+				<control type="group" description="popcorn"><width>104</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.popcorn))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>30</width><height>30</height><texture>povil/ratings/popcorn_$INFO[Window(home).Property(povil.rt.popcorn_state)].png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>38</left><top>0</top><width>66</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.popcorn)]</label></control>
+				</control>
+				<control type="group" description="tomato"><width>104</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.tomato))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>30</width><height>30</height><texture>povil/ratings/tomato_$INFO[Window(home).Property(povil.rt.tomato_state)].png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>38</left><top>0</top><width>66</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.tomato)]</label></control>
+				</control>
+				<control type="group" description="imdb"><width>116</width><height>32</height>
+					<visible>String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.for)) + !String.IsEmpty(Window(home).Property(povil.rt.imdb))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>60</width><height>30</height><texture>povil/ratings/imdb.png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>68</left><top>0</top><width>48</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$INFO[Window(home).Property(povil.rt.imdb)]</label></control>
+				</control>
+				<control type="group" description="tmdb"><width>116</width><height>32</height>
+					<visible>!String.IsEmpty(Control.GetLabel(9808))</visible>
+					<animation effect="fade" start="0" end="100" time="220">Visible</animation>
+					<control type="image"><left>0</left><top>1</top><width>60</width><height>30</height><texture>povil/ratings/tmdb.png</texture><aspectratio>keep</aspectratio></control>
+					<control type="label"><left>68</left><top>0</top><width>48</width><height>32</height><font>povil_meta_bold</font><textcolor>povil_white</textcolor><align>left</align><aligny>center</aligny><label>$VAR[POVIL_V_RatingsTmdb]</label></control>
+				</control>
+			</control>
+			<control type="label" id="9808"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_V_RatingsTmdb]</label></control>
+			<control type="textbox"><left>970</left><top>440</top><width>860</width><height>152</height><font>povil_plot</font><textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label><animation effect="slide" end="0,-38" time="140" tween="cubic" easing="out" condition="String.IsEmpty(Control.GetLabel(9807))">Conditional</animation></control>
 			<control type="list" id="55">
 				<left>290</left><top>640</top><width>1570</width><height>380</height>
 				<viewtype label="תצוגת פרקים">wrap</viewtype>
