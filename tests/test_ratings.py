@@ -5,9 +5,12 @@ property and an announcement, and one thread of the Wizard's service answers.
 """
 import importlib.util
 import json
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 WIZARD = ROOT / 'plugin.program.kodipovilwizard'
@@ -416,8 +419,96 @@ class DeskTests(unittest.TestCase):
         source = (WIZARD / 'resources/libs/ratings.py').read_text('utf-8')
         fetch = source[source.index('def trakt_fetch(path):'):source.index('_WRITING = ')]
         self.assertIn('http.client.HTTPSConnection(HOST, timeout=TIMEOUT)', fetch)
-        self.assertIn('_LINES.line = None', fetch, 'a line closed at the far end is opened again, once')
+        self.assertIn('for attempt in (0, 1):', fetch, 'a line closed at the far end is opened again, once')
         self.assertNotIn('urlopen', source)
+
+    def test_the_title_on_screen_is_asked_on_the_line_used_last(self):
+        # the owner, on a phone: "skipping a few posters ahead the ratings are back to one or two seconds" --
+        # the workers that take only the title on screen each kept a line of their own, which went cold
+        made, sent = [], []
+
+        class Line(object):
+            def __init__(self, host, timeout=None):
+                self.name = 'line%d' % len(made)
+                self.dead = False
+                made.append(self)
+
+            def request(self, method, path, headers=None):
+                if self.dead:
+                    raise ConnectionResetError()
+                sent.append((self.name, path))
+
+            def getresponse(self):
+                return types.SimpleNamespace(status=200, read=lambda: b'{"trakt": {"rating": 7.5, "votes": 3}}')
+
+            def close(self):
+                sent.append((self.name, 'closed'))
+
+        fake = types.SimpleNamespace(HTTPSConnection=Line)
+        ratings._KEY[:] = ['k']
+        del ratings._POOL[:]
+        try:
+            import http.client
+            with mock.patch.dict(sys.modules, {'http.client': fake}), mock.patch.object(http, 'client', fake):
+                ratings._LINES.urgent = False
+                self.assertEqual(ratings.trakt_fetch('/movies/tt1/ratings')[0], 200)      # opens line0
+                self.assertEqual(ratings._LINES.how, 'new line')
+                clock = [100.0]
+                with mock.patch.object(ratings.time, 'time', lambda: clock[0]):
+                    ratings._POOL[0][0] = 10.0
+                    ratings._give_line(Line(ratings.HOST))                                 # line1, used last
+                    clock[0] = 101.0
+                    ratings._LINES.urgent = True
+                    ratings.trakt_fetch('/movies/tt2/ratings')
+                    self.assertEqual(sent[-1], ('line1', '/movies/tt2/ratings?extended=all'), 'the title on screen: the warmest line')
+                    self.assertEqual(ratings._LINES.how, '')
+                    clock[0] = 102.0
+                    ratings._LINES.urgent = False
+                    ratings.trakt_fetch('/movies/tt3/ratings')
+                    self.assertEqual(sent[-1], ('line0', '/movies/tt3/ratings?extended=all'), 'a title asked ahead: the line used longest ago')
+                    # a kept line the far end closed: once more on a new one, and the log can say so
+                    for line in made:
+                        line.dead = True
+                    clock[0] = 103.0
+                    ratings._LINES.urgent = True
+                    self.assertEqual(ratings.trakt_fetch('/movies/tt4/ratings')[0], 200)
+                    self.assertEqual(ratings._LINES.how, 'kept line was closed, new line')
+                    self.assertEqual(sent[-1][1], '/movies/tt4/ratings?extended=all')
+                    # never more lines kept than POOL
+                    for _ in range(5):
+                        ratings._give_line(Line(ratings.HOST))
+                    self.assertEqual(len(ratings._POOL), ratings.POOL)
+        finally:
+            del ratings._POOL[:]
+            ratings._KEY[:] = []
+
+    def test_a_slow_answer_for_the_title_on_screen_is_said_in_the_log(self):
+        home = Home(**{'povil.rt.ask': 'tt1|movie||'})
+        said = []
+        clock = [0.0]
+
+        class SlowStore(object):
+            def known(self, key):
+                return None, False
+
+            def lookup(self, key):
+                clock[0] += 1.25
+                ratings._LINES.how = 'kept line was closed, new line'
+                return {}
+
+            def clock(self):
+                return clock[0]
+
+        desk = ratings.Desk(home, SlowStore(), None, log=said.append)
+        desk.asked('home')
+        with mock.patch.object(ratings.time, 'time', lambda: clock[0]):
+            self.assertTrue(desk.step())
+        self.assertEqual(said, ['slow answer for the title on screen: 1250 ms (kept line was closed, new line), 0 waiting'])
+        # a title asked ahead may take its time: nothing is said
+        desk._put(desk.AHEAD, 'tt9|movie||', None)
+        with mock.patch.object(ratings.time, 'time', lambda: clock[0]):
+            self.assertTrue(desk.step())
+        self.assertEqual(len(said), 1)
 
 
 class WiringTests(unittest.TestCase):
