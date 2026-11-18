@@ -383,9 +383,14 @@
 		<stop>true</stop>
 	</timer>
 	<timer>
+		<name>povil_trailer_opening</name>
+		<start reset="true">!String.IsEmpty(Window(home).Property(povil.tr.opening))</start>
+		<stop>String.IsEmpty(Window(home).Property(povil.tr.opening))</stop>
+	</timer>
+	<timer>
 		<name>povil_trailer_shown</name>
-		<start reset="true">Window.IsActive(home) + Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask))</start>
-		<stop>!Window.IsActive(home) | ![Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask))]</stop>
+		<start reset="true">Window.IsActive(home) + Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))</start>
+		<stop>!Window.IsActive(home) | ![Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))]</stop>
 	</timer>
 	<timer>
 		<name>povil_trailer_stop</name>
