@@ -251,7 +251,10 @@ class EarlyTests(unittest.TestCase):
     def test_a_child_profile_notes_nothing(self):
         self.env.child = True
         self.assertFalse(self.early(self.MARK))
-        self.assertEqual((self.env.builtins, self.win.values), ([], {}))
+        marks = {k: v for k, v in self.win.values.items() if k != self.m.ACTION_PROPERTY}
+        self.assertEqual((self.env.builtins, marks), ([], {}))
+        # (every POV action leaves its time for the home's trailers, on any profile: nothing starts under it)
+        self.assertIn(self.m.ACTION_PROPERTY, self.win.values)
 
     def test_the_copy_is_shown_with_the_mark_at_once_and_the_rebuild_does_not_wait(self):
         self.open()
