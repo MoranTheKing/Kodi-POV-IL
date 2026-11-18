@@ -15,6 +15,7 @@ marker file:
 and nothing when all match. A repository that cannot be read is reported
 on stderr and skipped; it never fails the check.
 """
+import gzip
 import re
 import sys
 import urllib.request
@@ -40,6 +41,9 @@ WATCH = (
         '/master/repo/zips/addons.xml',)),
     ('script.module.acctmgr', (
         'https://raw.githubusercontent.com/Zaxxon709/zaxxon/main/zips/addons.xml',)),
+    # (Kodi's own repository: the build patches it since Wizard 0.5.13, patches_config youtube_whole_streams)
+    ('plugin.video.youtube', (
+        'https://mirrors.kodi.tv/addons/omega/addons.xml.gz',)),
 )
 
 _ADDON = re.compile(r'<addon\b[^>]*>', re.S)
@@ -78,7 +82,10 @@ def read_marker(text):
 def fetch(url, timeout=30):
     req = urllib.request.Request(url, headers={'User-Agent': 'kodi-povil-upstream-check'})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode('utf-8', 'replace')
+        data = resp.read()
+    if url.endswith('.gz'):
+        data = gzip.decompress(data)    # (Kodi's own index: a tenth of the 12 MB)
+    return data.decode('utf-8', 'replace')
 
 
 def upstream_versions(fetcher=fetch, warn=None):
