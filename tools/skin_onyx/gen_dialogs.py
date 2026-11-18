@@ -28,8 +28,12 @@ def busy():
     x(2, '<control type="group">')
     x(3, '<left>912</left><top>492</top>')
     # Kodi brings this dialog up while any playback opens, the home's trailer too (the Wizard's
-    # trailers.py names that moment in a home-window property): nothing turns over a title being read
-    x(3, '<visible>String.IsEmpty(Window(home).Property(povil.tr.opening))</visible>')
+    # trailers.py names that moment in a home-window property): nothing turns over a title being read.
+    # For the first seconds of an opening only (Onyx 1.0.19, the timer is the home's, gen_home.py): an
+    # opening takes a second at most where trailers work, and the dialog takes the remote's keys while it
+    # is up -- one hidden for longer would hold them unseen (the owner's LG hung opening a trailer)
+    x(3, '<visible>String.IsEmpty(Window(home).Property(povil.tr.opening)) | '
+         'Integer.IsGreater(Skin.TimerElapsedSecs(povil_trailer_opening),5)</visible>')
     x(3, '<control type="image"><left>-36</left><top>-36</top><width>168</width><height>168</height>'
          '<texture colordiffuse="B3000000">povil/pill.png</texture></control>')
     x(3, '<control type="image"><left>0</left><top>0</top><width>96</width><height>96</height>'

@@ -65,8 +65,12 @@ RATINGS_KEY, RATINGS_SLOT = 9807, 'povil.rt.'
 # and Kodi hands out whichever control of an id is visible first)
 TRAILER_KEY, TRAILER_OFF_SWITCH, TRAILER_REST_S = 9809, 'POVILNoTrailers', 3
 TRAILERS_ON, TRAILERS_OFF = '!Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH, 'Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH
+# (and its first picture has come: the Wizard clears povil.tr.opening then. On the owner's LG, Nov 2026, the
+# player said it had a video while it hung opening one that never showed a picture -- the home faded away into
+# "the trailer to itself" over nothing, and only a key brought it back)
 TRAILER_SHOWN = ('Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + '
-                 'String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask))')
+                 'String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + '
+                 'String.IsEmpty(Window(home).Property(povil.tr.opening))')
 # The trailer to itself (the owner, Nov 2026: "so the viewer can watch the trailer if they want, and read
 # it" -- POV names a title's Hebrew trailer when TMDb has one, and its words are in the picture): once
 # the trailer has been on for a few seconds and the remote is still, everything over the picture fades
@@ -534,6 +538,13 @@ def gen_timers():
     x(2, '<onstart>SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(%d)],home)</onstart>' % TRAILER_KEY)
     x(2, '<onstart>NotifyAll(povil.trailer,ask)</onstart>')
     x(2, '<stop>true</stop>')
+    x(1, '</timer>')
+    # how long the trailer has been opening (Kodi's busy dialog is hidden for the first seconds of it only,
+    # gen_dialogs.py)
+    x(1, '<timer>')
+    x(2, '<name>povil_trailer_opening</name>')
+    x(2, '<start reset="true">!String.IsEmpty(Window(home).Property(povil.tr.opening))</start>')
+    x(2, '<stop>String.IsEmpty(Window(home).Property(povil.tr.opening))</stop>')
     x(1, '</timer>')
     # how long the trailer has been on the screen (TRAILER_ALONE counts from it)
     x(1, '<timer>')

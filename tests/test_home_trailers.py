@@ -259,12 +259,29 @@ class DeskTests(unittest.TestCase):
         desk.playback_started()
         self.assertFalse(desk.guard())
         self.assertEqual(player.playing, 'http://debrid/film.mkv')
-        # the viewer moved on (the skin said stop) while the guard watched
+        # the viewer moved on (the skin said stop) while it opened, and its first picture came after: stopped
+        # then, and not a trailer that failed
         desk, home, player, now = self.guarded(lambda second: 0.0)
+        keep = desk.waiting.wait
+        desk.waiting.wait = lambda s: (keep(s), now[0] >= 1005.0 and desk.ours and desk.stop(),
+                                       now[0] >= 1007.0 and desk.ours and desk.playback_started())[0]
+        self.assertFalse(desk.guard())
+        self.assertEqual(desk.given_up, {}, 'stopped by the viewer is not a trailer that failed')
+        # ... the same after its first picture
+        desk, home, player, now = self.guarded(lambda second: second)
+        desk.playback_started()
         keep = desk.waiting.wait
         desk.waiting.wait = lambda s: (keep(s), now[0] >= 1005.0 and desk.ours and desk.stop())[0]
         self.assertFalse(desk.guard())
-        self.assertEqual(desk.given_up, {}, 'stopped by the viewer is not a trailer that failed')
+        self.assertEqual(desk.given_up, {})
+        # but an opening that never shows a picture is one, whether or not the viewer moved on meanwhile (the
+        # owner's LG, 0.5.14: he moved on after nine seconds, the player had hung opening)
+        desk, home, player, now = self.guarded(lambda second: 0.0)
+        keep = desk.waiting.wait
+        desk.waiting.wait = lambda s: (keep(s), now[0] >= 1009.0 and desk.ours and desk.stop())[0]
+        self.assertTrue(desk.guard())
+        self.assertIn(ADDRESS, desk.given_up)
+        self.assertEqual(player.calls, [('play', STREAM['url'], True)], 'still never told to stop while it opens')
 
     def test_every_device_gets_h264_up_to_720p_and_the_youtube_add_on_keeps_its_settings(self):
         # of ten trailers in the QA Kodi three came as 1080p AV1 and one as 4K VP9 (a small box decodes those
@@ -837,8 +854,14 @@ class SkinTests(unittest.TestCase):
                      '[System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)]'):
             self.assertIn(part, stop)
         busy = (XML / 'DialogBusy.xml').read_text('utf-8')
-        self.assertIn('<visible>String.IsEmpty(Window(home).Property(povil.tr.opening))</visible>', busy,
-                      'no spinner over a title being read while its trailer opens')
+        self.assertIn('<visible>String.IsEmpty(Window(home).Property(povil.tr.opening)) | '
+                      'Integer.IsGreater(Skin.TimerElapsedSecs(povil_trailer_opening),5)</visible>', busy,
+                      'no spinner over a title being read while its trailer opens -- for its first seconds only')
+        opening = timers['povil_trailer_opening']
+        self.assertEqual((opening.findtext('start'), opening.findtext('stop')),
+                         ('!String.IsEmpty(Window(home).Property(povil.tr.opening))',
+                          'String.IsEmpty(Window(home).Property(povil.tr.opening))'))
+        self.assertEqual(opening.find('start').get('reset'), 'true')
         self.assertEqual([n.text for n in timers['povil_trailer_stop'].findall('onstart')],
                          ['ClearProperty(povil.tr.ask,home)', 'NotifyAll(povil.trailer,stop)'])
         for name in ('povil_trailer', 'povil_trailer_stop'):
@@ -852,6 +875,8 @@ class SkinTests(unittest.TestCase):
         self.assertIn('Player.HasVideo', shown)
         self.assertIn('String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask))', shown)
         self.assertIn('!String.IsEmpty(Window(home).Property(povil.tr.on))', shown)
+        # its first picture has come (the owner's LG: a player that hung opening said it had a video)
+        self.assertIn('String.IsEmpty(Window(home).Property(povil.tr.opening))', shown)
         order = [c.get('description') for c in controls]
         self.assertLess(order.index('backdrop'), order.index('trailer'))
         self.assertLess(order.index('under the trailer'), order.index('trailer'))
