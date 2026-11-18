@@ -119,7 +119,7 @@ EDITS = [
 		<width>1260</width>
 		<textoffsetx>20</textoffsetx>
 		<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-		<texturefocus border="5" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 		<align>right</align>
 		<aligny>center</aligny>
 		<font>size23</font>
@@ -130,7 +130,7 @@ EDITS = [
 		<width>1260</width>
 		<textoffsetx>20</textoffsetx>
 		<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
-		<texturefocus border="5" colordiffuse="$VAR[FocusBoxColor]">img/MediaButton2.png</texturefocus>
+		<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 		<align>left</align>
 		<aligny>center</aligny>
 		<font>size23</font>
@@ -174,6 +174,13 @@ EDITS = [
     # Choice lists (Wizard, POV, Kodi): the item text on the right
     ('Includes_DialogSelect.xml', '<control type="label" description="Main Label">',
      '<control type="label" description="Main Label"><align>right</align><posx>96</posx>', '<align>right</align><posx>96</posx>'),
+    # The dialogs' panel is all but opaque unless the viewer chose a transparency in the skin's
+    # settings: at Onyx's own default (88 percent, and the colour darkened with it) the page
+    # behind was read through a question -- QA, Nov 2026: the home's plot ran through the
+    # words of a yes/no dialog.
+    ('Includes_Variables.xml',
+     '\t\t<value condition="Skin.HasSetting(MenuOff)">MenuOff</value>' + NL + '\t\t<value>MenuMedLow</value>',
+     '\t\t<value condition="Skin.HasSetting(MenuOff)">MenuOff</value>' + NL + '\t\t<value>povil_panel</value>'),
 ]
 
 
@@ -315,6 +322,40 @@ def skin_settings_rtl(folder):
     return True
 
 
+def dialog_look(folder):
+    """Onyx's dialogs in the build's look (the owner, Nov 2026: the design everywhere, a level up).
+
+    Every dialog of the skin sits on img/DialogCE.png, a black square with a white hairline, and
+    marks the focused row with img/MediaButton2.png, a flat grey rectangle. Both are replaced
+    wherever they are used by the textures of gen_dialog_textures.py: a charcoal glass panel
+    with a soft gold hairline and a shadow, in the original's own geometry (no layout moves),
+    and a rounded focus box whose 9-slice border is 14 whatever the original's was. Returns
+    the number of files changed; a second run changes none.
+    """
+    import re
+    box = re.compile(r'(<(?:alt)?texture(?:focus|nofocus)?)((?:\s+[a-z]+="[^"]*")*)\s*>img/MediaButton2\.png')
+
+    def rounded(match):
+        attributes = match.group(2)
+        if 'border="' in attributes:
+            attributes = re.sub(r'border="[^"]*"', 'border="14"', attributes)
+        else:
+            attributes += ' border="14"'
+        return match.group(1) + attributes + '>povil/focus_box.png'
+    changed = 0
+    for name in sorted(os.listdir(folder)):
+        if not name.endswith('.xml'):
+            continue
+        path = os.path.join(folder, name)
+        text = open(path, encoding='utf-8').read()
+        new = box.sub(rounded, text.replace('img/DialogCE.png', 'povil/panel.png'))
+        if new != text:
+            with open(path, 'w', encoding='utf-8', newline=NL) as f:
+                f.write(new)
+            changed += 1
+    return changed
+
+
 def main():
     folder = os.path.join(sys.argv[1], 'xml')
     applied = skipped = 0
@@ -339,6 +380,7 @@ def main():
         applied += 1
     if skin_settings_rtl(folder):
         applied += 1
+    applied += dialog_look(folder)
     print('onyx edits: %d applied, %d already there' % (applied, skipped))
 
 

@@ -13,7 +13,7 @@
 			<centertop>540</centertop>
 			<width>1200</width>
 			<height>590</height>
-			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+			<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 		</control>
 		<control type="label" id="1">
 			<left>480</left>

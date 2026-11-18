@@ -50,7 +50,7 @@
 							<height>69</height>
 							<aligny>center</aligny>
 							<visible>Control.HasFocus(9000)</visible>
-							<texture border="9">img/MediaButton2.png</texture>
+							<texture border="14">povil/focus_box.png</texture>
 						</control>
 						<control type="label">
 							<left>10</left>

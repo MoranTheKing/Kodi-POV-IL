@@ -17,7 +17,7 @@
 				<width>900</width>
 				<height>750</height>
 				<aspectratio>stretch</aspectratio>
-				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 			</control>
 			<control type="label" description="Header">
 				<posx>240</posx>
@@ -71,7 +71,7 @@
 						<posy>0</posy>
 						<width>720</width>
 						<height>75</height>
-						<texture border="9">img/MediaButton2.png</texture>
+						<texture border="14">povil/focus_box.png</texture>
 					</control>
 					<control type="label">
 						<posx>25</posx>

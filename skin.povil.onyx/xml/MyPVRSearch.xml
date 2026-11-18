@@ -189,7 +189,7 @@
 							<posy>3</posy>
 							<width>1800</width>
 							<height>75</height>
-							<texture border="8">img/MediaButton2.png</texture>
+							<texture border="14">povil/focus_box.png</texture>
 						</control>
 						<control type="label" description="Timer label">
 							<posx>10</posx>

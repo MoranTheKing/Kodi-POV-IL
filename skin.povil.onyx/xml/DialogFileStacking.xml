@@ -48,7 +48,7 @@
 						<visible>!Skin.HasSetting(NoFocusBox)</visible>
 						<width>870</width>
 						<height>66</height>
-						<texture border="9">img/MediaButton2.png</texture>
+						<texture border="14">povil/focus_box.png</texture>
 					</control>
 					<control type="label">
 						<textcolor>$VAR[RowFocusFileStacking]</textcolor>

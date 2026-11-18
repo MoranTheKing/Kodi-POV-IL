@@ -178,21 +178,62 @@ class GeneratedXmlTests(unittest.TestCase):
         # Kodi links a grouplist's items by id: a gap without one ended the chain, and
         # left / right fell through to the video and seeked (field report: "only 10 seconds")
         osd = ET.parse(XML / 'VideoOSD.xml').getroot()
-        row = next(c for c in osd.iter('control') if c.get('id') == '7000')
-        self.assertEqual((row.findtext('onleft'), row.findtext('onright')), ('7000', '7000'))
-        children = [c for c in row if c.tag == 'control']
-        self.assertTrue(children)
-        self.assertTrue(all(c.get('id') for c in children))
-        self.assertIn('7024', [c.get('id') for c in children])
+        groups = {gid: next(c for c in osd.iter('control') if c.get('id') == gid) for gid in ('7006', '7000', '7007')}
+        ids = {}
+        for gid, group in groups.items():
+            self.assertEqual(group.get('type'), 'grouplist')
+            children = [c for c in group if c.tag == 'control']
+            self.assertTrue(all(c.get('id') for c in children), gid)
+            ids[gid] = [c.get('id') for c in children if c.get('type') != 'image']
+            # no key is left to fall through to the picture, and no end leads to the group itself (Kodi
+            # would wrap the group round)
+            for tag in ('onleft', 'onright', 'onup', 'ondown'):
+                targets = [n.text for n in group.findall(tag)]
+                self.assertTrue(targets, (gid, tag))
+                self.assertIsNone(group.findall(tag)[-1].get('condition'), 'the last one always applies')
+                self.assertNotIn(gid, targets)
+        self.assertEqual(ids, {'7006': ['7010', '7011', '7012'], '7000': ['7002', '7003', '7004'],
+                               '7007': ['7024', '7020', '7021', '7022', '7023', '7025', '7026']})
+        # the owner: "the subtitles button closer": two presses from the main button
+        self.assertEqual((ids['7000'].index('7004') - ids['7000'].index('7003')) + 1 + ids['7007'].index('7024'), 2)
+        # the main button is in the middle of the screen
+        middle = groups['7000']
+        self.assertEqual(int(middle.findtext('left')) + int(middle.findtext('width')) // 2, 960)
+        self.assertEqual(middle.findtext('align'), 'center')
+        # each side leads to the button beside it in the next group that is on the screen
+        self.assertEqual([n.text for n in groups['7006'].findall('onleft')], ['noop'])
+        self.assertEqual([n.text for n in groups['7007'].findall('onright')], ['noop'])
+        self.assertEqual([n.text for n in middle.findall('onleft')], ['7012'])
+        self.assertEqual([n.text for n in middle.findall('onright')], ['7024', '7020', '7021', '7022'])
+        self.assertEqual([n.text for n in groups['7006'].findall('onright')], ['7002', '7003', '7004', '7024', '7020', '7021', '7022'])
+        self.assertEqual([n.text for n in groups['7007'].findall('onleft')], ['7004', '7003', '7002', '7012'])
+        for tag, gid in (('onright', '7006'), ('onright', '7000'), ('onleft', '7007')):
+            for node in groups[gid].findall(tag)[:-1]:
+                self.assertTrue(node.get('condition'), 'a button that may be off the screen is a target only while it is on it')
+        # at rest a glass chip, focused a gold disc; the main button a size above the others
+        sizes = {c.get('id'): int(c.findtext('width')) for g in groups.values() for c in g if c.tag == 'control' and c.get('type') != 'image'}
+        self.assertGreater(sizes.pop('7003'), max(sizes.values()))
+        for group in groups.values():
+            for c in group:
+                if c.tag != 'control' or c.get('type') == 'image':
+                    continue
+                self.assertRegex(c.findtext('texturenofocus'), r'^povil/osd/\w+_(nf|hi)\.png$')
+                self.assertRegex(c.findtext('texturefocus'), r'^povil/osd/\w+_fo\.png$')
+                for texture in (c.findtext('texturenofocus'), c.findtext('texturefocus')):
+                    self.assertTrue((ROOT / 'skin.povil.onyx/media' / texture).is_file(), texture)
 
     def test_the_timeline_takes_the_focus_and_seeks(self):
         # field report: "only 30-second jumps, no real seeking as in the other players"
         osd = ET.parse(XML / 'VideoOSD.xml').getroot()
-        row = next(c for c in osd.iter('control') if c.get('id') == '7000')
-        self.assertEqual(row.findtext('onup'), '7001')
+        # the timeline is the lowest thing on the picture: Down from every group of buttons, Up goes back
+        for gid in ('7006', '7000', '7007'):
+            row = next(c for c in osd.iter('control') if c.get('id') == gid)
+            down = row.findall('ondown')
+            self.assertEqual([(n.text, n.get('condition')) for n in down], [('7001', 'Player.SeekEnabled'), ('noop', None)])
+            self.assertGreater(980, int(row.findtext('top')) + int(row.findtext('height')))
         stop = next(c for c in osd.iter('control') if c.get('id') == '7001')
-        self.assertEqual((stop.findtext('onleft'), stop.findtext('onright'), stop.findtext('ondown')),
-                         ('StepBack', 'StepForward', '7000'))
+        self.assertEqual((stop.findtext('onleft'), stop.findtext('onright'), stop.findtext('onup'), stop.findtext('ondown')),
+                         ('StepBack', 'StepForward', '7000', 'noop'))
         self.assertLess(int(stop.findtext('left')), 0, 'off the picture: a finger on the timeline must reach the dot, not this stop')
         sliders = [c for c in osd.iter('control') if c.get('type') == 'slider']
         drag = [c for c in sliders if c.findtext('action') == 'seek']
@@ -227,7 +268,7 @@ class GeneratedXmlTests(unittest.TestCase):
             found = re.findall(r'<left>90</left><top>(\d+)</top>\s*<visible>!String.IsEmpty\(Player.Duration\)</visible>', text)
             self.assertEqual(len(found), 1, name)
             tops.update(found)
-        self.assertEqual(tops, {'866'})
+        self.assertEqual(tops, {'980'})
 
     def test_every_control_of_the_picture_window_has_an_id(self):
         # Kodi hides "control 0" of the fullscreen window (its view mode line), and a control with no id is control 0
@@ -256,17 +297,23 @@ class GeneratedXmlTests(unittest.TestCase):
         for c in controls:
             if c.get('type') in ('button', 'togglebutton', 'slider', 'grouplist') and c is not area:
                 self.assertGreater(controls.index(c), at, c.get('id'))
-        # between the title block and the clock line, clear of both
+        # between the title block and the controls' line (the pills, the focused button's name), clear of both
         top, height = int(area.findtext('top')), int(area.findtext('height'))
-        self.assertGreaterEqual(top, 288)
-        self.assertLessEqual(top + height, 812)
+        self.assertGreaterEqual(top, 304)
+        pills = next(c for c in controls if c.get('description') == 'what is playing')
+        self.assertLessEqual(top + height, int(pills.findtext('top')))
         self.assertGreaterEqual(height, 400)
         # no key leads to it, and every arrow from it goes back to the buttons
         for c in controls:
             if c is not area:
                 for tag in ('onup', 'ondown', 'onleft', 'onright'):
                     self.assertNotIn('7005', [n.text for n in c.findall(tag)], c.get('id'))
-        self.assertEqual([area.findtext(t) for t in ('onup', 'ondown', 'onleft', 'onright')], ['7000'] * 4)
+        for tag in ('onup', 'ondown', 'onleft', 'onright'):
+            # the main buttons, or the right group (its sound button is always there) when a channel cannot pause
+            self.assertEqual([(n.text, n.get('condition')) for n in area.findall(tag)],
+                             [('7000', 'Player.PauseEnabled'), ('7007', None)])
+        loads = [(n.text, n.get('condition')) for n in osd.findall('onload')]
+        self.assertIn(('SetFocus(7022)', '!Player.PauseEnabled + !Control.IsVisible(7024)'), loads)
         self.assertEqual(osd.findtext('defaultcontrol'), '7003')
 
     def test_kodi_settings_rows_show_their_switches_and_values(self):

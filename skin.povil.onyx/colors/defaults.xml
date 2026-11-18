@@ -38,5 +38,6 @@
 	<color name="povil_white">FFF5F2EC</color>
 	<color name="povil_dim">D9F5F2EC</color>
 	<color name="povil_faint">A6F5F2EC</color>
+	<color name="povil_panel">FAFFFFFF</color>
 	<color name="povil_ink">FF17130D</color>
 </colors>

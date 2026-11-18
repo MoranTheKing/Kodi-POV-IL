@@ -431,7 +431,7 @@
 		<value condition="Skin.HasSetting(MenuMedHigh)">MenuMedHigh</value>
 		<value condition="Skin.HasSetting(MenuLow)">MenuLow</value>
 		<value condition="Skin.HasSetting(MenuOff)">MenuOff</value>
-		<value>MenuMedLow</value>
+		<value>povil_panel</value>
 	</variable>
 	<variable name="OSDTransperancy">
 		<value condition="Skin.HasSetting(OSDHigh)">OSDHigh</value>

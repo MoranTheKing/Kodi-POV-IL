@@ -9,7 +9,7 @@
 				<centertop>530</centertop>
 				<width>720</width>
 				<height>680</height>
-				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 			</control>
 			<control type="label" description="Dialog heading">
 				<centerleft>960</centerleft>

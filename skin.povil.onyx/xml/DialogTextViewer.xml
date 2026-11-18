@@ -9,7 +9,7 @@
 				<centertop>540</centertop>
 				<width>940</width>
 				<height>940</height>
-				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 			</control>
 			<control type="group">
 				<posx>480</posx>

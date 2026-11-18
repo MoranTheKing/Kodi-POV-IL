@@ -9,14 +9,14 @@
 				<centertop>748</centertop>
 				<width>890</width>
 				<height>340</height>
-				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">img/DialogCE.png</texture>
+				<texture colordiffuse="$VAR[MenuTransperancy]" border="128">povil/panel.png</texture>
 			</control>
 			<control type="image">
 				<posx>630</posx>
 				<posy>664</posy>
 				<width>660</width>
 				<height>75</height>
-				<texture border="9">img/MediaButton2.png</texture>
+				<texture border="14">povil/focus_box.png</texture>
 				<animation condition="Container(9001).Position(0)" effect="slide" start="0,0" end="0,0" time="0" easing="inout" reversible="true">Conditional</animation>
 				<animation condition="Container(9001).Position(1)" effect="slide" start="0,0" end="0,96" time="0" easing="inout" reversible="true">Conditional</animation>
 			</control>
