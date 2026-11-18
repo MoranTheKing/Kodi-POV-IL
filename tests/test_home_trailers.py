@@ -166,15 +166,16 @@ class DeskTests(unittest.TestCase):
 
     def test_none_while_kodi_is_still_starting(self):
         home, player = Home(**{trailers.ASK: ADDRESS}), Player()
-        desk = self.desk(home, player, age=10.0)
+        desk = self.desk(home, player, age=3.0)
         waits = []
         desk.waiting.wait = lambda seconds: waits.append(seconds)
         job = desk.asked()
         self.assertTrue(job(), 'still the title on screen when the start is over: it plays then')
-        self.assertEqual(waits, [trailers.QUIET_START_S - 10.0])
+        self.assertEqual(waits, [trailers.QUIET_START_S - 3.0])
+        self.assertLessEqual(trailers.QUIET_START_S, 10, 'the thread starts after the home has settled: a few seconds, not a minute')
         # the viewer moved on during the wait: nothing is asked of YouTube at all
         home, player = Home(**{trailers.ASK: ADDRESS}), Player()
-        desk = self.desk(home, player, age=10.0)
+        desk = self.desk(home, player, age=3.0)
         desk.waiting.wait = lambda seconds: home.values.update({trailers.ASK: ''})
         self.assertFalse(desk.asked()())
         self.assertEqual(self.resolved, [])
