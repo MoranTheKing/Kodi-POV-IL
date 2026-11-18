@@ -462,6 +462,20 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
         return e.partial_text
 
 
+def ai_mode_on():
+    """Has the viewer chosen AI translation? With "Google Translate" or "no translation" chosen NO
+    text request is made to Gemini, whoever asks (a viewer, Nov 2026: "with Google Translate chosen it
+    still tries to translate with AI and runs into 'busy' -- it has to be Google only"). The
+    translation itself already went to Google in that mode; what still asked Gemini was the
+    proofread of a translation taken from the cache or the pool. This is the one door every text
+    request goes through, so nothing can ask by another way."""
+    try:
+        from . import kodi_utils
+        return (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') == 'ai'
+    except Exception:
+        return True
+
+
 def generate(api_key, model, prompt, temperature=0.2,
              max_output_tokens=16384, top_p=None,
              thinking_budget=None, thinking_level=None,
@@ -473,6 +487,8 @@ def generate(api_key, model, prompt, temperature=0.2,
 
     Raises QuotaExceeded on 429, InvalidKey on 400/403, GeminiError
     on anything else."""
+    if not ai_mode_on():
+        raise GeminiError('AI translation is not the chosen mode: no request is made')
     if not requests:
         raise GeminiError('python-requests is not installed')
     if not api_key:

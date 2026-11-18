@@ -5018,8 +5018,12 @@ def _gp_models(hebrew_ref=False):
 
 
 def _gp_models_left(hebrew_ref=False):
-    """Whether a proofread model (_gp_models) still has quota today."""
+    """Whether a proofread model (_gp_models) still has quota today -- and AI is the chosen mode at
+    all: with "Google Translate" or "no translation" chosen nothing is proofread (0.3.96; a translation
+    from the cache or the pool was, and the viewer saw Gemini's "busy")."""
     try:
+        if (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
+            return False
         from . import gender_proofread
         return any(not gender_proofread.exhausted_today(m, kodi_utils)
                    for m in _gp_models(hebrew_ref))
