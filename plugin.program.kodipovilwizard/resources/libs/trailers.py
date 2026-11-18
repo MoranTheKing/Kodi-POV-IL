@@ -50,6 +50,17 @@ able to run it ... it has to work in every situation". What that took, each seen
     and the player for every part of the stream it has begun to open. The stop is remembered
     and carried out at the trailer's first picture (Desk.stop, Desk.playback_started); the
     picture is not shown meanwhile, and the next title's trailer waits for it.
+  * A STOP THAT COMES WHILE THE TRAILER OPENS MAY NOT BE MEANT. On the owner's phone (his second
+    log, Nov 2026) the same trailer opened five times in a row and was stopped each time within a
+    tenth of a second of its first picture; the fifth stop froze the screen twenty seconds. The
+    skin had said "stop" while the trailer was opening -- with Kodi's busy dialog over the home
+    what the skin reads of the home is not what it reads a moment later -- the stop was carried
+    out at the first picture, the skin asked again, and so on. Now such a stop is looked at
+    again half a second after the first picture (Desk._late_stop, wanted_now): if the home is
+    on the screen with no dialog and the title is still the one the trailer is of, the trailer
+    plays on and the skin's question is put back. A trailer that IS stopped as it begins, twice
+    for the same title, leaves that title alone for a while. The log says what the screen looked
+    like when the stop came.
   * EVERY DEVICE: left to itself the YouTube add-on names the best stream its own settings allow
     -- of ten trailers three came as 1080p AV1 and one as 4K VP9, which a small box decodes in
     software. The trailer asks for H.264 up to 720p instead (light_streams): every box decodes
@@ -76,6 +87,7 @@ ASK, ON = 'povil.tr.ask', 'povil.tr.on'
 FILE = 'povil.tr.file'          # the address of the trailer the player was handed: another add-on tells a trailer from a film by it
 OPENING = 'povil.tr.opening'    # set from the moment the player is told to play until the first picture (or the viewer moving on)
 OFF_SWITCH = 'POVILNoTrailers'  # the skin's setting: set = the viewer switched the trailers off
+HERO_LABEL = 9809               # the home's hidden label that holds the trailer address of the title in the hero (gen_home.py)
 YOUTUBE = 'plugin.video.youtube'
 QUIET_START_S = 60              # none while Kodi is still starting (its services, the home's rows)
 MAX_HEIGHT = 720                # what the trailer asks of YouTube: H.264 up to this, which every box decodes in its chip
@@ -89,6 +101,9 @@ GIVEN_UP_S = 30 * 60            # a title whose trailer was given up is not aske
 FAILURE_BOX_S = 4.0             # how long Kodi's "playback failed" box is looked for after a trailer failed to open
 LOOPBACK = '127.0.0.1'
 FAILS, REST_S = 3, 10 * 60      # this many trailers in a row that did not play: none is tried for this long
+SETTLE_S = 0.5                  # a stop that came while the trailer opened is looked at again this long after the first picture
+QUICK_S = 1.0                   # a trailer stopped sooner than this after its first picture was stopped "as it began"
+#                                 (the loop on the phone stopped it within 0.13 s; a viewer browsing takes longer to move on)
 # Kodi's own box for a play that did not open: its heading is Kodi's string 16026 ("Playback failed");
 # any other OK box that happens to be up is not this module's to close
 FAILURE_BOX = 'Window.IsActive(okdialog) + String.IsEqual(Control.GetLabel(1),$LOCALIZE[16026])'
@@ -307,13 +322,20 @@ class Desk(object):
     """Starts and stops the home's trailer. Kodi's pieces are handed in, so it runs without Kodi."""
 
     def __init__(self, home, player, resolve, make_item, enabled, log=lambda text: None, clock=None,
-                 ready=lambda stream: stream, halt=None):
+                 ready=lambda stream: stream, halt=None, wanted_now=lambda key: False, look=lambda key: '', settle=0.0):
         import time
         self.home, self.player, self.resolve, self.make_item = home, player, resolve, make_item
         self.enabled, self.log, self.ready = enabled, log, ready
         # how the player is told to stop: in Kodi a built-in that returns at once, never the player's own stop
         # (see the module's text); without Kodi, the test's own player
         self.halt = halt or player.stop
+        # wanted_now(key): is the home on the screen, with no dialog, on the title this trailer is of?
+        # look(key): the same in words, for the log. settle: how long after the first picture a stop
+        # that came during the opening is looked at again (0: at once, on the caller's thread).
+        self.wanted_now, self.look, self.settle = wanted_now, look, settle
+        self.shown = None           # when the trailer on the player showed its first picture
+        self.quick = {}             # the ask of a trailer stopped as it began -> how many times in a row
+        self.said = 0               # how many times the log was told of a stop during an opening
         self.clock = clock or time.time
         self.born = self.clock()
         self.waiting = threading.Event()        # set when Kodi closes: a waiting trailer gives up at once
@@ -343,6 +365,7 @@ class Desk(object):
         return self.opening is not None
 
     def _forget(self):
+        self.shown = None
         # (remembered: should it show a picture after all -- a word of Kodi's about another playback was
         # taken for its failing, or it opened later than anyone waits -- it is stopped then, not left to
         # play unseen with its sound on)
@@ -483,12 +506,55 @@ class Desk(object):
             self.home.clearProperty(OPENING)
             if self.ours and self._opening():
                 self.stop_wanted = True
+                if self.said < 5:
+                    self.said += 1
+                    self.log('stop while opening (%s)' % self.look(self.key))
                 return False
             ours = self.is_ours()
+            if ours:
+                self._stopped_early(self.key)
             self._forget()
             if ours:
                 self.halt()
         return ours
+
+    def _stopped_early(self, key):
+        """A trailer is being stopped: was it as it began? Twice in a row for one title and the title is
+        left alone for a while -- whatever stops it would stop it again (seen: five times in ten seconds)."""
+        if self.shown is not None and self.clock() - self.shown >= QUICK_S:
+            self.quick.pop(key, None)
+            return
+        self.quick[key] = self.quick.get(key, 0) + 1
+        if self.quick[key] >= 2:
+            self.quick.pop(key, None)
+            self.given_up[key] = self.clock()
+            self._did_not_play('stopped as it began, twice: %s' % video_id(key))
+
+    def _late_stop(self, url, key):
+        """The trailer has shown its first picture and a stop came while it opened: look again."""
+        if self.settle:
+            self.waiting.wait(self.settle)
+        try:
+            wanted = bool(self.wanted_now(key))
+        except Exception:
+            wanted = False
+        with self.lock:
+            if self.ours != url or not self.stop_wanted:
+                return
+            self.stop_wanted = False
+            if wanted and self.is_ours():
+                # not meant: the title is still on the screen. The skin's question is put back, so it
+                # neither asks again nor hides the picture
+                self.home.setProperty(ASK, key)
+                self.home.setProperty(ON, key)
+                self.log('a stop that came while the trailer opened was not meant: it plays on')
+                return
+            ours = self.is_ours()
+            if ours:
+                self._stopped_early(key)
+            self._forget()
+            if ours:
+                self.halt()
 
     def playback_over(self):
         """Kodi says a playback ended, stopped or failed. Returns True when it was this desk's
@@ -511,6 +577,7 @@ class Desk(object):
             self.home.clearProperty(OPENING)
             if self.ours and self.is_ours():
                 self.failed = 0     # a trailer shows its picture: they work on this device
+                self.shown = self.clock()
             if not self.ours or not self.is_ours():
                 try:
                     orphan = bool(self.let_go) and self.player.isPlaying() and self.player.getPlayingFile() == self.let_go
@@ -523,9 +590,12 @@ class Desk(object):
                     self.halt()
                 return
             self.opening = None
-            if self.stop_wanted:
-                self._forget()
-                self.halt()
+            late = (self.ours, self.key) if self.stop_wanted else None
+        if late:
+            if self.settle:
+                threading.Thread(target=self._late_stop, args=late, name='POVILTrailerLook').start()
+            else:
+                self._late_stop(*late)
 
 
 def watch():
@@ -539,7 +609,10 @@ def watch():
         xbmc.log('[POV IL trailers] %s' % text, xbmc.LOGINFO)
 
     def enabled():
+        # (none on a children's profile: its guard stops every playback it did not approve -- with the
+        # blocking stop this module must never meet -- and a trailer is not rated for the child)
         return (not xbmc.getCondVisibility('Skin.HasSetting(%s)' % OFF_SWITCH) and
+                home.getProperty('POVIL.ChildProfile') != 'true' and
                 xbmc.getCondVisibility('System.AddonIsEnabled(%s)' % YOUTUBE))
 
     def resolve(video):
@@ -611,9 +684,27 @@ def watch():
         def onPlayBackError(self):
             over()
 
+    BUSY = 'Window.IsActive(busydialog) | Window.IsActive(busydialognocancel)'
+    DIALOG = 'System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)'
+
+    def wanted_now(key):
+        # (Kodi's busy dialog may still be closing: what is read of the home under it is not the home's)
+        for _ in range(10):
+            if not xbmc.getCondVisibility(BUSY) or listener.waitForAbort(0.1):
+                break
+        return (enabled() and xbmc.getCondVisibility('Window.IsActive(home)') and not xbmc.getCondVisibility(DIALOG) and
+                xbmc.getInfoLabel('Control.GetLabel(%d)' % HERO_LABEL) == key)
+
+    def look(key):
+        label = xbmc.getInfoLabel('Control.GetLabel(%d)' % HERO_LABEL)
+        return 'home=%d dialog=%d busy=%d title=%s focus=%s' % (
+            xbmc.getCondVisibility('Window.IsActive(home)'), xbmc.getCondVisibility(DIALOG), xbmc.getCondVisibility(BUSY),
+            'same' if label == key else ('none' if not label else 'another'), xbmc.getInfoLabel('System.CurrentControlId') or 'none')
+
     player = Events()
     desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready,
-                halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)'))
+                halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)'),
+                wanted_now=wanted_now, look=look, settle=SETTLE_S)
 
     def run(job):
         threading.Thread(target=lambda: job() and desk.guard(), name='POVILTrailer').start()
