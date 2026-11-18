@@ -131,18 +131,146 @@ MIN_TRAILER_S = 45              # a trailer shorter than this is a spot: an alte
 # (the owner's phone and the QA Kodi, Nov 2026; anxdpanic/plugin.video.youtube issues 1481 and 1483, open
 # since Aug 2026 with add-on 7.4.4). Without it the add-on plays the complete streams of its other clients.
 CUT_SHORT = ('android_vr',)
-# An LG TV (webOS) asks for VP9. The owner's LG (webOS 26 firmware, Kodi 21.0, Nov 2026): films play, but the
-# trailer's H.264 stream was refused by the TV's own decoder ("CDVDVideoCodecStarfish: Load failed"), no picture
-# came and the player hung opening. Kodi's forum reports the same refusal, and only H.264 files are named there.
-# VP9 is what LG's own YouTube app plays, and Kodi's webOS decoder takes it.
-WEBOS_VIDEO = 'vp9'
+# An LG TV (webOS). The owner's LG (webOS 26 firmware, Kodi 21.0, Nov 2026): films play there, but the TV's own
+# decoder refused every trailer ("CDVDVideoCodecStarfish: Load failed"), no picture came and the player hung
+# opening -- H.264 (0.5.13) and VP9 (0.5.14) alike, both 720p, both through inputstream.adaptive. What Kodi asks the
+# TV's decoder with is the codec, the size and the frame rate only (Kodi 21.0 source) -- the manifest names all
+# three -- so of what differs from a film, two things are left: the size (a film is 1080p and up), and that a
+# film is read by Kodi's own player (FFmpeg), a trailer by inputstream.adaptive. Both are taken away (0.5.16): the
+# trailer is 1080p H.264, like a film, and goes to Kodi's own player as an HLS playlist (webos_hls) cut from the
+# same YouTube files -- FFmpeg reads that playlist and its pieces as it reads a film over the network.
+WEBOS_VIDEO = 'avc1'
+WEBOS_HEIGHT = 1080
+# A trailer in Hebrew (the owner, Nov 2026: "in the series the trailers are in English with no Hebrew
+# translation ... find the trailer with a Hebrew translation, exactly like the original" -- and NOT a machine
+# translation: "Google's or YouTube's translation is simply not good"). TMDb lists a Hebrew trailer for few
+# series (in the QA Kodi 3 of 20 -- and those three are the ones picked). Two more places, both human:
+#   * YouTube itself: an Israeli distributor's or channel's upload whose title says it is translated
+#     ("<name> | טריילר מתורגם"). Searched once per title by its Hebrew name (translated_query / translated_pick:
+#     the title must say "translated" and name the series or film; YouTube's own machine-translated titles say
+#     neither), kept in translated_trailers.json, and tried before TMDb's trailers.
+# No subtitles are asked of YouTube for a trailer: its own are speech recognition or a machine translation, and
+# asked for every trailer they were refused anyway ("429 Too Many Requests" in the QA Kodi).
+TRANSLATED = ('מתורגם', 'מתורגמת', 'תרגום', 'כתוביות בעברית', 'עם כתוביות')
+NOT_A_TRAILER = ('ביקורת', 'סיכום', 'תגובה', 'מאחורי הקלעים', 'ראיון', 'review', 'reaction', 'recap', 'explained',
+                 'behind the scenes', 'interview', 'full episode', 'פרק מלא')
+TRANSLATED_FOUND_S, TRANSLATED_NONE_S = 14 * 86400, 3 * 86400     # a search is kept this long (found / none)
+TRANSLATED_FILE = 'translated_trailers.json'
+# the uploads of Israeli distributors and of the services themselves come first (no channel's logo over the
+# picture -- seen in the QA Kodi: YouTube's first answer for one series was a small channel's, its logo on it)
+TRUSTED_CHANNELS = ('hit', 'tulip', 'forum film', 'פורום פילם', 'united king', 'יונייטד קינג', 'yes', 'hot', 'netflix',
+                    'נטפליקס', 'disney', 'דיסני', 'prime video', 'פריים וידאו', 'apple tv', 'hbo', 'paramount', 'פרמאונט',
+                    'סרטי שני', 'globus', 'גלובוס', 'כאן', 'kan', 'keshet', 'קשת', 'reshet', 'רשת', 'cinema city', 'סינמה סיטי',
+                    'lev cinema', 'לב')
+_HEBREW = re.compile('[\u0590-\u05ff]')
+
+
+def _plain(text):
+    """A name as compared: lower case, letters and digits only, single spaces."""
+    return ' '.join(re.sub(r'[^\w]+', ' ', (text or '').lower()).split())
+
+
+def translated_query(meta):
+    """(query, names) for a title's translated trailer on YouTube, from POV's metadata of it; (None, ()) when
+    it has no name to look for."""
+    title, original = (meta or {}).get('title') or '', (meta or {}).get('original_title') or ''
+    names = tuple(n for n in (_plain(title), _plain(original)) if n)
+    if not names:
+        return None, ()
+    name = title if _HEBREW.search(title) else (original or title)
+    return '%s טריילר מתורגם' % name, names
+
+
+def seconds_of(text):
+    """'1:49' or '1:02:03' as seconds; None for anything else."""
+    parts = (text or '').strip().split(':')
+    if not 1 < len(parts) < 4 or not all(p.isdigit() for p in parts):
+        return None
+    seconds = 0
+    for part in parts:
+        seconds = seconds * 60 + int(part)
+    return seconds
+
+
+def search_results(answer):
+    """[(title, seconds, video id, channel)] of a YouTube search answer (its own API, the video renderers in it)."""
+    found = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            video = node.get('videoRenderer')
+            if isinstance(video, dict) and video.get('videoId'):
+                title = ''.join(run.get('text', '') for run in (video.get('title') or {}).get('runs') or [])
+                channel = ''.join(run.get('text', '') for run in (video.get('ownerText') or video.get('longBylineText') or {}).get('runs') or [])
+                found.append((title, seconds_of((video.get('lengthText') or {}).get('simpleText')), video['videoId'], channel))
+                return
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+    walk(answer)
+    return found
+
+
+def title_of(rows, key):
+    """(meta, hebrew) of the title of POV's cache whose trailer is `key`'s first video -- the title that names it
+    as its trailer, else one that lists it -- or (None, False). rows: (db_type, tmdb_id, meta JSON)."""
+    import json
+    video = video_id(key)
+    if not video:
+        return None, False
+    listed = None
+    for db_type, tmdb_id, text in rows:
+        try:
+            meta = json.loads(text)
+        except Exception:
+            continue
+        videos = [v for v in meta.get('all_trailers') or [] if isinstance(v, dict) and v.get('key') == video]
+        hebrew = any(v.get('iso_639_1') == 'he' for v in videos)
+        meta = dict(meta, povil_id='%s:%s' % (db_type, tmdb_id))
+        if 'video_id=' + video in (meta.get('trailer') or ''):
+            return meta, hebrew
+        if videos and listed is None:
+            listed = (meta, hebrew)
+    return listed or (None, False)
+
+
+def trusted(channel):
+    """Is the channel an Israeli distributor's or a service's own (TRUSTED_CHANNELS, a whole word of its name)?"""
+    plain = ' %s ' % _plain(channel)
+    return any(' %s ' % _plain(name) in plain for name in TRUSTED_CHANNELS)
+
+
+def translated_pick(results, names, most=2):
+    """The video ids of the results that are a translated trailer of the title: the title says translated and
+    names the series or film, 45 s to 5 minutes, and not a review or the like. Distributors' and services' own
+    first, then the others, each in YouTube's order; `most` at most."""
+    results = sorted(results, key=lambda item: not trusted(item[3] if len(item) > 3 else ''))
+    picked = []
+    for item in results:
+        title, seconds, video = item[:3]
+        plain = _plain(title)
+        if not any(word in title for word in TRANSLATED):
+            continue
+        if not any(name and (' %s ' % name) in (' %s ' % plain) for name in names):
+            continue        # (whole words: "Up" or "היא" is not a part of another word)
+        if seconds is None or not MIN_TRAILER_S <= seconds <= 300:
+            continue
+        if any(word in plain for word in NOT_A_TRAILER):
+            continue
+        if re.match(r'^[\w-]{11}$', video or '') and video not in picked:
+            picked.append(video)
+        if len(picked) >= most:
+            break
+    return picked
+
+
 # ... and if even that shows no picture there, the trailers are switched off on that TV (the settings tile says
 # so and turns them back on): the player hung opening there, and would at every start. Kept with the Kodi
 # version it happened on -- a TV whose Kodi is upgraded gets its trailers back once.
 WEBOS_OFF_FILE = 'trailers_webos_off.json'
-# (0.5.15: VP9 was refused there in the same way -- "codec id: 167 ... Load failed" -- so it is not the codec.
-# Films play on that TV; a trailer -- YouTube's adaptive stream through inputstream.adaptive, behind the home --
-# does not, on Kodi 21.0 with webOS 26. VP9 stays: LG's own YouTube app plays it, and no worse than H.264 there.)
+WEBOS_WAY = 'hls'               # how an LG TV plays them (0.5.16): a TV that switched them off another way tries once
 TRIES = 3                       # ... this many of a title's trailers at most, each costs a second or two
 _VIDEO_ID = re.compile(r'[?&]video_id=([\w-]{11})(?:&|$)')
 _ALTERNATIVES = re.compile(r'[?&]povil_alt=([\w.-]+)')
@@ -204,22 +332,26 @@ def on_webos(app_id, kodi_path, os_info):
     return bool(app_id) or '/usr/palm/applications/' in (kodi_path or '') or 'webos' in (os_info or '').lower()
 
 
-def webos_guard(path, kodi_version, off, set_off, log):
+def webos_guard(path, kodi_version, off, set_off, log, way=WEBOS_WAY):
     """On an LG TV: (back_on_now, switch_off). back_on_now -- the trailers were switched off here on an older
-    Kodi and are on again (the file is gone). switch_off() -- the trailer showed no picture: off, with the version."""
+    Kodi, or when they were played another way, and are on again (the file is gone). switch_off() -- the
+    trailer showed no picture: off, with the Kodi version and the way."""
     import json
     back = False
     try:
         with open(path, encoding='utf-8') as handle:
-            was = json.load(handle).get('kodi')
+            kept = json.load(handle)
+        was, was_way = kept.get('kodi'), kept.get('way')
         if not off():
             # the viewer switched them back on by hand: whatever they choose later is theirs, never undone here
             os.remove(path)
-        elif was != kodi_version:
+        elif was != kodi_version or was_way != way:
             os.remove(path)
             set_off(False)
             back = True
-            log('an LG TV (webOS): Kodi is %s now (the trailers were switched off on %s): trailers on again' % (kodi_version, was))
+            log('an LG TV (webOS): trailers on again -- %s' % (
+                'Kodi is %s now (they were switched off on %s)' % (kodi_version, was) if was != kodi_version
+                else 'a new way to play them (%s)' % way))
     except (OSError, ValueError, AttributeError):
         pass
 
@@ -227,7 +359,7 @@ def webos_guard(path, kodi_version, off, set_off, log):
         set_off(True)
         try:
             with open(path, 'w', encoding='utf-8') as handle:
-                json.dump({'kodi': kodi_version}, handle)
+                json.dump({'kodi': kodi_version, 'way': way}, handle)
         except OSError:
             pass
         log('an LG TV (webOS): the trailer showed no picture -- trailers switched off on this TV '
@@ -235,7 +367,7 @@ def webos_guard(path, kodi_version, off, set_off, log):
     return back, switch_off
 
 
-def light_streams(video, provider_class, context_class, wake, video_codec='avc1'):
+def light_streams(video, provider_class, context_class, wake, video_codec='avc1', max_height=MAX_HEIGHT):
     """What the YouTube add-on answers for a trailer when asked for H.264 up to MAX_HEIGHT.
 
     First its server is woken, as its own player does before it plays (raises Asleep if it is
@@ -248,7 +380,7 @@ def light_streams(video, provider_class, context_class, wake, video_codec='avc1'
     if not context.ipc_exec(wake, timeout=WAKE_S):
         raise Asleep()
     settings = context.get_settings()
-    heights = [quality for quality in settings.mpd_video_qualities() if quality['nom_height'] <= MAX_HEIGHT]
+    heights = [quality for quality in settings.mpd_video_qualities() if quality['nom_height'] <= max_height]
     if not heights:
         raise ValueError('no adaptive streams in the YouTube add-on')
     kinds = frozenset(kind for kind in settings.stream_features() if kind not in HEAVY and kind != 'avc1') | frozenset((video_codec, 'mp4a'))
@@ -385,6 +517,129 @@ def reachable(stream, fetch, save=None, log=lambda text: None):
     return dict(stream, url=kept) if kept else None
 
 
+def parse_sidx(data, start):
+    """[(offset, size, seconds)] of the pieces an MP4 file's 'sidx' box lists. data: the bytes of the file's
+    index range, which begins at byte `start` of the file (the pieces follow the box)."""
+    import struct
+    at = data.find(b'sidx')
+    if at < 4:
+        raise ValueError('no sidx box')
+    box = at - 4
+    size = struct.unpack('>I', data[box:at])[0]
+    version, p = data[at + 4], at + 8
+    _reference, timescale = struct.unpack('>II', data[p:p + 8])
+    p += 8
+    if version == 0:
+        _earliest, first = struct.unpack('>II', data[p:p + 8])
+        p += 8
+    else:
+        _earliest, first = struct.unpack('>QQ', data[p:p + 16])
+        p += 16
+    count = struct.unpack('>H', data[p + 2:p + 4])[0]
+    p += 4
+    if not timescale or not count or len(data) < p + 12 * count:
+        raise ValueError('sidx cut short')
+    offset, pieces = start + box + size + first, []
+    for _ in range(count):
+        reference, duration, _sap = struct.unpack('>III', data[p:p + 12])
+        p += 12
+        if reference >> 31:
+            raise ValueError('sidx of sidx')
+        pieces.append((offset, reference & 0x7FFFFFFF, duration / float(timescale)))
+        offset += reference & 0x7FFFFFFF
+    return pieces
+
+
+def mpd_choice(manifest, codec='avc1', max_height=WEBOS_HEIGHT):
+    """(video, audio) of a DASH manifest the YouTube add-on wrote: each a dict of url, init and index (byte
+    ranges as (first, last)), codecs, bandwidth, and for the picture width and height. The picture: the tallest
+    of `codec` up to max_height (else the tallest of any); the sound: the default AAC track (else any)."""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(manifest)
+    ns = {'d': 'urn:mpeg:dash:schema:mpd:2011'}
+
+    def span(text):
+        first, _, last = (text or '').partition('-')
+        return int(first), int(last)
+    videos, audios = [], []
+    for aset in root.iterfind('.//d:AdaptationSet', ns):
+        kind = aset.get('contentType') or (aset.get('mimeType') or '').partition('/')[0]
+        for rep in aset.iterfind('d:Representation', ns):
+            base, segment = rep.find('d:BaseURL', ns), rep.find('d:SegmentBase', ns)
+            init = segment.find('d:Initialization', ns) if segment is not None else None
+            if base is None or init is None or not (base.text or '').strip() or not segment.get('indexRange'):
+                continue
+            mime = rep.get('mimeType') or aset.get('mimeType') or ''
+            if not mime.endswith('/mp4'):
+                continue        # (FFmpeg reads MP4 pieces; WebM ones are left to the others)
+            item = dict(url=base.text.strip(), init=span(init.get('range')), index=span(segment.get('indexRange')),
+                        codecs=rep.get('codecs') or '', bandwidth=int(rep.get('bandwidth') or 0),
+                        width=int(rep.get('width') or 0), height=int(rep.get('height') or 0),
+                        default=aset.get('default') == 'true')
+            (videos if kind == 'video' else audios if kind == 'audio' else []).append(item)
+    fits = [v for v in videos if v['height'] <= max_height]
+    of_codec = [v for v in fits if v['codecs'].startswith(codec)] or fits
+    video = max(of_codec, key=lambda v: (v['height'], v['bandwidth'])) if of_codec else None
+    aac = [a for a in audios if a['codecs'].startswith('mp4a')] or audios
+    audio = max(aac, key=lambda a: (a['default'], a['bandwidth'])) if aac else None
+    return video, audio
+
+
+def media_playlist(stream, pieces):
+    """An HLS media playlist of one MP4 file: its header, then its pieces, each a byte range of the same address."""
+    import math
+    first, last = stream['init']
+    lines = ['#EXTM3U', '#EXT-X-VERSION:7', '#EXT-X-TARGETDURATION:%d' % max(1, math.ceil(max(p[2] for p in pieces))),
+             '#EXT-X-MEDIA-SEQUENCE:0', '#EXT-X-PLAYLIST-TYPE:VOD',
+             '#EXT-X-MAP:URI="%s",BYTERANGE="%d@%d"' % (stream['url'], last - first + 1, first)]
+    for offset, size, seconds in pieces:
+        lines += ['#EXTINF:%.3f,' % seconds, '#EXT-X-BYTERANGE:%d@%d' % (size, offset), stream['url']]
+    return '\n'.join(lines + ['#EXT-X-ENDLIST', ''])
+
+
+def master_playlist(video, audio, video_address, audio_address):
+    """The HLS playlist Kodi's player is handed: the picture, with the sound as its audio track."""
+    return '\n'.join(['#EXTM3U', '#EXT-X-VERSION:7', '#EXT-X-INDEPENDENT-SEGMENTS',
+                      '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="audio",DEFAULT=YES,AUTOSELECT=YES,URI="%s"' % audio_address,
+                      '#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%dx%d,CODECS="%s,%s",AUDIO="audio"'
+                      % (video['bandwidth'] + audio['bandwidth'], video['width'], video['height'], video['codecs'], audio['codecs']),
+                      video_address, ''])
+
+
+def served_address(address, name):
+    """The address at which the YouTube add-on's server serves the file `name` of its folder (the server of
+    `address`, a manifest it serves)."""
+    from urllib.parse import urlsplit, urlunsplit, urlencode
+    parts = urlsplit(address)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode({'file': name}), ''))
+
+
+def webos_hls(stream, fetch, save, log=lambda text: None, codec=WEBOS_VIDEO, max_height=WEBOS_HEIGHT):
+    """The trailer (a DASH manifest the YouTube add-on serves) as an HLS playlist for Kodi's own player, kept
+    beside it; the stream with that address, or None. save(name, text) keeps a file and returns its address."""
+    url, headers = stream.get('url') or '', stream.get('headers') or {}
+    if isinstance(headers, str):
+        headers = {}
+    try:
+        video, audio = mpd_choice(fetch(url, headers, ANSWER_S, None).decode('utf-8', 'replace'), codec, max_height)
+        if not video or not audio:
+            log('no HLS: the manifest has no MP4 %s' % ('picture' if not video else 'sound'))
+            return None
+        from urllib.parse import urlsplit, parse_qs
+        manifest_name = (parse_qs(urlsplit(url).query).get('file') or ['trailer.mpd'])[0]
+        name = 'povil_hls_' + os.path.basename(manifest_name).rsplit('.', 1)[0]
+        made = {}
+        for kind, item in (('v', video), ('a', audio)):
+            first, last = item['index']
+            pieces = parse_sidx(fetch(item['url'], headers, ANSWER_S, 'bytes=%d-%d' % (first, last)), first)
+            made[kind] = save('%s_%s.m3u8' % (name, kind), media_playlist(item, pieces))
+        master = save(name + '.m3u8', master_playlist(video, audio, made['v'], made['a']))
+    except Exception as exc:
+        log('no HLS: %s' % _why(exc))
+        return None
+    return dict(stream, url=master, container='hls', ffmpeg=True, height=video['height'], manifest=url)
+
+
 def kept_address(address, prefix='povil_'):
     """(file name, address) for a turned manifest kept beside the one the YouTube add-on wrote: the
     add-on's server serves the file named in the address's `file` field from its own folder."""
@@ -430,7 +685,7 @@ class Desk(object):
 
     def __init__(self, home, player, resolve, make_item, enabled, log=lambda text: None, clock=None,
                  ready=lambda stream: stream, halt=None, wanted_now=lambda key: False, look=lambda key: '', settle=0.0,
-                 acting=lambda: False, no_picture=None):
+                 acting=lambda: False, no_picture=None, translated=lambda key: []):
         import time
         self.home, self.player, self.resolve, self.make_item = home, player, resolve, make_item
         self.enabled, self.log, self.ready = enabled, log, ready
@@ -443,6 +698,8 @@ class Desk(object):
         self.wanted_now, self.look, self.settle = wanted_now, look, settle
         self.acting = acting        # is POV carrying out an action right now (or was a moment ago)?
         self.no_picture = no_picture    # called when a trailer showed no picture at all (an LG TV: switched off)
+        self.translated = translated    # the ids of a title's translated trailers on YouTube, tried first ([]: none)
+        self.stream = None              # the stream of the trailer this desk handed to the player
         self.opened = {}            # the ask -> when its trailer was handed to the player, the last few times
         self.choice = {}            # the ask -> the one of its trailers that was found long enough (or the longest)
         self.shown = None           # when the trailer on the player showed its first picture
@@ -534,7 +791,16 @@ class Desk(object):
         # that is MIN_TRAILER_S long is played, else the longest of those read (the owner: "a ten-second
         # clip tells me nothing"). The one found is remembered, so the next visit asks for it alone.
         stream, why = None, None
-        for number, candidate in enumerate(([self.choice[key]] if key in self.choice else video_ids(key))[:TRIES]):
+        if key in self.choice:
+            candidates = [self.choice[key]]
+        else:
+            try:
+                found = list(self.translated(key) or [])
+            except Exception as exc:
+                self.log('no translated trailer: %s' % _why(exc))
+                found = []
+            candidates = (found + [v for v in video_ids(key) if v not in found])[:TRIES + len(found)]
+        for number, candidate in enumerate(candidates):
             if number and not self._wanted(key, ticket):
                 return False
             try:
@@ -581,6 +847,7 @@ class Desk(object):
             self.opened[key] = times + [self.clock()]
             url = stream['url']
             self.ours, self.key, self.opening, self.stop_wanted = url, key, self.clock(), False
+            self.stream = stream
             # (set before the player starts: the subtitles add-on reads it when the playback begins)
             self.home.setProperty(ON, key)
             self.home.setProperty(FILE, url)
@@ -778,7 +1045,7 @@ def watch():
         from youtube_plugin.youtube.provider import Provider
         from youtube_plugin.kodion.context import XbmcContext
         from youtube_plugin.kodion.constants import SERVER_WAKEUP
-        return light_streams(video, Provider, XbmcContext, SERVER_WAKEUP, video_codec=video_codec)
+        return light_streams(video, Provider, XbmcContext, SERVER_WAKEUP, video_codec=video_codec, max_height=max_height)
 
     def fetch(address, headers, seconds, span):
         # (a plain read of this module's own: no proxy for an address inside this device)
@@ -788,7 +1055,7 @@ def watch():
             request.add_header('Range', span)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with opener.open(request, timeout=seconds) as answer:
-            return answer.read(1024 if span else 2 * 1024 * 1024)
+            return answer.read(64 * 1024 if span else 2 * 1024 * 1024)
 
     def save(text, address):
         # beside the manifest the YouTube add-on wrote, in the folder its server serves them from
@@ -800,13 +1067,115 @@ def watch():
             handle.write(text)
         return kept
 
+    def save_named(name, text):
+        # beside the manifests of the YouTube add-on, served by its server (webos_hls)
+        from youtube_plugin.kodion.constants import TEMP_PATH
+        with open(os.path.join(xbmcvfs.translatePath(TEMP_PATH), name), 'w', encoding='utf-8') as handle:
+            handle.write(text)
+        return served_address(served[0], name)
+
+    served = ['']
+
     def ready(stream):
-        return reachable(stream, fetch, save, log)
+        stream = reachable(stream, fetch, save, log)
+        if stream is not None and webos_player:
+            served[0] = stream.get('url') or ''
+            stream = webos_hls(stream, fetch, save_named, log)
+        return stream
+
+    kept_path = os.path.join(xbmcvfs.translatePath('special://profile/addon_data/plugin.program.kodipovilwizard/'), TRANSLATED_FILE)
+    pov_cache = xbmcvfs.translatePath('special://profile/addon_data/plugin.video.pov/metacache.db')
+
+    def youtube_search(query):
+        # YouTube's own search (no key): the YouTube add-on's "v1" client, as it browses with it
+        folder = xbmcvfs.translatePath('special://home/addons/%s/resources/lib/' % YOUTUBE)
+        if folder not in sys.path:
+            sys.path.append(folder)
+        from youtube_plugin.youtube.provider import Provider
+        from youtube_plugin.kodion.context import XbmcContext
+        client = Provider().get_client(context=XbmcContext())
+        return client.api_request(client='v1', method='POST', path='search', do_auth=False, notify=False,
+                                  post_data={'query': query, 'params': 'EgIQAQ%3D%3D'})
+
+    seen, kept_lock = {}, threading.Lock()
+
+    def translated(key):
+        video = video_id(key)
+        if not video:
+            return []
+        if video not in seen:
+            found = look_up(video, key)
+            if found is None:
+                return []       # (POV does not hold the title yet: asked again on the next visit)
+            seen[video] = found
+        return list(seen[video])
+
+    def keep(update):
+        # read, change and write the kept answers under a lock; written whole beside and moved into place
+        import json
+        with kept_lock:
+            try:
+                with open(kept_path, encoding='utf-8') as handle:
+                    kept = json.load(handle)
+            except (OSError, ValueError):
+                kept = {}
+            update(kept)
+            if len(kept) > 2000:
+                for old in sorted(kept, key=lambda k: kept[k].get('t') or 0)[:500]:
+                    kept.pop(old, None)
+            try:
+                with open(kept_path + '.tmp', 'w', encoding='utf-8') as handle:
+                    json.dump(kept, handle)
+                os.replace(kept_path + '.tmp', kept_path)
+            except OSError:
+                pass
+
+    def look_up(video, key):
+        # (once per title per session; the kept answer by the trailer's video spares POV's cache a full read)
+        import json
+        import sqlite3
+        try:
+            with open(kept_path, encoding='utf-8') as handle:
+                kept = json.load(handle)
+        except (OSError, ValueError):
+            kept = {}
+        entry = kept.get('v:' + video) or {}
+        if time.time() - float(entry.get('t') or 0) < (TRANSLATED_FOUND_S if entry.get('ids') else TRANSLATED_NONE_S):
+            return list(entry.get('ids') or [])
+        if not os.path.isfile(pov_cache):
+            return None
+        con = sqlite3.connect('file:%s?mode=ro' % pov_cache, uri=True, timeout=2.0)
+        try:
+            rows = con.execute('SELECT db_type, tmdb_id, meta FROM metadata WHERE meta LIKE ?', ('%' + video + '%',)).fetchall()
+        finally:
+            con.close()
+        meta, hebrew = title_of(rows, key)
+        if meta is None:
+            return None         # (a title POV does not hold yet)
+        if hebrew:
+            return []           # (its own trailer is Hebrew already)
+        entry = kept.get(meta['povil_id']) or {}
+        age = time.time() - float(entry.get('t') or 0)
+        if age < (TRANSLATED_FOUND_S if entry.get('ids') else TRANSLATED_NONE_S):
+            keep(lambda kept: kept.__setitem__('v:' + video, entry))
+            return list(entry.get('ids') or [])
+        query, names = translated_query(meta)
+        if not query:
+            return []
+        ids = translated_pick(search_results(youtube_search(query)), names)
+        log('translated trailer for %s: %s' % (meta['povil_id'], ', '.join(ids) or 'none on YouTube'))
+        answer = {'ids': ids, 't': time.time()}
+        keep(lambda kept: kept.update({meta['povil_id']: answer, 'v:' + video: answer}))
+        return ids
 
     def make_item(url, stream):
         item = xbmcgui.ListItem(path=url, offscreen=True)
         container = str(stream.get('container') or '').lower()
-        if stream.get('adaptive') or container in ('mpd', 'hls'):
+        if stream.get('ffmpeg'):
+            # (an LG TV: Kodi's own player, FFmpeg, reads the HLS playlist -- no inputstream.adaptive)
+            item.setMimeType('application/vnd.apple.mpegurl')
+            item.setContentLookup(False)
+        elif stream.get('adaptive') or container in ('mpd', 'hls'):
             item.setProperty('inputstream', 'inputstream.adaptive')
             item.setMimeType('application/dash+xml' if container != 'hls' else 'application/x-mpegURL')
             item.setContentLookup(False)
@@ -817,11 +1186,11 @@ def watch():
         return item
 
     home = xbmcgui.Window(10000)
-    video_codec, no_picture = 'avc1', None
+    video_codec, no_picture, max_height, webos_player = 'avc1', None, MAX_HEIGHT, False
     app_id = os.environ.get('APPID') if xbmc.getCondVisibility('System.Platform.Linux + !System.Platform.Android') else None
     if on_webos(app_id, xbmcvfs.translatePath('special://xbmc/'), xbmc.getInfoLabel('System.OSVersionInfo')):
-        video_codec = WEBOS_VIDEO
-        log('an LG TV (webOS): trailers in %s' % WEBOS_VIDEO.upper())
+        video_codec, max_height, webos_player = WEBOS_VIDEO, WEBOS_HEIGHT, True
+        log('an LG TV (webOS): trailers %dp through Kodi\'s own player (HLS)' % WEBOS_HEIGHT)
         _back, no_picture = webos_guard(
             os.path.join(xbmcvfs.translatePath('special://profile/addon_data/plugin.program.kodipovilwizard/'), WEBOS_OFF_FILE),
             xbmc.getInfoLabel('System.BuildVersion'),
@@ -877,7 +1246,7 @@ def watch():
     player = Events()
     desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready, acting=acting,
                 halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)'),
-                wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture)
+                wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture, translated=translated)
 
     def run(job):
         threading.Thread(target=lambda: job() and desk.guard(), name='POVILTrailer').start()
