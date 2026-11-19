@@ -63,8 +63,28 @@ RATINGS_KEY, RATINGS_SLOT = 9807, 'povil.rt.'
 # until the viewer says otherwise (the owner, Nov 2026).
 # (9809: 9808 is the ratings row's hidden TMDb label, RATINGS_KEY + 1 -- the two shared an id until 1.0.17,
 # and Kodi hands out whichever control of an id is visible first)
-TRAILER_KEY, TRAILER_OFF_SWITCH, TRAILER_REST_S = 9809, 'POVILNoTrailers', 3
+TRAILER_KEY, TRAILER_OFF_SWITCH = 9809, 'POVILNoTrailers'
 TRAILERS_ON, TRAILERS_OFF = '!Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH, 'Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH
+
+
+def by_choice(setting, default, choices, cond):
+    """cond(seconds) for the number of seconds the viewer chose in Skin.String(setting) (the Wizard's
+    trailer_timing.py writes it): the default while none is chosen; a value not among the choices never holds."""
+    parts = []
+    for seconds in choices:
+        chosen = 'String.IsEqual(Skin.String(%s),%d)' % (setting, seconds)
+        if seconds == default:
+            chosen = '[%s | String.IsEmpty(Skin.String(%s))]' % (chosen, setting)
+        parts.append('[%s + %s]' % (chosen, cond(seconds)))
+    return '[%s]' % ' | '.join(parts)
+
+
+# How long the screen rests on a title before its trailer is asked -- the viewer's choice (the tile "תזמון
+# טריילרים"). The owner, Nov 2026: "the trailer should play as fast as possible, almost at once" -- it took
+# about 4 s on his LG: a 3 s rest, then the trailer was read from YouTube. Now 1 s by default, and the Wizard
+# reads the trailer while the screen rests (povil.tr.peek, the timer povil_trailer_peek).
+TRAILER_WAIT, TRAILER_WAIT_S, TRAILER_WAITS = 'POVILTrailerWait', 1, (1, 2, 3, 5)
+TRAILER_REST = by_choice(TRAILER_WAIT, TRAILER_WAIT_S, TRAILER_WAITS, lambda seconds: 'System.IdleTime(%d)' % seconds)
 # (and its first picture has come: the Wizard clears povil.tr.opening then. On the owner's LG, Nov 2026, the
 # player said it had a video while it hung opening one that never showed a picture -- the home faded away into
 # "the trailer to itself" over nothing, and only a key brought it back)
@@ -75,9 +95,16 @@ TRAILER_SHOWN = ('Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.
 # it" -- POV names a title's Hebrew trailer when TMDb has one, and its words are in the picture): once
 # the trailer has been on for a few seconds and the remote is still, everything over the picture fades
 # away and the whole screen is the trailer. Any key brings the home back.
-TRAILER_ALONE_AFTER_S, TRAILER_STILL_S = 4, 3
-TRAILER_ALONE = ('%s + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),%d) + System.IdleTime(%d)'
-                 % (TRAILER_SHOWN, TRAILER_ALONE_AFTER_S, TRAILER_STILL_S))
+# How long that takes is the viewer's choice too (the same tile; "0" there: never) -- 4 s by default, as it
+# always was (the owner: "no later than it is today").
+TRAILER_FULL, TRAILER_ALONE_AFTER_S, TRAILER_FULLS, TRAILER_STILL_S = 'POVILTrailerFull', 4, (2, 3, 4, 6, 8, 12), 3
+# (Skin.TimerIsRunning: a stopped timer keeps its last count -- 39.7 s, read in the QA Kodi after a title
+# change -- and until Kodi starts it again for the next trailer, about half a second later, that count was
+# read: the home faded at the new trailer's first picture, 2 titles of 6 on 0.5.19)
+TRAILER_ALONE = '%s + Skin.TimerIsRunning(povil_trailer_shown) + %s' % (TRAILER_SHOWN, by_choice(
+    TRAILER_FULL, TRAILER_ALONE_AFTER_S, TRAILER_FULLS,
+    lambda seconds: 'Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),%d) + System.IdleTime(%d)'
+                    % (seconds, min(seconds, TRAILER_STILL_S))))
 TRAILER_FADE = ('<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="%s">Conditional</animation>'
                 % TRAILER_ALONE)
 PLAYER_RATINGS_KEY, PLAYER_RATINGS_SLOT = 7920, 'povil.rtp.'
@@ -350,6 +377,9 @@ SETTINGS_ITEMS = [
     # the trailer behind the hero (trailers.py): on unless switched off here; the tile says which
     ('$VAR[POVIL_TrailersTile]', 'DefaultAddonVideo.png', 'Skin.ToggleSetting(%s)' % TRAILER_OFF_SWITCH,
      'System.HasAddon(plugin.video.youtube)'),
+    # how soon it starts, and how soon it has the screen to itself (the Wizard asks, trailer_timing.py)
+    ('תזמון טריילרים', 'DefaultAddonVideo.png', plugin_run(WIZARD + '?mode=trailer_timing'),
+     'System.HasAddon(plugin.video.youtube) + ' + TRAILERS_ON),
     ('הגדרות הסקין', 'DefaultAddonSkin.png', 'ActivateWindow(SkinSettings)', ''),
     ('הגדרות קודי', 'DefaultAddonService.png', 'ActivateWindow(Settings)', ''),
     ('הרחבות', 'DefaultAddonsInstalled.png', 'ActivateWindow(AddonBrowser)', ''),
@@ -531,12 +561,31 @@ def gen_timers():
     # (none while an add-on is finding or opening a title's sources under Kodi's background progress:
     # the viewer pressed a title, a film is about to start -- review, Nov 2026)
     x(2, '<start reset="true">Window.IsActive(home) + %s + !System.HasActiveModalDialog + '
-         '!Window.IsVisible(extendedprogressdialog) + System.IdleTime(%d) + '
+         '!Window.IsVisible(extendedprogressdialog) + %s + '
          '!String.IsEmpty(Control.GetLabel(%d)) + !String.IsEqual(Control.GetLabel(%d),%s) + '
          '[!Player.HasMedia | !String.IsEmpty(Window(home).Property(povil.tr.on))]</start>'
-      % (TRAILERS_ON, TRAILER_REST_S, TRAILER_KEY, TRAILER_KEY, asked))
+      % (TRAILERS_ON, TRAILER_REST, TRAILER_KEY, TRAILER_KEY, asked))
+    # (the count to "the trailer to itself" starts again with every trailer: Kodi looks at its timers about
+    # twice a second, and a timer whose stop was never seen kept the last trailer's count -- the home faded
+    # at the new one's first picture. Seen in the QA Kodi: 2 titles of 6 on 0.5.19, 1 of 8 with the faster
+    # trailer, which comes sooner after the last one)
+    x(2, '<onstart>Skin.TimerStop(povil_trailer_shown)</onstart>')
     x(2, '<onstart>SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(%d)],home)</onstart>' % TRAILER_KEY)
     x(2, '<onstart>NotifyAll(povil.trailer,ask)</onstart>')
+    x(2, '<stop>true</stop>')
+    x(1, '</timer>')
+    # ... and the title the screen is on, named to the Wizard the moment it is there (povil.tr.peek): the
+    # trailer is read from YouTube while the screen rests, so it is ready when it is asked (the Wizard reads
+    # only a title the screen stayed on for a moment: not every poster passed on the way)
+    peeked = 'Window(home).Property(povil.tr.peek)'
+    x(1, '<timer>')
+    x(2, '<name>povil_trailer_peek</name>')
+    x(2, '<start reset="true">Window.IsActive(home) + %s + !System.HasActiveModalDialog + '
+         '!Window.IsVisible(extendedprogressdialog) + '
+         '!String.IsEmpty(Control.GetLabel(%d)) + !String.IsEqual(Control.GetLabel(%d),%s)</start>'
+      % (TRAILERS_ON, TRAILER_KEY, TRAILER_KEY, peeked))
+    x(2, '<onstart>SetProperty(povil.tr.peek,$ESCINFO[Control.GetLabel(%d)],home)</onstart>' % TRAILER_KEY)
+    x(2, '<onstart>NotifyAll(povil.trailer,peek)</onstart>')
     x(2, '<stop>true</stop>')
     x(1, '</timer>')
     # how long the trailer has been opening (Kodi's busy dialog is hidden for the first seconds of it only,
@@ -567,6 +616,7 @@ def gen_timers():
                '!String.IsEqual(Control.GetLabel(%d),%s)]' % (TRAILER_KEY, asked))
     x(2, '<start reset="true">!String.IsEmpty(%s) + [!Window.IsActive(home) | %s | '
          '%s | %s]</start>' % (asked, dialog, TRAILERS_OFF, changed))
+    x(2, '<onstart>Skin.TimerStop(povil_trailer_shown)</onstart>')
     x(2, '<onstart>ClearProperty(povil.tr.ask,home)</onstart>')
     x(2, '<onstart>NotifyAll(povil.trailer,stop)</onstart>')
     x(2, '<stop>true</stop>')
@@ -906,8 +956,9 @@ def gen_includes():
         x(2, '<value condition="%s"></value>' % cond)
     x(1, '</variable>')
     x(1, '<variable name="POVIL_TrailersTile">')
-    x(2, '<value condition="%s">טריילרים במסך הבית: כבוי</value>' % TRAILERS_OFF)
-    x(2, '<value>טריילרים במסך הבית: פועל</value>')
+    # (short: the tile showed the end of "טריילרים במסך הבית: פועל" only -- "פועל", seen in the QA Kodi)
+    x(2, '<value condition="%s">טריילרים: כבוי</value>' % TRAILERS_OFF)
+    x(2, '<value>טריילרים: פועל</value>')
     x(1, '</variable>')
     x(1, '<variable name="POVIL_HeroPlot">')
     detail('plot')

@@ -139,7 +139,9 @@ class HlsTests(unittest.TestCase):
         item = item[:item.index('    home = xbmcgui.Window(10000)')]
         self.assertLess(item.index("if stream.get('ffmpeg'):"), item.index("item.setProperty('inputstream', 'inputstream.adaptive')"))
         self.assertIn("item.setMimeType('application/vnd.apple.mpegurl')", item)
-        self.assertIn('stream = webos_hls(stream, fetch, save_named, log)', source)
+        self.assertIn('stream = webos_hls(stream, fetch, lambda name, text: save_named(name, text, manifest), log)', source)
+        # (each reading names its own manifest: a trailer read ahead and one asked for may be read at once)
+        self.assertNotIn('served[0]', source)
 
 
 if __name__ == '__main__':
