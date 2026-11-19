@@ -165,7 +165,15 @@ def hold_resets(base, local):
             now = local.get(key)
             if now is not None and now.get('d'):
                 gone.setdefault(name, []).append(key)
-    held = {name: keys for name, keys in gone.items() if len(keys) >= GUARD_MIN and len(keys) > GUARD_SHARE * alive[name]}
+    def reset(name, keys):
+        if len(keys) < GUARD_MIN:
+            return False
+        if name.endswith('.watched') or name.endswith('.progress'):
+            # a whole season marked unwatched is a viewer's real choice: these lists look reset only when emptied
+            # (the reviewer's note on 0.5.24; a reinstalled add-on or a fresh database is empty)
+            return len(keys) == alive[name]
+        return len(keys) > GUARD_SHARE * alive[name]
+    held = {name: keys for name, keys in gone.items() if reset(name, keys)}
     if not held:
         return local, {}
     out = dict(local)

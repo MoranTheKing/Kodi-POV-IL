@@ -620,5 +620,24 @@ class ReviewTests(unittest.TestCase):
         self.assertFalse(records.loads(cloud['text'])['pov.fav.movie.1'].get('d'), 'nothing removed for the others')
 
 
+class SeasonUnwatchedTests(unittest.TestCase):
+    """The reviewer's note on 0.5.24: a viewer who marks a whole season unwatched removes most of a small list on
+    purpose -- that travels; only an emptied watched or progress list is held as a reset."""
+
+    def test_a_season_marked_unwatched_travels_and_an_emptied_list_is_held(self):
+        base = {'pov.watched.episode.1399.%d.%d' % (s, e): {'v': {'title': 'x'}, 't': 10}
+                for s, count in ((1, 12), (2, 8)) for e in range(1, count + 1)}
+        local = dict(base)
+        for e in range(1, 13):
+            local['pov.watched.episode.1399.1.%d' % e] = {'t': 99, 'd': 1}
+        kept, held = records.hold_resets(base, local)
+        self.assertEqual(held, {}, 'twelve of twenty: a real choice')
+        self.assertTrue(kept['pov.watched.episode.1399.1.1'].get('d'))
+        emptied = {key: {'t': 99, 'd': 1} for key in base}
+        kept, held = records.hold_resets(base, emptied)
+        self.assertEqual(held, {'pov.watched': 20})
+        self.assertFalse(kept['pov.watched.episode.1399.1.1'].get('d'))
+
+
 if __name__ == '__main__':
     unittest.main()
