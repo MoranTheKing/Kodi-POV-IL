@@ -151,11 +151,36 @@ WEBOS_HEIGHT = 1080
 #     neither), kept in translated_trailers.json, and tried before TMDb's trailers.
 # No subtitles are asked of YouTube for a trailer: its own are speech recognition or a machine translation, and
 # asked for every trailer they were refused anyway ("429 Too Many Requests" in the QA Kodi).
-TRANSLATED = ('מתורגם', 'מתורגמת', 'תרגום', 'כתוביות בעברית', 'עם כתוביות')
+# (a Hebrew-dubbed trailer counts too: Disney Israel's for a children's film, say)
+TRANSLATED = ('מתורגם', 'מתורגמת', 'תרגום', 'כתוביות בעברית', 'עם כתוביות', 'מדובב', 'מדובבת')
 NOT_A_TRAILER = ('ביקורת', 'סיכום', 'תגובה', 'מאחורי הקלעים', 'ראיון', 'review', 'reaction', 'recap', 'explained',
                  'behind the scenes', 'interview', 'full episode', 'פרק מלא')
+# A "trailer" that sells a way to watch the film is not one (the owner, Nov 2026, Coco's: a still picture saying
+# "watch Coco free, built-in translation, the link in the description"). Checked on every video's own YouTube
+# title before it is played -- TMDb's too -- and on the search's results.
+NOT_A_TRAILER_EITHER = ('בחינם', 'חינם', 'סרט מלא', 'הסרט המלא', 'לינק', 'קישור', 'בתיאור', 'להורדה', 'full movie',
+                        'watch free', 'free online', 'watch online', 'online free', 'download', 'link in', 'in description',
+                        'stream free')
+# ... and these only next to one of those, or on a channel that is not a distributor's or a service's: yes and
+# HOT title real trailers "עכשיו לצפייה ישירה ב-yes VOD"
+SELLING_IF_NOT_TRUSTED = ('לצפייה ישירה', 'צפייה ישירה', 'צפייה מלאה')
+
+
+def selling(title, channel=None):
+    """Does a video's title sell a way to watch (a scam, not a trailer)? channel: the uploader when known."""
+    plain = ' %s ' % _plain(title)
+    if any(' %s ' % _plain(word) in plain for word in NOT_A_TRAILER_EITHER):
+        return True
+    soft = any(' %s ' % _plain(word) in plain for word in SELLING_IF_NOT_TRUSTED)
+    return bool(soft and channel is not None and not trusted(channel))
+
+
+def video_title(stream):
+    """The YouTube video's own title, as the YouTube add-on gives it with the stream."""
+    meta = (stream or {}).get('meta') or {}
+    return meta.get('title') or ((meta.get('video') or {}).get('title')) or ''
 TRANSLATED_FOUND_S, TRANSLATED_NONE_S = 14 * 86400, 3 * 86400     # a search is kept this long (found / none)
-TRANSLATED_FILE = 'translated_trailers.json'
+TRANSLATED_FILE = 'translated_trailers_v2.json'     # (v2, 0.5.17: searched again under the scam filter)
 # the uploads of Israeli distributors and of the services themselves come first (no channel's logo over the
 # picture -- seen in the QA Kodi: YouTube's first answer for one series was a small channel's, its logo on it)
 TRUSTED_CHANNELS = ('hit', 'tulip', 'forum film', 'פורום פילם', 'united king', 'יונייטד קינג', 'yes', 'hot', 'netflix',
@@ -257,7 +282,7 @@ def translated_pick(results, names, most=2):
             continue        # (whole words: "Up" or "היא" is not a part of another word)
         if seconds is None or not MIN_TRAILER_S <= seconds <= 300:
             continue
-        if any(word in plain for word in NOT_A_TRAILER):
+        if any(word in plain for word in NOT_A_TRAILER) or selling(title, item[3] if len(item) > 3 else ''):
             continue
         if re.match(r'^[\w-]{11}$', video or '') and video not in picked:
             picked.append(video)
@@ -805,6 +830,9 @@ class Desk(object):
                 return False
             try:
                 found = pick(self.resolve(candidate))
+                if found is not None and selling(video_title(found)):
+                    self.log('not a trailer (it sells a way to watch): %s' % candidate)
+                    continue
             except Asleep:
                 self._did_not_play('the YouTube add-on did not wake its server')
                 return False
