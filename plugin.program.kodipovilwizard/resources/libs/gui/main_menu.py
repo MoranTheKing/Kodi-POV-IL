@@ -61,6 +61,9 @@ class MainMenu:
                 ##############################################################################################
                 # KODI-POV-IL ACCOUNT MANAGER PILOT (opt-in; see wizard.install_acctmgr_pilot)
                 directory.add_dir('חיבור שירותים (Account Manager)', {'mode': 'run_acctmgr'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
+                # KODI-POV-IL - sync between devices through the viewer's own Google Drive (cloud_sync): from every skin,
+                # not only Onyx's settings tile
+                directory.add_file('סנכרון בין מכשירים (Google Drive)', {'mode': 'cloud_sync'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
                 ##############################################################################################
                 
             # KODI-POV-IL - Kodi's own settings back to the build's (see gui_repair),
