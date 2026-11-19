@@ -2,7 +2,7 @@
 
 # Helper functions and constants for patterns.py
 
-delimiters = "[\.\s\-\+_\/(),]"
+delimiters = r"[\.\s\-\+_\/(),]"
 
 langs = [
     ("rus(?:sian)?", "Russian"),
@@ -40,7 +40,7 @@ genres = [
     ("Sci-?Fi", "Sci-Fi"),
     ("Drama", "Drama"),
     ("Comedy", "Comedy"),
-    ("West(?:\.|ern)?", "Western"),
+    (r"West(?:\.|ern)?", "Western"),
     ("Action", "Action"),
     ("Adventure", "Adventure"),
     ("Thriller", "Thriller"),
@@ -99,7 +99,7 @@ def get_channel_audio_options(patterns_with_names):
         for (speakers, subwoofers) in channels:
             options.append(
                 (
-                    "((?:{}){}*{}[. \-]?{}(?:ch)?)".format(
+                    r"((?:{}){}*{}[. \-]?{}(?:ch)?)".format(
                         audio_pattern, delimiters, speakers, subwoofers
                     ),
                     "{} {}.{}".format(name, speakers, subwoofers),

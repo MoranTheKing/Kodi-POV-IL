@@ -162,7 +162,7 @@ def favouritesDataGen():
     namePattern = re.compile('name="([^"]+)')
     thumbPattern = re.compile('thumb="([^"]+)')
 
-    for entryMatch in re.finditer('(<favourite\s[^<]+</favourite>)', contents):
+    for entryMatch in re.finditer(r'(<favourite\s[^<]+</favourite>)', contents):
         entry = entryMatch.group(1)
 
         match = namePattern.search(entry)

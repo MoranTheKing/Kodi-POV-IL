@@ -89,8 +89,15 @@ class HlsTests(unittest.TestCase):
         text = trailers.media_playlist(video, [(900, 1000, 5.005), (1900, 2000, 4.2)])
         lines = text.splitlines()
         self.assertEqual(lines[:6], ['#EXTM3U', '#EXT-X-VERSION:7', '#EXT-X-TARGETDURATION:6', '#EXT-X-MEDIA-SEQUENCE:0',
-                                     '#EXT-X-PLAYLIST-TYPE:VOD', '#EXT-X-MAP:URI="%s",BYTERANGE="741@0"' % video['url']])
-        self.assertEqual(lines[6:9], ['#EXTINF:5.005,', '#EXT-X-BYTERANGE:1000@900', video['url']])
+                                     '#EXT-X-PLAYLIST-TYPE:VOD', '#EXT-X-MAP:URI="%s&povil=0.mp4",BYTERANGE="741@0"' % video['url']])
+        self.assertEqual(lines[6:9], ['#EXTINF:5.005,', '#EXT-X-BYTERANGE:1000@900', video['url'] + '&povil=1.mp4'])
+        # Kodi 22's FFmpeg (QA Kodi 22.0 RC2, Nov 2026): it refuses the playlist when a piece's address does not end
+        # like a media file, and it reads pieces that share one address as one stream (the picture stopped after
+        # the first piece) -- so each piece has an address of its own, ending in .mp4
+        addresses = [line for line in lines if line.startswith('http')]
+        self.assertTrue(all(address.endswith('.mp4') for address in addresses))
+        self.assertEqual(len(set(addresses)), len(addresses))
+        self.assertEqual(trailers.piece_address('http://h/youtube/stream', 3), 'http://h/youtube/stream?povil=3.mp4')
         self.assertEqual(lines[-1], '#EXT-X-ENDLIST')
         master = trailers.master_playlist(video, audio, 'http://h/v.m3u8', 'http://h/a.m3u8').splitlines()
         self.assertIn('#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="audio",DEFAULT=YES,AUTOSELECT=YES,URI="http://h/a.m3u8"', master)
