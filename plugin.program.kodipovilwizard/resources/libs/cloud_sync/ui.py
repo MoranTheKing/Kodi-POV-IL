@@ -15,8 +15,8 @@ INTRO = ('המועדפים, סימוני הצפייה ו"המשך צפייה" ש
 # (five short lines: the window's text area ends where its cancel button begins)
 STEPS = ('[B]1.[/B] בטלפון או במחשב היכנסו אל [B]{url}[/B][CR]'
          '[B]2.[/B] הקלידו את הקוד: [B][COLOR gold]{code}[/COLOR][/B][CR]'
-         '[B]3.[/B] בחרו את חשבון הגוגל שלכם ואשרו.[CR][CR]'
-         'החלון ייסגר לבד כשהחיבור יושלם.')
+         '[B]3.[/B] בחרו חשבון גוגל ואשרו (אפשר גם בטלפון הזה).[CR]'
+         'החלון ייסגר לבד כשתחזרו לקודי והחיבור יושלם.')
 LISTS = (('pov.fav.', 'מועדפים (POV)'), ('pov.drop.', 'סדרות שנזנחו (POV)'), ('pov.watched.', 'סימוני צפייה (POV)'),
          ('pov.progress.', 'המשך צפייה (POV)'), ('umb.fav.', 'מועדפים (Umbrella)'), ('umb.watched.', 'סימוני צפייה (Umbrella)'),
          ('umb.progress.', 'המשך צפייה (Umbrella)'))
@@ -93,8 +93,9 @@ def connect(folder):
     try:
         tokens = poll_device_flow(config.CLIENT_ID, config.CLIENT_SECRET, flow,
                                   wait=lambda seconds: monitor.waitForAbort(seconds),
-                                  cancelled=lambda: closed() or monitor.abortRequested())
-    except DriveError:
+                                  cancelled=lambda: closed() or monitor.abortRequested(), log=_log)
+    except DriveError as exc:
+        _log('connecting failed: %s' % exc.status)
         tokens = None
     finally:
         try:
