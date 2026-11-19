@@ -174,7 +174,7 @@
 					<width>100</width>
 					<texture colordiffuse="95FFFFFF" fallback="flags/starrating/rating0.png">$INFO[ListItem.ActualIcon,flags/starrating/rating,.png]</texture>
 					<aspectratio>keep</aspectratio>
-					<visible>!String.IsEmpty(ListItem.property(sync)</visible>
+					<visible>!String.IsEmpty(ListItem.Property(sync))</visible>
 				</control>
 				</control>
 				</itemlayout>
@@ -247,7 +247,7 @@
 					<width>100</width>
 					<texture colordiffuse="95FFFFFF" fallback="flags/starrating/rating0.png">$INFO[ListItem.ActualIcon,flags/starrating/rating,.png]</texture>
 					<aspectratio>keep</aspectratio>
-					<visible>!String.IsEmpty(ListItem.property(sync)</visible>
+					<visible>!String.IsEmpty(ListItem.Property(sync))</visible>
 				</control>
 				</control>
 				</focusedlayout>

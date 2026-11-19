@@ -1,3 +1,6 @@
+0.3.98
+- FENtastic's simple player had two "החלף מקור" buttons side by side with one id: the skin carries its own now, and the one this add-on added (fentastic_simpleplayer_source_patcher) was a second -- the remote's right key stood still on the pair (QA Kodi, Nov 2026). The patcher adds nothing where the skin has the button, and takes out the copy it added before (from the next Kodi start: the skin in memory keeps the old file until then). An older FENtastic without the button still gets one. Test: tests/test_fentastic_simpleplayer_source.py.
+
 0.3.97
 - Kodi 22 (Python 3.14) logs no "invalid escape sequence" warnings from MoranSubs: the patterns that carried a backslash are raw strings now (the owner's LG log on Kodi 22.0 RC2, Nov 2026). Nothing else changes.
 - Arctic Fuse 3's power menu: "שליחת לוג" runs the Wizard's log uploader. It ran POV's "Changelog & Log Utils" menu, which POV 6.11.03 no longer has; a device's row gets the new command where it stands, with its own label. Test: tests/test_favourites_send_log.py.

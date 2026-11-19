@@ -233,7 +233,7 @@
 	<param name="visible">VideoPlayer.AudioLanguage</param>
 	<param name="icontop">52</param>
 	<param name="iconleft">32</param>
-	<param name="icon">https://www.iconsdb.com/icons/preview/white/speaker-xxl.png</param>
+	<param name="icon">osd/fullscreen/buttons/audio.png</param>
 	</include>
 	<include content="_roundedFlagosd_">
 	<param name="labelposition">-3</param>
@@ -489,7 +489,7 @@
 	<bottom>40</bottom>
 	<height>50</height>
 	<width>35</width>
-	<texture>https://www.iconsdb.com/icons/preview/white/arrow-down-6-xxl.png</texture>
+	<texture>buttons/spinctrl/arrow-light-down.png</texture>
 	<colordiffuse>15FFFFFF</colordiffuse>
 	</control>
 <control type="image">
@@ -497,7 +497,7 @@
 	<height>50</height>
 	<width>35</width>
 	<right>5</right>
-	<texture flipy="true">https://www.iconsdb.com/icons/preview/white/arrow-down-6-xxl.png</texture>
+	<texture flipy="true">buttons/spinctrl/arrow-light-down.png</texture>
 	<colordiffuse>15FFFFFF</colordiffuse>
 </control>
 </control>

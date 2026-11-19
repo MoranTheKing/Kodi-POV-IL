@@ -851,7 +851,7 @@
 	</variable>
 	
 	<variable name="SetLabelflag">
-		<value condition="!String.IsEmpty(Player.Process(VideoFPS)">$VAR[NoLabelFlagFound]</value>
+		<value condition="!String.IsEmpty(Player.Process(VideoFPS))">$VAR[NoLabelFlagFound]</value>
 	</variable>
 	
 	<variable name="NextPreviousIndicator">

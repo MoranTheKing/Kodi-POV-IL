@@ -16,31 +16,31 @@
 <width max="auto">auto</width>
 <textcolor>45FFFFFF</textcolor>
 <label>$INFO[Window(home).Property(extendedinforating)]</label>
-<visible>!String.IsEmpty(Window(home).Property(extendedinforating)</visible>
+<visible>!String.IsEmpty(Window(home).Property(extendedinforating))</visible>
 </control>
 <control type="label">
 <width max="auto">auto</width>
 <textcolor>45FFFFFF</textcolor>
 <label>$INFO[Window(home).Property(extendedinfohebduration)]</label>
-<visible>!String.IsEmpty(Window(home).Property(extendedinfohebduration) + [String.IsEqual(Window(home).Property(extenedinfodbtype),movie) | String.IsEqual(Window(home).Property(extenedinfodbtype),episode)]</visible>
+<visible>!String.IsEmpty(Window(home).Property(extendedinfohebduration)) + [String.IsEqual(Window(home).Property(extenedinfodbtype),movie) | String.IsEqual(Window(home).Property(extenedinfodbtype),episode)]</visible>
 </control>
 <control type="label">
 <width max="auto">auto</width>
 <textcolor>45FFFFFF</textcolor>
 <label>$INFO[Window(home).Property(extendedinfotvshowname)]</label>
-<visible>!String.IsEmpty(Window(home).Property(extendedinfotvshowname) + ![String.IsEqual(Window(home).Property(extenedinfodbtype),movie)]</visible>
+<visible>!String.IsEmpty(Window(home).Property(extendedinfotvshowname)) + ![String.IsEqual(Window(home).Property(extenedinfodbtype),movie)]</visible>
 </control>
 <control type="label">
 <width max="auto">auto</width>
 <textcolor>45FFFFFF</textcolor>
 <label>$INFO[Window(home).Property(extendedinfocheckstatus)]</label>
-<visible>![String.IsEqual(Window(home).Property(extenedinfodbtype),movie) + String.IsEmpty(Window(home).Property(extendedinfocheckstatus)]</visible>
+<visible>![String.IsEqual(Window(home).Property(extenedinfodbtype),movie) + String.IsEmpty(Window(home).Property(extendedinfocheckstatus))]</visible>
 </control>
 <control type="label">
 <width max="auto">auto</width>
 <textcolor>45FFFFFF</textcolor>
 <label>$INFO[Window(home).Property(extendedinfoFixLabel)]</label>
-<visible>!String.IsEmpty(Window(home).Property(extendedinfoFixLabel) + String.IsEqual(Window(home).Property(extenedinfodbtype),movie)</visible>
+<visible>!String.IsEmpty(Window(home).Property(extendedinfoFixLabel)) + String.IsEqual(Window(home).Property(extenedinfodbtype),movie)</visible>
 </control>
 <control type="label">
 <width max="auto">auto</width>

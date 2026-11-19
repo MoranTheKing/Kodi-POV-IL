@@ -155,7 +155,7 @@
 			<visible>Player.Chapter | !String.IsEmpty(VideoPlayer.offset(-1).Title)</visible>
 		</item>
 		<item id="250">
-			<label>הרץ קדימה</label>
+			<label>הרץ אחורה</label>
 			<icon>osd/fullscreen/buttons/rewind.png</icon>
 			<visible>Player.SeekEnabled</visible>
 			<property name="rewind">rewind</property>
@@ -190,7 +190,7 @@
 		</item>
 		<item id="104">
 			<property name="timer">icons\infodialogs\timer.png</property>
-			<label>הנגן יסגר בעוד $INFO[Skin.String(OSDAutoCloseTime)] שניות</label>
+			<label>הפקדים ייסגרו אחרי $VAR[SkinSettingOSDAutoCloseTime] שניות</label>
 			<onclick>Skin.SetNumeric(OSDAutoCloseTime,20)</onclick>
 			<visible>Skin.HasSetting(playerclosedelay)</visible>
 		</item>
@@ -239,7 +239,7 @@
 			<visible>!Player.Paused</visible>
 		</item>
 		<item id="108">
-		<label>הגדרות ויאודו / אודיו / נגן</label>
+		<label>הגדרות וידאו / אודיו / נגן</label>
 			<icon>osd/fullscreen/buttons/settings.png</icon>
 			<onclick>ActivateWindow(1124)</onclick>
 		</item>
@@ -258,7 +258,7 @@
 			<onclick>Control.SetFocus(50001)</onclick>
 		</item>
 		<item id="109">
-			<label>מעבר לתוכנית הבאה או לא לפרק הבא</label>
+			<label>מעבר לתוכנית הבאה או לפרק הבא</label>
 			<icon>osd/fullscreen/buttons/next.png</icon>
 			<property name="id">next</property>
 			<onclick>SkipNext</onclick>
@@ -1075,7 +1075,7 @@
 	<include content="_FixOsdFlags">
 		<param name="left">Padxy10</param>
 		<param name="label2">$VAR[_FixaudiolangugeOsd]</param>
-		<param name="texture">https://www.iconsdb.com/icons/preview/white/speaker-xxl.png</param>
+		<param name="texture">osd/fullscreen/buttons/audio.png</param>
 		<param name="visible">true</param>
 	</include>
 	<include content="_FixOsdFlags">

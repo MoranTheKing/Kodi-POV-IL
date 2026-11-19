@@ -58,7 +58,7 @@
             <height>40</height>
             <top>765</top>
             <right>320</right>
-            <texture colordiffuse="15FFFFFF">https://www.iconsdb.com/icons/preview/white/arrow-xxl.png</texture>
+            <texture colordiffuse="15FFFFFF">icons/keyboard/arrowright.png</texture>
 			<include>GlobaRight2LeftAnimation</include>
         </control>
         <control type="label">
@@ -168,7 +168,7 @@
             <height>40</height>
             <top>765</top>
             <right>20</right>
-            <texture colordiffuse="15FFFFFF">https://www.iconsdb.com/icons/preview/white/arrow-xxl.png</texture>
+            <texture colordiffuse="15FFFFFF">icons/keyboard/arrowright.png</texture>
 			<include>GlobaRight2LeftAnimation</include>
         </control>
         <control type="label">

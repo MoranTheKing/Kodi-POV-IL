@@ -99,8 +99,24 @@ def _parses(text):
         return False
 
 
+# FENtastic's own simple player has carried this very button (id 700460) since the build's FENtastic 1.0.x:
+# with ours there were two, side by side and with one id -- the "third arrow" -- and the remote's right key
+# stood still on them (QA Kodi, Nov 2026). Ours is taken out again where the skin's own is there.
+NATIVE = 'id="700460"'
+
+
+def without_ours(content):
+    """The file without the one line this patcher added (its marker's line)."""
+    at = content.find(MARKER)
+    if at == -1:
+        return content
+    start = content.rfind('\n', 0, at) + 1
+    end = content.find('\n', at)
+    return content[:start] + ('' if end == -1 else content[end + 1:])
+
+
 def ensure_patched():
-    """Returns 'patched' | 'already_patched' | 'no_fentastic' | 'unmatched'
+    """Returns 'patched' | 'already_patched' | 'native' | 'removed_duplicate' | 'no_fentastic' | 'unmatched'
     | 'compile_failed' | 'read_failed' | 'write_failed'."""
     if xbmcvfs is None:
         return 'no_fentastic'
@@ -113,7 +129,18 @@ def ensure_patched():
         return 'read_failed'
 
     if MARKER in content:
-        return 'already_patched'
+        rest = without_ours(content)
+        if NATIVE not in rest:
+            return 'already_patched'
+        try:
+            _write(OSD3_REL, rest)
+        except Exception as e:
+            _log('write failed: {0}'.format(e), level='WARNING')
+            return 'write_failed'
+        _log('the skin has its own change-source button: the second one taken out', level='INFO')
+        return 'removed_duplicate'
+    if NATIVE in content:
+        return 'native'
 
     idx = content.find(ANCHOR)
     if idx == -1 or content.find(ANCHOR, idx + 1) != -1:

@@ -1,3 +1,12 @@
+1.0.35
+- The four player styles, checked button by button in the QA Kodi (the owner, Nov 2026: "check every player in depth and fix whatever does not work well"):
+  - Netflix style, the jump lists of forward and rewind: "1 דקה" jumped 2 minutes, "60 דקות" 80, "80 דקות" not at all (sseek, no such command), and "הרצה" in the rewind list ran forward. Measured after: 1 minute about 70 s (the picture's key frames), 10 minutes 608 s.
+  - "שנה נגן" (the player menu, the power menu): all four styles in turn -- it went simple, advanced, netflix and back, never to the fourth.
+  - Simple style: the remote's right key from stop passes over nothing -- it went past "החלף מקור" (it pointed at the disc-menu button, there only for a disc that has one). Every button is reached both ways now.
+  - Twenty-three conditions never held -- a bracket missing, or a text label used as a yes/no (Kodi reads them as false): the "synced" mark in the subtitle list, the chapter / season line of the advanced style (also a text label used as a yes/no), the player's fanart and landscape, extended info, the first step of three toggles.
+  - Labels: the advanced style's rewind said "הרץ קדימה"; "ויאודו"; "או לא לפרק הבא"; "הנגן יסגר בעוד" is the time after which the CONTROLS close (and showed no number until one was set); "אחוזי צפייה עד כה: X%" (it read ":... X% אחוז").
+  - No picture is fetched from another website any more: 27 icons and one background came from iconsdb.com and ibb.co on every viewer's device (their address went there; offline the buttons had no picture). The skin's own pictures instead.
+
 1.0.34
 - Player: a tap or a click on the picture closes the controls, in all four player styles (the skin had no such area). Any arrow from it goes back to the buttons.
 

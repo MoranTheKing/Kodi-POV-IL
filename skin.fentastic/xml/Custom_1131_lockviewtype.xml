@@ -5,7 +5,7 @@
 	<controls>
 	
 	<include content="AdvancedGlobalViewBackGround">
-		<param name="fanart">https://i.ibb.co/1tnVhYvG/vecteezy-nature-background-high-resolution-wallpaper-for-a-serene-49855695.jpg</param>
+		<param name="fanart">$VAR[generalviewtypefanartview]</param>
 	</include>
 	
 	<!-- LOCK PLAYERS -->
