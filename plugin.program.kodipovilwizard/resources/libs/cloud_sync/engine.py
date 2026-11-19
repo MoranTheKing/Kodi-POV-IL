@@ -55,7 +55,7 @@ class Folder(object):
 
     def disconnect(self):
         """This device only: its access, and what it knew of the file (the viewer's other devices stay connected)."""
-        for name in ('tokens.json', 'state.json', 'base.json', 'remote.json'):
+        for name in ('tokens.json', 'state.json', 'base.json', 'remote.json', 'copied.json'):
             try:
                 os.remove(self.file(name))
             except OSError:
@@ -73,6 +73,15 @@ class Folder(object):
         _write_json(self.file('base.json'), base)
         _write_json(self.file('remote.json'), remote)
         _write_json(self.file('state.json'), state)
+
+    def copied(self):
+        """What the Trakt / MDBList copy last wrote into POV's watched.db (stores.mirror_pov)."""
+        copied = _read_json(self.file('copied.json'), {})
+        return copied if isinstance(copied, dict) else {}
+
+    def save_copied(self, copied):
+        os.makedirs(self.path, exist_ok=True)
+        _write_json(self.file('copied.json'), copied)
 
     def lock(self, clock=time.time):
         """True when this round may run (no other round holds the lock, or the one that did is long gone)."""
@@ -96,10 +105,19 @@ class Folder(object):
             pass
 
 
+def clean_copied(copied):
+    from .records import KEY, clean_value
+    return {key: clean_value(value) or {} for key, value in copied.items() if isinstance(key, str) and KEY.match(key)}
+
+
 def sync_round(folder, stores, drive, now_ms):
     """One round. Returns {'put', 'removed', 'uploaded', 'records', 'skipped'} (counts); raises the Drive's errors."""
     state = folder.state()
     base, remote = folder.maps()
+    if stores.pov_dir and stores.pov_indicators in (1, 2):
+        from .stores import mirror_pov
+        copied, _done = mirror_pov(stores.pov_dir, stores.pov_indicators, clean_copied(folder.copied()))
+        folder.save_copied(copied)
     values, skipped = stores.read()
     local = records.changes(base, values, now_ms, stores.mine)
     file_id, md5 = state.get('file_id'), None
@@ -132,11 +150,20 @@ def sync_round(folder, stores, drive, now_ms):
 # ------------------------------------------------------------------ inside Kodi
 def kodi_parts():
     """(folder, stores) of this Kodi profile."""
+    import xbmc
+    import xbmcaddon
     import xbmcvfs
     from .stores import Stores
     data = xbmcvfs.translatePath('special://profile/addon_data/')
+    indicators = 0
+    if xbmc.getCondVisibility('System.HasAddon(plugin.video.pov)'):
+        try:
+            # where POV keeps its watched marks: 0 itself, 1 Trakt, 2 MDBList (stores.mirror_pov)
+            indicators = int(xbmcaddon.Addon('plugin.video.pov').getSetting('watched_indicators') or 0)
+        except (RuntimeError, ValueError):
+            indicators = 0
     return (Folder(os.path.join(data, 'plugin.program.kodipovilwizard', 'cloud_sync')),
-            Stores(os.path.join(data, 'plugin.video.pov'), os.path.join(data, 'plugin.video.umbrella')))
+            Stores(os.path.join(data, 'plugin.video.pov'), os.path.join(data, 'plugin.video.umbrella'), indicators))
 
 
 def make_drive(folder):
@@ -179,31 +206,76 @@ def run_once(log, why='round'):
     return summary
 
 
+class Schedule(object):
+    """When the next round runs. The owner, Nov 2026, on the quota: "a viewer who starts a few films a day ... and has
+    five more devices at home -- isn't that a lot?" -- the expensive part is every other device reading each change.
+    So: a round soon after start; one AFTER_PLAYBACK_S after a film or an episode ends (its place, its watched mark),
+    never during one (POV keeps the place on the device every minute, and it is sent when the playback ends -- or,
+    if Kodi was switched off mid-way, at its next start); every EVERY_S while someone uses the device; none while it
+    stands idle (nobody touched the remote for IDLE_S), and one at once when someone comes back to it."""
+
+    def __init__(self, now):
+        self.due, self.urgent, self.away, self.trailer = now + FIRST_WAIT_S, True, False, False
+
+    def started(self, trailer):
+        self.trailer = trailer          # (the home's trailer is a playback too: its end sends nothing)
+
+    def ended(self, now):
+        if not self.trailer:
+            # (not sooner: POV writes the place and the watched mark in the seconds after the stop)
+            self.due, self.urgent = now + AFTER_PLAYBACK_S, True
+        self.trailer = False
+
+    def ready(self, now, idle, watching):
+        """True when a round runs now."""
+        if idle >= IDLE_S:
+            self.away = True
+        elif self.away and idle < 30:
+            self.away = False
+            self.due, self.urgent = min(self.due, now), True         # back at the device: its lists fresh now
+        if now < self.due:
+            return False
+        if watching:
+            self.due = now + 60
+            return False
+        urgent, self.urgent = self.urgent, False
+        self.due = now + EVERY_S
+        return urgent or not self.away
+
+
+IDLE_S = 20 * 60
+
+
 def watch():
-    """The Wizard's start-up service runs this as one of its threads: a round soon after start, every EVERY_S, and
-    AFTER_PLAYBACK_S after a playback ends. Nothing at all while the device is not connected."""
+    """The Wizard's start-up service runs this as one of its threads (see Schedule). Nothing at all while the device
+    is not connected."""
     import xbmc
+    import xbmcgui
 
     def log(text):
         xbmc.log('[POV IL sync] %s' % text, xbmc.LOGINFO)
 
     monitor = xbmc.Monitor()
-    due = [time.time() + FIRST_WAIT_S]
+    home = xbmcgui.Window(10000)
+    schedule = Schedule(time.time())
 
     class Player(xbmc.Player):
+        def onAVStarted(self):
+            schedule.started(bool(home.getProperty('povil.tr.on')))
+
         def onPlayBackStopped(self):
-            due[0] = min(due[0], time.time() + AFTER_PLAYBACK_S)
+            schedule.ended(time.time())
 
         def onPlayBackEnded(self):
-            self.onPlayBackStopped()
+            schedule.ended(time.time())
 
     player = Player()
     while not monitor.abortRequested():
         if monitor.waitForAbort(5):
             break
-        if time.time() < due[0]:
+        watching = xbmc.getCondVisibility('Player.HasVideo') and not home.getProperty('povil.tr.on')
+        if not schedule.ready(time.time(), xbmc.getGlobalIdleTime(), watching):
             continue
-        due[0] = time.time() + EVERY_S
         folder, _stores = kodi_parts()
         if folder.tokens() is None:
             continue

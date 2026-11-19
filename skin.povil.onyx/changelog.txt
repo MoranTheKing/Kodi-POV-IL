@@ -1,3 +1,6 @@
+[B]Kodi POV IL - Onyx 1.0.24[/B]
+- The settings tile "סנכרון בין מכשירים": POV's and Umbrella's own lists on every device of the viewer, through the viewer's own Google Drive (the Wizard's cloud_sync, Wizard 0.5.24).
+
 [B]Kodi POV IL - Onyx 1.0.23[/B]
 - The home a size up where it is read from the sofa (a viewer, via the owner, Nov 2026: "bigger, to see from afar -- the top bar, the chips, the film's details like the rating; done with care, not a build for the old"): the top bar 31 -> 34, the chips 23 -> 26, the hero's details, its episode line and the sites' ratings 26 -> 28 -- fonts of their own (povil_tab, povil_chip_home, povil_hero_meta[_bold]), so the player, the info screen and the dialogs keep theirs. The bar stays as wide (it ends right of the power button): the longest name ("המשך צפייה") has a little more room and the two shortest a little less -- with the bigger font "ישראלי" and "המשך צפייה" read as one phrase (QA Kodi).
 - The watched mark's colour, the viewer's choice (a viewer: "how do I make the V green, where I now see it gold?"): the settings tile "סימן נצפה: ..." -- gold (as until now), green, white or light blue; Kodi's own list (Skin.SelectBool, named by the skin's strings 31900-31904: plain text showed Kodi's string 0, "Programs"). QA Kodi: green and light blue on the home's pictures, the tile naming the choice.
