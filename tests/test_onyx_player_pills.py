@@ -30,11 +30,12 @@ def remember():
 
 class PlayerPillsTests(unittest.TestCase):
     def test_both_player_windows_carry_the_pills_and_none_takes_the_focus(self):
-        for name in ('VideoOSD.xml', 'VideoFullScreen.xml'):
+        # (the controls draw them twice: in Onyx's own player and in the large one, gen_osd_styles.py)
+        for name, times in (('VideoOSD.xml', 2), ('VideoFullScreen.xml', 1)):
             root = ET.parse(XML / name).getroot()
             pills = [c for c in root.iter('control')
                      if c.get('type') == 'button' and (c.findtext('label') or '').startswith('$VAR[POVIL_OSD_')]
-            self.assertEqual(sorted(c.findtext('label')[5:-1] for c in pills), sorted(PILLS + ('POVIL_OSD_Provider',)), name)
+            self.assertEqual(sorted(c.findtext('label')[5:-1] for c in pills), sorted(list(PILLS + ('POVIL_OSD_Provider',)) * times), name)
             for pill in pills:
                 self.assertEqual(pill.findtext('enable'), 'false', 'a pill is not a stop for the remote')
                 self.assertEqual(pill.findtext('width'), 'auto')
@@ -192,7 +193,7 @@ class SubtitlePositionTests(unittest.TestCase):
             for suffix in ('', '_fo'):
                 self.assertTrue((ROOT / 'skin.povil.onyx/media/povil/osd' / (name + suffix + '.png')).is_file(), name)
         router = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/common/router.py').read_text('utf-8')
-        self.assertIn("'player_subs_position'):", router, 'a kids profile may move its subtitles too')
+        self.assertIn("'player_subs_position', 'player_style'):", router, 'a kids profile may move its subtitles too')
         home = ET.parse(XML / 'Home.xml').getroot()
         power = next(c for c in home.iter('control') if c.get('id') == '9099')
         self.assertEqual(power.findtext('onclick'), 'ActivateWindow(ShutdownMenu)')
