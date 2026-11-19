@@ -378,7 +378,7 @@ class DeviceFlowTests(unittest.TestCase):
             (200, {'access_token': 'at', 'refresh_token': 'rt', 'expires_in': 3599}),
         ])
         flow = self.drive.start_device_flow('client', opener=opener)
-        self.assertIn(b'scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive.appdata', sent[0][2], 'only the app folder')
+        self.assertIn(b'scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive.file', sent[0][2], 'only the files it made')
         waited = []
         tokens = self.drive.poll_device_flow('client', 'secret', flow, wait=waited.append, clock=lambda: 1000.0, opener=opener)
         self.assertEqual(tokens['refresh_token'], 'rt')

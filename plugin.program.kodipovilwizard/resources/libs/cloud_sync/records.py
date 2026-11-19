@@ -3,7 +3,7 @@ Umbrella's own local lists -- favourites, dropped shows, watched marks, the plac
 map of records that every device of that viewer merges.
 
 The owner, Nov 2026: "sync between devices from anywhere in the world, of series and films (lists and continue
-watching), without fiddling with Trakt or MDBList". Kept in the viewer's own Google Drive (its hidden app folder,
+watching), without fiddling with Trakt or MDBList". Kept in the viewer's own Google Drive (one file the build made,
 drive.py); none of it passes through the build's own servers.
 
 A record: {'v': {plain values}, 't': when it last changed (ms), 'd': 1 when it was removed}. Every device keeps
