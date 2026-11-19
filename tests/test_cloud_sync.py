@@ -233,6 +233,15 @@ class FakeDrive(object):
         self.calls.append(('find', 100))
         return dict(self.store['meta']) if self.store.get('meta') else None
 
+    def find_all(self):
+        self.calls.append(('find', 100))
+        files = [dict(self.store['meta'])] if self.store.get('meta') else []
+        return files + [dict(meta) for meta, _text in self.store.get('extra', [])]
+
+    def delete(self, file_id):
+        self.calls.append(('delete', 50))
+        self.store['extra'] = [(m, x) for m, x in self.store.get('extra', []) if m['id'] != file_id]
+
     def look(self, file_id):
         self.calls.append(('look', 5))
         meta = self.store.get('meta')
@@ -240,6 +249,9 @@ class FakeDrive(object):
 
     def download(self, file_id):
         self.calls.append(('download', 200))
+        for meta, text in self.store.get('extra', []):
+            if meta['id'] == file_id:
+                return text
         return self.store['text']
 
     def upload(self, text, file_id=None):
@@ -488,6 +500,124 @@ class ScheduleTests(unittest.TestCase):
             s.started(trailer=True)
             s.ended(self.engine.FIRST_WAIT_S + 10 + i)
         self.assertFalse(s.ready(self.engine.FIRST_WAIT_S + 100, 0, False), 'browsing trailers asks for no round')
+
+
+class ReviewTests(unittest.TestCase):
+    """The reviewer's findings on 0.5.24: a reset list, an emptied Trakt cache, a late place, a first connect, two
+    files, a clock ahead, a table of an unexpected shape."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix='povil-review-')
+        self.engine, _drive = _engine()
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def device(self, name, **kw):
+        d = Device(self.root, name, **kw)
+        d.folder = self.engine.Folder(os.path.join(self.root, name, 'wizard'))
+        return d
+
+    def round(self, device, cloud, now):
+        return self.engine.sync_round(device.folder, device.stores, FakeDrive(cloud), now)
+
+    def test_a_device_whose_list_was_reset_is_filled_again_and_wipes_nobody(self):
+        cloud = {}
+        tv, phone = self.device('tv'), self.device('phone')
+        for n in range(12):
+            tv.sql('pov', 'INSERT INTO favorites VALUES (?, ?, ?)', ('movie', str(1000 + n), 'Film %d' % n))
+        self.round(tv, cloud, 1000)
+        self.round(phone, cloud, 2000)
+        tv.sql('pov', 'DELETE FROM favorites')             # POV reinstalled, its data cleared
+        summary = self.round(tv, cloud, 3000)
+        self.assertEqual(summary['held'], {'pov.fav': 12})
+        self.assertEqual(len([k for k in tv.stores.read()[0] if k.startswith('pov.fav.')]), 12, 'filled again from the cloud')
+        self.round(phone, cloud, 4000)
+        self.assertEqual(len([k for k in phone.stores.read()[0] if k.startswith('pov.fav.')]), 12, 'the other device keeps them')
+        # a few removed by the viewer still travel
+        tv.sql('pov', 'DELETE FROM favorites WHERE tmdb_id IN (?, ?)', ('1000', '1001'))
+        self.assertEqual(self.round(tv, cloud, 5000)['held'], {})
+        self.round(phone, cloud, 6000)
+        self.assertEqual(len([k for k in phone.stores.read()[0] if k.startswith('pov.fav.')]), 10)
+
+    def test_an_emptied_trakt_cache_removes_nothing(self):
+        tv = self.device('tv')
+        rows = [('INSERT INTO watched_status VALUES (?, ?, ?, ?, ?, ?)', ('episode', '1399', 1, n, '2026-11-19T20:00:00.000Z', 'GoT'))
+                for n in range(1, 13)]
+        db(os.path.join(tv.pov, 'traktcache.db'), POV_SCHEMA, rows)
+        copied, done = stores.mirror_pov(tv.pov, 1, {})
+        self.assertEqual(done, 12)
+        con = sqlite3.connect(os.path.join(tv.pov, 'traktcache.db'))
+        con.execute('DELETE FROM watched_status')           # POV rebuilding its Trakt cache
+        con.commit()
+        con.close()
+        copied2, done = stores.mirror_pov(tv.pov, 1, copied)
+        self.assertEqual(done, 0)
+        self.assertEqual(sorted(copied2), sorted(copied), 'the copy keeps what it holds')
+        self.assertEqual(len([k for k in tv.stores.read()[0] if k.startswith('pov.watched.')]), 12)
+
+    def test_a_place_noticed_late_loses_to_a_newer_place_from_another_device(self):
+        import time as _time
+        cloud = {}
+        tv, phone = self.device('tv'), self.device('phone')
+        self.round(tv, cloud, 1000)
+        self.round(phone, cloud, 1100)
+        older = _time.strftime('%Y-%m-%d %H:%M:%S', _time.localtime(1_700_000_000))
+        newer = _time.strftime('%Y-%m-%d %H:%M:%S', _time.localtime(1_700_003_600))
+        now = 1_700_100_000_000
+        # the TV stopped at 20 min and was switched off; meanwhile the phone reached 40 min and sent it
+        tv.sql('pov', 'INSERT INTO progress VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', ('episode', '1399', 1, 2, '35.0', '1200', older, 0, 'GoT'))
+        phone.sql('pov', 'INSERT INTO progress VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', ('episode', '1399', 1, 2, '70.0', '2400', newer, 0, 'GoT'))
+        self.round(phone, cloud, now)
+        self.round(tv, cloud, now + 86400 * 1000)          # the TV's next start, a day later
+        self.assertEqual(tv.stores.read()[0]['pov.progress.episode.1399.1.2']['curr_time'], '2400')
+
+    def test_a_second_device_s_first_connect_keeps_the_newer_place_and_the_others_favourites(self):
+        import time as _time
+        cloud = {}
+        tv = self.device('tv')
+        newer = _time.strftime('%Y-%m-%d %H:%M:%S', _time.localtime(1_700_003_600))
+        older = _time.strftime('%Y-%m-%d %H:%M:%S', _time.localtime(1_700_000_000))
+        tv.sql('pov', 'INSERT INTO progress VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', ('movie', '27205', '', '', '70.0', '6000', newer, 0, 'I'))
+        tv.sql('pov', 'INSERT INTO favorites VALUES (?, ?, ?)', ('movie', '27205', 'Inception'))
+        self.round(tv, cloud, 1_700_050_000_000)
+        phone = self.device('phone')
+        phone.sql('pov', 'INSERT INTO progress VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', ('movie', '27205', '', '', '10.0', '900', older, 0, 'I'))
+        phone.sql('pov', 'INSERT INTO favorites VALUES (?, ?, ?)', ('movie', '27205', 'Inception (old title)'))
+        phone.sql('pov', 'INSERT INTO favorites VALUES (?, ?, ?)', ('movie', '603', 'The Matrix'))
+        self.round(phone, cloud, 1_700_060_000_000)
+        values = phone.stores.read()[0]
+        self.assertEqual(values['pov.progress.movie.27205._._']['curr_time'], '6000')
+        self.assertEqual(values['pov.fav.movie.27205']['title'], 'Inception')
+        self.assertIn('pov.fav.movie.603', records.loads(cloud['text']), 'what the others lack is added')
+
+    def test_two_files_of_the_build_are_merged_into_one(self):
+        cloud = {}
+        tv, phone = self.device('tv'), self.device('phone')
+        tv.sql('pov', 'INSERT INTO favorites VALUES (?, ?, ?)', ('movie', '1', 'One'))
+        self.round(tv, cloud, 1000)
+        other = records.dumps({'pov.fav.movie.2': {'v': {'db_type': 'movie', 'tmdb_id': '2', 'title': 'Two'}, 't': 900}})
+        cloud['extra'] = [({'id': 'file-2', 'md5Checksum': 'x'}, other)]
+        summary = self.round(phone, cloud, 2000)
+        self.assertEqual(summary['merged_files'], 1)
+        self.assertEqual(cloud['extra'], [], 'the other file is deleted')
+        self.assertEqual(sorted(k for k in records.loads(cloud['text'])), ['pov.fav.movie.1', 'pov.fav.movie.2'])
+
+    def test_a_record_from_a_clock_far_ahead_is_taken_as_made_now(self):
+        recs = {'pov.fav.movie.1': {'v': {}, 't': 10 ** 13}, 'pov.fav.movie.2': {'v': {}, 't': 5}}
+        fixed, count = records.from_the_future(recs, 1000)
+        self.assertEqual((fixed['pov.fav.movie.1']['t'], fixed['pov.fav.movie.2']['t'], count), (1000, 5, 1))
+
+    def test_a_table_of_an_unexpected_shape_is_left_out_not_emptied(self):
+        cloud = {}
+        tv = self.device('tv')
+        tv.sql('pov', 'INSERT INTO favorites VALUES (?, ?, ?)', ('movie', '1', 'One'))
+        self.round(tv, cloud, 1000)
+        tv.sql('pov', 'DROP TABLE favorites')
+        tv.sql('pov', 'CREATE TABLE favorites (db_type TEXT, tmdb TEXT, name TEXT)')   # a future POV renamed its columns
+        summary = self.round(tv, cloud, 2000)
+        self.assertEqual(summary['unreadable'], ['pov.fav'])
+        self.assertFalse(records.loads(cloud['text'])['pov.fav.movie.1'].get('d'), 'nothing removed for the others')
 
 
 if __name__ == '__main__':
