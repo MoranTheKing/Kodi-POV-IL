@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-11-19T10:08:05Z",
+  "generated": "2026-11-19T12:24:08Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -46,24 +46,24 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.5.18",
+      "version": "0.5.19",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.5.18.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.5.18.zip",
-      "size": 2622572,
-      "sha256": "3410a26fc5b8bf9ebd485bb3ffb73b7fe68417de7d08667b248d70faca7f6b25",
-      "updated": "2026-11-19T10:08:05Z"
+      "filename": "plugin.program.kodipovilwizard-0.5.19.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.5.19.zip",
+      "size": 2625016,
+      "sha256": "ff31eda417d5d6492dbcc4f6847ac149e013a1247fae14a3f5bcacbb9b04bb71",
+      "updated": "2026-11-19T12:24:08Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
       "name": "מועדפים ואייקונים",
-      "version": "1.4.13",
+      "version": "1.4.14",
       "type": "plugin",
-      "filename": "plugin.program.orderfavourites-hebrew-1.4.13.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.13.zip",
-      "size": 13338413,
-      "sha256": "5e6df3a0d269a66f5ba2adfad25959a61e0616468e93d047d087bd883a0fcf56",
-      "updated": "2026-11-17T21:11:48Z"
+      "filename": "plugin.program.orderfavourites-hebrew-1.4.14.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.14.zip",
+      "size": 13338414,
+      "sha256": "a84c0451485866bd2b5c6e59b7d3a1ac1265362795897bac84b80cf4c3c7b890",
+      "updated": "2026-11-19T12:24:08Z"
     },
     "repository.709": {
       "id": "repository.709",
@@ -145,13 +145,13 @@
     "service.subtitles.kodipovilai": {
       "id": "service.subtitles.kodipovilai",
       "name": "MoranSubs",
-      "version": "0.3.96",
+      "version": "0.3.97",
       "type": "subtitle",
-      "filename": "service.subtitles.kodipovilai-0.3.96.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.96.zip",
-      "size": 3919109,
-      "sha256": "57ca58dbb1e61f0ba5369ce5b305342b7e75b20c1362076799f1004d2bf7619f",
-      "updated": "2026-11-18T17:36:48Z"
+      "filename": "service.subtitles.kodipovilai-0.3.97.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.97.zip",
+      "size": 3919523,
+      "sha256": "c8832c13a37dd3ea7f45b64867a033fed455560e4e6655ebc96303bc9baf7265",
+      "updated": "2026-11-19T12:24:08Z"
     },
     "skin.estuary": {
       "id": "skin.estuary",
