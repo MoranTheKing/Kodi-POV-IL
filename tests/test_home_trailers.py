@@ -494,7 +494,7 @@ class DeskTests(unittest.TestCase):
         self.assertEqual(player.calls[-1], ('stop',))
         # in Kodi the second look is half a second after the first picture, off the thread Kodi speaks on
         source = (WIZARD / 'resources/libs/trailers.py').read_text('utf-8')
-        self.assertIn('wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture, translated=translated)', source)
+        self.assertIn('wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture, translated=translated,', source)
         self.assertIn("threading.Thread(target=self._late_stop, args=late, name='POVILTrailerLook').start()", source)
         self.assertIn("xbmc.getInfoLabel('Control.GetLabel(%d)' % HERO_LABEL) == key", source)
         self.assertEqual(trailers.HERO_LABEL, 9809)

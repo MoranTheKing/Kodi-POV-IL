@@ -1057,6 +1057,13 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),continue) + ![String.Contains(Container(5101).ListItem.FolderPath,new_page=) | String.Contains(Container(5101).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5101).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5101).ListItem.Trailer]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),continue)"></value>
 	</variable>
+	<variable name="POVIL_PlayerTile">
+		<value condition="String.IsEqual(Skin.String(POVILPlayer),netflix)">נגן: נטפליקס</value>
+		<value condition="String.IsEqual(Skin.String(POVILPlayer),advanced)">נגן: מתקדם</value>
+		<value condition="String.IsEqual(Skin.String(POVILPlayer),simple)">נגן: פשוט</value>
+		<value condition="String.IsEqual(Skin.String(POVILPlayer),pretty)">נגן: גדול</value>
+		<value>נגן: Onyx</value>
+	</variable>
 	<variable name="POVIL_TrailersTile">
 		<value condition="Skin.HasSetting(POVILNoTrailers)">טריילרים: כבוי</value>
 		<value>טריילרים: פועל</value>
@@ -2819,6 +2826,7 @@
 	</variable>
 	<variable name="POVIL_OSD_Focused">
 		<value condition="Control.HasFocus(7001)">ימינה ושמאלה מדלגים · לחיצות רצופות מדלגות רחוק יותר · אישור משהה</value>
+		<value condition="Control.HasFocus(7013)">החלפת נגן</value>
 		<value condition="Control.HasFocus(7010)">עצירה</value>
 		<value condition="Control.HasFocus(7011)">מידע</value>
 		<value condition="Control.HasFocus(7012)">הגדרות וידאו</value>
@@ -2832,6 +2840,35 @@
 		<value condition="Control.HasFocus(7023)">סנכרון כתוביות</value>
 		<value condition="Control.HasFocus(7025)">כתוביות למטה</value>
 		<value condition="Control.HasFocus(7026)">כתוביות למעלה</value>
+	</variable>
+	<variable name="POVIL_PS_Part">
+		<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.Season,עונה , · ]$INFO[VideoPlayer.Episode,פרק ]</value>
+		<value condition="Integer.IsGreater(Player.ChapterCount,1)">[COLOR povil_dim]מקטע[/COLOR] $INFO[Player.Chapter]/$INFO[Player.ChapterCount]</value>
+	</variable>
+	<variable name="POVIL_PS_InfoLine">
+		<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.Season,עונה , · ]$INFO[VideoPlayer.Episode,פרק ]</value>
+		<value condition="Integer.IsGreater(Player.ChapterCount,1)">מקטע $INFO[Player.Chapter] מתוך $INFO[Player.ChapterCount]</value>
+		<value>$INFO[VideoPlayer.Genre]</value>
+	</variable>
+	<variable name="POVIL_PS_Genre">
+		<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.Season,עונה , · ]$INFO[VideoPlayer.Episode,פרק ]</value>
+		<value>$INFO[VideoPlayer.Genre]</value>
+	</variable>
+	<variable name="POVIL_PS_Subs">
+		<value condition="VideoPlayer.SubtitlesEnabled">כתוביות: מוצגות</value>
+		<value>כתוביות: מוסתרות</value>
+	</variable>
+	<variable name="POVIL_PS_Play">
+		<value condition="Player.Paused | Player.Forwarding | Player.Rewinding">המשך ניגון</value>
+		<value>השהיה</value>
+	</variable>
+	<variable name="POVIL_PS_Left">
+		<value condition="!String.IsEmpty(Player.Duration)">נותרו $INFO[Player.TimeRemaining]  ·  נצפו $INFO[Player.Progress]%</value>
+	</variable>
+	<variable name="POVIL_PS_Picture">
+		<value condition="!String.IsEmpty(Player.Art(fanart))">$INFO[Player.Art(fanart)]</value>
+		<value condition="!String.IsEmpty(Player.Art(landscape))">$INFO[Player.Art(landscape)]</value>
+		<value condition="!String.IsEmpty(Player.Art(thumb))">$INFO[Player.Art(thumb)]</value>
 	</variable>
 	<!-- POVIL OSD END -->
 	<!-- POVIL INFO BEGIN -->
