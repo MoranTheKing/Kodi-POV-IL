@@ -87,6 +87,64 @@ class LogUploadTests(unittest.TestCase):
         self.assertIn('https://paste.kodi.tv/fixture', self.dialog.ok.call_args.args[1])
         self.assertEqual(list(Path(self.folder.name).rglob('*.png')), [])
 
+    def test_the_last_run_s_log_travels_with_kodi_log_in_one_link(self):
+        # the owner's LG, Nov 2026: Kodi crashed while trailers were browsed; the log sent after opening it
+        # again was the new run's -- the crash was in kodi.old.log, which went nowhere
+        with open(os.path.join(self.folder.name, 'kodi.log'), 'w') as handle:
+            handle.write('this run\n')
+        with open(os.path.join(self.folder.name, 'kodi.old.log'), 'w') as handle:
+            handle.write('the run before\nClosing stream player 2\n')
+        self.config.KEEPOLDLOG = True           # (the old switch: not sent twice)
+        self.scope['read_log'] = lambda path: (True, open(path).read())
+        self.scope['post_log'] = Mock(return_value=(True, 'https://paste.kodi.tv/fixture'))
+        self.scope['upload_log']()
+        self.scope['post_log'].assert_called_once()
+        content, name = self.scope['post_log'].call_args.args
+        self.assertEqual(name, 'kodi.log + kodi.old.log')
+        self.assertLess(content.index('this run'), content.index('===== kodi.old.log'))
+        self.assertTrue(content.rstrip().endswith('Closing stream player 2'), 'the end of the last run: where a crash is')
+        # each part is cut to its last part, the old run's end kept
+        long_now, long_before = 'n' * 400000, 'b' * 400000 + 'END'
+        joined = self.scope['with_previous'](long_now, long_before)
+        self.assertLess(len(joined), 600000, 'room for both in one paste')
+        self.assertTrue(joined.endswith('END'))
+        self.assertEqual(self.scope['with_previous']('only now', False), 'only now')
+
+    def test_what_a_posted_log_must_not_carry_is_masked(self):
+        # (review, Nov 2026: a press posts two logs to a public site where nothing can be deleted)
+        lines = {
+            'debrid': 'Opening https://tb-cdn.example.io/dl/123456/file.mkv?token=SECRET1 now',
+            'youtube': 'stream https://rr3---sn-x.googlevideo.com/videoplayback?expire=1&ip=203.0.113.9&sig=SECRET2',
+            'query': 'GET https://api.example.org/list?apikey=SECRET3&page=2 and &api_key=SECRET4',
+            'json': "settings {'access_token': 'SECRET5', \"client_id\": \"SECRET6\"}",
+            'mail': 'signed in as someone.name@example.com',
+            'ips': 'server at 192.168.1.20:8080, peer 203.0.113.77, local 127.0.0.1:50152',
+            'windows': r'C:\Users\SomeName\AppData\Roaming\Kodi\kodi.log and C:\\Users\\SomeName\\x',
+            'linux': '/home/somename/.kodi/userdata and /Users/somename/Library',
+            'host': 'info <general>: Local hostname: DESKTOP-ABC123',
+            'visitor': "   Visitor:       'CgsVISITOR1...AgSQ%3D%3D'",
+            'proxy': 'VideoPlayer::OpenFile: http://127.0.0.1:50152/youtube/stream?__host=rr1---sn-x.example&ei=PROXY1&mt=2',
+            'encoded': 'plugin://plugin.video.pov/?url=https%3A%2F%2Fx.example%2Fd%3Ftoken%3DENCODED1%26page%3D2',
+            'raw percent': 'GET https://x.example/a?sig=RAWHEAD%2BRAWTAIL%3D&page=3',
+            'bearer': 'headers |Authorization=Bearer%20BEARER1 and Authorization: Bearer BEARER2',
+        }
+        clean = {name: self.scope['clean_log'](line) for name, line in lines.items()}
+        joined = '\n'.join(clean.values())
+        for secret in ('SECRET1', 'SECRET2', 'SECRET3', 'SECRET4', 'SECRET5', 'SECRET6', 'someone.name', '203.0.113',
+                       '192.168.1.20', 'SomeName', 'somename', 'DESKTOP-ABC123', '/dl/123456', 'VISITOR1', 'PROXY1', 'ENCODED1', 'BEARER1', 'BEARER2', 'RAWHEAD', 'RAWTAIL'):
+            self.assertNotIn(secret, joined, secret)
+        self.assertIn('tb-cdn.example.io/REDACTED', clean['debrid'])
+        self.assertIn('127.0.0.1:50152', clean['ips'], 'the loopback stays')
+        self.assertIn('page=2', clean['query'])
+        self.assertIn('page%3D2', clean['encoded'], 'the next encoded field stays')
+        self.assertIn('&page=3', clean['raw percent'])
+        self.assertIn(r'C:\Users\USER\AppData', clean['windows'])
+        # what a crash is read from stays as it is
+        crash = ('2026-11-19 15:34:52.446 T:2019     info <general>: Closing stream player 2\n'
+                 'Starting Kodi (22.0-RC2 (21.90.902) Git:20261109-d686683a55d). Platform: webOS ARM 32-bit\n'
+                 'FFmpeg version/source: 9.0.2-Kodi')
+        self.assertEqual(self.scope['clean_log'](crash), crash)
+
     def test_upload_failure_shows_server_error_without_qr(self):
         self.prepare_upload(post=(False, 'offline'))
         self.scope['upload_log']()
