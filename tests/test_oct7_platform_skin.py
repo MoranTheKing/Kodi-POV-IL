@@ -63,7 +63,7 @@ class PlatformSkinIncidents(unittest.TestCase):
         requested[0] = ''  # Kodi's own manual skin picker has no scoped request.
         self.assertFalse(fn())
 
-    def platform(self, folder, apple=True, version=None, enabled=True):
+    def platform(self, folder, apple=True, version=None, enabled=True, webos=False):
         state = {'version': version, 'enabled': enabled}; calls = []; notifications = []; properties = {}
         def rpc(raw):
             request = json.loads(raw); calls.append(request)
@@ -71,7 +71,8 @@ class PlatformSkinIncidents(unittest.TestCase):
                 state['enabled'] = True; return '{"result":"OK"}'
             return json.dumps({'result': {'addon': state}} if state['version'] else {'error': {}})
         modules = dict(xbmc=types.SimpleNamespace(getCondVisibility=lambda cond: apple and cond.endswith('TVOS'),
-            executeJSONRPC=rpc, getInfoLabel=lambda _: '21.3', log=lambda *args: None, LOGWARNING=2),
+            executeJSONRPC=rpc, getInfoLabel=lambda label: 'webOS TV 11.2.0' if webos and label == 'System.OSVersionInfo' else '21.3',
+            log=lambda *args: None, LOGWARNING=2),
             xbmcgui=types.SimpleNamespace(Window=lambda _: types.SimpleNamespace(
                 getProperty=lambda key: properties.get(key, ''), setProperty=properties.__setitem__),
                 Dialog=lambda: types.SimpleNamespace(notification=lambda *args, **kwargs: notifications.append(args))),
@@ -103,6 +104,18 @@ class PlatformSkinIncidents(unittest.TestCase):
             ids = ['plugin.video.youtube']
             self.assertEqual(module.eligible(ids), ids)
             self.assertEqual(notes, [])
+
+    def test_an_lg_tv_without_adaptive_defers_youtube_instead_of_stopping_the_install(self):
+        # the owner's LG on a Kodi 21.2 build: Kodi's dependency box stopped the first install at 1%
+        with tempfile.TemporaryDirectory() as raw:
+            module, state, calls, notes = self.platform(Path(raw), apple=False, webos=True)
+            ids = ['plugin.video.pov', 'plugin.video.youtube']
+            self.assertEqual(module.eligible(ids), ['plugin.video.pov'])
+            self.assertEqual(module.eligible(ids), ['plugin.video.pov'])
+            self.assertEqual(len(notes), 1)
+            self.assertIn('InputStream Adaptive', notes[0][1])
+            state['version'] = '21.4.4'
+            self.assertEqual(module.eligible(ids), ids, 'an LG TV whose Kodi has it gets YouTube as before')
 
     def test_compatible_disabled_adaptive_is_enabled_before_youtube(self):
         with tempfile.TemporaryDirectory() as raw:
