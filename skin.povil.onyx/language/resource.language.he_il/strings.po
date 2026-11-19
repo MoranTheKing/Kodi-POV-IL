@@ -788,3 +788,23 @@ msgstr "טקסט רגיל במסגרת הסימון"
 msgctxt "#31970"
 msgid "With the focus box shown, keep the focused text in its normal color and let the box alone show where you are, instead of also using the focus color."
 msgstr "כשמסגרת הסימון מוצגת, הטקסט נשאר בצבעו הרגיל והמסגרת לבדה מראה את הבחירה."
+
+msgctxt "#31900"
+msgid "Watched mark colour"
+msgstr "צבע סימן הנצפה"
+
+msgctxt "#31901"
+msgid "Gold"
+msgstr "זהב"
+
+msgctxt "#31902"
+msgid "Green"
+msgstr "ירוק"
+
+msgctxt "#31903"
+msgid "White"
+msgstr "לבן"
+
+msgctxt "#31904"
+msgid "Light blue"
+msgstr "תכלת"

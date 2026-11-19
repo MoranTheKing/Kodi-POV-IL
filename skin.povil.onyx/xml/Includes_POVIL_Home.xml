@@ -1057,6 +1057,18 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),continue) + ![String.Contains(Container(5101).ListItem.FolderPath,new_page=) | String.Contains(Container(5101).ListItem.FolderPath,Page&amp;url=)] + String.StartsWith(Container(5101).ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[Container(5101).ListItem.Trailer]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),continue)"></value>
 	</variable>
+	<variable name="POVIL_WatchedColour">
+		<value condition="Skin.HasSetting(POVILWatchedGreen)">FF34C759</value>
+		<value condition="Skin.HasSetting(POVILWatchedWhite)">FFFFFFFF</value>
+		<value condition="Skin.HasSetting(POVILWatchedBlue)">FF5AC8FA</value>
+		<value>povil_gold</value>
+	</variable>
+	<variable name="POVIL_WatchedTile">
+		<value condition="Skin.HasSetting(POVILWatchedGreen)">סימן נצפה: ירוק</value>
+		<value condition="Skin.HasSetting(POVILWatchedWhite)">סימן נצפה: לבן</value>
+		<value condition="Skin.HasSetting(POVILWatchedBlue)">סימן נצפה: תכלת</value>
+		<value>סימן נצפה: זהב</value>
+	</variable>
 	<variable name="POVIL_PlayerTile">
 		<value condition="String.IsEqual(Skin.String(POVILPlayer),netflix)">נגן: נטפליקס</value>
 		<value condition="String.IsEqual(Skin.String(POVILPlayer),advanced)">נגן: מתקדם</value>
@@ -1707,7 +1719,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
@@ -1777,7 +1789,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
@@ -1841,7 +1853,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
@@ -1921,7 +1933,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
@@ -1972,7 +1984,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="textbox">
@@ -2019,7 +2031,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="textbox">
@@ -2089,7 +2101,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
@@ -2165,7 +2177,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
@@ -2229,7 +2241,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
@@ -2299,7 +2311,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
@@ -2363,7 +2375,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
@@ -2443,7 +2455,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
@@ -2494,7 +2506,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="textbox">
@@ -2541,7 +2553,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="textbox">
@@ -2605,7 +2617,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
@@ -2685,7 +2697,7 @@
 					</control>
 					<control type="image">
 						<left>10</left><top>32</top><width>34</width><height>34</height>
-						<texture colordiffuse="povil_gold">povil/check.png</texture>
+						<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">

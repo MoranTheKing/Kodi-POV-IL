@@ -64,6 +64,13 @@ RATINGS_KEY, RATINGS_SLOT = 9807, 'povil.rt.'
 # (9809: 9808 is the ratings row's hidden TMDb label, RATINGS_KEY + 1 -- the two shared an id until 1.0.17,
 # and Kodi hands out whichever control of an id is visible first)
 TRAILER_KEY, TRAILER_OFF_SWITCH = 9809, 'POVILNoTrailers'
+# The watched mark's colour on the home's pictures, the viewer's choice (a viewer, Nov 2026: "how do I make the V
+# green?"): Kodi's own Skin.SelectBool list -- one of these on, the others off; none on (as until now) is gold.
+# (SelectBool names its heading and choices by string id only -- plain text showed Kodi's string 0, "Programs", seen
+# in the QA Kodi: the skin's own strings 31900-31904, gen_strings.py)
+WATCHED_COLOURS = (('POVILWatchedGold', 'זהב', 'povil_gold', 31901), ('POVILWatchedGreen', 'ירוק', 'FF34C759', 31902),
+                   ('POVILWatchedWhite', 'לבן', 'FFFFFFFF', 31903), ('POVILWatchedBlue', 'תכלת', 'FF5AC8FA', 31904))
+WATCHED_CHOICE = 'Skin.SelectBool(31900,%s)' % ','.join('%d|%s' % (sid, s) for s, _name, _c, sid in WATCHED_COLOURS)
 # The players the controls can show besides Onyx's own (gen_osd_styles.py), as the settings tile names them
 PLAYER_STYLES = (('netflix', 'נטפליקס'), ('advanced', 'מתקדם'), ('simple', 'פשוט'), ('pretty', 'גדול'))
 TRAILERS_ON, TRAILERS_OFF = '!Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH, 'Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH
@@ -378,6 +385,8 @@ SETTINGS_ITEMS = [
     ('בחירת מסכים', 'DefaultAddonLookAndFeel.png', plugin_run(WIZARD + '?mode=onyx_tabs'), ''),
     # which player the controls show (the Wizard asks, onyx_player_style.py; gen_osd_styles.py draws them)
     ('$VAR[POVIL_PlayerTile]', 'povil/osd/layout.png', plugin_run(WIZARD + '?mode=player_style'), ''),
+    # the watched mark's colour (WATCHED_COLOURS)
+    ('$VAR[POVIL_WatchedTile]', 'povil/check.png', WATCHED_CHOICE, ''),
     # the trailer behind the hero (trailers.py): on unless switched off here; the tile says which
     ('$VAR[POVIL_TrailersTile]', 'DefaultAddonVideo.png', 'Skin.ToggleSetting(%s)' % TRAILER_OFF_SWITCH,
      'System.HasAddon(plugin.video.youtube)'),
@@ -399,8 +408,10 @@ MARGIN = 90
 PAD = 42
 ROWS_Y = 618
 TAB_W = 146         # (172 until 1.0.18: nine tabs now, and the bar must end right of the power button)
-# a tab whose name is longer than that (seen cut short in the QA Kodi at one width for all)
-TAB_WIDE = {'continue': 208, 'favourites': 170, 'live': 166}
+# a tab whose name is longer than that (seen cut short in the QA Kodi at one width for all); since the bar's
+# bigger font (povil_tab 34, 1.0.23) the longest name has a little more and the two shortest a little less, the
+# bar as wide as it was: 'ישראלי' and 'המשך צפייה' read as one phrase otherwise (seen in the QA Kodi)
+TAB_WIDE = {'continue': 220, 'favourites': 170, 'live': 166, 'tv': 140, 'kids': 140}
 GEOM = {
     # list height, row block height (title + list), item size, item spacing
     'poster': dict(list_h=340, block=402, w=196, h=294, step=226),
@@ -959,6 +970,16 @@ def gen_includes():
              '$INFO[Container(%d).ListItem.Trailer]</value>' % (cond, more_page % (cid, cid), cid, cid))
         x(2, '<value condition="%s"></value>' % cond)
     x(1, '</variable>')
+    x(1, '<variable name="POVIL_WatchedColour">')
+    for setting, _name, colour, _sid in WATCHED_COLOURS[1:]:
+        x(2, '<value condition="Skin.HasSetting(%s)">%s</value>' % (setting, colour))
+    x(2, '<value>%s</value>' % GOLD)
+    x(1, '</variable>')
+    x(1, '<variable name="POVIL_WatchedTile">')
+    for setting, name, _colour, _sid in WATCHED_COLOURS[1:]:
+        x(2, '<value condition="Skin.HasSetting(%s)">סימן נצפה: %s</value>' % (setting, name))
+    x(2, '<value>סימן נצפה: זהב</value>')
+    x(1, '</variable>')
     x(1, '<variable name="POVIL_PlayerTile">')
     for style, name in PLAYER_STYLES:
         x(2, '<value condition="String.IsEqual(Skin.String(POVILPlayer),%s)">נגן: %s</value>' % (style, name))
@@ -1205,7 +1226,7 @@ def item_layout(x, name, kind, cond=None, title='POVIL_ItemTitle', subtitle='POV
             # watched: top left since 1.0.15 -- the top right corner is the rating's
             x(5, '<control type="image">')
             x(6, '<left>10</left><top>%d</top><width>34</width><height>34</height>' % (top + 10))
-            x(6, '<texture colordiffuse="%s">povil/check.png</texture>' % GOLD)
+            x(6, '<texture colordiffuse="$VAR[POVIL_WatchedColour]">povil/check.png</texture>')
             x(6, '<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>')
             x(5, '</control>')
             if kind != 'square':
@@ -1436,7 +1457,7 @@ def top_bar(x, d):
         line = '<alttexture%%s colordiffuse="%s">povil/%s</alttexture%%s>' % (GOLD, tab_line(tab['id']))
         x(d + 2, (line % ('focus', 'focus')) + (line % ('nofocus', 'nofocus')))
         x(d + 2, '<usealttexture>%s</usealttexture>' % tab_cond(tab))
-        x(d + 2, '<font>povil_menu</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>')
+        x(d + 2, '<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>')
         x(d + 2, '<textcolor>$VAR[POVIL_TabColor_%s]</textcolor><focusedcolor>povil_white</focusedcolor>' % tab['id'])
         x(d + 2, '<label>%s</label>' % e(tab['label']))
         # (not while a service's page is being entered: the chip that was pressed leaves the screen with
@@ -1495,7 +1516,7 @@ def hero(x, d):
     RR.key_label(x, d + 1, RATINGS_KEY, '$VAR[POVIL_RatingsKey]')
     x(d + 1, '<control type="label" description="episode">')
     x(d + 2, '<left>%d</left><top>288</top><width>1100</width><height>34</height>' % (right - 1100))
-    x(d + 2, '<font>povil_meta_bold</font><textcolor>%s</textcolor><align>right</align><aligny>center</aligny>' % GOLD)
+    x(d + 2, '<font>povil_hero_meta_bold</font><textcolor>%s</textcolor><align>right</align><aligny>center</aligny>' % GOLD)
     x(d + 2, '<label>$VAR[POVIL_HeroEpisode]</label>')
     x(d + 1, '</control>')
     # Details: rating (gold star) then year, genre, length, rating age
@@ -1503,11 +1524,11 @@ def hero(x, d):
     x(d + 2, '<left>%d</left><top>%s</top><width>1100</width><height>40</height>' % (right - 1100, 322))
     x(d + 2, '<orientation>horizontal</orientation><align>right</align><itemgap>16</itemgap><usecontrolcoords>true</usecontrolcoords>')
     x(d + 2, '<control type="label">')
-    x(d + 3, '<width>auto</width><height>40</height><font>povil_meta</font><textcolor>povil_dim</textcolor><aligny>center</aligny>')
+    x(d + 3, '<width>auto</width><height>40</height><font>povil_hero_meta</font><textcolor>povil_dim</textcolor><aligny>center</aligny>')
     x(d + 3, '<label>$VAR[POVIL_HeroMeta]</label>')
     x(d + 2, '</control>')
     x(d + 2, '<control type="label">')
-    x(d + 3, '<width>auto</width><height>40</height><font>povil_meta_bold</font><textcolor>%s</textcolor><aligny>center</aligny>' % GOLD)
+    x(d + 3, '<width>auto</width><height>40</height><font>povil_hero_meta_bold</font><textcolor>%s</textcolor><aligny>center</aligny>' % GOLD)
     x(d + 3, '<label>$VAR[POVIL_HeroRating]</label>')
     # the star and its number are for a title with no ratings row: there TMDb's mark says it
     x(d + 3, '<visible>String.IsEmpty(Control.GetLabel(%d))</visible>' % RATINGS_KEY)
@@ -1519,7 +1540,7 @@ def hero(x, d):
     x(d + 2, '</control>')
     x(d + 1, '</control>')
     x(d + 1, '<control type="label" id="9801"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_HeroRating]</label></control>')
-    RR.row(x, d + 1, right, 366, RATINGS_KEY, RATINGS_SLOT, 'POVIL_RatingsTmdb')
+    RR.row(x, d + 1, right, 366, RATINGS_KEY, RATINGS_SLOT, 'POVIL_RatingsTmdb', font='povil_hero_meta_bold')
     x(d + 1, '<control type="textbox" description="plot">')
     x(d + 2, '<left>%d</left><top>408</top><width>860</width><height>114</height>' % (right - 860))
     # no ratings row: the plot follows the details as it always did (402 = 408 + 34 - 40)
@@ -1554,7 +1575,7 @@ def chips(x, d):
             vis = tab_cond(tab) + (' + ' + chip[2] if chip[2] else '')
             x(d + 1, '<control type="button" id="%d">' % ids[ci])
             x(d + 2, '<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>')
-            x(d + 2, '<font>povil_chip</font><align>center</align><aligny>center</aligny>')
+            x(d + 2, '<font>povil_chip_home</font><align>center</align><aligny>center</aligny>')
             if chip[3]:
                 # a choice that is on (films / series / all, the service shown): gold-tinted while it is
                 x(d + 2, '<textcolor>$VAR[POVIL_ChipText_%d]</textcolor><focusedcolor>povil_ink</focusedcolor>' % ids[ci])

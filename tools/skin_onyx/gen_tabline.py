@@ -13,7 +13,7 @@ import sys
 from PIL import Image
 
 HEIGHT, LINE_W, LINE_H = 64, 44, 4
-WIDTHS = dict(('tab_line_%d.png' % width, width) for width in (146, 166, 170, 208))     # gen_home.py: TAB_W, TAB_WIDE
+WIDTHS = dict(('tab_line_%d.png' % width, width) for width in (140, 146, 166, 170, 220))     # gen_home.py: TAB_W, TAB_WIDE
 
 
 def make(width):
