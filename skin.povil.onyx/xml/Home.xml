@@ -2709,6 +2709,12 @@
 								<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_style)</onclick>
 							</item>
 							<item>
+								<label>סנכרון בין מכשירים</label>
+								<property name="povil_rtl">1</property>
+								<icon>DefaultNetwork.png</icon>
+								<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=cloud_sync)</onclick>
+							</item>
+							<item>
 								<label>בחירת מסכים</label>
 								<property name="povil_rtl">1</property>
 								<icon>DefaultAddonLookAndFeel.png</icon>
