@@ -83,7 +83,7 @@ def _is_complete_document(content):
 
 
 def _trim_tail(content):
-    """Everything after the document's last real element, removed.
+    r"""Everything after the document's last real element, removed.
 
     Two things live past the closing tag on a file that is nevertheless
     complete. NUL padding, because a block-based filesystem -- Android flash,

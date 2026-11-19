@@ -172,26 +172,27 @@ def upload_log():
     files = get_files()
     for item in files:
         filetype = item[0]
+        # (the viewer's language: the build's Hebrew)
         if filetype == 'log':
             name = os.path.basename(item[1]) or "kodi.log"
-            error = "Error posting the {0} file".format(name)
         elif filetype == 'oldlog':
             name = os.path.basename(item[1]) or "kodi.old.log"
-            error = "Error posting the {0} file".format(name)
         elif filetype == 'wizlog':
             name = "wizard.log"
-            error = "Error posting the {0} file".format(name)
         elif filetype == 'crashlog':
             name = "crash log"
-            error = "Error posting the crashlog file"
+        error = "\u05e9\u05dc\u05d9\u05d7\u05ea {0} \u05e0\u05db\u05e9\u05dc\u05d4".format(name)
         succes, data = read_log(item[1])
         if succes:
             content = clean_log(data)
             succes, result = post_log(content, name)
             if succes:
-                msg = "Post this url or scan QRcode for your [COLOR {0}]{1}[/COLOR]," \
-                      "together with a description of the problem:[CR][COLOR {2}]{3}[/COLOR]".format(
-                    CONFIG.COLOR1, name, CONFIG.COLOR1, result)
+                # "The log was sent ({name}). Send this address, or a photo of the code, with what went wrong:"
+                msg = ("\u05d4\u05dc\u05d5\u05d2 \u05e0\u05e9\u05dc\u05d7 ([COLOR {0}]{1}[/COLOR]). "
+                       "\u05e9\u05dc\u05d7\u05d5 \u05d0\u05ea \u05d4\u05e7\u05d9\u05e9\u05d5\u05e8 "
+                       "\u05d0\u05d5 \u05e6\u05dc\u05de\u05d5 \u05d0\u05ea \u05d4\u05e7\u05d5\u05d3, "
+                       "\u05e2\u05dd \u05ea\u05d9\u05d0\u05d5\u05e8 \u05d4\u05d1\u05e2\u05d9\u05d4:"
+                       "[CR][COLOR {2}]{3}[/COLOR]").format(CONFIG.COLOR1, name, CONFIG.COLOR1, result)
 
                 # if len(self.email) > 5:
                 # em_result, em_msg = self.email_Log(self.email, result, name)

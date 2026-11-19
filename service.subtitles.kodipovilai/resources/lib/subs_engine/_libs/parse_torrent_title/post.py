@@ -49,7 +49,7 @@ def try_encoder_before_site(self, unmatched):
             full_title_match = re.search(
                 r"[\s\-]("
                 + re.escape(m)
-                + ")(?:\."
+                + r")(?:\."
                 + link_patterns(patterns["filetype"])
                 + ")?$",
                 self.torrent_name,
@@ -192,7 +192,7 @@ def filter_non_languages(self):
 
 def try_vague_season_episode(self):
     title = self.parts["title"]
-    m = re.search("(\d{1,2})-(\d{1,2})$", title)
+    m = re.search(r"(\d{1,2})-(\d{1,2})$", title)
     if m:
         if "season" not in self.parts and "episode" not in self.parts:
             new_title = title[: m.start()]

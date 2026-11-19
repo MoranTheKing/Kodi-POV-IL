@@ -24,7 +24,7 @@ season_range_pattern = (
     + delimiters
     + "*(?:s(?:easons?)?)"
     + delimiters
-    + "*(?:s?[0-9]{1,2}[\s]*(?:(?:\-|(?:\s*to\s*))[\s]*s?[0-9]{1,2}))(?:"
+    + r"*(?:s?[0-9]{1,2}[\s]*(?:(?:\-|(?:\s*to\s*))[\s]*s?[0-9]{1,2}))(?:"
     + delimiters
     + "*Complete)?"
 )
@@ -121,7 +121,7 @@ patterns["season"] = [
     + r"?\b",
     r"\b([0-9]{1,2})x[0-9]{2}\b",  # Describes 5x02, 12x15 type descriptions
     "[0-9]{1,2}(?:st|nd|rd|th)" + delimiters + "season",
-    "Series" + delimiters + "\d{1,2}",
+    "Series" + delimiters + r"\d{1,2}",
     r"\b(?:Complete"
     + delimiters
     + r")?Season[\. -][0-9]{1,2}\b",  # Describes Season.15 type descriptions
@@ -132,7 +132,7 @@ patterns["episode"] += [
     + delimiters
     + "*P(?:ar)?t"
     + delimiters
-    + "*(\d{1,3})"
+    + r"*(\d{1,3})"
 ]
 patterns["year"] = year_pattern
 patterns["month"] = "(?:{year}){d}({month}){d}(?:{day})".format(
@@ -158,7 +158,7 @@ patterns["resolution"] = [
 ]
 
 patterns["quality"] = [
-    ("WEB[ -\.]?DL(?:Rip|Mux)?|HDRip", "WEB-DL"),
+    (r"WEB[ -\.]?DL(?:Rip|Mux)?|HDRip", "WEB-DL"),
     # Match WEB-DL's first as they can show up with others.
     ("WEB[ -]?Cap", "WEBCap"),
     ("W[EB]B[ -]?(?:Rip)|WEB", "WEBRip"),
@@ -227,7 +227,7 @@ patterns["network"] += [
     ("Hoichoi", "Hoichoi"),
     ("Zee5", "ZEE5"),
     ("Hallmark", "Hallmark"),
-    ("Sony\s?LIV", "SONY LIV"),
+    (r"Sony\s?LIV", "SONY LIV"),
 ]
 patterns["codec"] = [
     ("xvid", "Xvid"),
@@ -319,7 +319,7 @@ patterns["subtitles"] = [
     # just 'subs' to match last.
     # The second-last one must stay second-last, see patterns["language"]
     "(?:m(?:ulti(?:ple)?)?{d}*)sub(?:title|bed)?s?".format(d=delimiters),
-    "(?:m(?:ulti(?:ple)?)?[\.\s\-\+_\/]*)?sub(?:title|bed)?s?{d}*".format(d=delimiters),
+    r"(?:m(?:ulti(?:ple)?)?[\.\s\-\+_\/]*)?sub(?:title|bed)?s?{d}*".format(d=delimiters),
 ]
 # Language takes precedence over subs when ambiguous - if we have a lang match, and
 # then a subtitles match starting with subs, the first langs are languages, and the
@@ -353,7 +353,7 @@ patterns["language"] = [
 patterns["sbs"] = [("Half-SBS", "Half SBS"), ("SBS", None, "upper")]
 patterns["unrated"] = "UNRATED"
 patterns["size"] = (
-    "\d+(?:\.\d+)?\s?(?:GB|MB)",
+    r"\d+(?:\.\d+)?\s?(?:GB|MB)",
     None,
     [("upper", []), ("replace", [" ", ""])],
 )
