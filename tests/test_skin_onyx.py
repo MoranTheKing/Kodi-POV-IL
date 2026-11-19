@@ -192,7 +192,8 @@ class GeneratedXmlTests(unittest.TestCase):
                 self.assertTrue(targets, (gid, tag))
                 self.assertIsNone(group.findall(tag)[-1].get('condition'), 'the last one always applies')
                 self.assertNotIn(gid, targets)
-        self.assertEqual(ids, {'7006': ['7010', '7011', '7012'], '7000': ['7002', '7003', '7004'],
+        # (7013: the other players, gen_osd_styles.py -- the farthest from the middle)
+        self.assertEqual(ids, {'7006': ['7013', '7010', '7011', '7012'], '7000': ['7002', '7003', '7004'],
                                '7007': ['7024', '7020', '7021', '7022', '7023', '7025', '7026']})
         # the owner: "the subtitles button closer": two presses from the main button
         self.assertEqual((ids['7000'].index('7004') - ids['7000'].index('7003')) + 1 + ids['7007'].index('7024'), 2)
@@ -313,7 +314,9 @@ class GeneratedXmlTests(unittest.TestCase):
             self.assertEqual([(n.text, n.get('condition')) for n in area.findall(tag)],
                              [('7000', 'Player.PauseEnabled'), ('7007', None)])
         loads = [(n.text, n.get('condition')) for n in osd.findall('onload')]
-        self.assertIn(('SetFocus(7022)', '!Player.PauseEnabled + !Control.IsVisible(7024)'), loads)
+        # (Onyx's own player only: the others open on their own buttons, gen_osd_styles.py)
+        onyx = osd.find('controls').find("control[@description='the Onyx player']").findtext('visible')[len('Player.HasMedia + '):]
+        self.assertIn(('SetFocus(7022)', onyx + ' + !Player.PauseEnabled + !Control.IsVisible(7024)'), loads)
         self.assertEqual(osd.findtext('defaultcontrol'), '7003')
 
     def test_kodi_settings_rows_show_their_switches_and_values(self):

@@ -118,6 +118,8 @@ GIVEN_UP_S = 30 * 60            # a title whose trailer was given up is not aske
 FAILURE_BOX_S = 4.0             # how long Kodi's "playback failed" box is looked for after a trailer failed to open
 LOOPBACK = '127.0.0.1'
 FAILS, REST_S = 3, 10 * 60      # this many trailers in a row that did not play: none is tried for this long
+# the YouTube add-on's server asleep and not woken: its port is looked at (youtube_port.py), at most this often
+PORT_CHECK_S = 60
 SETTLE_S = 0.5                  # a stop that came while the trailer opened is looked at again this long after the first picture
 ACTION = 'povil.pov.action'     # when POV was last asked to do something (pov_list_snapshot.serve_early writes it)
 ACTION_REST_S = 12              # no trailer starts this long after it: the action may ask a question, or start a film
@@ -727,7 +729,7 @@ class Desk(object):
 
     def __init__(self, home, player, resolve, make_item, enabled, log=lambda text: None, clock=None,
                  ready=lambda stream: stream, halt=None, wanted_now=lambda key: False, look=lambda key: '', settle=0.0,
-                 acting=lambda: False, no_picture=None, translated=lambda key: []):
+                 acting=lambda: False, no_picture=None, translated=lambda key: [], repair=lambda: None):
         import time
         self.home, self.player, self.resolve, self.make_item = home, player, resolve, make_item
         self.enabled, self.log, self.ready = enabled, log, ready
@@ -741,6 +743,10 @@ class Desk(object):
         self.acting = acting        # is POV carrying out an action right now (or was a moment ago)?
         self.no_picture = no_picture    # called when a trailer showed no picture at all (an LG TV: switched off)
         self.translated = translated    # the ids of a title's translated trailers on YouTube, tried first ([]: none)
+        # repair(): the YouTube add-on did not wake its server -- its port is looked at, and moved when this device
+        # does not let it open it (youtube_port.py); truthy when it was moved
+        self.repair = repair
+        self.port_checked = None
         self.stream = None              # the stream of the trailer this desk handed to the player
         self.opened = {}            # the ask -> when its trailer was handed to the player, the last few times
         self.choice = {}            # the ask -> the one of its trailers that was found long enough (or the longest)
@@ -836,7 +842,11 @@ class Desk(object):
         try:
             stream, why, gone = self._obtain(key, lambda: self._wanted(key, ticket))
         except Asleep:
-            self._did_not_play('the YouTube add-on did not wake its server')
+            if self._port_moved():
+                # (not counted: the add-on starts its server again on the new port, and the next title has it)
+                self.log('the YouTube add-on did not wake its server: its port was moved')
+            else:
+                self._did_not_play('the YouTube add-on did not wake its server')
             return False
         if gone:
             return False
@@ -985,6 +995,17 @@ class Desk(object):
         finally:
             self.ahead.release()
         return False
+
+    def _port_moved(self):
+        now = self.clock()
+        if self.port_checked is not None and now - self.port_checked < PORT_CHECK_S:
+            return False
+        self.port_checked = now
+        try:
+            return bool(self.repair())
+        except Exception as exc:
+            self.log('the YouTube add-on\'s port was not checked: %s' % _why(exc))
+            return False
 
     def _did_not_play(self, why):
         """One more trailer that did not play; FAILS of them in a row and the trailers rest."""
@@ -1373,9 +1394,14 @@ def watch():
             return False
 
     player = Events()
+    def repair():
+        from resources.libs import youtube_port
+        return youtube_port.run(log)
+
     desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready, acting=acting,
                 halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)'),
-                wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture, translated=translated)
+                wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture, translated=translated,
+                repair=repair)
 
     def run(job):
         threading.Thread(target=lambda: job() and desk.guard(), name='POVILTrailer').start()
