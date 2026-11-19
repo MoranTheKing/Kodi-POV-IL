@@ -64,6 +64,8 @@ RATINGS_KEY, RATINGS_SLOT = 9807, 'povil.rt.'
 # (9809: 9808 is the ratings row's hidden TMDb label, RATINGS_KEY + 1 -- the two shared an id until 1.0.17,
 # and Kodi hands out whichever control of an id is visible first)
 TRAILER_KEY, TRAILER_OFF_SWITCH = 9809, 'POVILNoTrailers'
+# The players the controls can show besides Onyx's own (gen_osd_styles.py), as the settings tile names them
+PLAYER_STYLES = (('netflix', 'נטפליקס'), ('advanced', 'מתקדם'), ('simple', 'פשוט'), ('pretty', 'גדול'))
 TRAILERS_ON, TRAILERS_OFF = '!Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH, 'Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH
 
 
@@ -374,6 +376,8 @@ SETTINGS_ITEMS = [
     ('ניקוי קאש', 'DefaultAddonRepository.png', plugin_run(POV + '?mode=clear_all_cache&isFolder=false'), 'System.HasAddon(plugin.video.pov)'),
     # which screens the top bar shows (the Wizard asks, onyx_tabs.py): any but films and settings can go
     ('בחירת מסכים', 'DefaultAddonLookAndFeel.png', plugin_run(WIZARD + '?mode=onyx_tabs'), ''),
+    # which player the controls show (the Wizard asks, onyx_player_style.py; gen_osd_styles.py draws them)
+    ('$VAR[POVIL_PlayerTile]', 'povil/osd/layout.png', plugin_run(WIZARD + '?mode=player_style'), ''),
     # the trailer behind the hero (trailers.py): on unless switched off here; the tile says which
     ('$VAR[POVIL_TrailersTile]', 'DefaultAddonVideo.png', 'Skin.ToggleSetting(%s)' % TRAILER_OFF_SWITCH,
      'System.HasAddon(plugin.video.youtube)'),
@@ -954,6 +958,11 @@ def gen_includes():
         x(2, '<value condition="%s + %s + String.StartsWith(Container(%d).ListItem.Trailer,plugin://plugin.video.youtube/)">'
              '$INFO[Container(%d).ListItem.Trailer]</value>' % (cond, more_page % (cid, cid), cid, cid))
         x(2, '<value condition="%s"></value>' % cond)
+    x(1, '</variable>')
+    x(1, '<variable name="POVIL_PlayerTile">')
+    for style, name in PLAYER_STYLES:
+        x(2, '<value condition="String.IsEqual(Skin.String(POVILPlayer),%s)">נגן: %s</value>' % (style, name))
+    x(2, '<value>נגן: Onyx</value>')
     x(1, '</variable>')
     x(1, '<variable name="POVIL_TrailersTile">')
     # (short: the tile showed the end of "טריילרים במסך הבית: פועל" only -- "פועל", seen in the QA Kodi)

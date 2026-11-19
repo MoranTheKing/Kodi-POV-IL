@@ -153,9 +153,51 @@ def subdown(d):
     tri(d, [(48, 80), (32, 60), (64, 60)])
 
 
+def previous(d):
+    """A bar and a triangle pointing at it: the chapter or the episode before."""
+    rbar(d, 24, 30, 31, 66, 2)
+    tri(d, [(72, 30), (72, 66), (36, 48)])
+
+
+def next_(d):
+    """A triangle and the bar it points at: the chapter or the episode after."""
+    tri(d, [(24, 30), (24, 66), (60, 48)])
+    rbar(d, 65, 30, 72, 66, 2)
+
+
+def _lens(d):
+    ring(d, 42, 42, 18, 5)
+    d.line((P(55), P(55), P(74), P(74)), fill=255, width=P(7))
+
+
+def zoomin(d):
+    """A magnifying glass with a plus: the picture larger (player styles of the build)."""
+    _lens(d)
+    rbar(d, 33, 40, 51, 44, 2)
+    rbar(d, 40, 33, 44, 51, 2)
+
+
+def zoomout(d):
+    """A magnifying glass with a minus: the picture smaller."""
+    _lens(d)
+    rbar(d, 33, 40, 51, 44, 2)
+
+
+def search(d):
+    """A magnifying glass: look for something (subtitles)."""
+    _lens(d)
+
+
+def layout(d):
+    """Four tiles: another player style."""
+    for x0, y0 in ((22, 22), (52, 22), (22, 52), (52, 52)):
+        rbar(d, x0, y0, x0 + 22, y0 + 22, 4)
+
+
 ICONS = dict(play=play, pause=pause, stop=stop, rewind=rewind, forward=forward, subtitles=subtitles,
              audio=audio, source=source, episodes=episodes, sync=sync, settings=settings, info=info,
-             skipback=skipback, skipfwd=skipfwd, subup=subup, subdown=subdown, power=power)
+             skipback=skipback, skipfwd=skipfwd, subup=subup, subdown=subdown, power=power,
+             previous=previous, next=next_, zoomin=zoomin, zoomout=zoomout, layout=layout, search=search)
 
 for name, draw in ICONS.items():
     mask = canvas()

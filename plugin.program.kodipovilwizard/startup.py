@@ -1016,6 +1016,22 @@ def _trailers_watch():
 
 _start_watch('POVILTrailers', _trailers_watch)
 
+
+# KODI-POV-IL - the YouTube add-on's own server on a port this device lets it open (youtube_port.py): a
+# viewer's Windows kept the add-on's port for itself ([WinError 10013] at every start) and no home trailer
+# played. Looked at once its service has had its start; moved to a free port when it cannot be opened.
+def _youtube_port():
+    try:
+        if xbmc.Monitor().waitForAbort(15):
+            return
+        from resources.libs import youtube_port as _port
+        _port.run(lambda text: xbmc.log('[POV IL YouTube] ' + text, xbmc.LOGINFO))
+    except Exception as _exc:
+        xbmc.log('[POV IL YouTube] port check: %r' % (_exc,), xbmc.LOGWARNING)
+
+
+_start_watch('POVILYouTubePort', _youtube_port)
+
 # KODI-POV-IL - the trailer POV names for a title (patches/pov_trailer_pick.py): the
 # series POV already holds in its cache were asked for Hebrew videos only, and a
 # finished series stays there half a year. Once per device they are let go, so

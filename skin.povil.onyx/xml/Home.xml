@@ -2697,6 +2697,12 @@
 								<visible>System.HasAddon(plugin.video.youtube)</visible>
 							</item>
 							<item>
+								<label>$VAR[POVIL_PlayerTile]</label>
+								<property name="povil_rtl">1</property>
+								<icon>povil/osd/layout.png</icon>
+								<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_style)</onclick>
+							</item>
+							<item>
 								<label>בחירת מסכים</label>
 								<property name="povil_rtl">1</property>
 								<icon>DefaultAddonLookAndFeel.png</icon>

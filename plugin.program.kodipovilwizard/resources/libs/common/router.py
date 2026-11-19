@@ -48,7 +48,7 @@ class Router:
         from resources.libs.patches import profile_age_guard
         if profile_age_guard.active_policy() is not None and mode not in (
                 'profiles', 'profile_child_open', 'profile_skin', 'player_season_episodes',
-                'player_subs_position'):
+                'player_subs_position', 'player_style'):
             xbmcgui.Dialog().ok('פרופיל ילדים', 'ניהול הבילד זמין במשתמש הראשי.')
             if handle >= 0:
                 xbmcplugin.endOfDirectory(handle, succeeded=False)
@@ -110,6 +110,10 @@ class Router:
             # how soon the home's trailer starts and has the screen (the tile in Onyx's settings screen)
             from resources.libs import trailer_timing
             trailer_timing.choose()
+        elif mode == 'player_style':
+            # which player Onyx shows (its settings tile "סוג נגן", and the button "החלפת נגן" in every player)
+            from resources.libs import onyx_player_style
+            onyx_player_style.choose()
         elif mode == 'onyx_tabs':
             # which screens the top bar of the Onyx home shows (the tile in its settings screen)
             from resources.libs import onyx_tabs
