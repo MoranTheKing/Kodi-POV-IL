@@ -639,5 +639,58 @@ class SeasonUnwatchedTests(unittest.TestCase):
         self.assertFalse(kept['pov.watched.episode.1399.1.1'].get('d'))
 
 
+class ConnectOnAPhoneTests(unittest.TestCase):
+    """The owner's phone, 20 Nov 2026: Kodi went to the background while he approved in the phone's browser, one
+    question to Google went unanswered, and the whole connection ended ("the connection was not completed")."""
+
+    def test_an_unanswered_question_is_asked_again_and_the_end_is_said_in_the_log(self):
+        import io as _io
+        import json as _json
+        import urllib.error
+        _engine_mod, drive = _engine()
+        answers = [None, (428, {'error': 'authorization_pending'}), None, (200, {'access_token': 'at', 'refresh_token': 'rt', 'expires_in': 3599})]
+
+        class Opener(object):
+            def open(self, request, timeout=None):
+                answer = answers.pop(0)
+                if answer is None:
+                    raise urllib.error.URLError('network is unreachable')
+                status, body = answer
+                if status >= 400:
+                    raise urllib.error.HTTPError(request.full_url, status, 'x', {}, _io.BytesIO(_json.dumps(body).encode()))
+
+                class Answer(object):
+                    def __init__(self):
+                        self.status, self.headers = status, {}
+
+                    def read(self):
+                        return _json.dumps(body).encode()
+
+                    def __enter__(self):
+                        return self
+
+                    def __exit__(self, *a):
+                        return False
+                return Answer()
+        said = []
+        tokens = drive.poll_device_flow('c', 's', {'device_code': 'd', 'interval': 1, 'expires_in': 600},
+                                        wait=lambda s: None, clock=lambda: 0.0, opener=Opener(), log=said.append)
+        self.assertEqual(tokens['refresh_token'], 'rt')
+        self.assertEqual(len(said), 1, 'the first unanswered question is said once')
+        self.assertNotIn('rt', ' '.join(said))
+        said = []
+        answers[:] = [(403, {'error': 'access_denied'})]
+        self.assertIsNone(drive.poll_device_flow('c', 's', {'device_code': 'd', 'interval': 1, 'expires_in': 600},
+                                                 wait=lambda s: None, clock=lambda: 0.0, opener=Opener(), log=said.append))
+        self.assertEqual(said, ['connecting ended by Google: access_denied (HTTP 403)'])
+
+    def test_the_sync_is_in_the_services_connection_and_the_wizard_menu(self):
+        services = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/patches/pov_myservices.py').read_text(encoding='utf-8')
+        self.assertIn("'google drive': DriveSyncService", services)
+        self.assertIn('?mode=cloud_sync', services)
+        menu = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/gui/main_menu.py').read_text(encoding='utf-8')
+        self.assertIn("{'mode': 'cloud_sync'}", menu)
+
+
 if __name__ == '__main__':
     unittest.main()

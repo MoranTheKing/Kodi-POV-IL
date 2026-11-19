@@ -72,19 +72,33 @@ def start_device_flow(client_id, opener=None):
     return data
 
 
-def poll_device_flow(client_id, client_secret, flow, wait=time.sleep, cancelled=lambda: False, clock=time.time, opener=None):
+def poll_device_flow(client_id, client_secret, flow, wait=time.sleep, cancelled=lambda: False, clock=time.time, opener=None,
+                     log=lambda text: None):
     """Asks every few seconds until the viewer approved: the tokens ({'refresh_token', 'access_token', 'expires_at'}),
-    or None when the viewer cancelled, refused, or the code ran out."""
+    or None when the viewer cancelled, refused, or the code ran out.
+
+    A question Google did not answer is asked again (the owner's phone, 20 Nov 2026: Kodi went to the background
+    while he approved in the phone's browser -- the window was gone and back three times -- and one unanswered
+    question ended the whole connection: "the connection was not completed"). Only Google's own "no" ends it."""
     interval = int(flow.get('interval') or 5)
     ends = clock() + int(flow.get('expires_in') or 1800)
+    missed = 0
     while clock() < ends:
         if cancelled():
             return None
         wait(interval)
         if cancelled():
             return None
-        status, data = _form(TOKEN_URL, {'client_id': client_id, 'client_secret': client_secret, 'device_code': flow['device_code'],
-                                         'grant_type': 'urn:ietf:params:oauth:grant-type:device_code'}, opener)
+        try:
+            status, data = _form(TOKEN_URL, {'client_id': client_id, 'client_secret': client_secret, 'device_code': flow['device_code'],
+                                             'grant_type': 'urn:ietf:params:oauth:grant-type:device_code'}, opener)
+        except DriveError as exc:
+            missed += 1
+            if missed in (1, 10, 50):
+                log('connecting: no answer from Google (%s), asking again' % (exc.reason or exc.status))
+            continue
+        if status >= 500:
+            continue
         if status == 200 and data.get('refresh_token'):
             return {'refresh_token': data['refresh_token'], 'access_token': data.get('access_token', ''),
                     'expires_at': clock() + int(data.get('expires_in') or 3600) - 60}
@@ -94,7 +108,10 @@ def poll_device_flow(client_id, client_secret, flow, wait=time.sleep, cancelled=
         if error == 'slow_down':
             interval += 5
             continue
-        return None             # access_denied, expired_token, or something unexpected
+        # access_denied, expired_token, or something unexpected: said in the log, never anything of the answer but its code
+        log('connecting ended by Google: %s (HTTP %s)' % (error or ('no refresh token' if status == 200 else 'no error code'), status))
+        return None
+    log('connecting: the code ran out')
     return None
 
 
