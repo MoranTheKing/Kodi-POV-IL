@@ -92,6 +92,11 @@ import threading
 SENDER = 'povil.trailer'
 ASK, ON = 'povil.tr.ask', 'povil.tr.on'
 FILE = 'povil.tr.file'          # the address of the trailer the player was handed: another add-on tells a trailer from a film by it
+PEEK = 'povil.tr.peek'          # the title the screen is on, named by the skin at once: its trailer is read while the screen rests
+PEEK_S = 0.7                    # ... once the screen has stayed on it this long (not every poster passed on the way:
+                                # each reading is several requests to YouTube from the viewer's address -- review)
+FOUND_S = 120                   # a trailer read ahead is played within this long of its reading, or read again
+FOUND_MAX = 8                   # (the ones read ahead and not asked for: the last few are kept)
 OPENING = 'povil.tr.opening'    # set from the moment the player is told to play until the first picture (or the viewer moving on)
 OFF_SWITCH = 'POVILNoTrailers'  # the skin's setting: set = the viewer switched the trailers off
 HERO_LABEL = 9809               # the home's hidden label that holds the trailer address of the title in the hero (gen_home.py)
@@ -755,6 +760,10 @@ class Desk(object):
         self.let_go = None          # the address of a trailer this desk forgot before it was seen to end
         self.ticket = 0
         self.lock = threading.Lock()
+        self.peek_ticket = 0
+        self.found = {}             # the ask -> (stream, why, when): its trailer read ahead, until it is asked for
+        self.fetching = {}          # the ask -> an Event, set when the reading of its trailer is over
+        self.ahead = threading.Lock()   # one reading ahead at a time: the next waits until the last one stops
 
     def is_ours(self):
         try:
@@ -824,48 +833,15 @@ class Desk(object):
         while self._opening():
             if self.waiting.wait(0.2) or not self._wanted(key, ticket):
                 return False
-        # A REAL TRAILER: the title's address names its chosen trailer and a few alternatives; the first
-        # that is MIN_TRAILER_S long is played, else the longest of those read (the owner: "a ten-second
-        # clip tells me nothing"). The one found is remembered, so the next visit asks for it alone.
-        stream, why = None, None
-        if key in self.choice:
-            candidates = [self.choice[key]]
-        else:
-            try:
-                found = list(self.translated(key) or [])
-            except Exception as exc:
-                self.log('no translated trailer: %s' % _why(exc))
-                found = []
-            candidates = (found + [v for v in video_ids(key) if v not in found])[:TRIES + len(found)]
-        for number, candidate in enumerate(candidates):
-            if number and not self._wanted(key, ticket):
-                return False
-            try:
-                found = pick(self.resolve(candidate))
-                if found is not None and selling(video_title(found)):
-                    self.log('not a trailer (it sells a way to watch): %s' % candidate)
-                    continue
-            except Asleep:
-                self._did_not_play('the YouTube add-on did not wake its server')
-                return False
-            except Exception as exc:
-                why = '%s: %s' % (type(exc).__name__, str(exc)[:160])
-                continue
-            if found is None:
-                continue
-            if not self._wanted(key, ticket):
-                return False
-            found = self.ready(found)
-            if not found:
-                why = 'given up (no answer): %s' % candidate
-                self.choice.pop(key, None)      # (the one remembered no longer answers: its alternatives next time)
-                continue
-            found = dict(found, video=candidate)
-            seconds = found.get('seconds')
-            if stream is None or (seconds or 0) > (stream.get('seconds') or 0):
-                stream = found
-            if seconds is None or seconds >= MIN_TRAILER_S:
-                break
+        try:
+            stream, why, gone = self._obtain(key, lambda: self._wanted(key, ticket))
+        except Asleep:
+            self._did_not_play('the YouTube add-on did not wake its server')
+            return False
+        if gone:
+            return False
+        with self.lock:
+            self.found.pop(key, None)       # (read once, played once: a later visit reads it again)
         if stream is None:
             if why:
                 # none answers: never handed to Kodi's player, and this title rests for a while
@@ -895,6 +871,120 @@ class Desk(object):
             self.home.setProperty(OPENING, '1')
             self.player.play(url, self.make_item(url, stream), True)
         return True
+
+    def _find(self, key, still):
+        """Read the title's trailer from YouTube: (stream, why, gone). stream None: none found (why: what went
+        wrong, if anything did); gone: the title is no longer wanted (still() said no) -- nothing is known.
+        Raises Asleep when the YouTube add-on did not wake its server.
+
+        A REAL TRAILER: the title's address names its chosen trailer and a few alternatives; the first
+        that is MIN_TRAILER_S long is played, else the longest of those read (the owner: "a ten-second
+        clip tells me nothing"). The one found is remembered, so the next visit asks for it alone."""
+        stream, why = None, None
+        if key in self.choice:
+            candidates = [self.choice[key]]
+        else:
+            try:
+                found = list(self.translated(key) or [])
+            except Exception as exc:
+                self.log('no translated trailer: %s' % _why(exc))
+                found = []
+            candidates = (found + [v for v in video_ids(key) if v not in found])[:TRIES + len(found)]
+        for number, candidate in enumerate(candidates):
+            if number and not still():
+                return None, None, True
+            try:
+                found = pick(self.resolve(candidate))
+                if found is not None and selling(video_title(found)):
+                    self.log('not a trailer (it sells a way to watch): %s' % candidate)
+                    continue
+            except Asleep:
+                raise
+            except Exception as exc:
+                why = '%s: %s' % (type(exc).__name__, str(exc)[:160])
+                continue
+            if found is None:
+                continue
+            if not still():
+                return None, None, True
+            found = self.ready(found)
+            if not found:
+                why = 'given up (no answer): %s' % candidate
+                self.choice.pop(key, None)      # (the one remembered no longer answers: its alternatives next time)
+                continue
+            found = dict(found, video=candidate)
+            seconds = found.get('seconds')
+            if stream is None or (seconds or 0) > (stream.get('seconds') or 0):
+                stream = found
+            if seconds is None or seconds >= MIN_TRAILER_S:
+                break
+        return stream, why, False
+
+    def _obtain(self, key, still):
+        """_find's answer for the title: the one read ahead a moment ago, the one being read now (waited for
+        while still() holds), or one read here."""
+        while True:
+            with self.lock:
+                kept = self.found.get(key)
+                if kept is not None and self.clock() - kept[2] < FOUND_S:
+                    return kept[0], kept[1], False
+                event = self.fetching.get(key)
+                if event is None:
+                    event = self.fetching[key] = threading.Event()
+                    break
+            while not event.is_set():
+                if self.waiting.wait(0.1) or not still():
+                    return None, None, True
+            # (over: its answer is kept now -- or that reading was given up as the viewer moved on: read here)
+        try:
+            stream, why, gone = self._find(key, still)
+            if not gone:
+                with self.lock:
+                    self.found[key] = (stream, why, self.clock())
+                    for old in sorted(self.found, key=lambda name: self.found[name][2])[:-FOUND_MAX]:
+                        self.found.pop(old, None)
+            return stream, why, gone
+        finally:
+            with self.lock:
+                self.fetching.pop(key, None)
+            event.set()
+
+    def peeked(self):
+        """The skin named the title the screen is on (povil.tr.peek). Its trailer is read now, so it is ready
+        when the screen has rested on the title and the skin asks for it (the owner, Nov 2026: "as fast as
+        possible, almost at once"). Returns the job to run off this thread, or None."""
+        key = self.home.getProperty(PEEK)
+        if not video_id(key) or not self.enabled() or self._busy_with_another() or self.acting():
+            return None
+        if self.clock() - self.given_up.get(key, -GIVEN_UP_S) < GIVEN_UP_S or self.clock() < self.resting:
+            return None
+        if self.clock() - self.born < QUIET_START_S:
+            return None             # Kodi is starting: the ask reads it, after the start
+        with self.lock:
+            if self.ours and self.key == key:
+                return None         # it plays, or is opening
+            self.peek_ticket += 1
+            ticket = self.peek_ticket
+        return lambda: self._read_ahead(key, ticket)
+
+    def _read_ahead(self, key, ticket):
+        def still():
+            return ticket == self.peek_ticket and key in (self.home.getProperty(PEEK), self.home.getProperty(ASK))
+        if self.waiting.wait(PEEK_S) or not still():
+            return False
+        # (the one before, of a title the screen has left, stops at its next step: its still() says no)
+        while not self.ahead.acquire(timeout=0.1):
+            if self.waiting.is_set() or not still():
+                return False
+        try:
+            self._obtain(key, still)
+        except Asleep:
+            pass                    # (the ask says so, when it comes)
+        except Exception as exc:
+            self.log('read ahead: %s' % _why(exc))
+        finally:
+            self.ahead.release()
+        return False
 
     def _did_not_play(self, why):
         """One more trailer that did not play; FAILS of them in a row and the trailers rest."""
@@ -1107,20 +1197,19 @@ def watch():
             handle.write(text)
         return kept
 
-    def save_named(name, text):
+    def save_named(name, text, manifest):
         # beside the manifests of the YouTube add-on, served by its server (webos_hls)
         from youtube_plugin.kodion.constants import TEMP_PATH
         with open(os.path.join(xbmcvfs.translatePath(TEMP_PATH), name), 'w', encoding='utf-8') as handle:
             handle.write(text)
-        return served_address(served[0], name)
-
-    served = ['']
+        return served_address(manifest, name)
 
     def ready(stream):
         stream = reachable(stream, fetch, save, log)
         if stream is not None and webos_player:
-            served[0] = stream.get('url') or ''
-            stream = webos_hls(stream, fetch, save_named, log)
+            # (each reading its own manifest's address: a trailer read ahead and one asked for may be read at once)
+            manifest = stream.get('url') or ''
+            stream = webos_hls(stream, fetch, lambda name, text: save_named(name, text, manifest), log)
         return stream
 
     kept_path = os.path.join(xbmcvfs.translatePath('special://profile/addon_data/plugin.program.kodipovilwizard/'), TRANSLATED_FILE)
@@ -1298,6 +1387,10 @@ def watch():
             try:
                 if what == 'ask':
                     job = desk.asked()
+                    if job is not None:
+                        run(job)
+                elif what == 'peek':
+                    job = desk.peeked()
                     if job is not None:
                         run(job)
                 elif what == 'stop':

@@ -835,14 +835,19 @@ class SkinTests(unittest.TestCase):
     def test_the_skin_asks_after_a_rest_and_says_stop_the_moment_anything_changes(self):
         timers = {t.findtext('name'): t for t in ET.parse(XML / 'Timers.xml').getroot().findall('timer')}
         start = timers['povil_trailer'].findtext('start')
-        for part in ('Window.IsActive(home)', '!Skin.HasSetting(POVILNoTrailers)', '!System.HasActiveModalDialog', 'System.IdleTime(3)',
+        for part in ('Window.IsActive(home)', '!Skin.HasSetting(POVILNoTrailers)', '!System.HasActiveModalDialog',
+                     # the rest is the viewer's choice: 1 s while none is made (the owner: "almost at once")
+                     '[[String.IsEqual(Skin.String(POVILTrailerWait),1) | String.IsEmpty(Skin.String(POVILTrailerWait))] + System.IdleTime(1)]',
+                     '[String.IsEqual(Skin.String(POVILTrailerWait),3) + System.IdleTime(3)]',
                      # none while an add-on is finding a pressed title's sources (a film is about to start)
                      '!Window.IsVisible(extendedprogressdialog)',
                      '!String.IsEmpty(Control.GetLabel(9809))',
                      '[!Player.HasMedia | !String.IsEmpty(Window(home).Property(povil.tr.on))]'):
             self.assertIn(part, start)
+        # (every new trailer counts its seconds on the screen from its own first picture)
         self.assertEqual([n.text for n in timers['povil_trailer'].findall('onstart')],
-                         ['SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(9809)],home)', 'NotifyAll(povil.trailer,ask)'])
+                         ['Skin.TimerStop(povil_trailer_shown)',
+                          'SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(9809)],home)', 'NotifyAll(povil.trailer,ask)'])
         stop = timers['povil_trailer_stop'].findtext('start')
         for part in ('!Window.IsActive(home)', '| Skin.HasSetting(POVILNoTrailers) |',
                      # the title is compared only with no busy dialog over the home: under one the label reads
@@ -863,9 +868,17 @@ class SkinTests(unittest.TestCase):
                           'String.IsEmpty(Window(home).Property(povil.tr.opening))'))
         self.assertEqual(opening.find('start').get('reset'), 'true')
         self.assertEqual([n.text for n in timers['povil_trailer_stop'].findall('onstart')],
-                         ['ClearProperty(povil.tr.ask,home)', 'NotifyAll(povil.trailer,stop)'])
-        for name in ('povil_trailer', 'povil_trailer_stop'):
+                         ['Skin.TimerStop(povil_trailer_shown)', 'ClearProperty(povil.tr.ask,home)', 'NotifyAll(povil.trailer,stop)'])
+        for name in ('povil_trailer', 'povil_trailer_stop', 'povil_trailer_peek'):
             self.assertEqual(timers[name].findtext('stop'), 'true', 'ready for the next title')
+        # the title the screen is on is named at once: the Wizard reads its trailer while the screen rests
+        peek = timers['povil_trailer_peek']
+        for part in ('Window.IsActive(home)', '!Skin.HasSetting(POVILNoTrailers)', '!System.HasActiveModalDialog',
+                     '!String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.peek))'):
+            self.assertIn(part, peek.findtext('start'))
+        self.assertNotIn('IdleTime', peek.findtext('start'))
+        self.assertEqual([n.text for n in peek.findall('onstart')],
+                         ['SetProperty(povil.tr.peek,$ESCINFO[Control.GetLabel(9809)],home)', 'NotifyAll(povil.trailer,peek)'])
 
     def test_the_picture_is_behind_the_hero_only_for_the_title_on_screen(self):
         home = ET.parse(XML / 'Home.xml').getroot()
@@ -906,9 +919,16 @@ class SkinTests(unittest.TestCase):
         fade = over.find('animation')
         alone = fade.get('condition')
         self.assertEqual((fade.get('effect'), fade.get('end'), fade.text), ('fade', '0', 'Conditional'))
-        for part in ('Player.HasVideo', 'povil.tr.on', 'Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4)',
-                     'System.IdleTime(3)'):
+        for part in ('Player.HasVideo', 'povil.tr.on',
+                     # the count of THIS trailer: a stopped timer keeps the last one's (the home faded at once)
+                     'Skin.TimerIsRunning(povil_trailer_shown)',
+                     # 4 s on the screen and the remote still for 3, as always, while the viewer chose nothing
+                     '[[String.IsEqual(Skin.String(POVILTrailerFull),4) | String.IsEmpty(Skin.String(POVILTrailerFull))] + '
+                     'Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)]',
+                     '[String.IsEqual(Skin.String(POVILTrailerFull),2) + '
+                     'Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),2) + System.IdleTime(2)]'):
             self.assertIn(part, alone, 'only a trailer that has been on a few seconds, and only while the remote is still')
+        self.assertNotIn('POVILTrailerFull),0)', alone, '"never": no fade at all')
         inside = {c.get('description') for c in over.iter('control')} | {c.get('id') for c in over.iter('control')}
         for part in ('hero', 'chips', 'clock', '9000', '5011'):
             self.assertIn(part, inside, part)
@@ -932,7 +952,7 @@ class SkinTests(unittest.TestCase):
         self.assertEqual(home.count('Skin.ToggleSetting(POVILNoTrailers)'), 1)
         variables = {v.get('name'): v for v in ET.parse(XML / 'Includes_POVIL_Home.xml').getroot().findall('variable')}
         said = [(v.get('condition'), v.text) for v in variables['POVIL_TrailersTile'].findall('value')]
-        self.assertEqual(said, [('Skin.HasSetting(POVILNoTrailers)', 'טריילרים במסך הבית: כבוי'), (None, 'טריילרים במסך הבית: פועל')])
+        self.assertEqual(said, [('Skin.HasSetting(POVILNoTrailers)', 'טריילרים: כבוי'), (None, 'טריילרים: פועל')])
 
     def test_the_trailer_is_gone_before_pov_or_umbrella_start_their_player(self):
         # review, Nov 2026: POV's player waits for Kodi's first word about a playback after it starts one; the
