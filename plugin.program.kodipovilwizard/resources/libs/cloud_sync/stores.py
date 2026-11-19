@@ -186,11 +186,52 @@ def write_umbrella_favourites(path, put, remove, local):
     return done
 
 
+# ------------------------------------------------------------------ POV with Trakt or MDBList
+# A viewer whose POV keeps its watched marks with Trakt or MDBList (its setting watched_indicators 1 / 2): POV writes
+# them -- the whole history it read from there, and every mark and place since -- into its own cache file of that
+# service (traktcache.db / mdblcache.db, the same tables as watched.db), never into watched.db. The owner, Nov 2026:
+# "keep it working in the background as long as Google is connected, alongside Trakt / MDBList". So every round
+# copies what changed in that cache into watched.db (mirror_pov): the viewer's Drive holds a copy of it all, and a
+# device of the same viewer without Trakt has it too. Only what changed in the cache since the last copy is written,
+# and only rows the copy itself made are ever removed (a row another device sent stays).
+POV_CACHE = {1: 'traktcache.db', 2: 'mdblcache.db'}
+POV_MIRRORED = POV_TABLES[2:]           # watched_status, progress
+
+
+def local_time(text):
+    """A service's UTC time ('2026-11-19T22:15:00.000Z') as watched.db writes its own ('2026-11-20 00:15:00')."""
+    from datetime import datetime, timezone
+    for pattern in ('%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%dT%H:%M:%SZ'):
+        try:
+            return datetime.strptime(text, pattern).replace(tzinfo=timezone.utc).astimezone().strftime('%Y-%m-%d %H:%M:%S')
+        except (TypeError, ValueError):
+            continue
+    return text
+
+
+def mirror_pov(pov_dir, indicators, copied):
+    """Copy into watched.db what changed in POV's Trakt / MDBList cache since the last copy (copied: key -> values
+    then). Returns (copied now, rows written or removed); (copied, 0) when POV keeps its marks itself."""
+    name = POV_CACHE.get(indicators)
+    source, target = (os.path.join(pov_dir, name) if name else None), os.path.join(pov_dir, 'watched.db')
+    if not source or not os.path.isfile(source) or not os.path.isfile(target):
+        return copied, 0
+    found, _skipped = read_tables(source, 'pov', POV_MIRRORED)
+    for value in found.values():
+        if isinstance(value.get('last_played'), str):
+            value['last_played'] = local_time(value['last_played'])
+    put = {key: value for key, value in found.items() if copied.get(key) != value}
+    remove = [key for key in copied if key not in found]
+    done = write_tables(target, 'pov', POV_MIRRORED, put, remove, copied) if (put or remove) else 0
+    return found, done
+
+
 # ------------------------------------------------------------------ both add-ons
 class Stores(object):
     """The lists of one device: POV's and Umbrella's, where their files are (pov_dir, umb_dir: their addon_data)."""
 
-    def __init__(self, pov_dir, umb_dir):
+    def __init__(self, pov_dir, umb_dir, pov_indicators=0):
+        self.pov_dir, self.pov_indicators = pov_dir, pov_indicators
         self.pov = os.path.join(pov_dir, 'watched.db') if pov_dir else None
         self.umb_watched = os.path.join(umb_dir, 'watched.db') if umb_dir else None
         self.umb_favourites = os.path.join(umb_dir, 'favourites.db') if umb_dir else None

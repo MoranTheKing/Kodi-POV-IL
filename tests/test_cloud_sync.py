@@ -397,5 +397,98 @@ class DeviceFlowTests(unittest.TestCase):
             drive.look('file-1')
 
 
+class MirrorTests(unittest.TestCase):
+    """A POV that keeps its watched marks with Trakt / MDBList writes them into its cache of that service; the sync
+    copies what changed there into watched.db (the owner: "alongside Trakt / MDBList, as long as Google is connected")."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix='povil-mirror-')
+        self.engine, _drive = _engine()
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_trakt_s_history_reaches_watched_db_and_the_cloud_and_only_the_copy_s_own_rows_leave(self):
+        tv = Device(self.root, 'tv')
+        db(os.path.join(tv.pov, 'traktcache.db'), POV_SCHEMA)
+        cache = lambda sql, values: (lambda c: (c.execute(sql, values), c.commit(), c.close()))(
+            sqlite3.connect(os.path.join(tv.pov, 'traktcache.db')))
+        cache('INSERT INTO watched_status VALUES (?, ?, ?, ?, ?, ?)', ('episode', '1399', 1, 1, '2026-11-19T20:00:00.000Z', 'GoT'))
+        cache('INSERT INTO progress VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              ('episode', '1399', 1, 2, '45.3', '1508.9', '2026-11-19T21:00:00.000Z', 7, 'GoT'))
+        # a row another device sent: never the copy's to take away
+        tv.sql('pov', 'INSERT INTO watched_status VALUES (?, ?, ?, ?, ?, ?)', ('movie', '27205', '', '', '2026-11-18 10:00:00', 'Inception'))
+        folder = self.engine.Folder(os.path.join(self.root, 'tv', 'wizard'))
+        tv.stores = stores.Stores(tv.pov, tv.umb, pov_indicators=1)
+        cloud = {}
+        self.engine.sync_round(folder, tv.stores, FakeDrive(cloud), 1000)
+        sent = records.loads(cloud['text'])
+        self.assertIn('pov.watched.episode.1399.1.1', sent)
+        self.assertEqual(sent['pov.progress.episode.1399.1.2']['v']['curr_time'], '1508.9')
+        self.assertNotIn('T', sent['pov.watched.episode.1399.1.1']['v']['last_played'], 'in the format watched.db keeps')
+        # unwatched on Trakt: the copy takes its own row away, the other device's row stays
+        cache('DELETE FROM watched_status WHERE media_id = ?', ('1399',))
+        self.engine.sync_round(folder, tv.stores, FakeDrive(cloud), 2000)
+        values = tv.stores.read()[0]
+        self.assertNotIn('pov.watched.episode.1399.1.1', values)
+        self.assertIn('pov.watched.movie.27205._._', values)
+        self.assertTrue(records.loads(cloud['text'])['pov.watched.episode.1399.1.1'].get('d'))
+
+    def test_an_unchanged_cache_writes_nothing_and_a_newer_place_from_another_device_stays(self):
+        tv = Device(self.root, 'tv')
+        db(os.path.join(tv.pov, 'traktcache.db'), POV_SCHEMA,
+           [('INSERT INTO progress VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', ('movie', '27205', '', '', '20.0', '600', '2026-11-19T21:00:00.000Z', 1, 'I'))])
+        copied, done = stores.mirror_pov(tv.pov, 1, {})
+        self.assertEqual(done, 1)
+        # another device's newer place arrives in watched.db; the cache did not change: the copy leaves it
+        tv.sql('pov', 'UPDATE progress SET curr_time = ? WHERE media_id = ?', ('900', '27205'))
+        copied, done = stores.mirror_pov(tv.pov, 1, copied)
+        self.assertEqual(done, 0)
+        self.assertEqual(tv.stores.read()[0]['pov.progress.movie.27205._._']['curr_time'], '900')
+        self.assertEqual(stores.mirror_pov(tv.pov, 0, copied), (copied, 0), 'POV keeps its own marks: nothing to copy')
+
+    def test_service_times_become_local_times(self):
+        self.assertRegex(stores.local_time('2026-11-19T22:15:00.000Z'), r'^2026-11-(19|20) \d\d:15:00$')
+        self.assertRegex(stores.local_time('2026-11-19T22:15:00Z'), r'^2026-11-(19|20) \d\d:15:00$')
+        self.assertEqual(stores.local_time('2026-11-19 22:15:00'), '2026-11-19 22:15:00')
+
+
+class ScheduleTests(unittest.TestCase):
+    def setUp(self):
+        self.engine, _drive = _engine()
+
+    def test_a_round_after_start_then_only_while_someone_uses_the_device(self):
+        s = self.engine.Schedule(0)
+        self.assertFalse(s.ready(10, 0, False))
+        self.assertTrue(s.ready(self.engine.FIRST_WAIT_S, 0, False), 'soon after start')
+        self.assertFalse(s.ready(self.engine.FIRST_WAIT_S + 60, 0, False))
+        t = self.engine.FIRST_WAIT_S + self.engine.EVERY_S
+        self.assertTrue(s.ready(t, 5, False), 'every 10 minutes while in use')
+        t += self.engine.EVERY_S
+        self.assertFalse(s.ready(t, self.engine.IDLE_S + 1, False), 'nobody at the remote: nothing')
+        self.assertFalse(s.ready(t + self.engine.EVERY_S, self.engine.IDLE_S + 700, False))
+        self.assertTrue(s.ready(t + self.engine.EVERY_S + 7, 3, False), 'someone came back: at once')
+
+    def test_never_during_a_film_and_soon_after_it_ends_even_with_nobody_at_the_remote(self):
+        s = self.engine.Schedule(0)
+        s.ready(self.engine.FIRST_WAIT_S, 0, False)
+        s.started(trailer=False)
+        t = self.engine.FIRST_WAIT_S + self.engine.EVERY_S
+        self.assertFalse(s.ready(t, 0, True), 'a film plays: its place goes when it ends')
+        self.assertFalse(s.ready(t + 600, self.engine.IDLE_S + 600, True))
+        s.ended(t + 3000)
+        self.assertFalse(s.ready(t + 3010, self.engine.IDLE_S + 3000, False))
+        self.assertTrue(s.ready(t + 3000 + self.engine.AFTER_PLAYBACK_S, self.engine.IDLE_S + 3030, False),
+                        'two hours without the remote, and still sent when the film ends')
+
+    def test_the_home_s_trailers_send_nothing(self):
+        s = self.engine.Schedule(0)
+        s.ready(self.engine.FIRST_WAIT_S, 0, False)
+        for i in range(10):
+            s.started(trailer=True)
+            s.ended(self.engine.FIRST_WAIT_S + 10 + i)
+        self.assertFalse(s.ready(self.engine.FIRST_WAIT_S + 100, 0, False), 'browsing trailers asks for no round')
+
+
 if __name__ == '__main__':
     unittest.main()

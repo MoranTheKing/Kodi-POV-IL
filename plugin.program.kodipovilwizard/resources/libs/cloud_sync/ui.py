@@ -12,8 +12,9 @@ INTRO = ('המועדפים, סימוני הצפייה ו"המשך צפייה" ש
          'הנתונים נשמרים בגוגל דרייב שלכם, בקובץ אחד שהבילד יוצר. הבילד לא רואה שום קובץ אחר בדרייב, '
          'ושום דבר לא עובר דרך שרת שלנו.[CR][CR]'
          'מחברים כל מכשיר פעם אחת, עם קוד קצר בטלפון.')
-STEPS = ('[B]1.[/B] בטלפון או במחשב, היכנסו אל:[CR][B]{url}[/B][CR][CR]'
-         '[B]2.[/B] הקלידו את הקוד:[CR][B][COLOR gold]{code}[/COLOR][/B][CR][CR]'
+# (five short lines: the window's text area ends where its cancel button begins)
+STEPS = ('[B]1.[/B] בטלפון או במחשב היכנסו אל [B]{url}[/B][CR]'
+         '[B]2.[/B] הקלידו את הקוד: [B][COLOR gold]{code}[/COLOR][/B][CR]'
          '[B]3.[/B] בחרו את חשבון הגוגל שלכם ואשרו.[CR][CR]'
          'החלון ייסגר לבד כשהחיבור יושלם.')
 LISTS = (('pov.fav.', 'מועדפים (POV)'), ('pov.drop.', 'סדרות שנזנחו (POV)'), ('pov.watched.', 'סימוני צפייה (POV)'),
@@ -53,7 +54,7 @@ def _code_window(flow):
         def onInit(self):
             if image:
                 self.getControl(501).setImage(image, False)
-            self.getControl(502).setText(STEPS.format(url=flow['verification_url'], code=flow['user_code']))
+            self.getControl(502).setText(STEPS.format(url=flow['verification_url'].split('://', 1)[-1], code=flow['user_code']))
             self.getControl(504).setLabel(HEADING)
             try:
                 self.getControl(503).setLabel('ביטול')
