@@ -106,6 +106,10 @@ class Router:
             # POV's own favourites: newest first, or by name (the settings' line, Onyx's favourites tab)
             from resources.libs.patches import pov_favorites_order
             pov_favorites_order.toggle()
+        elif mode == 'trailer_timing':
+            # how soon the home's trailer starts and has the screen (the tile in Onyx's settings screen)
+            from resources.libs import trailer_timing
+            trailer_timing.choose()
         elif mode == 'onyx_tabs':
             # which screens the top bar of the Onyx home shows (the tile in its settings screen)
             from resources.libs import onyx_tabs
