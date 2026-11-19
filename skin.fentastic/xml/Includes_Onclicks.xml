@@ -4,7 +4,7 @@
 	
 	
 <include name="InfoBackWindowOpecityChange">
-<onclick condition="String.IsEmpty(Skin.String(backwindowopecitychange,10)">Skin.SetString(backwindowopecitychange,10)</onclick>
+<onclick condition="String.IsEmpty(Skin.String(backwindowopecitychange))">Skin.SetString(backwindowopecitychange,10)</onclick>
 <onclick condition="Skin.String(backwindowopecitychange,10)">Skin.SetString(backwindowopecitychange,20)</onclick>
 <onclick condition="Skin.String(backwindowopecitychange,20)">Skin.SetString(backwindowopecitychange,40)</onclick>
 <onclick condition="Skin.String(backwindowopecitychange,40)">Skin.SetString(backwindowopecitychange,60)</onclick>
@@ -24,7 +24,7 @@
 </include>
 
 <include name="__GlobalPlayerReplacment__OSD">
-<onclick condition="!String.IsEmpty(Skin.String(__chooseplayer,__simpleplayer)">Skin.SetString(__chooseplayer,__simpleplayer)</onclick>
+<onclick condition="String.IsEmpty(Skin.String(__chooseplayer))">Skin.SetString(__chooseplayer,__simpleplayer)</onclick>
 <onclick condition="Skin.String(__chooseplayer,__simpleplayer)">Skin.SetString(__chooseplayer,__advancedplayer)</onclick>
 <onclick condition="Skin.String(__chooseplayer,__advancedplayer)">Skin.SetString(__chooseplayer,__netflixplayer)</onclick>
 <onclick condition="Skin.String(__chooseplayer,__netflixplayer)">Skin.SetString(__chooseplayer,__prettyplayer)</onclick>
@@ -35,7 +35,7 @@
 <item>
 <label>$VAR[__PlayerChoose]</label>
 <property name="resizedicon2">icons\infodialogs\update.png</property>
-<onclick condition="!String.IsEmpty(Skin.String(__chooseplayer,__simpleplayer)">Skin.SetString(__chooseplayer,__simpleplayer)</onclick>
+<onclick condition="String.IsEmpty(Skin.String(__chooseplayer))">Skin.SetString(__chooseplayer,__simpleplayer)</onclick>
 <onclick condition="Skin.String(__chooseplayer,__simpleplayer)">Skin.SetString(__chooseplayer,__advancedplayer)</onclick>
 <onclick condition="Skin.String(__chooseplayer,__advancedplayer)">Skin.SetString(__chooseplayer,__netflixplayer)</onclick>
 <onclick condition="Skin.String(__chooseplayer,__netflixplayer)">Skin.SetString(__chooseplayer,__prettyplayer)</onclick>
