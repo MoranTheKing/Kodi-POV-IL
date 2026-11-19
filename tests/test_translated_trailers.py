@@ -56,6 +56,27 @@ class TranslatedTests(unittest.TestCase):
         self.assertEqual(trailers.translated_query({'title': 'Slow Horses', 'original_title': 'Slow Horses'})[0],
                          'Slow Horses טריילר מתורגם')
         self.assertEqual(trailers.translated_query({}), (None, ()))
+        # a video that sells a way to watch is no trailer (Coco's, on the owner's device: "watch Coco free, built-in
+        # translation, the link in the description"); a Hebrew-dubbed trailer is a Hebrew one
+        scams = [('קוקו לצפייה ישירה בחינם מתורגם', 120, 'CCCCCCCCCC1', 'x'), ('קוקו מתורגם - הלינק בתיאור', 90, 'CCCCCCCCCC2', 'x'),
+                 ('Coco full movie מתורגם', 200, 'CCCCCCCCCC3', 'x'), ('קוקו - טריילר מדובב חדש', 104, 'CCCCCCCCCC4', 'Disney Israel')]
+        self.assertEqual(trailers.translated_pick(scams, ('קוקו', 'coco')), ['CCCCCCCCCC4'])
+        self.assertTrue(trailers.selling('קוקו לצפייה ישירה בחינם'))
+        # "now to watch directly on yes VOD" is how yes and HOT name real trailers: alone it sells nothing, and a
+        # small channel's is not taken by the search
+        self.assertFalse(trailers.selling('טולסה קינג | טריילר מתורגם | עכשיו לצפייה ישירה ב-yes VOD'))
+        self.assertFalse(trailers.selling('טולסה קינג | טריילר מתורגם | עכשיו לצפייה ישירה ב-yes VOD', 'yes'))
+        self.assertTrue(trailers.selling('טולסה קינג | טריילר מתורגם | לצפייה ישירה', 'seret box'))
+        # the very upload 0.5.16 took for Coco (its YouTube title says "translation" and names the film)
+        self.assertTrue(trailers.selling('קוקו לצפייה ישירה עם תרגום מובנה בחינם'))
+        self.assertEqual(trailers.translated_pick([('קוקו לצפייה ישירה עם תרגום מובנה בחינם', 141, 'DDDDDDDDDD1', 'seret box'),
+                                                   ('טריילר מדובב קוקו | COCO', 63, 'DDDDDDDDDD2', 'Disney Israel')], ('קוקו', 'coco')),
+                         ['DDDDDDDDDD2'])
+        self.assertFalse(trailers.selling('קוקו - טריילר מדובב חדש'))
+        self.assertFalse(trailers.selling('Coco | Official Final Trailer'))
+        self.assertFalse(trailers.selling('דקסטר | טריילר מתורגם | זמין לצפייה ב-yes'), 'available to watch on a service: a trailer')
+        self.assertFalse(trailers.selling('מואנה 2 | צפו עכשיו ב-Disney+ | טריילר מדובב'))
+        self.assertFalse(trailers.selling('The Download | Official Trailer'[:0] + 'Hachiko | Official Trailer'))
         # whole words: a short name is not a part of another word
         short = [('היא חוזרת | טריילר מתורגם', 100, 'BBBBBBBBBB1', 'x'), ('איזו היאנה | טריילר מתורגם', 100, 'BBBBBBBBBB2', 'x')]
         self.assertEqual(trailers.translated_pick(short, ('היא',)), ['BBBBBBBBBB1'])
@@ -113,6 +134,21 @@ class TranslatedTests(unittest.TestCase):
         self.assertTrue(desk.asked()())
         self.assertEqual(asked, ['ccccccccccc'], 'found translated: played, nothing else asked of YouTube')
         self.assertEqual(player.calls, ['http://x/ccccccccccc.mpd'])
+        # a video that sells a way to watch is skipped at play time too -- whatever named it (TMDb as well)
+        asked.clear()
+        said = []
+        streams = {'ccccccccccc': {'url': 'http://x/c.mpd', 'meta': {'title': 'קוקו לצפייה ישירה בחינם'}},
+                   'x8UAUAuKNcU': {'url': 'http://x/x.mpd', 'meta': {'title': 'Coco | Official Final Trailer'}}}
+        player = Player()
+        player.calls = []
+        desk = trailers.Desk(Home(**{trailers.ASK: address}), player, lambda video: (asked.append(video), [streams.get(video, {'url': 'u'})])[1],
+                             lambda url, stream: url, lambda: True, translated=lambda key: ['ccccccccccc'], halt=lambda: None,
+                             log=said.append)
+        desk.born = 0.0
+        self.assertTrue(desk.asked()())
+        self.assertEqual(asked, ['ccccccccccc', 'x8UAUAuKNcU'])
+        self.assertEqual(player.calls, ['http://x/x.mpd'])
+        self.assertIn('not a trailer (it sells a way to watch): ccccccccccc', said)
         # a search that fails leaves the title's own trailers
         asked.clear()
         desk = trailers.Desk(Home(**{trailers.ASK: address}), Player(), lambda video: (asked.append(video), [{'url': 'u'}])[1],
