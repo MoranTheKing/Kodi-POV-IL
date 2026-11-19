@@ -161,7 +161,7 @@
 			<param name="bottom">-88</param>
 			<param name="centerleft">50%</param>
 		</include>
-			<param name="texture">https://www.iconsdb.com/icons/preview/white/arrow-189-xxl.png</param>
+			<param name="texture">buttons/spinctrl/arrow-light-down.png</param>
 			<param name="colordiffuse">95FFFFFF</param>
 			<param name="visible">![Window.IsActive(1126) | Window.IsActive(1127)]</param>
 	</include>
@@ -189,7 +189,7 @@
 			<param name="bottom">-88</param>
 			<param name="centerleft">50%</param>
 		</include>
-			<param name="texture">https://www.iconsdb.com/icons/preview/white/arrow-189-xxl.png</param>
+			<param name="texture">buttons/spinctrl/arrow-light-down.png</param>
 			<param name="flipy">true</param>
 			<param name="colordiffuse">95FFFFFF</param>
 			<param name="visible">Window.IsActive(1126)</param>
@@ -489,7 +489,7 @@
 	</item>
 	<item>
 		<label>פרקי עונה $INFO[VideoPlayer.Season,(,)] לסדרה $INFO[VideoPlayer.TvShowTitle]</label>
-		<property name="episoderesize">https://www.iconsdb.com/icons/preview/white/tv-3-xxl.png</property>
+		<property name="episoderesize">DefaultTVShows.png</property>
 		<property name="visiblepisodes">true</property>
 		<onclick>Control.SetFocus(200323,0,absolute)</onclick>
 		<visible>$EXP[__episode_OSD] + [!String.IsEmpty(VideoPlayer.UniqueID(tmdb)) | String.Contains(Player.FolderPath,idanplus)]</visible>
@@ -645,7 +645,7 @@
 	</item>
 	<item>
 		<label>$VAR[NetFlixMenuRightLabel]</label>
-		<property name="resizedicon">https://www.iconsdb.com/icons/preview/white/arrow-189-xxl.png</property>
+		<property name="resizedicon">buttons/spinctrl/arrow-light-down.png</property>
 		<onclick>ActivateWindow(1127)</onclick>
 	</item>
 	<item>
