@@ -1032,6 +1032,16 @@ def _youtube_port():
 
 _start_watch('POVILYouTubePort', _youtube_port)
 
+
+# KODI-POV-IL - the device-to-device sync of POV's and Umbrella's own lists through the viewer's own Google Drive
+# (cloud_sync/engine.py): nothing at all until the viewer connects this device from the settings tile.
+def _cloud_sync_watch():
+    from resources.libs.cloud_sync import engine as _sync
+    _sync.watch()
+
+
+_start_watch('POVILSync', _cloud_sync_watch)
+
 # KODI-POV-IL - the trailer POV names for a title (patches/pov_trailer_pick.py): the
 # series POV already holds in its cache were asked for Hebrew videos only, and a
 # finished series stays there half a year. Once per device they are let go, so

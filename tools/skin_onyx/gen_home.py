@@ -383,6 +383,9 @@ SETTINGS_ITEMS = [
     ('ניקוי קאש', 'DefaultAddonRepository.png', plugin_run(POV + '?mode=clear_all_cache&isFolder=false'), 'System.HasAddon(plugin.video.pov)'),
     # which screens the top bar shows (the Wizard asks, onyx_tabs.py): any but films and settings can go
     ('בחירת מסכים', 'DefaultAddonLookAndFeel.png', plugin_run(WIZARD + '?mode=onyx_tabs'), ''),
+    # POV's and Umbrella's own lists on every device of the viewer, through the viewer's own Google Drive
+    # (the Wizard's cloud_sync)
+    ('סנכרון בין מכשירים', 'DefaultNetwork.png', plugin_run(WIZARD + '?mode=cloud_sync'), ''),
     # which player the controls show (the Wizard asks, onyx_player_style.py; gen_osd_styles.py draws them)
     ('$VAR[POVIL_PlayerTile]', 'povil/osd/layout.png', plugin_run(WIZARD + '?mode=player_style'), ''),
     # the watched mark's colour (WATCHED_COLOURS)
