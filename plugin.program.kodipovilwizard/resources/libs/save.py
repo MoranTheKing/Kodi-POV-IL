@@ -101,7 +101,8 @@ def import_save_data():
         
     if os.path.exists(pov):
         x += 1
-        _copy_folder_contents(pov, os.path.join(CONFIG.ADDON_DATA, 'plugin.video.pov', 'databases'), overwrite, dialog)
+        # (POV keeps its databases in its own folder: a "databases" folder there is read by nothing)
+        _copy_folder_contents(pov, os.path.join(CONFIG.ADDON_DATA, 'plugin.video.pov'), overwrite, dialog)
 
     if os.path.exists(umbrella):
         x += 1
@@ -130,6 +131,8 @@ def import_save_data():
         logging.log_notify(CONFIG.ADDONTITLE, f"[COLOR {CONFIG.COLOR2}]Save Data Import Failed (No data found)[/COLOR]")
     else:
         logging.log_notify(CONFIG.ADDONTITLE, f"[COLOR {CONFIG.COLOR2}]Save Data Import Complete[/COLOR]")
+        # (POV reads its history and favourites from what it holds in memory until Kodi starts again)
+        dialog.ok(CONFIG.ADDONTITLE, 'הנתונים יובאו. כדי שיופיעו בכל מקום, יש לסגור את קודי ולפתוח אותו מחדש.')
 
 
 def _add_folder_to_zip(zipf, source_path, zip_path_prefix):
@@ -140,6 +143,55 @@ def _add_folder_to_zip(zipf, source_path, zip_path_prefix):
                 fn = os.path.join(base, file)
                 rel_path = os.path.relpath(fn, source_path)
                 zipf.write(fn, os.path.join(zip_path_prefix, rel_path), zipfile.ZIP_DEFLATED)
+
+
+# What of POV's folder is the viewer's own: watched.db holds the history, the places to resume, the favourites
+# and the dropped shows; navigator.db the shortcut folders; views.db the views; the build's own files beside
+# them (favourites order, dropped Trakt / MDBList shows). The rest is caches POV fills again by itself.
+POV_DATA_FILES = ('watched.db', 'navigator.db', 'views.db')
+POV_DATA_PREFIX = 'povil_'
+
+
+def pov_data_files(folder):
+    """The names in POV's folder that are the viewer's own data (see POV_DATA_FILES)."""
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return []
+    return sorted(name for name in names if os.path.isfile(os.path.join(folder, name)) and
+                  (name in POV_DATA_FILES or (name.startswith(POV_DATA_PREFIX) and not name.endswith('.lock.db'))))
+
+
+def _consistent_copy(path):
+    """A database file as SQLite itself copies it (POV may be writing it -- now also while a video plays,
+    pov_periodic_bookmark): a temporary file, or None when it cannot be read as one."""
+    import sqlite3
+    import tempfile
+    fd, copy = tempfile.mkstemp(suffix='.db')
+    os.close(fd)
+    try:
+        source = sqlite3.connect(path)
+        target = sqlite3.connect(copy)
+        try:
+            source.backup(target)
+        finally:
+            target.close()
+            source.close()
+        return copy
+    except Exception:
+        os.remove(copy)
+        return None
+
+
+def _add_pov_data_to_zip(zipf, folder, zip_path_prefix):
+    for name in pov_data_files(folder):
+        path = os.path.join(folder, name)
+        copy = _consistent_copy(path) if name.endswith('.db') else None
+        try:
+            zipf.write(copy or path, os.path.join(zip_path_prefix, name), zipfile.ZIP_DEFLATED)
+        finally:
+            if copy:
+                os.remove(copy)
 
 
 def export_save_data():
@@ -159,9 +211,11 @@ def export_save_data():
     if getattr(CONFIG, 'KEEPACCTMGR', 'false') == 'true':
         _add_folder_to_zip(zipf, os.path.join(CONFIG.ADDON_DATA, 'script.module.acctmgr'), 'acctmgr')
         
-    # POV Databases
+    # POV's history and favourites. POV keeps its databases in its own folder -- this read a "databases"
+    # folder that POV never makes, and the saved data had none of them (a viewer, Nov 2026: "how do I back
+    # up my POV favourites before installing the build again?")
     if getattr(CONFIG, 'KEEPPOVDATA', 'false') == 'true':
-        _add_folder_to_zip(zipf, os.path.join(CONFIG.ADDON_DATA, 'plugin.video.pov', 'databases'), 'pov')
+        _add_pov_data_to_zip(zipf, os.path.join(CONFIG.ADDON_DATA, 'plugin.video.pov'), 'pov')
         
     # Umbrella Databases
     if getattr(CONFIG, 'KEEPUMBRELLADATA', 'false') == 'true':
