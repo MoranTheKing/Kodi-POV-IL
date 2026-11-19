@@ -1,7 +1,9 @@
-"""The viewer's own Google Drive as the sync's store: one file in the Drive's hidden folder for apps
-(appDataFolder), reached with the narrowest Drive permission there is -- drive.appdata, "see, create and delete
-its own configuration data": the build sees nothing else in the viewer's Drive, and nothing passes through the
-build's own servers.
+"""The viewer's own Google Drive as the sync's store: one file the build made there (FILE_NAME), reached with
+drive.file -- "see, edit, create and delete only the specific Google Drive files you use with this app": the build
+sees nothing else in the viewer's Drive, and nothing passes through the build's own servers. (Drive's hidden folder
+for apps, drive.appdata, is not offered to TVs: Google's device flow answers "Invalid device flow scope" -- seen
+with the build's own client, 20 Nov 2026. drive.file is.) A file made by the build is the build's on every device
+of the viewer: drive.file is granted to the app, not to one device.
 
 Connecting a device is Google's flow for TVs: the device shows an address and a short code, the viewer types the
 code on a phone or a computer and approves; the device keeps the refresh token in its own settings file.
@@ -22,8 +24,8 @@ TOKEN_URL = 'https://oauth2.googleapis.com/token'
 REVOKE_URL = 'https://oauth2.googleapis.com/revoke'
 FILES = 'https://www.googleapis.com/drive/v3/files'
 UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files'
-SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
-NAME = 'povil_sync.json.gz'
+SCOPE = 'https://www.googleapis.com/auth/drive.file'
+NAME = 'Kodi POV IL - sync between devices (do not delete).gz'
 TIMEOUT = 20
 
 
@@ -144,8 +146,9 @@ class Drive(object):
         return data
 
     def find(self):
-        """The file's {'id', 'md5Checksum'} in the app folder, or None (100 units)."""
-        query = urllib.parse.urlencode({'spaces': 'appDataFolder', 'q': "name = '%s' and trashed = false" % NAME,
+        """The file's {'id', 'md5Checksum'} -- the latest of the build's own if there are several -- or None (100 units).
+        (drive.file: only files the build made are ever listed.)"""
+        query = urllib.parse.urlencode({'q': "name = '%s' and trashed = false" % NAME, 'orderBy': 'modifiedTime desc',
                                         'fields': 'files(id,md5Checksum,modifiedTime)', 'pageSize': 10})
         data = json.loads(self._call('GET', FILES + '?' + query, 100).decode('utf-8'))
         files = data.get('files') or []
@@ -168,7 +171,7 @@ class Drive(object):
         return gzip.decompress(raw).decode('utf-8')
 
     def upload(self, text, file_id=None):
-        """Writes the file (50 units): a new one in the app folder when there is no file_id. Its {'id', 'md5Checksum'}."""
+        """Writes the file (50 units): a new one in the viewer's Drive when there is no file_id. Its {'id', 'md5Checksum'}."""
         body = gzip.compress(text.encode('utf-8'))
         fields = urllib.parse.urlencode({'fields': 'id,md5Checksum'})
         if file_id:
@@ -176,7 +179,10 @@ class Drive(object):
                               {'Content-Type': 'application/gzip'})
         else:
             boundary = 'povil-sync-boundary'
-            meta = json.dumps({'name': NAME, 'parents': ['appDataFolder'], 'mimeType': 'application/gzip'})
+            meta = json.dumps({'name': NAME, 'mimeType': 'application/gzip',
+                               'description': 'Kodi POV IL: favourites, watched marks and continue watching of POV and Umbrella, '
+                                              'kept the same on every Kodi device of this account. Deleting it stops nothing: '
+                                              'the next sync writes it again.'})
             multipart = ('--%s\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n%s\r\n--%s\r\nContent-Type: application/gzip\r\n\r\n'
                          % (boundary, meta, boundary)).encode() + body + ('\r\n--%s--' % boundary).encode()
             data = self._call('POST', '%s?uploadType=multipart&%s' % (UPLOAD, fields), 50, multipart,
