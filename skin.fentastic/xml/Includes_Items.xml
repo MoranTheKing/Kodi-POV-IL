@@ -5,12 +5,12 @@
 	<content>
 	<item>
 		<label>הגדרות אודיו</label>
-		<icon>https://www.iconsdb.com/icons/preview/white/speaker-xxl.png</icon>
+		<icon>osd/fullscreen/buttons/audio.png</icon>
 		<onclick>ActivateWindow(osdaudiosettings)</onclick>
 	</item>
 	<item>
 		<label>הגדרות וידאו</label>
-		<icon>https://www.iconsdb.com/icons/preview/white/video-play-2-xxl.png</icon>
+		<icon>osd/fullscreen/buttons/play.png</icon>
 		<onclick>ActivateWindow(osdvideosettings)</onclick>
 	</item>
 	<item>
@@ -20,7 +20,7 @@
 	</item>
 	<item>
 		<label>הגדרות נגן</label>
-		<icon>https://www.iconsdb.com/icons/preview/white/play-3-xxl.png</icon>
+		<icon>osd/fullscreen/buttons/settings.png</icon>
 		<onclick>Control.SetFocus(9001)</onclick>
 	</item>
 	</content>
@@ -31,7 +31,7 @@
 	<item>
 		<label>הצג חלון כתובית דארקסאבס</label>
 		<label2>$VAR[_ReplaceSubtitle]</label2>
-		<onclick condition="String.IsEmpty(Skin.String(subtitlesearch,darksubs)">Skin.SetString(subtitlesearch,darksubs)</onclick>
+		<onclick condition="String.IsEmpty(Skin.String(subtitlesearch))">Skin.SetString(subtitlesearch,darksubs)</onclick>
 		<onclick condition="Skin.String(subtitlesearch,darksubs)">Skin.SetString(subtitlesearch,kodisubtitle)</onclick>
 		<onclick condition="Skin.String(subtitlesearch,kodisubtitle)">Skin.SetString(subtitlesearch,darksubs)</onclick>
 	</item>	
@@ -106,10 +106,11 @@
 <item>
 	<label>[B][COLOR blue]שנה נגן[/COLOR][/B]</label>
 	<label2>$VAR[__PlayerChoose]</label2>
-	<onclick condition="String.IsEmpty(Skin.String(__chooseplayer,__simpleplayer)">Skin.SetString(__chooseplayer,__simpleplayer)</onclick>
+	<onclick condition="String.IsEmpty(Skin.String(__chooseplayer))">Skin.SetString(__chooseplayer,__advancedplayer)</onclick>
 	<onclick condition="Skin.String(__chooseplayer,__simpleplayer)">Skin.SetString(__chooseplayer,__advancedplayer)</onclick>
 	<onclick condition="Skin.String(__chooseplayer,__advancedplayer)">Skin.SetString(__chooseplayer,__netflixplayer)</onclick>
-	<onclick condition="Skin.String(__chooseplayer,__netflixplayer)">Skin.SetString(__chooseplayer,__simpleplayer)</onclick>
+	<onclick condition="Skin.String(__chooseplayer,__netflixplayer)">Skin.SetString(__chooseplayer,__prettyplayer)</onclick>
+	<onclick condition="Skin.String(__chooseplayer,__prettyplayer)">Skin.SetString(__chooseplayer,__simpleplayer)</onclick>
 </item>
 </include>
 
@@ -127,7 +128,7 @@
 </item>
 <item>
 	<label>1 דקה</label>
-	<onclick>seek(120)</onclick>
+	<onclick>seek(60)</onclick>
 </item>
 <item>
 	<label>5 דקות</label>
@@ -147,11 +148,11 @@
 </item>
 <item>
 	<label>60 דקות</label>
-	<onclick>seek(4800)</onclick>
+	<onclick>seek(3600)</onclick>
 </item>
 <item>
 	<label>80 דקות</label>
-	<onclick>sseek(6000)</onclick>
+	<onclick>seek(4800)</onclick>
 </item>
 </content>
 </include>
@@ -161,17 +162,17 @@
 <content>
 <item>
 	<label>הרצה</label>
-	<onclick>PlayerControl(forward)</onclick>
-	<visible>!Player.Forwarding</visible>
+	<onclick>PlayerControl(rewind)</onclick>
+	<visible>!Player.Rewinding</visible>
 </item>
 <item>
 	<label>עצור</label>
 	<onclick>PlayerControl(play)</onclick>
-	<visible>Player.Forwarding</visible>
+	<visible>Player.Rewinding</visible>
 </item>
 <item>
 	<label>1 דקה</label>
-	<onclick>seek(-120)</onclick>
+	<onclick>seek(-60)</onclick>
 </item>
 <item>
 	<label>5 דקות</label>
@@ -191,11 +192,11 @@
 </item>
 <item>
 	<label>60 דקות</label>
-	<onclick>seek(-4800)</onclick>
+	<onclick>seek(-3600)</onclick>
 </item>
 <item>
 	<label>80 דקות</label>
-	<onclick>sseek(-6000)</onclick>
+	<onclick>seek(-4800)</onclick>
 </item>
 </content>
 </include>

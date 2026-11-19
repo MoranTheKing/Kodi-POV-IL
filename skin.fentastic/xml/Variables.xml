@@ -66,28 +66,28 @@
 </variable>
 	
 	<variable name="LockViewLayoutSetFocusColor">
-	<value condition="!String.IsEmpty(Skin.String(viewtypelockfocuscolor)">$INFO[Skin.String(viewtypelockfocuscolor)]</value>
+	<value condition="!String.IsEmpty(Skin.String(viewtypelockfocuscolor))">$INFO[Skin.String(viewtypelockfocuscolor)]</value>
 	<value>FFFFFF</value>
 	</variable>
 	
 	<variable name="LockedPlayerOSd">
-	<value condition="$EXP[__SimplePlayerVisiblity]">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="$EXP[__AdvancedPlayerVisiblity]">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="$EXP[__NetflixPlayerVisiblity]">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="$EXP[__PrettyplayerPlayerVisiblity]">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
+	<value condition="$EXP[__SimplePlayerVisiblity]">OverlayLocked.png</value>
+	<value condition="$EXP[__AdvancedPlayerVisiblity]">OverlayLocked.png</value>
+	<value condition="$EXP[__NetflixPlayerVisiblity]">OverlayLocked.png</value>
+	<value condition="$EXP[__PrettyplayerPlayerVisiblity]">OverlayLocked.png</value>
 	</variable>
 	
 	<variable name="LockViewTypes_VAR">
-	<value condition="String.IsEqual(Skin.String(lock.view.type),posterviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="String.IsEqual(Skin.String(lock.view.type),shitposterviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="String.IsEqual(Skin.String(lock.view.type),panelviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="String.IsEqual(Skin.String(lock.view.type),widelistviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="String.IsEqual(Skin.String(lock.view.type),widepanelviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="String.IsEqual(Skin.String(lock.view.type),widepanelpostersviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="String.IsEqual(Skin.String(lock.view.type),widepanelfanartsviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="String.IsEqual(Skin.String(lock.view.type),listviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="String.IsEqual(Skin.String(lock.view.type),AdvancedViewList)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>	
-	<value condition="String.IsEqual(Skin.String(lock.view.type),AdvancedWideViewList)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
+	<value condition="String.IsEqual(Skin.String(lock.view.type),posterviewtype)">OverlayLocked.png</value>
+	<value condition="String.IsEqual(Skin.String(lock.view.type),shitposterviewtype)">OverlayLocked.png</value>
+	<value condition="String.IsEqual(Skin.String(lock.view.type),panelviewtype)">OverlayLocked.png</value>
+	<value condition="String.IsEqual(Skin.String(lock.view.type),widelistviewtype)">OverlayLocked.png</value>
+	<value condition="String.IsEqual(Skin.String(lock.view.type),widepanelviewtype)">OverlayLocked.png</value>
+	<value condition="String.IsEqual(Skin.String(lock.view.type),widepanelpostersviewtype)">OverlayLocked.png</value>
+	<value condition="String.IsEqual(Skin.String(lock.view.type),widepanelfanartsviewtype)">OverlayLocked.png</value>
+	<value condition="String.IsEqual(Skin.String(lock.view.type),listviewtype)">OverlayLocked.png</value>
+	<value condition="String.IsEqual(Skin.String(lock.view.type),AdvancedViewList)">OverlayLocked.png</value>	
+	<value condition="String.IsEqual(Skin.String(lock.view.type),AdvancedWideViewList)">OverlayLocked.png</value>
 	</variable>
 	
 	
@@ -396,15 +396,15 @@
 	</variable>
 
 	<variable name="__Osdprettyplayerlabeltime">
-	<value condition="$EXP[__episode_OSD] | $EXP[__Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.FinishTime][/COLOR][/B] [B]:אחוזי צפיה עד כה [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.Progress]% אחוז[/COLOR][/B] $VAR[__Osdprettyplayerlabelepisode]</value>
+	<value condition="$EXP[__episode_OSD] | $EXP[__Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.FinishTime][/COLOR][/B] [B]אחוזי צפייה עד כה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.Progress]%[/COLOR][/B] $VAR[__Osdprettyplayerlabelepisode]</value>
 	</variable>
 	
 	<variable name="__Osdprettyplayernextlabeltime">
-	<value condition="$EXP[__episode_OSD] | $EXP[__Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).FinishTime][/COLOR][/B] [B]:אחוזי צפיה עד כה [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).Progress]% אחוז[/COLOR][/B] $VAR[__Osdprettyplayerlabelnextepisode]</value>
+	<value condition="$EXP[__episode_OSD] | $EXP[__Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).FinishTime][/COLOR][/B] [B]אחוזי צפייה עד כה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).Progress]%[/COLOR][/B] $VAR[__Osdprettyplayerlabelnextepisode]</value>
 	</variable>	
 	
 	<variable name="__Osdprettyplayerpreviouslabeltime">
-	<value condition="$EXP[__episode_OSD] | $EXP[__Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).FinishTime][/COLOR][/B] [B]:אחוזי צפיה עד כה [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).Progress]% אחוז[/COLOR][/B] $VAR[__Osdprettyplayerlabelpreviousepisode]</value>
+	<value condition="$EXP[__episode_OSD] | $EXP[__Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).FinishTime][/COLOR][/B] [B]אחוזי צפייה עד כה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).Progress]%[/COLOR][/B] $VAR[__Osdprettyplayerlabelpreviousepisode]</value>
 	</variable>
 	
 	<variable name="__osdprettylabelpercent">
@@ -441,8 +441,8 @@
 	</variable>
 	
 	<variable name="texturecurrentimage">
-	<value condition="!String.IsEmpty(Player.Art(fanart)">$INFO[Player.Art(fanart)]</value>
-	<value condition="!String.IsEmpty(Player.Art(landscape)">$INFO[Player.Art(landscape)]</value>
+	<value condition="!String.IsEmpty(Player.Art(fanart))">$INFO[Player.Art(fanart)]</value>
+	<value condition="!String.IsEmpty(Player.Art(landscape))">$INFO[Player.Art(landscape)]</value>
 	<value condition="!String.IsEmpty(VideoPlayer.Cover)">$INFO[VideoPlayer.Cover]</value>
 	<value>$INFO[VideoPlayer.Cover]</value>
 	</variable>
@@ -1080,15 +1080,15 @@
 	</variable>
 
 	<variable name="OsdInfoLabelVar">
-		<value condition="Player.Chapter + player.chaptercount">מקטע[COLOR button_focus] $INFO[Player.Chapter,(,)][/COLOR] / קטע[COLOR button_focus] $INFO[Player.ChapterCount,(,)][/COLOR]</value>
-		<value condition="![Player.Chapter + player.chaptercount)] + VideoPlayer.Content(episodes)">עונה $INFO[VideoPlayer.Season,[COLOR button_focus](,)[/COLOR]] / פרק $INFO[VideoPlayer.Episode,[COLOR button_focus](,)[/COLOR]]</value>
-		<value condition="![Player.Chapter + player.chaptercount)] + VideoPlayer.Content(movies) + !String.IsEmpty(VideoPlayer.TagLine)">$INFO[VideoPlayer.TagLine]</value>
-		<value condition="![Player.Chapter + player.chaptercount)] + VideoPlayer.Content(LiveTv)">מתחיל $INFO[VideoPlayer.StartTime,[COLOR button_focus](,)[/COLOR]] / מסתיים $INFO[VideoPlayer.EndTime,[COLOR button_focus](,)[/COLOR]]</value>
+		<value condition="Integer.IsGreater(Player.ChapterCount,0)">מקטע[COLOR button_focus] $INFO[Player.Chapter,(,)][/COLOR] / קטע[COLOR button_focus] $INFO[Player.ChapterCount,(,)][/COLOR]</value>
+		<value condition="!Integer.IsGreater(Player.ChapterCount,0) + VideoPlayer.Content(episodes)">עונה $INFO[VideoPlayer.Season,[COLOR button_focus](,)[/COLOR]] / פרק $INFO[VideoPlayer.Episode,[COLOR button_focus](,)[/COLOR]]</value>
+		<value condition="!Integer.IsGreater(Player.ChapterCount,0) + VideoPlayer.Content(movies) + !String.IsEmpty(VideoPlayer.TagLine)">$INFO[VideoPlayer.TagLine]</value>
+		<value condition="!Integer.IsGreater(Player.ChapterCount,0) + VideoPlayer.Content(LiveTv)">מתחיל $INFO[VideoPlayer.StartTime,[COLOR button_focus](,)[/COLOR]] / מסתיים $INFO[VideoPlayer.EndTime,[COLOR button_focus](,)[/COLOR]]</value>
 		<value>No Information</value>
 	</variable>
 
 	<variable name="_FixOsdIcon">
-	<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(episodes) + !String.IsEmpty(Player.Art(poster)">$INFO[Player.Art(poster)]</value>
+	<value condition="[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !String.IsEmpty(Player.Art(poster))">$INFO[Player.Art(poster)]</value>
 	<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(episodes) + !String.IsEmpty(VideoPlayer.Cover)">$INFO[VideoPlayer.Cover]</value>
 	<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(episodes) + !String.IsEmpty(Player.Icon)">$INFO[Player.Icon]</value>
 	<value>$INFO[Player.Icon]</value>
@@ -1654,7 +1654,7 @@
 	</variable>
 	
 	<variable name="generalviewtypefanartview">
-	<value condition="!String.IsEmpty(ListItem.Art(fanart)">$INFO[ListItem.Art(fanart)]</value>
+	<value condition="!String.IsEmpty(ListItem.Art(fanart))">$INFO[ListItem.Art(fanart)]</value>
 	<value condition="!String.IsEmpty(ListItem.Art(landscape)">$INFO[ListItem.Art(landscape)]</value>
 	<value>$INFO[ListItem.Icon]</value>
 	</variable>

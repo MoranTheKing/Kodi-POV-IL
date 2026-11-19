@@ -148,7 +148,7 @@
 		<focusedcolor>black</focusedcolor>
 		<onclick>$INFO[Window(home).Property(extendedinfotrailer)]</onclick>
 		<onclick>ReplaceWindow(1133)</onclick>
-		<visible>!String.IsEmpty(Window(home).Property(extendedinfotrailer)</visible>
+		<visible>!String.IsEmpty(Window(home).Property(extendedinfotrailer))</visible>
 	</control>	
 	<control type="button" id="306">
 		<width>172</width>

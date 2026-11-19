@@ -3822,6 +3822,10 @@ def _maybe_patch_fentastic_simpleplayer_source():
             kodi_utils.log(
                 'fentastic_simpleplayer_source_patcher: change-source button '
                 'added to the simple player OSD', level='INFO')
+        elif status == 'removed_duplicate':
+            kodi_utils.log(
+                'fentastic_simpleplayer_source_patcher: the skin has its own '
+                'change-source button -- the second copy was removed', level='INFO')
         elif status in ('unmatched', 'compile_failed', 'write_failed',
                         'read_failed'):
             kodi_utils.log(

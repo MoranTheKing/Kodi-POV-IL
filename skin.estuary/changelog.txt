@@ -1,3 +1,6 @@
+[B]4.0.10[/B]
+• The player's frame-rate flag: its condition was missing a bracket and never held
+
 [B]4.0.9[/B]
 • The pause window: its three mask pictures are shipped (the panel and the poster were drawn with square, unfaded edges), and its end-time block uses a font this skin has
 • Zoom in / zoom out and twenty skin strings that had no Hebrew are translated

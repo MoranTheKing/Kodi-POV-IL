@@ -83,7 +83,7 @@
 			<centerleft>50%</centerleft>
 			<aspectratio align="center" aligny="bottom">strech</aspectratio>
 			<texture>$INFO[Window(home).Property(extendedinfoclearart)]</texture>
-			<visible>String.IsEmpty(Window(home).Property(extendedinfoclearlogo)</visible>
+			<visible>String.IsEmpty(Window(home).Property(extendedinfoclearlogo))</visible>
 			<aspectratio>keep</aspectratio>
 			<animation effect="fade" start="0" end="100" time="350">VisibleChange</animation>
 		</control>

@@ -201,7 +201,11 @@
 					<onup>878</onup>
 					<ondown>noop</ondown>
 					<onleft>70048</onleft>
-					<onright>804</onright>
+					<!-- (804, the disc menu, is there only for a disc that has one: the focus fell elsewhere in the
+					     group to the right and passed over the change-source button -- seen in the QA Kodi) -->
+					<onright condition="Control.IsVisible(804)">804</onright>
+					<onright condition="!Control.IsVisible(804) + Control.IsVisible(700460)">700460</onright>
+					<onright condition="!Control.IsVisible(804) + !Control.IsVisible(700460)">202</onright>
 					<control type="radiobutton" id="70046">
 						<include content="OSDButton">
 							<param name="texture" value="osd/fullscreen/buttons/settings-subtitle.png"/>
