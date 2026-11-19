@@ -1058,8 +1058,8 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),continue)"></value>
 	</variable>
 	<variable name="POVIL_TrailersTile">
-		<value condition="Skin.HasSetting(POVILNoTrailers)">טריילרים במסך הבית: כבוי</value>
-		<value>טריילרים במסך הבית: פועל</value>
+		<value condition="Skin.HasSetting(POVILNoTrailers)">טריילרים: כבוי</value>
+		<value>טריילרים: פועל</value>
 	</variable>
 	<variable name="POVIL_HeroPlot">
 		<value condition="!String.IsEmpty(Control.GetLabel(9805)) + String.IsEqual(Control.GetLabel(9805),Window(home).Property(povil.details.for)) + !String.IsEmpty(Window(home).Property(povil.details.plot))">$INFO[Window(home).Property(povil.details.plot)]</value>
