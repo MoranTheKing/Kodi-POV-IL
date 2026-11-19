@@ -101,12 +101,99 @@ def changes(base, values, now, mine=lambda key: True):
         if rec is not None and not rec.get('d') and rec.get('v') == value:
             out[key] = rec
         else:
-            out[key] = {'v': value, 't': now}
+            out[key] = {'v': value, 't': changed_at(key, value, rec, now)}
     for key, rec in base.items():
         if key in out:
             continue
         out[key] = rec if rec.get('d') or not mine(key) else {'t': now, 'd': 1}
     return out
+
+
+TIMED = ('.watched.', '.progress.')
+
+
+def row_time(value, now):
+    """When a watched mark or a place was made, from its own last_played (ms); None when it has none usable."""
+    import calendar
+    import time
+    text = value.get('last_played') if isinstance(value, dict) else None
+    if not isinstance(text, str):
+        return None
+    text = text.strip()
+    for pattern, utc in (('%Y-%m-%d %H:%M:%S', False), ('%Y-%m-%dT%H:%M:%S.%fZ', True), ('%Y-%m-%dT%H:%M:%SZ', True)):
+        try:
+            parsed = time.strptime(text[:26] if utc else text[:19], pattern)
+        except ValueError:
+            continue
+        seconds = calendar.timegm(parsed) if utc else time.mktime(parsed)
+        return min(int(seconds * 1000), now)
+    return None
+
+
+def changed_at(key, value, before, now):
+    """The time of a changed record. A watched mark or a place carries the time it was made (the reviewer, 0.5.24:
+    a place a TV noticed only at its next start -- it was switched off right after the film -- must not beat the newer
+    place the viewer reached on another device meanwhile); never earlier than the record it replaces."""
+    t = now
+    if any(part in key for part in TIMED):
+        made = row_time(value, now)
+        if made is not None:
+            t = made
+    if before is not None and t <= before['t']:
+        t = before['t'] + 1
+    return t
+
+
+GUARD_MIN = 10          # a list must lose at least this many ...
+GUARD_SHARE = 0.5       # ... and more than this share of what it held, at once, to look reset
+
+
+def list_of(key):
+    return '.'.join(key.split('.')[:2])         # 'pov.fav', 'umb.progress' ...
+
+
+def hold_resets(base, local):
+    """A list that lost most of what it held at once (an add-on reinstalled, its data cleared, a fresh install) did
+    not have all of it removed by the viewer: its removals are held back -- the device is filled again from the other
+    devices instead (the reviewer, 0.5.24: "a device that loses its list wipes it on every device"). Returns the
+    records without those removals, and {list: how many were held}."""
+    alive, gone = {}, {}
+    for key, rec in base.items():
+        if not rec.get('d'):
+            name = list_of(key)
+            alive[name] = alive.get(name, 0) + 1
+            now = local.get(key)
+            if now is not None and now.get('d'):
+                gone.setdefault(name, []).append(key)
+    held = {name: keys for name, keys in gone.items() if len(keys) >= GUARD_MIN and len(keys) > GUARD_SHARE * alive[name]}
+    if not held:
+        return local, {}
+    out = dict(local)
+    for keys in held.values():
+        for key in keys:
+            out[key] = base[key]
+    return out, {name: len(keys) for name, keys in held.items()}
+
+
+def first_connect(local, remote):
+    """A device's first round (it has no base): where its favourites or dropped shows differ from what the other
+    devices already keep, theirs stand (its own rows are not newer for being noticed now); what they lack is added."""
+    out = dict(local)
+    for key, rec in local.items():
+        if key in remote and not any(part in key for part in TIMED):
+            out[key] = dict(rec, t=1)
+    return out
+
+
+def from_the_future(records, now, slack_ms=86400 * 1000):
+    """Records stamped more than a day ahead of this device's clock (a box whose clock runs far ahead would win every
+    conflict): taken as made now. Returns the records and how many were changed."""
+    out, fixed = {}, 0
+    for key, rec in records.items():
+        if rec['t'] > now + slack_ms:
+            rec, fixed = dict(rec, t=now), fixed + 1
+        out[key] = rec
+    return out, fixed
 
 
 def to_apply(merged, values, mine=lambda key: True):

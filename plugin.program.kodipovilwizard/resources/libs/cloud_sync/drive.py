@@ -154,6 +154,13 @@ class Drive(object):
         files = data.get('files') or []
         return files[0] if files else None
 
+    def find_all(self):
+        """Every file of the build's in the viewer's Drive, the latest first (100 units). Two devices that connected
+        at the same moment can each have made one: the engine merges them into the latest."""
+        query = urllib.parse.urlencode({'q': "name = '%s' and trashed = false" % NAME, 'orderBy': 'modifiedTime desc',
+                                        'fields': 'files(id,md5Checksum,modifiedTime)', 'pageSize': 10})
+        return json.loads(self._call('GET', FILES + '?' + query, 100).decode('utf-8')).get('files') or []
+
     def look(self, file_id):
         """{'id', 'md5Checksum'} of the file (5 units); None when it is gone."""
         try:

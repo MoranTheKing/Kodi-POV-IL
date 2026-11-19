@@ -65,8 +65,10 @@ def _values(row, columns):
     return clean_value({c: row[c] for c in columns if row[c] is not None}) or {}
 
 
-def read_tables(path, addon, specs):
-    """key -> values for every row of the tables in specs; rows that cannot be named are counted in 'skipped'."""
+def read_tables(path, addon, specs, broken=None):
+    """key -> values for every row of the tables in specs; rows that cannot be named are counted in 'skipped'. A table
+    that cannot be read as expected (an add-on version that changed it) is named in broken ('pov.watched' ...) and
+    left out: a list that cannot be read is never taken for an emptied one."""
     out, skipped = {}, 0
     if not os.path.isfile(path):
         return out, skipped
@@ -76,7 +78,13 @@ def read_tables(path, addon, specs):
         for kind, table, ids, rest in specs:
             if table not in have:
                 continue
-            for row in con.execute('SELECT %s FROM "%s"' % (', '.join(ids + rest), table)):
+            try:
+                rows = con.execute('SELECT %s FROM "%s"' % (', '.join(ids + rest), table)).fetchall()
+            except sqlite3.Error:
+                if broken is not None:
+                    broken.add('%s.%s' % (addon, kind))
+                continue
+            for row in rows:
                 key = _key(addon, kind, [row[c] for c in ids])
                 if key is None:
                     skipped += 1
@@ -105,8 +113,11 @@ def write_tables(path, addon, specs, put, remove, local):
                 if _key(addon, parts[1], [value.get(c) for c in ids]) != key:
                     continue        # (values that do not name the row the key names: never written)
                 columns = ids + rest
-                con.execute('INSERT OR REPLACE INTO "%s" (%s) VALUES (%s)' % (table, ', '.join(columns), ', '.join('?' * len(columns))),
-                            [value.get(c) for c in columns])
+                try:
+                    con.execute('INSERT OR REPLACE INTO "%s" (%s) VALUES (%s)' % (table, ', '.join(columns), ', '.join('?' * len(columns))),
+                                [value.get(c) for c in columns])
+                except sqlite3.Error:
+                    continue        # (not written: the next round asks again, and it is never taken for a removal)
                 done += 1
             for key in remove:
                 parts = key.split('.')
@@ -114,8 +125,11 @@ def write_tables(path, addon, specs, put, remove, local):
                 if not spec or spec[0] not in have or key not in local:
                     continue
                 table, ids, _rest = spec
-                con.execute('DELETE FROM "%s" WHERE %s' % (table, ' AND '.join('%s IS ?' % c for c in ids)),
-                            [local[key].get(c) for c in ids])
+                try:
+                    con.execute('DELETE FROM "%s" WHERE %s' % (table, ' AND '.join('%s IS ?' % c for c in ids)),
+                                [local[key].get(c) for c in ids])
+                except sqlite3.Error:
+                    continue
                 done += 1
     finally:
         con.close()
@@ -131,7 +145,7 @@ def _details(text):
     return value if isinstance(value, dict) else None
 
 
-def read_umbrella_favourites(path):
+def read_umbrella_favourites(path, broken=None):
     from .records import clean_value
     out, skipped = {}, 0
     if not os.path.isfile(path):
@@ -142,7 +156,13 @@ def read_umbrella_favourites(path):
         for kind, (_create, columns) in UMB_FAVOURITES.items():
             if kind not in have:
                 continue
-            for row in con.execute('SELECT %s FROM "%s"' % (', '.join(columns), kind)):
+            try:
+                rows = con.execute('SELECT %s FROM "%s"' % (', '.join(columns), kind)).fetchall()
+            except sqlite3.Error:
+                if broken is not None:
+                    broken.add('umb.fav')
+                continue
+            for row in rows:
                 key = _key('umb', 'fav', [kind, row['id']])
                 details = clean_value(_details(row['items']) or {})
                 if key is None or not details:
@@ -216,12 +236,19 @@ def mirror_pov(pov_dir, indicators, copied):
     source, target = (os.path.join(pov_dir, name) if name else None), os.path.join(pov_dir, 'watched.db')
     if not source or not os.path.isfile(source) or not os.path.isfile(target):
         return copied, 0
-    found, _skipped = read_tables(source, 'pov', POV_MIRRORED)
+    broken = set()
+    found, _skipped = read_tables(source, 'pov', POV_MIRRORED, broken)
     for value in found.values():
         if isinstance(value.get('last_played'), str):
             value['last_played'] = local_time(value['last_played'])
     put = {key: value for key, value in found.items() if copied.get(key) != value}
     remove = [key for key in copied if key not in found]
+    # POV empties that cache whenever it rebuilds it (cleared, authorised again, a token that lapsed): a cache that
+    # lost most of what the copy holds is not the viewer unwatching it all -- nothing is removed, the copy keeps it
+    # (the reviewer, 0.5.24)
+    if broken or (remove and (not found or (len(remove) >= 10 and len(remove) > len(copied) / 2))):
+        remove = []
+        found = dict(copied, **found)
     done = write_tables(target, 'pov', POV_MIRRORED, put, remove, copied) if (put or remove) else 0
     return found, done
 
@@ -235,10 +262,13 @@ class Stores(object):
         self.pov = os.path.join(pov_dir, 'watched.db') if pov_dir else None
         self.umb_watched = os.path.join(umb_dir, 'watched.db') if umb_dir else None
         self.umb_favourites = os.path.join(umb_dir, 'favourites.db') if umb_dir else None
+        self.broken = set()             # the lists that could not be read in the last read()
 
     def mine(self, key):
         """Is this key of a list this device has? (POV's file is made by POV; Umbrella's favourites file only with its
-        first favourite -- Umbrella is here when its folder is.)"""
+        first favourite -- Umbrella is here when its folder is.) A list that could not be read this round is not."""
+        if '.'.join(key.split('.')[:2]) in self.broken:
+            return False
         if key.startswith('pov.'):
             return bool(self.pov) and os.path.isfile(self.pov)
         if key.startswith('umb.fav.'):
@@ -249,10 +279,10 @@ class Stores(object):
 
     def read(self):
         """key -> values for everything both add-ons hold; and how many rows could not be named."""
-        values, skipped = {}, 0
-        for found, missed in (read_tables(self.pov, 'pov', POV_TABLES) if self.pov else ({}, 0),
-                              read_tables(self.umb_watched, 'umb', UMB_TABLES) if self.umb_watched else ({}, 0),
-                              read_umbrella_favourites(self.umb_favourites) if self.umb_favourites else ({}, 0)):
+        values, skipped, self.broken = {}, 0, set()
+        for found, missed in (read_tables(self.pov, 'pov', POV_TABLES, self.broken) if self.pov else ({}, 0),
+                              read_tables(self.umb_watched, 'umb', UMB_TABLES, self.broken) if self.umb_watched else ({}, 0),
+                              read_umbrella_favourites(self.umb_favourites, self.broken) if self.umb_favourites else ({}, 0)):
             values.update(found)
             skipped += missed
         return values, skipped

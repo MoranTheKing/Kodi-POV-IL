@@ -16,6 +16,7 @@ import time
 from . import records
 
 LOCK_STALE_S = 180
+FIND_EVERY_MS = 86400 * 1000        # once a day the file is looked for again: two devices may each have made one
 FIRST_WAIT_S = 25           # after Kodi starts: its own services first
 EVERY_S = 10 * 60           # a round this often while Kodi runs
 AFTER_PLAYBACK_S = 30       # and this long after a playback ends (its place, its watched mark)
@@ -120,31 +121,41 @@ def sync_round(folder, stores, drive, now_ms):
         folder.save_copied(copied)
     values, skipped = stores.read()
     local = records.changes(base, values, now_ms, stores.mine)
-    file_id, md5 = state.get('file_id'), None
-    meta = drive.look(file_id) if file_id else None
-    if meta is None:
-        meta = drive.find()
+    local, held = records.hold_resets(base, local)
+    file_id, found_at = state.get('file_id'), state.get('found', 0)
+    meta, extra = (drive.look(file_id) if file_id else None), []
+    if meta is None or now_ms - found_at > FIND_EVERY_MS:
+        # the first round, a file the viewer deleted, and once a day: every file of the build's, the latest kept
+        files = drive.find_all()
+        meta, extra, found_at = (files[0] if files else None), files[1:], now_ms
         file_id = meta['id'] if meta else None
     md5 = meta.get('md5Checksum') if meta else None
     if file_id and md5 != state.get('md5'):
         remote = records.loads(drive.download(file_id))
     elif not file_id:
         remote = {}
+    for other in extra:
+        remote = records.merge(remote, records.loads(drive.download(other['id'])))
+    remote, future = records.from_the_future(remote, now_ms)
+    if not base and remote:
+        local = records.first_connect(local, remote)
     merged = records.forget_old(records.merge(remote, local), now_ms)
     put, remove = records.to_apply(merged, values, stores.mine)
     if put or remove:
         stores.write(put, remove, values)
         values, _ = stores.read()
     uploaded = False
-    if merged != remote and (merged or file_id):
+    if (merged != remote or extra or future) and (merged or file_id):
         meta = drive.upload(records.dumps(merged), file_id)
         file_id, md5, uploaded = meta.get('id', file_id), meta.get('md5Checksum'), True
+    for other in extra:
+        drive.delete(other['id'])
     # what the device could not take (an add-on's file it could not write) is left out of what it saw: it is asked
     # again next round, never taken for a removal
     seen = {key: rec for key, rec in merged.items() if rec.get('d') or key in values or not stores.mine(key)}
-    folder.save({'file_id': file_id, 'md5': md5, 'last': now_ms}, seen, merged)
+    folder.save({'file_id': file_id, 'md5': md5, 'last': now_ms, 'found': found_at}, seen, merged)
     return {'put': len(put), 'removed': len(remove), 'uploaded': uploaded, 'records': sum(1 for r in merged.values() if not r.get('d')),
-            'skipped': skipped}
+            'skipped': skipped, 'held': held, 'merged_files': len(extra), 'future': future, 'unreadable': sorted(stores.broken)}
 
 
 # ------------------------------------------------------------------ inside Kodi
@@ -200,6 +211,14 @@ def run_once(log, why='round'):
     units = sum(u for _m, u in drive.calls)
     log('%s: %d written here, %d removed here, %s, %d items, %d quota units' % (
         why, summary['put'], summary['removed'], 'uploaded' if summary['uploaded'] else 'nothing to upload', summary['records'], units))
+    for name, count in summary['held'].items():
+        log('%s: %s looked reset here (%d gone at once): filled again from the other devices, nothing removed' % (why, name, count))
+    if summary['merged_files']:
+        log('%s: %d more file(s) of the build in the viewer\'s Drive merged into one' % (why, summary['merged_files']))
+    if summary['future']:
+        log('%s: %d record(s) dated over a day ahead of this clock taken as made now' % (why, summary['future']))
+    if summary['unreadable']:
+        log('%s: left out, could not be read here: %s' % (why, ', '.join(summary['unreadable'])))
     if summary['put'] or summary['removed']:
         # the home's rows and POV's lists read their lists again
         xbmcgui.Window(10000).setProperty('povil.lists.t', str(int(time.time())))
