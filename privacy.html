@@ -23,10 +23,10 @@
         the places to continue watching from - the same on every Kodi device of that viewer.</p>
       <h2>Google user data it accesses</h2>
       <ul>
-        <li>Only the scope <code>https://www.googleapis.com/auth/drive.appdata</code>: a hidden folder in the viewer's own
-          Google Drive that only this app can see. The app cannot see, read or change any other file in the viewer's Drive.</li>
-        <li>In that folder it keeps one file with the lists above (titles and TMDb/IMDb ids of films and episodes, watched
-          marks and resume points).</li>
+        <li>Only the scope <code>https://www.googleapis.com/auth/drive.file</code>: the app can use only the file it creates
+          itself in the viewer's own Google Drive. It cannot see, read or change any other file in the viewer's Drive.</li>
+        <li>That file, named "Kodi POV IL - sync between devices (do not delete)", holds the lists above (titles and TMDb/IMDb
+          ids of films and episodes, watched marks and resume points).</li>
       </ul>
       <h2>Where the data goes</h2>
       <ul>
@@ -42,8 +42,8 @@
       <ul>
         <li>In Kodi: the settings tile "Sync between devices" - "Disconnect this device" removes the access from that device.</li>
         <li>In Google: <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> - remove
-          "Kodi POV IL" to end the app's access on every device; in Google Drive settings - "Manage apps" - "Kodi POV IL" -
-          "Delete hidden app data" to delete the file.</li>
+          "Kodi POV IL" to end the app's access on every device; delete the file
+          "Kodi POV IL - sync between devices (do not delete)" from Google Drive to delete the data.</li>
       </ul>
       <h2>Contact</h2>
       <p>Questions about this policy: <a href="https://github.com/MoranTheKing/Kodi-POV-IL/issues">github.com/MoranTheKing/Kodi-POV-IL/issues</a>.</p>
@@ -58,9 +58,10 @@
       <p>שומר את הרשימות של הצופה ב-POV וב-Umbrella - מועדפים, סדרות שנזנחו, סימוני צפייה והמשך צפייה - זהות בכל מכשירי הקודי שלו.</p>
       <h2>אילו נתונים מגוגל</h2>
       <ul>
-        <li>רק ההרשאה <code>drive.appdata</code>: תיקייה נסתרת בגוגל דרייב של הצופה, שרק האפליקציה הזו רואה. האפליקציה לא רואה,
+        <li>רק ההרשאה <code>drive.file</code>: האפליקציה משתמשת רק בקובץ שהיא עצמה יוצרת בגוגל דרייב של הצופה. היא לא רואה,
           לא קוראת ולא משנה שום קובץ אחר בדרייב.</li>
-        <li>בתיקייה נשמר קובץ אחד עם הרשימות: שמות ומספרי TMDb/IMDb של סרטים ופרקים, סימוני צפייה ונקודות המשך.</li>
+        <li>הקובץ, "Kodi POV IL - sync between devices (do not delete)", מכיל את הרשימות: שמות ומספרי TMDb/IMDb של סרטים ופרקים,
+          סימוני צפייה ונקודות המשך.</li>
       </ul>
       <h2>לאן הנתונים הולכים</h2>
       <ul>
@@ -72,7 +73,7 @@
       <ul>
         <li>בקודי: אריח "סנכרון בין מכשירים" - "ניתוק המכשיר הזה".</li>
         <li>בגוגל: <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> - הסרת "Kodi POV IL"
-          מכל המכשירים; בהגדרות גוגל דרייב - "ניהול אפליקציות" - "Kodi POV IL" - "מחיקת נתוני אפליקציה מוסתרים".</li>
+          מכל המכשירים; מחיקת הקובץ "Kodi POV IL - sync between devices (do not delete)" מהדרייב מוחקת את הנתונים.</li>
       </ul>
       <h2>יצירת קשר</h2>
       <p><a href="https://github.com/MoranTheKing/Kodi-POV-IL/issues">github.com/MoranTheKing/Kodi-POV-IL/issues</a></p>
