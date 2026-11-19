@@ -610,15 +610,27 @@ def mpd_choice(manifest, codec='avc1', max_height=WEBOS_HEIGHT):
     return video, audio
 
 
+def piece_address(address, number):
+    """The address of an HLS piece as Kodi 22's FFmpeg takes it: the file's own address, with a field of its own
+    that ends in .mp4 (number 0 is the file's header). QA Kodi 22.0 RC2, Nov 2026, the trailer otherwise:
+    - "[hls] parse_playlist error Invalid data found when processing input": its FFmpeg reads a piece only from
+      an address that ends like a media file, and the YouTube add-on's "/youtube/stream?..." does not -- the
+      trailer "did not open";
+    - with one address for all the pieces it read the first piece and its next ones as one stream, and the
+      picture stopped at the first piece's end (~10 s: the sound's pieces are 10 s long).
+    The add-on's server passes over a field it does not know; Kodi 21's FFmpeg checks neither."""
+    return '%s%spovil=%d.mp4' % (address, '&' if '?' in address else '?', number)
+
+
 def media_playlist(stream, pieces):
-    """An HLS media playlist of one MP4 file: its header, then its pieces, each a byte range of the same address."""
+    """An HLS media playlist of one MP4 file: its header, then its pieces, each a byte range of the same file."""
     import math
     first, last = stream['init']
     lines = ['#EXTM3U', '#EXT-X-VERSION:7', '#EXT-X-TARGETDURATION:%d' % max(1, math.ceil(max(p[2] for p in pieces))),
              '#EXT-X-MEDIA-SEQUENCE:0', '#EXT-X-PLAYLIST-TYPE:VOD',
-             '#EXT-X-MAP:URI="%s",BYTERANGE="%d@%d"' % (stream['url'], last - first + 1, first)]
-    for offset, size, seconds in pieces:
-        lines += ['#EXTINF:%.3f,' % seconds, '#EXT-X-BYTERANGE:%d@%d' % (size, offset), stream['url']]
+             '#EXT-X-MAP:URI="%s",BYTERANGE="%d@%d"' % (piece_address(stream['url'], 0), last - first + 1, first)]
+    for number, (offset, size, seconds) in enumerate(pieces, 1):
+        lines += ['#EXTINF:%.3f,' % seconds, '#EXT-X-BYTERANGE:%d@%d' % (size, offset), piece_address(stream['url'], number)]
     return '\n'.join(lines + ['#EXT-X-ENDLIST', ''])
 
 

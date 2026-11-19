@@ -894,6 +894,14 @@ if CONFIG.get_setting('buildname'):
     except Exception as _remember_migration_error:
         logging.log('[Source Remember] preference migration failed: {0}'.format(
             _remember_migration_error), level=xbmc.LOGWARNING)
+    # A favourite whose command leads nowhere any more (POV's old log menu): repointed
+    # (favourites_repair.py)
+    try:
+        from resources.libs import favourites_repair
+        favourites_repair.run(log=lambda message: logging.log(message, level=xbmc.LOGINFO))
+    except Exception as _favourites_error:
+        logging.log('[Favourites] repair failed: {0}: {1}'.format(
+            type(_favourites_error).__name__, _favourites_error), level=xbmc.LOGWARNING)
     # The build's colours in POV's and Umbrella's own windows, once, and only where the
     # add-on's own default colour is still set (patches/pov_palette.py)
     try:

@@ -155,7 +155,7 @@ class TextBox(xbmcgui.ControlTextBox):
 
 
 class Image(xbmcgui.ControlImage):
-    """
+    r"""
     Image(filename, aspectRatio=0, colorDiffuse=None)
     
     ControlImage class.

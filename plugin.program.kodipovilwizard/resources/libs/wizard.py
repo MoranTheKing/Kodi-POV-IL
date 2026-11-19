@@ -1142,7 +1142,8 @@ AF3_TOOLS = [
         'id': 'send_log',
         'label': 'שליחת לוג',
         'icon': 'special://home/media/povil_icons/twilight_send_log.png',
-        'builtin': 'ActivateWindow(10025,"plugin://plugin.video.pov/?mode=navigator.log_utils&name=Changelog%20%26%20Log%20Utils",return)',
+        # POV 6.11.03 has no "Changelog & Log Utils" menu (mode=navigator.log_utils): the Wizard's own uploader
+        'builtin': 'RunPlugin("plugin://plugin.program.kodipovilwizard/?mode=uploadlog")',
     },
     {
         'id': 'reload_skin',
