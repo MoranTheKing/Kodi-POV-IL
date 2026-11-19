@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-11-19T23:23:26Z",
+  "generated": "2026-11-19T23:31:13Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -46,13 +46,13 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.5.23",
+      "version": "0.5.24",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.5.23.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.5.23.zip",
-      "size": 2638048,
-      "sha256": "14913b35d953aaf3f3cc457a26d10d838b4778c60b52e76c41c8dffa52bf0a82",
-      "updated": "2026-11-19T20:52:03Z"
+      "filename": "plugin.program.kodipovilwizard-0.5.24.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/plugin.program.kodipovilwizard-0.5.24.zip",
+      "size": 2659898,
+      "sha256": "55322f29475758b5ea0e2ec352bf6ef6bae4708ba4919150bf343a8019776f9c",
+      "updated": "2026-11-19T23:31:13Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
@@ -178,13 +178,13 @@
     "skin.povil.onyx": {
       "id": "skin.povil.onyx",
       "name": "Kodi POV IL - Onyx",
-      "version": "1.0.23",
+      "version": "1.0.24",
       "type": "skin",
-      "filename": "skin.povil.onyx-1.0.23.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.onyx-1.0.23.zip",
-      "size": 3057251,
-      "sha256": "3172cefedc0e46eb8d4df01d75c195b82e8a3880a4bd891ffca95a098c04b4cf",
-      "updated": "2026-11-19T23:23:26Z"
+      "filename": "skin.povil.onyx-1.0.24.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.onyx-1.0.24.zip",
+      "size": 3057374,
+      "sha256": "9d088fff6ffb6e4727756f070c680565fdfb5d5f28b0ed6dc6fff4eda9795e21",
+      "updated": "2026-11-19T23:31:13Z"
     }
   }
 }
