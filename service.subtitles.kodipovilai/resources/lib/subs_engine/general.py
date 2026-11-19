@@ -190,9 +190,9 @@ def extract_season_episode_numbers(subtitle_file_name):
 
     regex_pattern = re.compile(
         r'S[e]?(?:ason)?' + optional_separators +
-        '(?P<season_number>\d{1,2})' + optional_middle_separators +
+        r'(?P<season_number>\d{1,2})' + optional_middle_separators +
         'E[p]?(?:isode)?' + optional_separators +
-        '(?P<episode_number>\d{1,3})',
+        r'(?P<episode_number>\d{1,3})',
         re.IGNORECASE
     )
     

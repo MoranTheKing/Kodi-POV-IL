@@ -563,6 +563,13 @@ HOME_SUBMENU = [
 ]
 
 
+# "שליחת לוג" ran POV's "Changelog & Log Utils" menu (mode=navigator.log_utils), and POV 6.11.03 has no such
+# menu: the row opened nothing. It runs the Wizard's own uploader now (the log's address and a QR); a device's old
+# row is the same row (_item_key), so the merge gives it the new command where it stands.
+SEND_LOG_PATH = 'RunPlugin("plugin://plugin.program.kodipovilwizard/?mode=uploadlog")'
+_DEAD_SEND_LOG = 'mode=navigator.log_utils'
+
+
 POWER_MENU = [
     {
         'label': 'POV',
@@ -610,7 +617,7 @@ POWER_MENU = [
     {
         'label': 'שליחת לוג',
         'icon': 'special://home/media/povil_icons/twilight_send_log.png',
-        'path': 'ActivateWindow(10025,"plugin://plugin.video.pov/?mode=navigator.log_utils&name=Changelog%20%26%20Log%20Utils",return)',
+        'path': SEND_LOG_PATH,
         'target': '',
     },
     {
@@ -845,6 +852,8 @@ def _item_key(item):
     try:
         path = item.get('path', '') or ''
         if path:
+            if _DEAD_SEND_LOG in path:
+                return SEND_LOG_PATH
             # A producer budget is an in-place delivery upgrade, not a new
             # user-facing tile. Ignore it while matching old/current rows.
             path = re.sub(r'([?&])widget_limit=\d+&?', r'\1', path)

@@ -63,6 +63,8 @@ class LogUploadTests(unittest.TestCase):
             self.assertEqual(layout, 'loguploader.xml')
             self.assertTrue(Path(filename).read_bytes().startswith(b'\x89PNG\r\n\x1a\n'))
             self.assertIn('https://paste.kodi.tv/fixture', message)
+            # in the build's Hebrew: "the log was sent ... send the link or a photo of the code"
+            self.assertIn('\u05d4\u05dc\u05d5\u05d2 \u05e0\u05e9\u05dc\u05d7', message)
             captured.append(filename)
         self.window.show_qr_code.side_effect = inspect
         self.scope['upload_log']()
