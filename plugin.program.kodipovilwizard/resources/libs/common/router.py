@@ -110,6 +110,10 @@ class Router:
             # how soon the home's trailer starts and has the screen (the tile in Onyx's settings screen)
             from resources.libs import trailer_timing
             trailer_timing.choose()
+        elif mode == 'cloud_sync':
+            # the device-to-device sync of POV's and Umbrella's own lists (the tile in Onyx's settings screen)
+            from resources.libs.cloud_sync import ui as cloud_sync_ui
+            cloud_sync_ui.open_tile()
         elif mode == 'player_style':
             # which player Onyx shows (its settings tile "סוג נגן", and the button "החלפת נגן" in every player)
             from resources.libs import onyx_player_style
