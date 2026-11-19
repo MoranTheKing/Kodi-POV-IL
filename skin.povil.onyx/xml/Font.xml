@@ -188,6 +188,26 @@
 			<size>150</size>
 		</font>
 		<font>
+			<name>povil_tab</name>
+			<filename>Heebo-Medium.ttf</filename>
+			<size>34</size>
+		</font>
+		<font>
+			<name>povil_chip_home</name>
+			<filename>Heebo-Medium.ttf</filename>
+			<size>26</size>
+		</font>
+		<font>
+			<name>povil_hero_meta</name>
+			<filename>Heebo-Regular.ttf</filename>
+			<size>28</size>
+		</font>
+		<font>
+			<name>povil_hero_meta_bold</name>
+			<filename>Heebo-SemiBold.ttf</filename>
+			<size>28</size>
+		</font>
+		<font>
 			<name>Mono30</name>
 			<filename>Heebo-Regular.ttf</filename>
 			<size>28</size>
@@ -387,6 +407,27 @@
 			<name>povil_rank</name>
 			<filename>arial.ttf</filename>
 			<size>149</size>
+			<style>bold</style>
+		</font>
+		<font>
+			<name>povil_tab</name>
+			<filename>arial.ttf</filename>
+			<size>33</size>
+		</font>
+		<font>
+			<name>povil_chip_home</name>
+			<filename>arial.ttf</filename>
+			<size>25</size>
+		</font>
+		<font>
+			<name>povil_hero_meta</name>
+			<filename>arial.ttf</filename>
+			<size>27</size>
+		</font>
+		<font>
+			<name>povil_hero_meta_bold</name>
+			<filename>arial.ttf</filename>
+			<size>27</size>
 			<style>bold</style>
 		</font>
 		<font>

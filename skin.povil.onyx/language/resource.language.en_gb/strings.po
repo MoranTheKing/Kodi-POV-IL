@@ -796,3 +796,23 @@ msgstr "Plain text in the focus box"
 msgctxt "#31970"
 msgid "With the focus box shown, keep the focused text in its normal color and let the box alone show where you are, instead of also using the focus color."
 msgstr "With the focus box shown, keep the focused text in its normal color and let the box alone show where you are, instead of also using the focus color."
+
+msgctxt "#31900"
+msgid "Watched mark colour"
+msgstr "Watched mark colour"
+
+msgctxt "#31901"
+msgid "Gold"
+msgstr "Gold"
+
+msgctxt "#31902"
+msgid "Green"
+msgstr "Green"
+
+msgctxt "#31903"
+msgid "White"
+msgstr "White"
+
+msgctxt "#31904"
+msgid "Light blue"
+msgstr "Light blue"

@@ -18,6 +18,10 @@ FONTS = [
     ('povil_clock', L, 40), ('povil_badge', SB, 19), ('povil_info_title', L, 58),
     # the numeral beside a poster in a row that ranks its titles (a service's page)
     ('povil_rank', B, 150),
+    # the home a size up where it is read from the sofa (a viewer, Nov 2026: "bigger, to see from afar"): the top
+    # bar (was povil_menu 31), the chips (povil_chip 23), the hero's details and ratings (povil_meta 26). Fonts of
+    # their own: the player, the info screen and the dialogs keep theirs
+    ('povil_tab', M, 34), ('povil_chip_home', M, 26), ('povil_hero_meta', R, 28), ('povil_hero_meta_bold', SB, 28),
 ]
 ARIAL = {'Heebo-Regular.ttf': ('arial.ttf', ''), 'Heebo-Medium.ttf': ('arial.ttf', ''),
          'Heebo-Light.ttf': ('arial.ttf', ''), 'Heebo-SemiBold.ttf': ('arial.ttf', 'bold'),
