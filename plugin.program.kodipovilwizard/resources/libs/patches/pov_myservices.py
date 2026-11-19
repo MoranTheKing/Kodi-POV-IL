@@ -112,6 +112,24 @@ def get_authorize_override(orig_authorize):
                     kodi_utils.notification('MDBList setup failed: %s' % str(exc)[:60])
                     return False
 
+        class DriveSyncService:
+            """The build's sync between devices through the viewer's own Google Drive (the Wizard's cloud_sync; the
+            owner, 20 Nov 2026: "in the services connection too")."""
+            icon = 'settings.png'
+
+            def __init__(self):
+                import os
+                import xbmcvfs
+                tokens = xbmcvfs.translatePath('special://profile/addon_data/plugin.program.kodipovilwizard/cloud_sync/tokens.json')
+                self.token = 'yes' if os.path.isfile(tokens) else ''
+
+            def label2(self):
+                return 'סנכרון בין מכשירים · ' + ('מחובר · לחץ לניהול' if self.token else 'לא מחובר · לחץ לחיבור')
+
+            def set(self):
+                xbmc.executebuiltin('RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=cloud_sync)')
+                return True
+
         def get_pov_service_class(names):
             """Retrieves a service class from POV's native myservices module."""
             for name in (names or ()):
@@ -201,10 +219,12 @@ def get_authorize_override(orig_authorize):
             ('easydebrid',    'pov',  'easydebrid.png',  None,        (),                                     ('EasyDebrid',)),
             ('easynews',      'am',   'easynews.png',    'easynews',  ('easynews.username', 'easynews.password'), ('EasyNews',)),
             ('gemini-ai',     'ours', 'gemini.png',      None,        (),                                     None),
+            ('google drive',  'ours', 'settings.png',    None,        (),                                     None),
         )
 
         custom_services = {'gemini-ai': GeminiService,
-                           'mdblist': MDBListService}
+                           'mdblist': MDBListService,
+                           'google drive': DriveSyncService}
         am_available = get_account_manager_addon() is not None
 
         available_services = []
