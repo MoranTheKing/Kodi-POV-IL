@@ -46,8 +46,40 @@ from urllib.parse import urlencode
 
 URL = 'https://paste.ubuntu.com/'
 EXPIRATION = 2592000
+# What a log must not carry to paste.kodi.tv (public, and nothing there can be deleted). Since 0.5.21 a press
+# sends the last run's log as well. Review, Nov 2026: this build's logs hold debrid and YouTube stream addresses
+# (a token in each; YouTube's carry the viewer's own address), add-on keys in queries, IP addresses, the
+# computer's name and the user's name in its home folder -- seen in a QA log that was posted by mistake.
+# What a crash is read from (the player's lines, the codecs, the add-ons' own lines) stays as it is.
+_SECRET_FIELDS = ('token|access_token|refresh_token|apikey|api_key|key|client_id|client_secret|sig|signature|'
+                  'lsig|ip|password|pass')
 REPLACES = (('//.+?:.+?@', '//USER:PASSWORD@'), ('<user>.+?</user>', '<user>USER</user>'), ('<pass>.+?</pass>',
-                                                                                            '<pass>PASSWORD</pass>'),)
+                                                                                            '<pass>PASSWORD</pass>'),
+            # a stream's address on a debrid service or on YouTube: its host stays, the rest is the viewer's
+            (r'(https?://[^/\s"\'<>]*(?:real-debrid|premiumize|alldebrid|debrid-link|torbox|tb-cdn|googlevideo)'
+             r'[^/\s"\'<>]*)/[^\s"\'<>]*', r'\1/REDACTED'),
+            # the YouTube add-on's own stream address (its query is the stream's, the viewer's address in it)
+            (r'(/youtube/stream\?)[^\s"\'<>]+', r'\1REDACTED'),
+            # token=..., &key=..., ?ip=... in any address (the whole value, %2B and all) ...
+            (r'(?i)([?&;](?:%s)=)[^&\s"\'<>]+' % _SECRET_FIELDS, r'\1REDACTED'),
+            # ... and the same written inside another address (%3F / %26 / %3D, as Kodi logs a plugin:// path):
+            # up to the next encoded field
+            (r'(?i)((?:%%3F|%%26)(?:%s)%%3D)(?:(?!%%26)[^&\s"\'<>])+' % _SECRET_FIELDS, r'\1REDACTED'),
+            # a bearer token (a stream's headers, an Authorization line)
+            (r'(?i)(bearer(?:%20|\s+))[A-Za-z0-9._~+/=-]+', r'\1REDACTED'),
+            # "token": "...", 'api_key': '...' (a dict or JSON in a line)
+            (r'(?i)(["\'](?:%s)["\']\s*:\s*["\'])[^"\']+' % _SECRET_FIELDS, r'\1REDACTED'),
+            # e-mail addresses
+            (r'[\w.+-]+@[\w-]+(?:\.[\w-]+)+', 'EMAIL'),
+            # IPv4, all but this device's own loopback and "any"
+            (r'\b(?!127\.0\.0\.1\b)(?!0\.0\.0\.0\b)(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b',
+             'x.x.x.x'),
+            # the user's name in a home folder (Windows, macOS, Linux)
+            (r'([A-Za-z]:[\\/]+Users[\\/]+|/Users/|/home/)[^\\/\s"\':]+', r'\1USER'),
+            # the computer's name
+            (r'(Local hostname: )\S+', r'\1HOST'),
+            # the YouTube add-on's visitor id (it names this device to YouTube)
+            (r"(Visitor:\s*)'[^']*'", r"\1'REDACTED'"))
 
 
 def log(msg, level=xbmc.LOGINFO):
@@ -163,6 +195,25 @@ def grab_log(file=False, old=False, wizard=False):
         return False
 
 
+# Kodi moves the last run's log to kodi.old.log when it starts again: after a crash that is the log that says
+# why, and a viewer sends "the log" once Kodi is open again -- the one that does not (the owner's LG, Nov 2026:
+# two uploads of the new run before the crash was found in the old one). It travels with kodi.log, in the same
+# document and the same link, each cut to its last part (where its trouble is).
+PREVIOUS_HEADER = '\n\n===== kodi.old.log: the run before this one (a crash shows at its end) =====\n\n'
+CURRENT_ROOM, PREVIOUS_ROOM = 280000, 300000
+
+
+def with_previous(content, previous):
+    """kodi.log's text, then kodi.old.log's: one document. Kodi's settings noise is taken out of each first."""
+    if not previous:
+        return content
+    content, said = _drop_settings_noise(content)
+    previous, said_before = _drop_settings_noise(previous)
+    content = said + content[-(CURRENT_ROOM - len(said)):]
+    previous = said_before + previous[-(PREVIOUS_ROOM - len(said_before)):]
+    return content + PREVIOUS_HEADER + previous
+
+
 def upload_log():
     try:
         from resources.libs import fentastic_widgets
@@ -170,8 +221,11 @@ def upload_log():
     except Exception:
         pass
     files = get_files()
+    previous = grab_log(file=True, old=True)
     for item in files:
         filetype = item[0]
+        if filetype == 'oldlog':
+            continue                # (it travels with kodi.log: with_previous)
         # (the viewer's language: the build's Hebrew)
         if filetype == 'log':
             name = os.path.basename(item[1]) or "kodi.log"
@@ -185,6 +239,11 @@ def upload_log():
         succes, data = read_log(item[1])
         if succes:
             content = clean_log(data)
+            if filetype == 'log' and previous and os.path.isfile(previous):
+                found, before = read_log(previous)
+                if found:
+                    content = with_previous(content, clean_log(before))
+                    name = '{0} + {1}'.format(name, os.path.basename(previous))
             succes, result = post_log(content, name)
             if succes:
                 # "The log was sent ({name}). Send this address, or a photo of the code, with what went wrong:"
