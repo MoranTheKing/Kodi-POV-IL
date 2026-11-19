@@ -142,6 +142,12 @@ PATCH_CONFIG = [
      'target_file': 'resources/lib/modules/player.py', 'marker': '# WIZARD_POV_PROFILE_PLAY_v1',
      'anchor': '\t\tif not url: return', 'action': 'prepend_before',
      'hook': "\t\timport sys, xbmcvfs\n\t\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\t\tif _p not in sys.path: sys.path.append(_p)\n\t\timport profile_age_guard\n\t\tif not profile_age_guard.permit_play(meta or {}, 'pov', url): return\n"},
+    # The place in a film or an episode saved while it plays, not only at the stop: a Kodi closed, crashed
+    # or switched off mid-way kept nothing and the title left "continue watching" (pov_periodic_bookmark.py)
+    {'id': 'pov_periodic_bookmark', 'name': 'Resume point kept while playing', 'addon_id': 'plugin.video.pov', 'enabled': True,
+     'target_file': 'resources/lib/modules/player.py', 'marker': '# WIZARD_POV_PERIODIC_BOOKMARK_v1', 'optional': True,
+     'anchor': '\t\t\tif not self.subs_searched:', 'action': 'prepend_before',
+     'hook': "\t\t\ttry: self._povil_periodic(self, ws, settings)\n\t\t\texcept AttributeError:\n\t\t\t\timport sys, xbmcvfs\n\t\t\t\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\t\t\t\tif _p not in sys.path: sys.path.append(_p)\n\t\t\t\timport pov_periodic_bookmark\n\t\t\t\tself._povil_periodic = pov_periodic_bookmark.tick\n\t\t\t\tself._povil_periodic(self, ws, settings)\n"},
     {'id': 'umbrella_profile_directory_guard', 'name': 'Child profile directory guard', 'addon_id': 'plugin.video.umbrella', 'enabled': True,
      'target_file': 'resources/lib/modules/control.py', 'marker': '# WIZARD_UMBRELLA_PROFILE_DIRECTORY_v1',
      'anchor': 'import xbmcvfs', 'action': 'append_after',
