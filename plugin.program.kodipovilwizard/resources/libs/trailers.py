@@ -198,7 +198,7 @@ def video_title(stream):
     return meta.get('title') or ((meta.get('video') or {}).get('title')) or ''
 TRANSLATED_FOUND_S, TRANSLATED_NONE_S = 14 * 86400, 3 * 86400     # a search is kept this long (found / none)
 # (v2, 0.5.17: searched again under the scam filter; v3, 0.5.30: under the film / series rule, translated_pick)
-TRANSLATED_FILE = 'translated_trailers_v3.json'
+TRANSLATED_FILE = 'translated_trailers_v4.json'      # (v4, 0.5.34: a film's upload chosen for a series is asked again)
 # A translated trailer of the OTHER kind: a viewer, via the owner, Nov 2026 -- the Pokémon series (1997) played the
 # dubbed trailer of the film "Detective Pikachu" (its title names "פוקימון" too). For a series a result that says it is
 # a film is left out, for a film one that says it is a series; and one that names a year far from the title's.
@@ -284,6 +284,25 @@ def title_of(rows, key):
     return listed or (None, False)
 
 
+def trailer_season(meta, video):
+    """Which season of a series one of its trailers is of (the choice's own reading, patches/pov_trailer_pick.py: its
+    name, else the season it came out for), or None: the series' own. For the channel's post (the owner, Nov 2026: "say
+    whether it is a season's trailer or the series' own")."""
+    try:
+        from resources.libs.patches import pov_trailer_pick as pick
+        entry = next((v for v in meta.get('all_trailers') or [] if isinstance(v, dict) and v.get('key') == video), None)
+        if not entry:
+            return None
+        seasons = meta.get('season_data')
+        season = pick.season_of(entry, seasons)
+        if season == pick.LAST:         # "final season": the last one there is
+            numbers = [s.get('season_number') for s in seasons or [] if isinstance(s, dict) and s.get('season_number')]
+            season = max(numbers) if numbers else None
+        return season if isinstance(season, int) and 1 <= season <= 98 else None
+    except Exception:
+        return None
+
+
 def trusted(channel):
     """Is the channel an Israeli distributor's or a service's own (TRUSTED_CHANNELS, a whole word of its name)?"""
     plain = ' %s ' % _plain(channel)
@@ -318,22 +337,32 @@ SEASON_WORDS = ('עונה', 'העונה', 'עונת', 'season', 'הראשונה'
                 'four', 'five', 'six')
 
 
+# where the words after "name:" end: a quotation mark, a bracket, a separator
+_AFTER_NAME_END = re.compile(r'["״“”„()\[\]{}|•]|\s[-–—]\s')
+
+
 def another_title(title, names, kind=None):
     """Does the upload name ANOTHER title that begins with this one's name -- "פוקימון: הבלש פיקאצ'ו" for the series
-    "פוקימון", "דיונה: חלק שני" for "דיונה"? The part of its title that holds the name has a colon and words after the
-    name that are not a trailer's own (PLAIN_WORDS, a number)."""
-    for part in re.split(r'\s[|•\-–—]\s|\|', title or ''):
-        if ':' not in part:
+    "פוקימון", "דיונה: חלק שני" for "דיונה"? Its title has the name, a colon right after it, and then words that are
+    not a trailer's own (PLAIN_WORDS, a number) before the next quotation mark, bracket or separator. The name may stand
+    anywhere: the owner, Nov 2026 -- the Pokémon series still played the film's trailer, an upload named
+    טריילר "פוקימון: הבלש פיקאצ'ו" (עם תרגום לעברית), whose name was not at the start of its title (0.5.30 looked there
+    only)."""
+    low = (title or '').lower()
+    for name in names:
+        name_words = (name or '').split()
+        if not name_words:
             continue
-        words = _plain(part).split()
-        for name in names:
-            name_words = (name or '').split()
-            if name_words and words[:len(name_words)] == name_words:
-                rest = [w for w in words[len(name_words):] if w not in PLAIN_WORDS and not w.isdigit()]
-                if rest and kind == 'tv' and any(w in ('עונה', 'העונה', 'עונת', 'season') for w in words[len(name_words):]):
-                    rest = [w for w in rest if w not in SEASON_WORDS]
-                if rest:
-                    return True
+        pattern = r'(?<!\w)' + r'\W+'.join(re.escape(w) for w in name_words) + r'(?!\w)\s*:'
+        for found in re.finditer(pattern, low):
+            after = low[found.end():]
+            stop = _AFTER_NAME_END.search(after)
+            words = _plain(after[:stop.start()] if stop else after).split()
+            rest = [w for w in words if w not in PLAIN_WORDS and not w.isdigit()]
+            if rest and kind == 'tv' and any(w in ('עונה', 'העונה', 'עונת', 'season') for w in words):
+                rest = [w for w in rest if w not in SEASON_WORDS]
+            if rest:
+                return True
     return False
 
 
@@ -1503,8 +1532,13 @@ def watch():
         meta, _hebrew = title_of(rows, key)
         if not meta:
             return {}
-        return {'title': meta.get('title') or '', 'original': meta.get('original_title') or '',
-                'year': str(meta.get('year') or '')[:4], 'kind': 'tv' if meta['povil_id'].startswith('tv') else 'movie'}
+        found = {'title': meta.get('title') or '', 'original': meta.get('original_title') or '',
+                 'year': str(meta.get('year') or '')[:4], 'kind': 'tv' if meta['povil_id'].startswith('tv') else 'movie'}
+        if found['kind'] == 'tv':
+            season = trailer_season(meta, video)
+            if season:
+                found['season'] = season
+        return found
 
     def load_captions(video):
         # the stream's information read again, subtitles asked for -- the YouTube add-on's own code, for a trailer
