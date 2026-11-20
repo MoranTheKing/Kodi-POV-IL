@@ -215,11 +215,25 @@ def eligible(now=None, probe=free_tier):
 
 
 def publish_able(able):
+    """'1' or '0' -- never left empty once said: the Wizard waits for the word while it is empty (0.3.100)."""
     try:
         import xbmcgui
-        xbmcgui.Window(10000).setProperty(ABLE, '1' if able else '')
+        xbmcgui.Window(10000).setProperty(ABLE, '1' if able else '0')
     except Exception:
         pass
+
+
+def tier_cached(now=None):
+    """Whether this device's answer needs no request: the key's tier is known from this week's check (or there is no
+    key at all)."""
+    try:
+        key = _key()
+    except Exception:
+        return False
+    if not key:
+        return True
+    known = (_load().get('tier') or {}).get(_key_id(key))
+    return bool(known and (now or time.time()) - known[1] < TIER_S and known[0] in ('free', 'billed'))
 
 
 def _count_request():
@@ -472,8 +486,10 @@ def start(monitor):
         # the thread that made it, while that thread waits (QA Kodi: made on the service's own thread, the Wizard's
         # job never arrived -- that thread waits elsewhere)
         listener = Listener()
-        # (a moment after Kodi's start: the key is checked then, once a week at most)
-        if listener.waitForAbort(20):
+        # The word at once when the key's tier is known from this week's check: the Wizard waits for it before the
+        # first trailer (the owner, 20 Nov 2026: the first trailer after a start was left untranslated -- the word came
+        # 11 s later). A key still to be checked is checked a moment after Kodi's start (once a week at most).
+        if not tier_cached() and listener.waitForAbort(20):
             return
         able, why = refresh()
         log('trailer subtitles: %s' % ('this device translates' if able else 'no (%s)' % why))

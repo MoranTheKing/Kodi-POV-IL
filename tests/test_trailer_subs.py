@@ -176,6 +176,25 @@ class MoranSubsTests(unittest.TestCase):
     def tearDown(self):
         self.modules.stop()
 
+    def test_the_word_is_yes_or_no_never_empty_and_at_once_when_the_key_s_tier_is_known(self):
+        """0.3.100 (the owner's log, 20 Nov 2026: the first trailer after a start was left untranslated)."""
+        said = {}
+        xbmcgui = types.SimpleNamespace(Window=lambda wid: types.SimpleNamespace(setProperty=lambda k, v: said.__setitem__(k, v)))
+        with mock.patch.dict(sys.modules, {'xbmcgui': xbmcgui}):
+            self.ms.publish_able(False)
+            self.assertEqual(said[self.ms.ABLE], '0', 'no is said, not left empty: empty means not yet')
+            self.ms.publish_able(True)
+            self.assertEqual(said[self.ms.ABLE], '1')
+        with mock.patch.object(self.ms, '_key', return_value='free-key'):
+            self.assertFalse(self.ms.tier_cached(now=1000.0), 'never checked: the check waits for a moment after the start')
+            self.ms.tier('free-key', now=1000.0, probe=lambda key: 'free')
+            self.assertTrue(self.ms.tier_cached(now=1000.0 + 3600), 'this week\'s check: the word at once')
+            self.assertFalse(self.ms.tier_cached(now=1000.0 + self.ms.TIER_S + 1), 'a week later: checked again first')
+        with mock.patch.object(self.ms, '_key', return_value=''):
+            self.assertTrue(self.ms.tier_cached(), 'no key: "no" is known at once')
+        source = (ROOT / 'service.subtitles.kodipovilai/resources/lib/trailer_subs.py').read_text(encoding='utf-8')
+        self.assertIn('if not tier_cached() and listener.waitForAbort(20):', source)
+
     def test_a_free_key_is_told_from_a_billed_one_at_no_cost(self):
         free = json.dumps({'error': {'details': [{'violations': [{'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier'}]}]}})
         self.assertEqual(self.ms.classify_probe(429, free), 'free')
@@ -239,6 +258,67 @@ class MoranSubsTests(unittest.TestCase):
         parts, read = self.ms.request_parts({'v': 'x', 'src': 'manual', 'cues': english})
         self.assertIn('1|Winter is coming.', parts[0]['text'])
         self.assertEqual(read('1|החורף מגיע.\n2|'), [(1.0, 2.5, 'החורף מגיע.')])
+
+
+class WordTests(unittest.TestCase):
+    """Wizard 0.5.32: MoranSubs' word is waited for right after Kodi's start (the owner's log, 20 Nov 2026, Android: the
+    first trailer after the start -- "not on Pages; this device does not translate" -- and "this device translates"
+    11 s later)."""
+
+    def subs(self, answers, values):
+        ts = load('plugin.program.kodipovilwizard/resources/libs/trailer_subs.py', 'povil_wizard_trailer_subs_word')
+        home = {}
+        said = []
+
+        class Home:
+            def getProperty(self, k):
+                return home.get(k, '')
+
+        class Waiting:
+            calls = 0
+
+            def wait(self, seconds):
+                Waiting.calls += 1
+                if values:
+                    home[ts.ABLE] = values.pop(0)
+                return False
+        subs = ts.Subs(Home(), None, said.append, lambda w: w, lambda b: None, fetch=lambda u: (404, b''),
+                       waiting=Waiting(), answers=lambda: answers)
+        subs.current = 'aBc_dEf-123'
+        return ts, subs, home, Waiting, said
+
+    def test_no_word_yet_is_waited_for_and_a_yes_translates(self):
+        ts, subs, home, waiting, said = self.subs(True, ['', '', '1'])
+        self.assertTrue(subs.able('aBc_dEf-123'))
+        self.assertEqual(waiting.calls, 3)
+        self.assertIn("trailer subtitles: waiting for MoranSubs' word (aBc_dEf-123)", said)
+
+    def test_a_no_is_a_no_at_once_and_an_older_moransubs_s_silence_is_a_no(self):
+        ts, subs, home, waiting, said = self.subs(True, [])
+        home[ts.ABLE] = '0'
+        self.assertFalse(subs.able('aBc_dEf-123'))
+        self.assertEqual(waiting.calls, 0)
+        ts, subs, home, waiting, said = self.subs(False, ['1'])
+        self.assertFalse(subs.able('aBc_dEf-123'), 'MoranSubs 0.3.99 leaves "no" empty: not waited for')
+        self.assertEqual(waiting.calls, 0)
+
+    def test_the_wait_ends_with_the_trailer_and_has_a_limit(self):
+        ts, subs, home, waiting, said = self.subs(True, [])
+        subs.current = 'other000001'
+        self.assertFalse(subs.able('aBc_dEf-123'), 'the trailer changed: not waited for')
+        ts, subs, home, waiting, said = self.subs(True, [])
+        self.assertFalse(subs.able('aBc_dEf-123'))
+        self.assertEqual(waiting.calls, int(ts.ABLE_WAIT_S * 2), 'MoranSubs never said: given up after ABLE_WAIT_S')
+
+    def test_the_version_that_gives_the_word(self):
+        ts = load('plugin.program.kodipovilwizard/resources/libs/trailer_subs.py', 'povil_wizard_trailer_subs_word2')
+        self.assertTrue(ts.version_at_least('0.3.100', ts.WORD_FROM))
+        self.assertTrue(ts.version_at_least('0.4.0', ts.WORD_FROM))
+        self.assertFalse(ts.version_at_least('0.3.99', ts.WORD_FROM), '100 > 99: compared as numbers')
+        self.assertFalse(ts.version_at_least('', ts.WORD_FROM))
+        source = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/trailers.py').read_text(encoding='utf-8')
+        self.assertIn('answers=moransubs_answers', source)
+        self.assertIn("System.AddonVersion(service.subtitles.kodipovilai)", source)
 
 
 class WithdrawnTests(unittest.TestCase):
