@@ -460,84 +460,84 @@
 	</timer>
 	<timer>
 		<name>povil_retry_5011</name>
-		<start reset="true">[$EXP[POVIL_Shows_5011_0] | $EXP[POVIL_Shows_5011_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.movies)) + !Integer.IsGreater(Container(5011).NumItems,0) + !Container(5011).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5011),2)</start>
+		<start reset="true">[[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_0),0)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),1)]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.movies)) + !Integer.IsGreater(Container(5011).NumItems,0) + !Container(5011).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5011),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5011),3) | Integer.IsGreater(Container(5011).NumItems,0) | Container(5011).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5011).NumItems,0) + !Container(5011).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5011),1)">SetProperty(povil.retry.5011,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5011).NumItems,0) + !Container(5011).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5011))">SetProperty(povil.retry.5011,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5012</name>
-		<start reset="true">[$EXP[POVIL_Shows_5012_0] | $EXP[POVIL_Shows_5012_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5012).NumItems,0) + !Container(5012).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5012),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),0)] | [!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_1),1)]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5012).NumItems,0) + !Container(5012).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5012),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5012),3) | Integer.IsGreater(Container(5012).NumItems,0) | Container(5012).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5012).NumItems,0) + !Container(5012).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5012),1)">SetProperty(povil.retry.5012,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5012).NumItems,0) + !Container(5012).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5012))">SetProperty(povil.retry.5012,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5013</name>
-		<start reset="true">[$EXP[POVIL_Shows_5013_0] | $EXP[POVIL_Shows_5013_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5013).NumItems,0) + !Container(5013).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5013),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),0)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),1)]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5013).NumItems,0) + !Container(5013).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5013),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5013),3) | Integer.IsGreater(Container(5013).NumItems,0) | Container(5013).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5013).NumItems,0) + !Container(5013).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5013),1)">SetProperty(povil.retry.5013,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5013).NumItems,0) + !Container(5013).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5013))">SetProperty(povil.retry.5013,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5014</name>
-		<start reset="true">[$EXP[POVIL_Shows_5014_0] | $EXP[POVIL_Shows_5014_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5014).NumItems,0) + !Container(5014).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5014),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),0)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),1)]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5014).NumItems,0) + !Container(5014).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5014),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5014),3) | Integer.IsGreater(Container(5014).NumItems,0) | Container(5014).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5014).NumItems,0) + !Container(5014).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5014),1)">SetProperty(povil.retry.5014,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5014).NumItems,0) + !Container(5014).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5014))">SetProperty(povil.retry.5014,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5015</name>
-		<start reset="true">[$EXP[POVIL_Shows_5015_0] | $EXP[POVIL_Shows_5015_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5015).NumItems,0) + !Container(5015).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5015),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),0)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),1)]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5015).NumItems,0) + !Container(5015).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5015),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5015),3) | Integer.IsGreater(Container(5015).NumItems,0) | Container(5015).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5015).NumItems,0) + !Container(5015).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5015),1)">SetProperty(povil.retry.5015,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5015).NumItems,0) + !Container(5015).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5015))">SetProperty(povil.retry.5015,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5016</name>
-		<start reset="true">[$EXP[POVIL_Shows_5016_0] | $EXP[POVIL_Shows_5016_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5016).NumItems,0) + !Container(5016).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5016),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),0)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),1)]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5016).NumItems,0) + !Container(5016).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5016),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5016),3) | Integer.IsGreater(Container(5016).NumItems,0) | Container(5016).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5016).NumItems,0) + !Container(5016).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5016),1)">SetProperty(povil.retry.5016,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5016).NumItems,0) + !Container(5016).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5016))">SetProperty(povil.retry.5016,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5021</name>
-		<start reset="true">[$EXP[POVIL_Shows_5021_0] | $EXP[POVIL_Shows_5021_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.tv)) + !Integer.IsGreater(Container(5021).NumItems,0) + !Container(5021).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5021),2)</start>
+		<start reset="true">[[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_0),0)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),1)]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.tv)) + !Integer.IsGreater(Container(5021).NumItems,0) + !Container(5021).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5021),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5021),3) | Integer.IsGreater(Container(5021).NumItems,0) | Container(5021).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5021).NumItems,0) + !Container(5021).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5021),1)">SetProperty(povil.retry.5021,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5021).NumItems,0) + !Container(5021).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5021))">SetProperty(povil.retry.5021,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5022</name>
-		<start reset="true">[$EXP[POVIL_Shows_5022_0] | $EXP[POVIL_Shows_5022_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5022).NumItems,0) + !Container(5022).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5022),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),0)] | [!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_1),1)]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5022).NumItems,0) + !Container(5022).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5022),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5022),3) | Integer.IsGreater(Container(5022).NumItems,0) | Container(5022).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5022).NumItems,0) + !Container(5022).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5022),1)">SetProperty(povil.retry.5022,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5022).NumItems,0) + !Container(5022).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5022))">SetProperty(povil.retry.5022,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5023</name>
-		<start reset="true">[$EXP[POVIL_Shows_5023_0] | $EXP[POVIL_Shows_5023_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5023).NumItems,0) + !Container(5023).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5023),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),0)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),1)]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5023).NumItems,0) + !Container(5023).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5023),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5023),3) | Integer.IsGreater(Container(5023).NumItems,0) | Container(5023).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5023).NumItems,0) + !Container(5023).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5023),1)">SetProperty(povil.retry.5023,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5023).NumItems,0) + !Container(5023).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5023))">SetProperty(povil.retry.5023,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5024</name>
-		<start reset="true">[$EXP[POVIL_Shows_5024_0] | $EXP[POVIL_Shows_5024_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5024).NumItems,0) + !Container(5024).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5024),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),0)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),1)]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5024).NumItems,0) + !Container(5024).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5024),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5024),3) | Integer.IsGreater(Container(5024).NumItems,0) | Container(5024).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5024).NumItems,0) + !Container(5024).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5024),1)">SetProperty(povil.retry.5024,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5024).NumItems,0) + !Container(5024).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5024))">SetProperty(povil.retry.5024,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5025</name>
-		<start reset="true">[$EXP[POVIL_Shows_5025_0] | $EXP[POVIL_Shows_5025_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5025).NumItems,0) + !Container(5025).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5025),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),0)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),1)]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5025).NumItems,0) + !Container(5025).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5025),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5025),3) | Integer.IsGreater(Container(5025).NumItems,0) | Container(5025).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5025).NumItems,0) + !Container(5025).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5025),1)">SetProperty(povil.retry.5025,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5025).NumItems,0) + !Container(5025).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5025))">SetProperty(povil.retry.5025,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5026</name>
-		<start reset="true">[$EXP[POVIL_Shows_5026_0] | $EXP[POVIL_Shows_5026_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5026).NumItems,0) + !Container(5026).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5026),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),0)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),1)]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5026).NumItems,0) + !Container(5026).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5026),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5026),3) | Integer.IsGreater(Container(5026).NumItems,0) | Container(5026).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5026).NumItems,0) + !Container(5026).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5026),1)">SetProperty(povil.retry.5026,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5026).NumItems,0) + !Container(5026).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5026))">SetProperty(povil.retry.5026,1,home)</onstop>
@@ -579,42 +579,42 @@
 	</timer>
 	<timer>
 		<name>povil_retry_5051</name>
-		<start reset="true">[$EXP[POVIL_Shows_5051_0] | $EXP[POVIL_Shows_5051_1] | $EXP[POVIL_Shows_5051_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.kids)) + !Integer.IsGreater(Container(5051).NumItems,0) + !Container(5051).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5051),2)</start>
+		<start reset="true">[[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_0),0)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),1)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),2)]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.kids)) + !Integer.IsGreater(Container(5051).NumItems,0) + !Container(5051).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5051),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5051),3) | Integer.IsGreater(Container(5051).NumItems,0) | Container(5051).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5051).NumItems,0) + !Container(5051).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5051),1)">SetProperty(povil.retry.5051,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5051).NumItems,0) + !Container(5051).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5051))">SetProperty(povil.retry.5051,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5052</name>
-		<start reset="true">[$EXP[POVIL_Shows_5052_0] | $EXP[POVIL_Shows_5052_1] | $EXP[POVIL_Shows_5052_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5052).NumItems,0) + !Container(5052).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5052),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),0)] | [!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_1),1)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),2)]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5052).NumItems,0) + !Container(5052).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5052),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5052),3) | Integer.IsGreater(Container(5052).NumItems,0) | Container(5052).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5052).NumItems,0) + !Container(5052).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5052),1)">SetProperty(povil.retry.5052,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5052).NumItems,0) + !Container(5052).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5052))">SetProperty(povil.retry.5052,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5053</name>
-		<start reset="true">[$EXP[POVIL_Shows_5053_0] | $EXP[POVIL_Shows_5053_1] | $EXP[POVIL_Shows_5053_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5053).NumItems,0) + !Container(5053).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5053),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),0)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),1)] | [!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_2),2)]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5053).NumItems,0) + !Container(5053).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5053),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5053),3) | Integer.IsGreater(Container(5053).NumItems,0) | Container(5053).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5053).NumItems,0) + !Container(5053).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5053),1)">SetProperty(povil.retry.5053,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5053).NumItems,0) + !Container(5053).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5053))">SetProperty(povil.retry.5053,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5054</name>
-		<start reset="true">[$EXP[POVIL_Shows_5054_0] | $EXP[POVIL_Shows_5054_1] | $EXP[POVIL_Shows_5054_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5054).NumItems,0) + !Container(5054).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5054),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),0)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),1)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),2)]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5054).NumItems,0) + !Container(5054).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5054),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5054),3) | Integer.IsGreater(Container(5054).NumItems,0) | Container(5054).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5054).NumItems,0) + !Container(5054).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5054),1)">SetProperty(povil.retry.5054,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5054).NumItems,0) + !Container(5054).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5054))">SetProperty(povil.retry.5054,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5055</name>
-		<start reset="true">[$EXP[POVIL_Shows_5055_0] | $EXP[POVIL_Shows_5055_1] | $EXP[POVIL_Shows_5055_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5055).NumItems,0) + !Container(5055).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5055),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),0)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),1)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),2)]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5055).NumItems,0) + !Container(5055).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5055),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5055),3) | Integer.IsGreater(Container(5055).NumItems,0) | Container(5055).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5055).NumItems,0) + !Container(5055).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5055),1)">SetProperty(povil.retry.5055,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5055).NumItems,0) + !Container(5055).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5055))">SetProperty(povil.retry.5055,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5056</name>
-		<start reset="true">[$EXP[POVIL_Shows_5056_0] | $EXP[POVIL_Shows_5056_1] | $EXP[POVIL_Shows_5056_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5056).NumItems,0) + !Container(5056).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5056),2)</start>
+		<start reset="true">[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),0)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),1)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),2)]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5056).NumItems,0) + !Container(5056).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5056),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5056),3) | Integer.IsGreater(Container(5056).NumItems,0) | Container(5056).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5056).NumItems,0) + !Container(5056).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5056),1)">SetProperty(povil.retry.5056,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5056).NumItems,0) + !Container(5056).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5056))">SetProperty(povil.retry.5056,1,home)</onstop>
@@ -759,86 +759,98 @@
 	</timer>
 	<timer>
 		<name>povil_rtl_5011</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5011).IsUpdating + Integer.IsGreater(Container(5011).NumItems,1) + Integer.IsEqual(Container(5011).CurrentItem,1) + String.IsEqual(Container(5011).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5011).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5011))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5011).IsUpdating + Integer.IsGreater(Container(5011).NumItems,1) + [[Integer.IsEqual(Container(5011).CurrentItem,1) + String.IsEqual(Container(5011).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5011).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5011))] | [[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)] + [!String.IsEqual(Container(5011).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5011)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5011,$ESCINFO[Container(5011).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5011,-1)</onstart>
+		<onstart>Control.Move(5011,-$INFO[Container(5011).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5012</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5012).IsUpdating + Integer.IsGreater(Container(5012).NumItems,1) + Integer.IsEqual(Container(5012).CurrentItem,1) + String.IsEqual(Container(5012).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5012).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5012))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5012).IsUpdating + Integer.IsGreater(Container(5012).NumItems,1) + [[Integer.IsEqual(Container(5012).CurrentItem,1) + String.IsEqual(Container(5012).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5012).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5012))] | [[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)] + [!String.IsEqual(Container(5012).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5012)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5012,$ESCINFO[Container(5012).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5012,-1)</onstart>
+		<onstart>Control.Move(5012,-$INFO[Container(5012).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5013</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5013).IsUpdating + Integer.IsGreater(Container(5013).NumItems,1) + Integer.IsEqual(Container(5013).CurrentItem,1) + String.IsEqual(Container(5013).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5013).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5013))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5013).IsUpdating + Integer.IsGreater(Container(5013).NumItems,1) + [[Integer.IsEqual(Container(5013).CurrentItem,1) + String.IsEqual(Container(5013).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5013).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5013))] | [[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)] + [!String.IsEqual(Container(5013).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5013)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5013,$ESCINFO[Container(5013).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5013,-1)</onstart>
+		<onstart>Control.Move(5013,-$INFO[Container(5013).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5014</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5014).IsUpdating + Integer.IsGreater(Container(5014).NumItems,1) + Integer.IsEqual(Container(5014).CurrentItem,1) + String.IsEqual(Container(5014).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5014).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5014))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5014).IsUpdating + Integer.IsGreater(Container(5014).NumItems,1) + [[Integer.IsEqual(Container(5014).CurrentItem,1) + String.IsEqual(Container(5014).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5014).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5014))] | [[[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_3),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)] + [!String.IsEqual(Container(5014).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5014)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5014,$ESCINFO[Container(5014).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5014,-1)</onstart>
+		<onstart>Control.Move(5014,-$INFO[Container(5014).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5015</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5015).IsUpdating + Integer.IsGreater(Container(5015).NumItems,1) + Integer.IsEqual(Container(5015).CurrentItem,1) + String.IsEqual(Container(5015).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5015).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5015))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5015).IsUpdating + Integer.IsGreater(Container(5015).NumItems,1) + [[Integer.IsEqual(Container(5015).CurrentItem,1) + String.IsEqual(Container(5015).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5015).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5015))] | [[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_4),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)] + [!String.IsEqual(Container(5015).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5015)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5015,$ESCINFO[Container(5015).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5015,-1)</onstart>
+		<onstart>Control.Move(5015,-$INFO[Container(5015).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5016</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5016).IsUpdating + Integer.IsGreater(Container(5016).NumItems,1) + Integer.IsEqual(Container(5016).CurrentItem,1) + String.IsEqual(Container(5016).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5016).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5016))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5016).IsUpdating + Integer.IsGreater(Container(5016).NumItems,1) + [[Integer.IsEqual(Container(5016).CurrentItem,1) + String.IsEqual(Container(5016).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5016).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5016))] | [[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_5),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)] + [!String.IsEqual(Container(5016).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5016)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5016,$ESCINFO[Container(5016).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5016,-1)</onstart>
+		<onstart>Control.Move(5016,-$INFO[Container(5016).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5021</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5021).IsUpdating + Integer.IsGreater(Container(5021).NumItems,1) + Integer.IsEqual(Container(5021).CurrentItem,1) + String.IsEqual(Container(5021).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5021).IsUpdating + Integer.IsGreater(Container(5021).NumItems,1) + [[Integer.IsEqual(Container(5021).CurrentItem,1) + String.IsEqual(Container(5021).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021))] | [[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)] + [!String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5021,$ESCINFO[Container(5021).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5021,-1)</onstart>
+		<onstart>Control.Move(5021,-$INFO[Container(5021).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5022</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5022).IsUpdating + Integer.IsGreater(Container(5022).NumItems,1) + Integer.IsEqual(Container(5022).CurrentItem,1) + String.IsEqual(Container(5022).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5022).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5022))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5022).IsUpdating + Integer.IsGreater(Container(5022).NumItems,1) + [[Integer.IsEqual(Container(5022).CurrentItem,1) + String.IsEqual(Container(5022).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5022).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5022))] | [[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)] + [!String.IsEqual(Container(5022).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5022)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5022,$ESCINFO[Container(5022).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5022,-1)</onstart>
+		<onstart>Control.Move(5022,-$INFO[Container(5022).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5023</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5023).IsUpdating + Integer.IsGreater(Container(5023).NumItems,1) + Integer.IsEqual(Container(5023).CurrentItem,1) + String.IsEqual(Container(5023).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5023).IsUpdating + Integer.IsGreater(Container(5023).NumItems,1) + [[Integer.IsEqual(Container(5023).CurrentItem,1) + String.IsEqual(Container(5023).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023))] | [[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)] + [!String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5023,$ESCINFO[Container(5023).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5023,-1)</onstart>
+		<onstart>Control.Move(5023,-$INFO[Container(5023).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5024</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5024).IsUpdating + Integer.IsGreater(Container(5024).NumItems,1) + Integer.IsEqual(Container(5024).CurrentItem,1) + String.IsEqual(Container(5024).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5024).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5024))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5024).IsUpdating + Integer.IsGreater(Container(5024).NumItems,1) + [[Integer.IsEqual(Container(5024).CurrentItem,1) + String.IsEqual(Container(5024).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5024).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5024))] | [[[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_3),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)] + [!String.IsEqual(Container(5024).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5024)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5024,$ESCINFO[Container(5024).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5024,-1)</onstart>
+		<onstart>Control.Move(5024,-$INFO[Container(5024).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5025</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5025).IsUpdating + Integer.IsGreater(Container(5025).NumItems,1) + Integer.IsEqual(Container(5025).CurrentItem,1) + String.IsEqual(Container(5025).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5025).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5025))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5025).IsUpdating + Integer.IsGreater(Container(5025).NumItems,1) + [[Integer.IsEqual(Container(5025).CurrentItem,1) + String.IsEqual(Container(5025).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5025).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5025))] | [[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_4),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)] + [!String.IsEqual(Container(5025).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5025)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5025,$ESCINFO[Container(5025).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5025,-1)</onstart>
+		<onstart>Control.Move(5025,-$INFO[Container(5025).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5026</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5026).IsUpdating + Integer.IsGreater(Container(5026).NumItems,1) + Integer.IsEqual(Container(5026).CurrentItem,1) + String.IsEqual(Container(5026).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5026).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5026))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5026).IsUpdating + Integer.IsGreater(Container(5026).NumItems,1) + [[Integer.IsEqual(Container(5026).CurrentItem,1) + String.IsEqual(Container(5026).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5026).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5026))] | [[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_5),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)] + [!String.IsEqual(Container(5026).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5026)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5026,$ESCINFO[Container(5026).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5026,-1)</onstart>
+		<onstart>Control.Move(5026,-$INFO[Container(5026).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
@@ -885,100 +897,114 @@
 	</timer>
 	<timer>
 		<name>povil_rtl_5051</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5051).IsUpdating + Integer.IsGreater(Container(5051).NumItems,1) + Integer.IsEqual(Container(5051).CurrentItem,1) + String.IsEqual(Container(5051).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5051).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5051))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5051).IsUpdating + Integer.IsGreater(Container(5051).NumItems,1) + [[Integer.IsEqual(Container(5051).CurrentItem,1) + String.IsEqual(Container(5051).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5051).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5051))] | [[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)] + [!String.IsEqual(Container(5051).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5051)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5051,$ESCINFO[Container(5051).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5051,-1)</onstart>
+		<onstart>Control.Move(5051,-$INFO[Container(5051).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5052</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5052).IsUpdating + Integer.IsGreater(Container(5052).NumItems,1) + Integer.IsEqual(Container(5052).CurrentItem,1) + String.IsEqual(Container(5052).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5052).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5052))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5052).IsUpdating + Integer.IsGreater(Container(5052).NumItems,1) + [[Integer.IsEqual(Container(5052).CurrentItem,1) + String.IsEqual(Container(5052).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5052).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5052))] | [[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)] + [!String.IsEqual(Container(5052).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5052)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5052,$ESCINFO[Container(5052).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5052,-1)</onstart>
+		<onstart>Control.Move(5052,-$INFO[Container(5052).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5053</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5053).IsUpdating + Integer.IsGreater(Container(5053).NumItems,1) + Integer.IsEqual(Container(5053).CurrentItem,1) + String.IsEqual(Container(5053).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5053).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5053))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5053).IsUpdating + Integer.IsGreater(Container(5053).NumItems,1) + [[Integer.IsEqual(Container(5053).CurrentItem,1) + String.IsEqual(Container(5053).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5053).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5053))] | [[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)] + [!String.IsEqual(Container(5053).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5053)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5053,$ESCINFO[Container(5053).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5053,-1)</onstart>
+		<onstart>Control.Move(5053,-$INFO[Container(5053).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5054</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5054).IsUpdating + Integer.IsGreater(Container(5054).NumItems,1) + Integer.IsEqual(Container(5054).CurrentItem,1) + String.IsEqual(Container(5054).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5054).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5054))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5054).IsUpdating + Integer.IsGreater(Container(5054).NumItems,1) + [[Integer.IsEqual(Container(5054).CurrentItem,1) + String.IsEqual(Container(5054).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5054).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5054))] | [[[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_3),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)] + [!String.IsEqual(Container(5054).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5054)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5054,$ESCINFO[Container(5054).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5054,-1)</onstart>
+		<onstart>Control.Move(5054,-$INFO[Container(5054).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5055</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5055).IsUpdating + Integer.IsGreater(Container(5055).NumItems,1) + Integer.IsEqual(Container(5055).CurrentItem,1) + String.IsEqual(Container(5055).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5055).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5055))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5055).IsUpdating + Integer.IsGreater(Container(5055).NumItems,1) + [[Integer.IsEqual(Container(5055).CurrentItem,1) + String.IsEqual(Container(5055).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5055).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5055))] | [[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_4),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)] + [!String.IsEqual(Container(5055).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5055)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5055,$ESCINFO[Container(5055).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5055,-1)</onstart>
+		<onstart>Control.Move(5055,-$INFO[Container(5055).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5056</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5056).IsUpdating + Integer.IsGreater(Container(5056).NumItems,1) + Integer.IsEqual(Container(5056).CurrentItem,1) + String.IsEqual(Container(5056).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5056).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5056))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5056).IsUpdating + Integer.IsGreater(Container(5056).NumItems,1) + [[Integer.IsEqual(Container(5056).CurrentItem,1) + String.IsEqual(Container(5056).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5056).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5056))] | [[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_5),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)] + [!String.IsEqual(Container(5056).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5056)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5056,$ESCINFO[Container(5056).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5056,-1)</onstart>
+		<onstart>Control.Move(5056,-$INFO[Container(5056).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5061</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5061).IsUpdating + Integer.IsGreater(Container(5061).NumItems,1) + Integer.IsEqual(Container(5061).CurrentItem,1) + String.IsEqual(Container(5061).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5061).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5061))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5061).IsUpdating + Integer.IsGreater(Container(5061).NumItems,1) + [[Integer.IsEqual(Container(5061).CurrentItem,1) + String.IsEqual(Container(5061).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5061).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5061))] | [[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)] + [!String.IsEqual(Container(5061).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5061)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5061,$ESCINFO[Container(5061).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5061,-1)</onstart>
+		<onstart>Control.Move(5061,-$INFO[Container(5061).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5062</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5062).IsUpdating + Integer.IsGreater(Container(5062).NumItems,1) + Integer.IsEqual(Container(5062).CurrentItem,1) + String.IsEqual(Container(5062).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5062).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5062))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5062).IsUpdating + Integer.IsGreater(Container(5062).NumItems,1) + [[Integer.IsEqual(Container(5062).CurrentItem,1) + String.IsEqual(Container(5062).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5062).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5062))] | [[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)] + [!String.IsEqual(Container(5062).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5062)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5062,$ESCINFO[Container(5062).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5062,-1)</onstart>
+		<onstart>Control.Move(5062,-$INFO[Container(5062).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5063</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5063).IsUpdating + Integer.IsGreater(Container(5063).NumItems,1) + Integer.IsEqual(Container(5063).CurrentItem,1) + String.IsEqual(Container(5063).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5063).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5063))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5063).IsUpdating + Integer.IsGreater(Container(5063).NumItems,1) + [[Integer.IsEqual(Container(5063).CurrentItem,1) + String.IsEqual(Container(5063).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5063).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5063))] | [[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)] + [!String.IsEqual(Container(5063).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5063)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5063,$ESCINFO[Container(5063).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5063,-1)</onstart>
+		<onstart>Control.Move(5063,-$INFO[Container(5063).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5064</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5064).IsUpdating + Integer.IsGreater(Container(5064).NumItems,1) + Integer.IsEqual(Container(5064).CurrentItem,1) + String.IsEqual(Container(5064).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5064).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5064))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5064).IsUpdating + Integer.IsGreater(Container(5064).NumItems,1) + [[Integer.IsEqual(Container(5064).CurrentItem,1) + String.IsEqual(Container(5064).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5064).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5064))] | [[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)] + [!String.IsEqual(Container(5064).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5064)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5064,$ESCINFO[Container(5064).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5064,-1)</onstart>
+		<onstart>Control.Move(5064,-$INFO[Container(5064).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5065</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5065).IsUpdating + Integer.IsGreater(Container(5065).NumItems,1) + Integer.IsEqual(Container(5065).CurrentItem,1) + String.IsEqual(Container(5065).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5065).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5065))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5065).IsUpdating + Integer.IsGreater(Container(5065).NumItems,1) + [[Integer.IsEqual(Container(5065).CurrentItem,1) + String.IsEqual(Container(5065).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5065).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5065))] | [[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)] + [!String.IsEqual(Container(5065).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5065)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5065,$ESCINFO[Container(5065).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5065,-1)</onstart>
+		<onstart>Control.Move(5065,-$INFO[Container(5065).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5066</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5066).IsUpdating + Integer.IsGreater(Container(5066).NumItems,1) + Integer.IsEqual(Container(5066).CurrentItem,1) + String.IsEqual(Container(5066).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5066).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5066))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5066).IsUpdating + Integer.IsGreater(Container(5066).NumItems,1) + [[Integer.IsEqual(Container(5066).CurrentItem,1) + String.IsEqual(Container(5066).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5066).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5066))] | [[[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_5),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)] + [!String.IsEqual(Container(5066).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5066)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5066,$ESCINFO[Container(5066).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5066,-1)</onstart>
+		<onstart>Control.Move(5066,-$INFO[Container(5066).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5067</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5067).IsUpdating + Integer.IsGreater(Container(5067).NumItems,1) + Integer.IsEqual(Container(5067).CurrentItem,1) + String.IsEqual(Container(5067).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5067).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5067))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5067).IsUpdating + Integer.IsGreater(Container(5067).NumItems,1) + [[Integer.IsEqual(Container(5067).CurrentItem,1) + String.IsEqual(Container(5067).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5067).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5067))] | [[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_6),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)] + [!String.IsEqual(Container(5067).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5067)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5067,$ESCINFO[Container(5067).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5067,-1)</onstart>
+		<onstart>Control.Move(5067,-$INFO[Container(5067).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
 		<name>povil_rtl_5068</name>
-		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5068).IsUpdating + Integer.IsGreater(Container(5068).NumItems,1) + Integer.IsEqual(Container(5068).CurrentItem,1) + String.IsEqual(Container(5068).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5068).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5068))</start>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5068).IsUpdating + Integer.IsGreater(Container(5068).NumItems,1) + [[Integer.IsEqual(Container(5068).CurrentItem,1) + String.IsEqual(Container(5068).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5068).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5068))] | [[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_7),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)] + [!String.IsEqual(Container(5068).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5068)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]</start>
 		<onstart>SetProperty(povil.rtl.5068,$ESCINFO[Container(5068).ListItemAbsolute(0).Label],home)</onstart>
-		<onstart>Control.Move(5068,-1)</onstart>
+		<onstart>Control.Move(5068,-$INFO[Container(5068).CurrentItem])</onstart>
+		<onstart>ClearProperty(povil.rtl.reset,home)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
