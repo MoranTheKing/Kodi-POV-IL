@@ -429,6 +429,94 @@
 		<stop>true</stop>
 	</timer>
 	<timer>
+		<name>povil_chips_movies</name>
+		<start reset="true">Window.IsActive(home) + !System.HasActiveModalDialog + Control.IsVisible(9100) + !String.IsEmpty(System.CurrentControlId) + String.IsEmpty(Window(home).Property(povil.hub.enter)) + String.IsEqual(Window(home).Property(povil.tab),movies) + !String.IsEqual(Window(home).Property(povil.chips.at),movies)</start>
+		<onstart>SetProperty(povil.chips.at,movies,home)</onstart>
+		<onstart>SetProperty(povil.chips.back,$INFO[System.CurrentControlId],home)</onstart>
+		<onstart>SetProperty(povil.chips.focus,$INFO[Window(home).Property(povil.focus)],home)</onstart>
+		<onstart>SetFocus($VAR[POVIL_FirstChip_movies])</onstart>
+		<onstart>SetFocus($INFO[Window(home).Property(povil.chips.back)])</onstart>
+		<onstart>SetProperty(povil.focus,$INFO[Window(home).Property(povil.chips.focus)],home)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_chips_tv</name>
+		<start reset="true">Window.IsActive(home) + !System.HasActiveModalDialog + Control.IsVisible(9100) + !String.IsEmpty(System.CurrentControlId) + String.IsEmpty(Window(home).Property(povil.hub.enter)) + String.IsEqual(Window(home).Property(povil.tab),tv) + !String.IsEqual(Window(home).Property(povil.chips.at),tv)</start>
+		<onstart>SetProperty(povil.chips.at,tv,home)</onstart>
+		<onstart>SetProperty(povil.chips.back,$INFO[System.CurrentControlId],home)</onstart>
+		<onstart>SetProperty(povil.chips.focus,$INFO[Window(home).Property(povil.focus)],home)</onstart>
+		<onstart>SetFocus($VAR[POVIL_FirstChip_tv])</onstart>
+		<onstart>SetFocus($INFO[Window(home).Property(povil.chips.back)])</onstart>
+		<onstart>SetProperty(povil.focus,$INFO[Window(home).Property(povil.chips.focus)],home)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_chips_israeli</name>
+		<start reset="true">Window.IsActive(home) + !System.HasActiveModalDialog + Control.IsVisible(9100) + !String.IsEmpty(System.CurrentControlId) + String.IsEmpty(Window(home).Property(povil.hub.enter)) + String.IsEqual(Window(home).Property(povil.tab),israeli) + !String.IsEqual(Window(home).Property(povil.chips.at),israeli)</start>
+		<onstart>SetProperty(povil.chips.at,israeli,home)</onstart>
+		<onstart>SetProperty(povil.chips.back,$INFO[System.CurrentControlId],home)</onstart>
+		<onstart>SetProperty(povil.chips.focus,$INFO[Window(home).Property(povil.focus)],home)</onstart>
+		<onstart>SetFocus($VAR[POVIL_FirstChip_israeli])</onstart>
+		<onstart>SetFocus($INFO[Window(home).Property(povil.chips.back)])</onstart>
+		<onstart>SetProperty(povil.focus,$INFO[Window(home).Property(povil.chips.focus)],home)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_chips_live</name>
+		<start reset="true">Window.IsActive(home) + !System.HasActiveModalDialog + Control.IsVisible(9100) + !String.IsEmpty(System.CurrentControlId) + String.IsEmpty(Window(home).Property(povil.hub.enter)) + String.IsEqual(Window(home).Property(povil.tab),live) + !String.IsEqual(Window(home).Property(povil.chips.at),live)</start>
+		<onstart>SetProperty(povil.chips.at,live,home)</onstart>
+		<onstart>SetProperty(povil.chips.back,$INFO[System.CurrentControlId],home)</onstart>
+		<onstart>SetProperty(povil.chips.focus,$INFO[Window(home).Property(povil.focus)],home)</onstart>
+		<onstart>SetFocus($VAR[POVIL_FirstChip_live])</onstart>
+		<onstart>SetFocus($INFO[Window(home).Property(povil.chips.back)])</onstart>
+		<onstart>SetProperty(povil.focus,$INFO[Window(home).Property(povil.chips.focus)],home)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_chips_kids</name>
+		<start reset="true">Window.IsActive(home) + !System.HasActiveModalDialog + Control.IsVisible(9100) + !String.IsEmpty(System.CurrentControlId) + String.IsEmpty(Window(home).Property(povil.hub.enter)) + String.IsEqual(Window(home).Property(povil.tab),kids) + !String.IsEqual(Window(home).Property(povil.chips.at),kids)</start>
+		<onstart>SetProperty(povil.chips.at,kids,home)</onstart>
+		<onstart>SetProperty(povil.chips.back,$INFO[System.CurrentControlId],home)</onstart>
+		<onstart>SetProperty(povil.chips.focus,$INFO[Window(home).Property(povil.focus)],home)</onstart>
+		<onstart>SetFocus($VAR[POVIL_FirstChip_kids])</onstart>
+		<onstart>SetFocus($INFO[Window(home).Property(povil.chips.back)])</onstart>
+		<onstart>SetProperty(povil.focus,$INFO[Window(home).Property(povil.chips.focus)],home)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_chips_favourites</name>
+		<start reset="true">Window.IsActive(home) + !System.HasActiveModalDialog + Control.IsVisible(9100) + !String.IsEmpty(System.CurrentControlId) + String.IsEmpty(Window(home).Property(povil.hub.enter)) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !String.IsEqual(Window(home).Property(povil.chips.at),favourites)</start>
+		<onstart>SetProperty(povil.chips.at,favourites,home)</onstart>
+		<onstart>SetProperty(povil.chips.back,$INFO[System.CurrentControlId],home)</onstart>
+		<onstart>SetProperty(povil.chips.focus,$INFO[Window(home).Property(povil.focus)],home)</onstart>
+		<onstart>SetFocus($VAR[POVIL_FirstChip_favourites])</onstart>
+		<onstart>SetFocus($INFO[Window(home).Property(povil.chips.back)])</onstart>
+		<onstart>SetProperty(povil.focus,$INFO[Window(home).Property(povil.chips.focus)],home)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_chips_search</name>
+		<start reset="true">Window.IsActive(home) + !System.HasActiveModalDialog + Control.IsVisible(9100) + !String.IsEmpty(System.CurrentControlId) + String.IsEmpty(Window(home).Property(povil.hub.enter)) + String.IsEqual(Window(home).Property(povil.tab),search) + !String.IsEqual(Window(home).Property(povil.chips.at),search)</start>
+		<onstart>SetProperty(povil.chips.at,search,home)</onstart>
+		<onstart>SetProperty(povil.chips.back,$INFO[System.CurrentControlId],home)</onstart>
+		<onstart>SetProperty(povil.chips.focus,$INFO[Window(home).Property(povil.focus)],home)</onstart>
+		<onstart>SetFocus($VAR[POVIL_FirstChip_search])</onstart>
+		<onstart>SetFocus($INFO[Window(home).Property(povil.chips.back)])</onstart>
+		<onstart>SetProperty(povil.focus,$INFO[Window(home).Property(povil.chips.focus)],home)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_chips_continue</name>
+		<start reset="true">Window.IsActive(home) + !System.HasActiveModalDialog + Control.IsVisible(9100) + !String.IsEmpty(System.CurrentControlId) + String.IsEmpty(Window(home).Property(povil.hub.enter)) + String.IsEqual(Window(home).Property(povil.tab),continue) + !String.IsEqual(Window(home).Property(povil.chips.at),continue)</start>
+		<onstart>SetProperty(povil.chips.at,continue,home)</onstart>
+		<onstart>SetProperty(povil.chips.back,$INFO[System.CurrentControlId],home)</onstart>
+		<onstart>SetProperty(povil.chips.focus,$INFO[Window(home).Property(povil.focus)],home)</onstart>
+		<onstart>SetFocus($VAR[POVIL_FirstChip_continue])</onstart>
+		<onstart>SetFocus($INFO[Window(home).Property(povil.chips.back)])</onstart>
+		<onstart>SetProperty(povil.focus,$INFO[Window(home).Property(povil.chips.focus)],home)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
 		<name>povil_swipe</name>
 		<start reset="true">!String.IsEmpty(Window(home).Property(povil.swipe))</start>
 		<onstart condition="Window.IsActive(home) + String.IsEmpty(System.CurrentControlId) + !String.IsEmpty(Window(home).Property(povil.focus))">SetFocus($INFO[Window(home).Property(povil.focus)])</onstart>

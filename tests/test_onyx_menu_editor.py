@@ -96,7 +96,9 @@ class BarTests(unittest.TestCase):
         self.assertNotIn('<visible>false</visible>', item)
         menus = settings.split('<control type="button" id="3400"')[1].split('</control>')[0]
         self.assertIn('RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=menu_editor)</onclick>', menus)
-        self.assertIn('>ActivateWindow(1162)</onclick>', menus)
+        # without the Wizard (Onyx 1.0.29): the same editor, inside the skin -- not the skin's rows-only windows
+        self.assertIn('>RunScript(special://skin/scripts/povil_menu_editor.py)</onclick>', menus)
+        self.assertNotIn('ActivateWindow(1162)', menus)
         shelves = settings.split('<control type="button" id="3401"')[1].split('</control>')[0]
         self.assertIn('?mode=menu_editor&amp;part=rows)</onclick>', shelves)
         for cid in ('3413', '3410', '3402', '3405'):
@@ -224,6 +226,102 @@ class EditorTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class WithoutTheWizardTests(unittest.TestCase):
+    """Onyx 1.0.29. A viewer, via the owner, Nov 2026, with Onyx alone (no Wizard): "on yours there is only the row
+    editing ... on mine I can edit all the menus" -- the full editor lived in the Wizard; the skin's own windows (1162,
+    1163) edit the rows and shortcuts only. QA Kodi: RunScript of the skin's copy opened the editor, the shortcuts
+    under "סרטים" and the order of the rows, nothing in the log."""
+
+    def test_the_skin_carries_the_wizard_s_own_editor_unchanged(self):
+        libs = SKIN / 'scripts/povil_menu/resources/libs'
+        for name in ('menu_editor.py', 'custom_rows.py', 'home_rows.py'):
+            self.assertEqual((libs / name).read_bytes(), (WIZARD / 'resources/libs' / name).read_bytes(),
+                             '%s: the skin\'s copy is the Wizard\'s (tools/skin_onyx/build.py copies it)' % name)
+        for package in (libs, libs.parent):
+            self.assertTrue((package / '__init__.py').exists())
+        # the copies need nothing of the Wizard's but each other (Kodi's own modules)
+        for name in ('menu_editor.py', 'custom_rows.py', 'home_rows.py'):
+            source = (libs / name).read_text(encoding='utf-8')
+            imported = set(re.findall(r'from resources\.libs import (\w+)', source))
+            self.assertLessEqual(imported, {'menu_editor', 'custom_rows', 'home_rows'}, name)
+            self.assertNotIn('xbmcaddon', source, '%s: a script run from the skin has no add-on of its own' % name)
+
+    def test_its_launcher_runs_each_part(self):
+        launcher = (SKIN / 'scripts/povil_menu_editor.py').read_text(encoding='utf-8')
+        self.assertIn("translatePath('special://skin/scripts/povil_menu')", launcher)
+        calls = []
+        libs = types.SimpleNamespace(menu_editor=types.SimpleNamespace(choose=lambda part=None: calls.append(('menu', part))),
+                                     custom_rows=types.SimpleNamespace(choose=lambda: calls.append(('custom', None))),
+                                     home_rows=types.SimpleNamespace(choose=lambda: calls.append(('order', None))))
+        modules = {'xbmcvfs': types.SimpleNamespace(translatePath=lambda p: '/skin/scripts/povil_menu'),
+                   'resources': types.SimpleNamespace(libs=libs), 'resources.libs': libs,
+                   'resources.libs.menu_editor': libs.menu_editor, 'resources.libs.custom_rows': libs.custom_rows,
+                   'resources.libs.home_rows': libs.home_rows}
+        for argv in (['x'], ['x', 'rows'], ['x', 'custom_rows'], ['x', 'home_rows']):
+            with mock.patch.dict(sys.modules, modules), mock.patch.object(sys, 'argv', argv), \
+                    mock.patch.object(sys, 'path', list(sys.path)):
+                exec(compile(launcher, 'povil_menu_editor.py', 'exec'), {'__name__': '__main__'})
+        self.assertEqual(calls, [('menu', None), ('menu', 'rows'), ('custom', None), ('order', None)])
+
+    def test_without_the_wizard_every_way_in_opens_the_skin_s_copy(self):
+        home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')
+        for label, mode, arg in (('עריכת התפריט', 'menu_editor', ''), ('שורות וכפתורים משלי', 'custom_chips', ',custom_rows'),
+                                 ('סדר השורות', 'home_rows', ',home_rows')):
+            tile = home.split('<label>%s</label>' % label)[1].split('</item>')[0]
+            self.assertIn('<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),%s)">'
+                          'RunScript(special://skin/scripts/povil_menu_editor.py%s)</onclick>' % (mode, arg), tile)
+        settings = (SKIN / 'xml/SkinSettings.xml').read_text(encoding='utf-8')
+        shelves = settings.split('<control type="button" id="3401"')[1].split('</control>')[0]
+        self.assertIn('>RunScript(special://skin/scripts/povil_menu_editor.py,rows)</onclick>', shelves)
+        self.assertNotIn('ActivateWindow(1163)', shelves)
+
+
+class ChipRowTests(unittest.TestCase):
+    """Onyx 1.0.29. The owner, Nov 2026, a photo of his TV: the films' first chip stood cut at the margin, in the middle
+    of the picture ("even though the picture covers the whole TV") -- the viewer's shortcuts made the row longer than
+    the screen, and Kodi shows a grouplist longer than itself from its left end. QA Kodi, with five long shortcuts of
+    the viewer's: the first chip at the margin as before, the rest cut at the screen's left edge; Left to the far end
+    shows the last one whole at the margin; another screen and back, the row at its first chip again."""
+
+    def test_the_row_spans_the_screen_with_a_margin_of_nothing_at_either_end(self):
+        H = gen_home()
+        home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')
+        row = home.split('<control type="grouplist" id="9100" description="chips">')[1]
+        row = row[:row.index('<control type="group" description="rows movies">')]
+        self.assertIn('<left>0</left><top>538</top><width>1920</width>', row)
+        edge = '<control type="label" description="edge"><width>%d</width>' % (H.MARGIN - H.CHIP_GAP)
+        self.assertEqual(row.count(edge), 2)
+        self.assertLess(row.index(edge), row.index('<control type="button"'), 'one before the first chip')
+        self.assertLess(row.rindex('<control type="button"'), row.rindex(edge), 'one after the last')
+        self.assertIn('<itemgap>%d</itemgap>' % H.CHIP_GAP, row)
+
+    def test_each_screen_s_row_is_brought_to_its_first_chip_once_and_the_focus_put_back(self):
+        H = gen_home()
+        timers = (SKIN / 'xml/Timers.xml').read_text(encoding='utf-8')
+        tabs = [t['id'] for t in H.TABS if t['chips'] and not t.get('hidden')]
+        self.assertIn('movies', tabs)
+        for tab in tabs:
+            timer = timers.split('<name>povil_chips_%s</name>' % tab)[1].split('</timer>')[0]
+            start = timer.split('<start reset="true">')[1].split('</start>')[0]
+            for cond in ('Window.IsActive(home)', '!System.HasActiveModalDialog', '!String.IsEmpty(System.CurrentControlId)',
+                         'String.IsEqual(Window(home).Property(povil.tab),%s)' % tab,
+                         '!String.IsEqual(Window(home).Property(povil.chips.at),%s)' % tab,
+                         'String.IsEmpty(Window(home).Property(povil.%s.enter))' % H.HUB):
+                self.assertIn(cond, start, tab)
+            steps = re.findall(r'<onstart>(.*?)</onstart>', timer)
+            self.assertEqual(steps, ['SetProperty(povil.chips.at,%s,home)' % tab,
+                                     'SetProperty(povil.chips.back,$INFO[System.CurrentControlId],home)',
+                                     'SetProperty(povil.chips.focus,$INFO[Window(home).Property(povil.focus)],home)',
+                                     'SetFocus($VAR[POVIL_FirstChip_%s])' % tab,
+                                     'SetFocus($INFO[Window(home).Property(povil.chips.back)])',
+                                     'SetProperty(povil.focus,$INFO[Window(home).Property(povil.chips.focus)],home)'], tab)
+            self.assertIn('<variable name="POVIL_FirstChip_%s">' % tab,
+                          (SKIN / 'xml/Includes_POVIL_Home.xml').read_text(encoding='utf-8'))
+        # every time the home opens
+        home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')
+        self.assertIn('<onload>ClearProperty(povil.chips.at,home)</onload>', home)
 
 
 class ButtonIdTests(unittest.TestCase):
