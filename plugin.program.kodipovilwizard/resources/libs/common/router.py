@@ -114,6 +114,10 @@ class Router:
             # the viewer's own rows on the Onyx home (the tile "שורות משלי")
             from resources.libs import custom_rows
             custom_rows.choose()
+        elif mode == 'menu_editor':
+            # the menu editor of the Onyx home (the tile "עריכת התפריט"; the skin settings' Homepage entries)
+            from resources.libs import menu_editor
+            menu_editor.choose(self.params.get('part'))
         elif mode == 'home_rows':
             # the order of an Onyx home screen's rows (the tile "סדר השורות")
             from resources.libs import home_rows

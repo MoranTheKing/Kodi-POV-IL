@@ -1,0 +1,139 @@
+{
+ "bar": [
+  "movies",
+  "tv",
+  "continue",
+  "israeli",
+  "live",
+  "kids",
+  "favourites",
+  "search",
+  "settings"
+ ],
+ "own_tabs": [
+  "own1",
+  "own2"
+ ],
+ "places": 11,
+ "tabs": {
+  "movies": {
+   "label": "סרטים",
+   "width": 146,
+   "always": true
+  },
+  "tv": {
+   "label": "סדרות",
+   "width": 140,
+   "always": false
+  },
+  "continue": {
+   "label": "המשך צפייה",
+   "width": 220,
+   "always": false
+  },
+  "israeli": {
+   "label": "ישראלי",
+   "width": 146,
+   "always": false
+  },
+  "live": {
+   "label": "שידור חי",
+   "width": 166,
+   "always": false
+  },
+  "kids": {
+   "label": "ילדים",
+   "width": 140,
+   "always": false
+  },
+  "favourites": {
+   "label": "מועדפים",
+   "width": 170,
+   "always": false
+  },
+  "search": {
+   "label": "חיפוש",
+   "width": 146,
+   "always": false
+  },
+  "settings": {
+   "label": "הגדרות",
+   "width": 146,
+   "always": true
+  },
+  "own1": {
+   "label": "",
+   "width": 140,
+   "always": false
+  },
+  "own2": {
+   "label": "",
+   "width": 140,
+   "always": false
+  }
+ },
+ "chips": {
+  "movies": {
+   "build": [
+    "נטפליקס",
+    "דיסני+",
+    "Apple TV+",
+    "Prime Video",
+    "בכורות",
+    "אקשן",
+    "קומדיה",
+    "דרמה",
+    "מתח",
+    "אימה",
+    "מדע בדיוני",
+    "כל הסרטים",
+    "Umbrella"
+   ],
+   "mid": true
+  },
+  "tv": {
+   "build": [
+    "נטפליקס",
+    "דיסני+",
+    "Apple TV+",
+    "Prime Video",
+    "ישראליות",
+    "דרמה",
+    "קומדיה",
+    "פשע",
+    "מסתורין",
+    "מדע בדיוני",
+    "ריאליטי",
+    "כל הסדרות",
+    "Umbrella"
+   ],
+   "mid": true
+  },
+  "kids": {
+   "build": [
+    "קטנטנים",
+    "ילדים ונוער",
+    "ניקלודיאון",
+    "אנימציה",
+    "משפחה",
+    "אנימה"
+   ],
+   "mid": false
+  },
+  "favourites": {
+   "build": [
+    "סרטים ב-POV",
+    "סדרות ב-POV",
+    "מיון: א-ב / חדש קודם",
+    "סרטים ב-Trakt",
+    "סדרות ב-Trakt",
+    "סרטים ב-MDBList",
+    "סדרות ב-MDBList",
+    "הרשימות שלי",
+    "כל המועדפים"
+   ],
+   "mid": false
+  }
+ },
+ "own_chips": 6
+}

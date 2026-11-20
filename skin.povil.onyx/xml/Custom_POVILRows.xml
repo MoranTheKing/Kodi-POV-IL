@@ -80,6 +80,46 @@
 				</control>
 				<control type="button" id="7805">
 					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_movies_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_movies_3,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7806">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_movies_4]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_movies_4,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7807">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_movies_5]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_movies_5,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7808">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_movies_6]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_movies_6,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7809">
+					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_RowSlot_tv_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
@@ -88,7 +128,7 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7806">
+				<control type="button" id="7810">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_RowSlot_tv_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -98,7 +138,7 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7807">
+				<control type="button" id="7811">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_RowSlot_tv_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -108,7 +148,7 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7808">
+				<control type="button" id="7812">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_ChipSlot_tv_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -118,7 +158,7 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7809">
+				<control type="button" id="7813">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_ChipSlot_tv_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -128,7 +168,47 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7810">
+				<control type="button" id="7814">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_tv_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_tv_3,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7815">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_tv_4]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_tv_4,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7816">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_tv_5]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_tv_5,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7817">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_tv_6]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_tv_6,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7818">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_RowSlot_kids_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -138,7 +218,7 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7811">
+				<control type="button" id="7819">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_RowSlot_kids_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -148,7 +228,7 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7812">
+				<control type="button" id="7820">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_RowSlot_kids_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -158,7 +238,7 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7813">
+				<control type="button" id="7821">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_ChipSlot_kids_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -168,7 +248,7 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7814">
+				<control type="button" id="7822">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_ChipSlot_kids_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -178,7 +258,47 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7815">
+				<control type="button" id="7823">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_kids_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_kids_3,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7824">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_kids_4]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_kids_4,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7825">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_kids_5]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_kids_5,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7826">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_kids_6]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_kids_6,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7827">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_RowSlot_favourites_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -188,7 +308,7 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7816">
+				<control type="button" id="7828">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_RowSlot_favourites_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -198,7 +318,7 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7817">
+				<control type="button" id="7829">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_RowSlot_favourites_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -208,7 +328,7 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7818">
+				<control type="button" id="7830">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_ChipSlot_favourites_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
@@ -218,13 +338,53 @@
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
-				<control type="button" id="7819">
+				<control type="button" id="7831">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_ChipSlot_favourites_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
 					<onclick>SetProperty(povil.rows.slot,Chip_favourites_2,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7832">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_favourites_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_favourites_3,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7833">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_favourites_4]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_favourites_4,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7834">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_favourites_5]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_favourites_5,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7835">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_favourites_6]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_favourites_6,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>

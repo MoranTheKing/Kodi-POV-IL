@@ -297,7 +297,9 @@ TABS = [
                # the start, and a row asked before then would stay empty)
                ('ערוצי ה-IPTV שלי', WIZARD + '?mode=pvr_row&p=$INFO[Window(home).Property(povil.pvr)]', 'square', True)],
          chips=[('ערוצים', videos(IDAN['idan_live'])),
-                ('IPTV שלי', 'ActivateWindow(TVChannels)', '[PVR.HasTVChannels | System.HasAddon(pvr.iptvsimple)]'),
+                # (any live-TV client of Kodi's, not IPTV Simple alone -- a viewer, Nov 2026, after moving to Onyx: "my
+                # IPTV is not found; in the earlier skins it was there"; Onyx 1.0.28)
+                ('IPTV שלי', 'ActivateWindow(TVChannels)', '[PVR.HasTVChannels | System.HasPVRAddon | System.HasAddon(pvr.iptvsimple)]'),
                 ('רדיו', videos(IDAN['radio'])),
                 ('ספורט 1', videos(IDAN['sport1'])), ('Eco99', videos(IDAN['eco99'])),
                 ('100FM', videos(IDAN['fm100'])),
@@ -431,6 +433,10 @@ SETTINGS_ITEMS = [
      by_wizard(plugin_run(WIZARD + '?mode=custom_rows'), 'ActivateWindow(1162)', mode='custom_chips'), ''),
     # the order of a screen's rows: up, down, hidden, shown again (SLOT_TABS; without the Wizard: window 1163)
     ('סדר השורות', 'DefaultPlaylist.png', by_wizard(plugin_run(WIZARD + '?mode=home_rows'), 'ActivateWindow(1163)', mode='home_rows'), ''),
+    # the menu editor (the Wizard's menu_editor.py, Onyx 1.0.28): the bar's order, names and buttons of the viewer's
+    # own; the chips under each tab; the rows. Without a Wizard that has it: the skin's own rows and chips dialog
+    ('עריכת התפריט', 'DefaultAddonLookAndFeel.png',
+     by_wizard(plugin_run(WIZARD + '?mode=menu_editor'), 'ActivateWindow(1162)', mode='menu_editor'), ''),
     # the watched mark's colour (WATCHED_COLOURS)
     ('$VAR[POVIL_WatchedTile]', 'povil/check.png', WATCHED_CHOICE, ''),
     # the trailer behind the hero (trailers.py): on unless switched off here; the tile says which
@@ -519,6 +525,47 @@ def tab_line(tab_id):
 
 BAR_W = sum(tab_width(tab_id) for tab_id in BAR)
 
+# The viewer's own bar (Onyx 1.0.28 / Wizard 0.5.29, the menu editor "עריכת התפריט"; a viewer, via the owner, Nov
+# 2026, with a mod of 1.0.26 his own Claude made: "I'd be glad if you put it in yours -- I want to work only with
+# your skin, updates included"). BAR_PLACES places; place p shows the tab named in Skin.String(POVILBar_<p>) once
+# Skin.HasSetting(POVILBarOrdered), else BAR[p]. Kodi lays a grouplist out in its children's order, so each place
+# holds a button of every tab that may stand there and shows only the one it holds (bar_button). A tab's name:
+# Skin.String(POVILTabName_<id>), else the build's (POVIL_TabLabel_<id>). OWN_TABS buttons of the viewer's own
+# (POVILTabOwn_<n>_path / _cmd / _name), opened as his chips are: as narrow as the narrowest tab -- one takes a
+# hidden tab's place (the Wizard keeps nine on the bar), so the bar is never wider than it was.
+OWN_TABS = 2
+OWN_TAB_IDS = ['own%d' % n for n in range(1, OWN_TABS + 1)]
+OWN_TAB_W = 140
+for _own in OWN_TAB_IDS:
+    TAB_WIDE[_own] = OWN_TAB_W
+BAR_IDS = BAR + OWN_TAB_IDS
+BAR_PLACES = len(BAR_IDS)
+
+
+def bar_shows(p, tab_id):
+    """The condition that place p holds tab_id."""
+    chosen = 'String.IsEqual(Skin.String(POVILBar_%d),%s)' % (p, tab_id)
+    if p < len(BAR) and BAR[p] == tab_id:
+        return '[!Skin.HasSetting(POVILBarOrdered) | %s]' % chosen
+    return '[Skin.HasSetting(POVILBarOrdered) + %s]' % chosen
+
+
+def bar_button(p, tab_id):
+    return 9600 + p * 16 + BAR_IDS.index(tab_id)
+
+
+def bar_visible(tab_id):
+    """A tab of the bar is on it (not taken off; a button of the viewer's has something to do)."""
+    conds = [] if tab_id in ALWAYS_SHOWN else ['!' + tab_hidden(tab_id)]
+    if tab_id in OWN_TAB_IDS:
+        conds.append(own_set('POVILTabOwn_%s' % tab_id[3:]))
+    return ' + '.join(conds)
+
+
+def to_tab(tab_id):
+    """The action that gives the focus to a tab's button, wherever on the bar it stands."""
+    return 'SetFocus($VAR[POVIL_TabButton_%s])' % tab_id
+
 
 
 def nav_chain(candidates, fallback=None):
@@ -562,12 +609,85 @@ for _tab in TABS:
 # rows), shown only while it has one; it opens the folder in the Videos window -- Kodi's library there has its own
 # sort menu. After a screen's services (CUSTOM_CHIP_AT), else last. Their ids are their own (custom_chip_ids): the
 # build's chips keep theirs.
-CUSTOM_CHIPS = 2
+# Onyx 1.0.28 (the menu editor, "עריכת התפריט"; the same viewer: "add, move and hide shortcuts under each button"):
+# CUSTOM_CHIPS of the viewer's own on each screen, each standing where he chose (POVILChip_<tab>_<n>_at: start --
+# the rightmost --, mid -- after the services, where a screen has them -- or end), opening a folder (_path) or doing
+# what a favourite, an add-on or the live TV does (_cmd: a builtin, own_action); and any of the build's chips of these
+# screens hidden (POVILHideChip_<tab>_<n>).
+CUSTOM_CHIPS = 6
 CUSTOM_CHIP_AT = {'movies': 4, 'tv': 4}
+CHIP_POINTS = ('start', 'mid', 'end')
+
+
+def custom_chip_id(ti, n, point):
+    return 9240 + (ti * CUSTOM_CHIPS + n - 1) * 3 + CHIP_POINTS.index(point)
 
 
 def custom_chip_ids(ti):
-    return [9240 + ti * CUSTOM_CHIPS + n for n in range(CUSTOM_CHIPS)]
+    """Every control of the viewer's chips of a screen (each chip at each point it may stand)."""
+    return [custom_chip_id(ti, n, point) for n in range(1, CUSTOM_CHIPS + 1) for point in CHIP_POINTS]
+
+
+def chip_at(tab, n, point):
+    """The condition that the viewer's chip n of a screen stands at `point` (None: it never can)."""
+    key = 'Skin.String(POVILChip_%s_%d_at)' % (tab['id'], n)
+    has_mid = tab['id'] in CUSTOM_CHIP_AT
+    if point == 'mid' and not has_mid:
+        return None
+    conds = ['String.IsEqual(%s,%s)' % (key, point)]
+    if point == ('mid' if has_mid else 'end'):
+        conds.append('String.IsEmpty(%s)' % key)
+    if point == 'end' and not has_mid:
+        conds.append('String.IsEqual(%s,mid)' % key)
+    return '[%s]' % ' | '.join(conds)
+
+
+def own_set(key):
+    """A chip or a bar button of the viewer's has something to do."""
+    return '[!String.IsEmpty(Skin.String(%s_path)) | !String.IsEmpty(Skin.String(%s_cmd))]' % (key, key)
+
+
+def own_action(key):
+    """[(condition, action)]: the viewer's builtin (a favourite, an add-on, the live TV: key_cmd), else his folder
+    (key_path) in the Videos window. ($INFO in an action is carried out as written -- QA Kodi; $ESCINFO quotes a
+    folder, so a comma in it cannot split the command.)"""
+    return [('!String.IsEmpty(Skin.String(%s_cmd))' % key, '$INFO[Skin.String(%s_cmd)]' % key),
+            ('String.IsEmpty(Skin.String(%s_cmd))' % key, 'ActivateWindow(Videos,$ESCINFO[Skin.String(%s_path)],return)' % key)]
+
+
+def chip_hidden(tab, ci):
+    return 'Skin.HasSetting(POVILHideChip_%s_%d)' % (tab['id'], ci)
+
+
+def chip_order(ti, tab):
+    """[(condition, id)] of a screen's chips the way they stand, the rightmost first: the viewer's at the start,
+    the build's to the services, his after the services, the build's others, his at the end."""
+    out, editable = [], tab['id'] in CUSTOM_TABS
+    ids = chip_ids(ti, tab)
+
+    def own(point):
+        if editable:
+            for n in range(1, CUSTOM_CHIPS + 1):
+                where = chip_at(tab, n, point)
+                if where:
+                    out.append(('%s + %s' % (own_set('POVILChip_%s_%d' % (tab['id'], n)), where), custom_chip_id(ti, n, point)))
+    own('start')
+    at = CUSTOM_CHIP_AT.get(tab['id'], len(tab['chips']))
+    for ci, chip in enumerate(tab['chips']):
+        if ci == at:
+            own('mid')
+        chip = tuple(chip) + (None, None)
+        conds = [c for c in (chip[2], '!' + chip_hidden(tab, ci) if editable else None) if c]
+        out.append((' + '.join(conds), ids[ci]))
+    if at >= len(tab['chips']):
+        own('mid')
+    own('end')
+    return out
+
+
+def first_chip(ti, tab):
+    """The action that gives the focus to a screen's first chip on the screen (the rightmost shown)."""
+    return 'SetFocus($VAR[POVIL_FirstChip_%s])' % tab['id']
 
 
 RTL_ADDONS = ('plugin.video.pov', 'plugin.video.umbrella', 'plugin.video.idanplus')   # patches_config.py's povil_rtl hooks
@@ -846,6 +966,16 @@ def gen_timers():
     x(2, '<start reset="true">%s + %s</start>' % (TRAILER_SCREEN, TRAILER_SHOWN))
     x(2, '<stop>!%s | ![%s]</stop>' % (TRAILER_SCREEN, TRAILER_SHOWN))
     x(1, '</timer>')
+    # The trailer has the screen to itself, and when the home comes back over it: the Wizard shows the trailer's
+    # Hebrew subtitles only meanwhile (trailer_subs.py; Onyx 1.0.28) -- Kodi draws subtitles over the home's video
+    # window too, under the rows (QA Kodi)
+    x(1, '<timer>')
+    x(2, '<name>povil_trailer_alone</name>')
+    x(2, '<start reset="true">%s + %s</start>' % (TRAILER_SCREEN, TRAILER_ALONE))
+    x(2, '<onstart>NotifyAll(povil.trailer,alone)</onstart>')
+    x(2, '<stop>!%s | ![%s]</stop>' % (TRAILER_SCREEN, TRAILER_ALONE))
+    x(2, '<onstop>NotifyAll(povil.trailer,shared)</onstop>')
+    x(1, '</timer>')
     x(1, '<timer>')
     x(2, '<name>povil_trailer_stop</name>')
     # (Kodi's own busy dialog comes up for a moment while any playback opens -- the trailer's too: it is
@@ -1099,8 +1229,12 @@ def gen_includes():
                 x(2, '<value condition="%s">%s</value>' % (cond, e(val)) if cond else '<value>%s</value>' % e(val))
         x(1, '</variable>')
 
-    tab_titles = [(tab_cond(t), t['label']) for t in TABS]
+    tab_titles = [(tab_cond(t), '$VAR[POVIL_TabLabel_%s]' % t['id'] if t['id'] in BAR_IDS else t['label']) for t in TABS]
     tab_blurbs = [(tab_cond(t), t['blurb']) for t in TABS]
+    for _own in OWN_TAB_IDS:
+        _cond = 'String.IsEqual(Window(home).Property(povil.tab),%s)' % _own
+        tab_titles.append((_cond, '$VAR[POVIL_TabLabel_%s]' % _own))
+        tab_blurbs.append((_cond, 'כפתור משלכם בסרגל: לחצו OK כדי לפתוח.'))
     more_page = '![String.Contains(Container(%d).ListItem.FolderPath,new_page=) | String.Contains(Container(%d).ListItem.FolderPath,Page&amp;url=)]'
 
     # What the Wizard fetched for the Israeli show on screen (hero_details.py): Keshet
@@ -1380,6 +1514,9 @@ def gen_includes():
         x(2, '<value>povil_faint</value>')
         x(1, '</variable>')
     item_layouts(x)
+    for tab_id in BAR_IDS:
+        tab_button_include(x, tab_id)
+    bar_variables(x)
     x(0, '</includes>')
     return x.text()
 
@@ -1565,7 +1702,10 @@ def gen_home():
     x(0, '<window>')
     # (the first tab's button itself: the bar is a list since 1.0.18, and a list asked to take the focus
     # gives it to its first button -- the settings, at the left -- whatever its own default says)
-    x(1, '<defaultcontrol>%d</defaultcontrol>' % tab_button(0))
+    x(1, '<defaultcontrol>%d</defaultcontrol>' % bar_button(0, BAR[0]))
+    # (the viewer's own bar: the films may stand elsewhere -- the first place's button, on Kodi's start only)
+    x(1, '<onload condition="String.IsEmpty(Window(home).Property(povil.focus)) + Skin.HasSetting(POVILBarOrdered)">'
+         'SetFocus($VAR[POVIL_BarFirst])</onload>')
     # Kodi's ".." item would sit after "more" at a list's far end: off, unless the user
     # chose it in the skin settings (POVILParentDirChosen; Onyx's own toggle script)
     x(1, '<onload condition="System.GetBool(filelists.showparentdiritems) + !Skin.HasSetting(POVILParentDirChosen)'
@@ -1717,7 +1857,8 @@ def top_bar(x, d):
     x(d + 1, '<left>350</left><top>32</top><width>60</width><height>60</height>')
     x(d + 1, '<texturenofocus colordiffuse="B3FFFFFF">povil/osd/power.png</texturenofocus><texturefocus>povil/osd/power_fo.png</texturefocus>')
     x(d + 1, '<label></label><onclick>ActivateWindow(ShutdownMenu)</onclick>')
-    x(d + 1, '<onright>%d</onright><ondown>%d</ondown><onleft>noop</onleft><onup>noop</onup>' % (tab_button(TAB_INDEX[BAR[-1]]), tab_button(TAB_INDEX[BAR[-1]])))
+    x(d + 1, '<onright>SetFocus($VAR[POVIL_BarLast])</onright><ondown>SetFocus($VAR[POVIL_BarLast])</ondown>'
+             '<onleft>noop</onleft><onup>noop</onup>')
     x(d, '</control>')
     x(d, '<control type="list" id="%d" description="Kodi favourites, counted for the favourites row">' % FAV_COUNT)
     x(d + 1, '<left>-4000</left><top>0</top><width>20</width><height>20</height>')
@@ -1732,39 +1873,55 @@ def top_bar(x, d):
     # it. Kodi steps between a list's OWN children only -- a button inside a cell of its own did not move, seen
     # in the QA Kodi -- so each tab is one button, and the line under the chosen tab is that button's texture
     # (gen_tabline.py). They stand in the BAR's order from the right.)
-    n = len(BAR)
     x(d, '<control type="grouplist" id="9000" description="tabs">')
     x(d + 1, '<left>%d</left><top>34</top><width>%d</width><height>72</height>' % (1920 - MARGIN - BAR_W, BAR_W))
     x(d + 1, '<orientation>horizontal</orientation><align>right</align><itemgap>0</itemgap><scrolltime>0</scrolltime>')
-    x(d + 1, '<defaultcontrol>%d</defaultcontrol>' % tab_button(0))
+    x(d + 1, '<defaultcontrol>%d</defaultcontrol>' % bar_button(0, BAR[0]))
     x(d + 1, '<onleft>%d</onleft><onright>noop</onright>' % POWER_BUTTON)
-    d = d + 1
-    for tab_id in reversed(BAR):
+    # every place holds a button of every tab (POVIL_Tab_<id>, gen_includes), shown while it holds that tab -- the
+    # last place first: XML order is left to right, place 0 the rightmost
+    for p in reversed(range(BAR_PLACES)):
+        for tab_id in BAR_IDS:
+            vis = ' + '.join(c for c in (bar_shows(p, tab_id), bar_visible(tab_id)) if c)
+            x(d + 1, '<include content="POVIL_Tab_%s"><param name="id" value="%d" /><param name="visible" value="%s" /></include>'
+              % (tab_id, bar_button(p, tab_id), e(vis)))
+    x(d, '</control>')
+
+
+def tab_button_include(x, tab_id):
+    """<include name="POVIL_Tab_<id>">: a tab's button, for any place on the bar ($PARAM[id], $PARAM[visible])."""
+    x(1, '<include name="POVIL_Tab_%s">' % tab_id)
+    x(2, '<param name="id" />')
+    x(2, '<param name="visible" />')
+    x(2, '<definition>')
+    d = 2
+    own = tab_id in OWN_TAB_IDS
+    x(d + 1, '<control type="togglebutton" id="$PARAM[id]" description="tab %s">' % tab_id)
+    x(d + 2, '<width>%d</width><height>64</height>' % tab_width(tab_id))
+    x(d + 2, '<visible>$PARAM[visible]</visible>')
+    # (a toggle button: its second pair of textures, shown while the tab is the chosen one, is the line)
+    x(d + 2, '<texturefocus /><texturenofocus />')
+    line = '<alttexture%%s colordiffuse="%s">povil/%s</alttexture%%s>' % (GOLD, tab_line(tab_id))
+    x(d + 2, (line % ('focus', 'focus')) + (line % ('nofocus', 'nofocus')))
+    chosen = 'String.IsEqual(Window(home).Property(povil.tab),%s)' % tab_id
+    x(d + 2, '<usealttexture>%s</usealttexture>' % chosen)
+    x(d + 2, '<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>')
+    x(d + 2, '<textcolor>$VAR[POVIL_TabColor_%s]</textcolor><focusedcolor>povil_white</focusedcolor>' % tab_id)
+    x(d + 2, '<label>$VAR[POVIL_TabLabel_%s]</label>' % tab_id)
+    # (not while a service's page is being entered: the chip that was pressed leaves the screen with
+    # its tab, Kodi hands the focus to the window's default -- a tab's button -- and that must not
+    # bring its tab back; the timer povil_hub_enter then gives the focus to the page's chips)
+    entering = 'String.IsEmpty(Window(home).Property(povil.%s.enter))' % HUB
+    x(d + 2, '<onfocus condition="%s">SetProperty(povil.tab,%s,home)</onfocus>' % (entering, tab_id))
+    x(d + 2, '<onfocus condition="%s">SetProperty(povil.tab.%s,1,home)</onfocus>' % (entering, tab_id))
+    x(d + 2, '<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>')
+    if own:
+        for cond, action in own_action('POVILTabOwn_%s' % tab_id[3:]):
+            x(d + 2, '<onclick condition="%s">%s</onclick>' % (cond, action))
+        x(d + 2, '<ondown>noop</ondown>')
+    else:
         ti = TAB_INDEX[tab_id]
         tab = TABS[ti]
-        left = 0
-        target = chip_ids(ti, tab)[0] if tab['chips'] else (row_id(ti, 0) if tab['rows'] else tab_button(ti))
-        width = tab_width(tab['id'])
-        d = d - 1
-        x(d + 1, '<control type="togglebutton" id="%d" description="tab %s">' % (tab_button(ti), tab['id']))
-        x(d + 2, '<width>%d</width><height>64</height>' % width)
-        if tab['id'] not in ALWAYS_SHOWN:
-            x(d + 2, '<visible>!%s</visible>' % tab_hidden(tab['id']))
-        # (a toggle button: its second pair of textures, shown while the tab is the chosen one, is the line)
-        x(d + 2, '<texturefocus /><texturenofocus />')
-        line = '<alttexture%%s colordiffuse="%s">povil/%s</alttexture%%s>' % (GOLD, tab_line(tab['id']))
-        x(d + 2, (line % ('focus', 'focus')) + (line % ('nofocus', 'nofocus')))
-        x(d + 2, '<usealttexture>%s</usealttexture>' % tab_cond(tab))
-        x(d + 2, '<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>')
-        x(d + 2, '<textcolor>$VAR[POVIL_TabColor_%s]</textcolor><focusedcolor>povil_white</focusedcolor>' % tab['id'])
-        x(d + 2, '<label>%s</label>' % e(tab['label']))
-        # (not while a service's page is being entered: the chip that was pressed leaves the screen with
-        # its tab, Kodi hands the focus to the window's default -- a tab's button -- and that must not
-        # bring its tab back; the timer povil_hub_enter then gives the focus to the page's chips)
-        entering = 'String.IsEmpty(Window(home).Property(povil.%s.enter))' % HUB
-        x(d + 2, '<onfocus condition="%s">SetProperty(povil.tab,%s,home)</onfocus>' % (entering, tab['id']))
-        x(d + 2, '<onfocus condition="%s">SetProperty(povil.tab.%s,1,home)</onfocus>' % (entering, tab['id']))
-        x(d + 2, '<onfocus>SetProperty(povil.focus,%d,home)</onfocus>' % tab_button(ti))
         # a row whose retries ran out (a box that started before its network) asks
         # again when its tab is chosen again
         for ri, row in enumerate(tab['rows']):
@@ -1779,11 +1936,53 @@ def top_bar(x, d):
         else:
             x(d + 2, '<onclick>%s</onclick>' % e(named(tab['click'], tab['label'])))
         # (left and right are the list's: it steps to the next button on the bar, over one that is off it)
-        x(d + 2, '<ondown>%d</ondown>' % target)
-        x(d + 1, '</control>')
-        d = d + 1
-    d = d - 1
-    x(d, '</control>')
+        if tab['chips']:
+            x(d + 2, '<ondown>%s</ondown>' % first_chip(ti, tab))
+        elif tab['rows']:
+            x(d + 2, '<ondown>%d</ondown>' % row_id(ti, 0))
+    x(d + 1, '</control>')
+    x(2, '</definition>')
+    x(1, '</include>')
+
+
+def bar_variables(x):
+    """Where the focus goes: a tab's button wherever it stands, the first and the last on the bar; a screen's first
+    chip on the screen; a tab's name; the colour of an own button's name."""
+    for tab_id in BAR_IDS:
+        x(1, '<variable name="POVIL_TabButton_%s">' % tab_id)
+        for p in range(BAR_PLACES):
+            x(2, '<value condition="%s">%d</value>' % (bar_shows(p, tab_id), bar_button(p, tab_id)))
+        x(2, '<value>9000</value>')
+        x(1, '</variable>')
+        x(1, '<variable name="POVIL_TabLabel_%s">' % tab_id)
+        if tab_id in OWN_TAB_IDS:
+            x(2, '<value>$INFO[Skin.String(POVILTabOwn_%s_name)]</value>' % tab_id[3:])
+        else:
+            x(2, '<value condition="!String.IsEmpty(Skin.String(POVILTabName_%s))">$INFO[Skin.String(POVILTabName_%s)]</value>'
+              % (tab_id, tab_id))
+            x(2, '<value>%s</value>' % e(TABS[TAB_INDEX[tab_id]]['label']))
+        x(1, '</variable>')
+    for name, places in (('POVIL_BarFirst', range(BAR_PLACES)), ('POVIL_BarLast', reversed(range(BAR_PLACES)))):
+        x(1, '<variable name="%s">' % name)
+        for p in places:
+            for tab_id in BAR_IDS:
+                vis = ' + '.join(c for c in (bar_shows(p, tab_id), bar_visible(tab_id)) if c)
+                x(2, '<value condition="%s">%d</value>' % (e(vis), bar_button(p, tab_id)))
+        x(2, '<value>%d</value>' % bar_button(0, BAR[0]))
+        x(1, '</variable>')
+    for ti, tab in enumerate(TABS):
+        if not tab['chips'] or tab.get('hidden'):
+            continue
+        x(1, '<variable name="POVIL_FirstChip_%s">' % tab['id'])
+        for cond, cid in chip_order(ti, tab):
+            x(2, ('<value condition="%s">%d</value>' % (e(cond), cid)) if cond else '<value>%d</value>' % cid)
+        x(2, '<value>%d</value>' % chip_ids(ti, tab)[0])
+        x(1, '</variable>')
+    for tab_id in OWN_TAB_IDS:
+        x(1, '<variable name="POVIL_TabColor_%s">' % tab_id)
+        x(2, '<value condition="String.IsEqual(Window(home).Property(povil.tab),%s)">povil_white</value>' % tab_id)
+        x(2, '<value>povil_faint</value>')
+        x(1, '</variable>')
 
 # A soft shadow under the hero's text (Onyx 1.0.26): the shade behind it stops short of black at the screen's edge
 # now (gen_textures.py), and the text stays readable over a bright backdrop
@@ -1869,16 +2068,20 @@ def chips(x, d):
     for ti, tab in enumerate(TABS):
         ids = chip_ids(ti, tab)
         down = row_id(ti, 0) if tab['rows'] else ''
-        at = CUSTOM_CHIP_AT.get(tab['id'], len(tab['chips'])) if tab['id'] in CUSTOM_TABS else None
-        # XML order is left to right: last chip first, so the first chip is the rightmost
+        editable = tab['id'] in CUSTOM_TABS
+        at = CUSTOM_CHIP_AT.get(tab['id'], len(tab['chips'])) if editable else None
+        # XML order is left to right: last chip first, so the first chip is the rightmost (the viewer's chips at
+        # the end -- the leftmost -- before them all, his at the start after them all)
+        if editable:
+            own_chips(x, d + 1, ti, tab, down, 'end')
+            if at >= len(tab['chips']):
+                own_chips(x, d + 1, ti, tab, down, 'mid')
         for ci in reversed(range(len(tab['chips']))):
-            if ci == at - 1 if at else False:
-                own_chips(x, d + 1, ti, tab, down)
             chip = tuple(tab['chips'][ci]) + (None, None)
             label = chip[0]
             # one action, or several in order (a service's chip names the service, then shows its page)
             clicks = [named(c, label) for c in (chip[1] if isinstance(chip[1], list) else [chip[1]])]
-            vis = tab_cond(tab) + (' + ' + chip[2] if chip[2] else '')
+            vis = tab_cond(tab) + (' + ' + chip[2] if chip[2] else '') + (' + !' + chip_hidden(tab, ci) if editable else '')
             x(d + 1, '<control type="button" id="%d">' % ids[ci])
             x(d + 2, '<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>')
             x(d + 2, '<font>povil_chip_home</font><align>center</align><aligny>center</aligny>')
@@ -1899,19 +2102,27 @@ def chips(x, d):
                 # no button of its own in the tab bar: Up and Back leave the page for the tabs
                 x(d + 2, '<onup>9000</onup><onback>9000</onback>')
             else:
-                x(d + 2, '<onup>%d</onup>' % tab_button(ti))
+                x(d + 2, '<onup>%s</onup>' % to_tab(tab['id']))
             if down:
                 x(d + 2, '<ondown>%d</ondown>' % down)
             x(d + 2, '<visible>%s</visible>' % vis)
             x(d + 1, '</control>')
+            if editable and ci == at:
+                own_chips(x, d + 1, ti, tab, down, 'mid')
+        if editable:
+            own_chips(x, d + 1, ti, tab, down, 'start')
     x(d, '</control>')
 
 
-def own_chips(x, d, ti, tab, down):
-    """The viewer's own chips of a screen (CUSTOM_CHIPS), right to left: shown while each has a folder."""
+def own_chips(x, d, ti, tab, down, point):
+    """The viewer's own chips of a screen standing at `point` (CHIP_POINTS), right to left: shown while each has
+    something to do and he put it there."""
     for n in reversed(range(1, CUSTOM_CHIPS + 1)):
+        where = chip_at(tab, n, point)
+        if not where:
+            continue
         key = 'POVILChip_%s_%d' % (tab['id'], n)
-        cid = custom_chip_ids(ti)[n - 1]
+        cid = custom_chip_id(ti, n, point)
         x(d, '<control type="button" id="%d">' % cid)
         x(d + 1, '<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>')
         x(d + 1, '<font>povil_chip_home</font><align>center</align><aligny>center</aligny>')
@@ -1919,14 +2130,14 @@ def own_chips(x, d, ti, tab, down):
         x(d + 1, '<texturenofocus border="24" colordiffuse="24FFFFFF">povil/pill48.png</texturenofocus>')
         x(d + 1, '<texturefocus border="24" colordiffuse="%s">povil/pill48.png</texturefocus>' % GOLD)
         x(d + 1, '<label>$INFO[Skin.String(%s_name)]</label>' % key)
-        # ($ESCINFO: quoted, so a comma in the folder cannot split the command)
-        x(d + 1, '<onclick>ActivateWindow(Videos,$ESCINFO[Skin.String(%s_path)],return)</onclick>' % key)
+        for cond, action in own_action(key):
+            x(d + 1, '<onclick condition="%s">%s</onclick>' % (cond, action))
         x(d + 1, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
         x(d + 1, '<onfocus>SetProperty(povil.focus,%d,home)</onfocus>' % cid)
-        x(d + 1, '<onup>%d</onup>' % tab_button(ti))
+        x(d + 1, '<onup>%s</onup>' % to_tab(tab['id']))
         if down:
             x(d + 1, '<ondown>%d</ondown>' % down)
-        x(d + 1, '<visible>%s + !String.IsEmpty(Skin.String(%s_path))</visible>' % (tab_cond(tab), key))
+        x(d + 1, '<visible>%s + %s + %s</visible>' % (tab_cond(tab), own_set(key), where))
         x(d, '</control>')
 
 
@@ -2092,9 +2303,10 @@ def rows(x, d):
                 x(d + 3, '<left>%d</left><top>40</top><width>%d</width><height>%d</height>' % (MARGIN - PAD, 1920 - MARGIN + PAD, g['list_h']))
             x(d + 3, '<orientation>horizontal</orientation><preloaditems>2</preloaditems>')
             x(d + 3, '<scrolltime tween="cubic" easing="out">260</scrolltime>')
-            top_up = chip_ids(ti, tab)[0] if tab['chips'] else tab_button(ti)
+            top_up = ((first_chip(ti, tab) if tab['id'] in CUSTOM_TABS else chip_ids(ti, tab)[0]) if tab['chips']
+                      else to_tab(tab['id']))
             for cond, target in nav_chain(list(reversed(ids[:ri])), top_up):
-                x(d + 3, '<onup condition="%s">%d</onup>' % (cond, target))
+                x(d + 3, '<onup condition="%s">%s</onup>' % (cond, target))
             # Kodi wraps a list with no action at its edge: the row's far end would
             # jump back to its start (and the start, on the right, to the far end)
             x(d + 3, '<onleft>noop</onleft><onright>noop</onright>')
@@ -2174,9 +2386,10 @@ def slot_row(x, d, ti, k, ids, top):
       % (left, width, max(GEOM[kind]['list_h'] for kind in kinds)))
     x(d + 2, '<orientation>horizontal</orientation><preloaditems>2</preloaditems>')
     x(d + 2, '<scrolltime tween="cubic" easing="out">260</scrolltime>')
-    top_up = chip_ids(ti, tab)[0] if tab['chips'] else tab_button(ti)
+    top_up = ((first_chip(ti, tab) if tab['id'] in CUSTOM_TABS else chip_ids(ti, tab)[0]) if tab['chips']
+              else to_tab(tab['id']))
     for cond, target in nav_chain(list(reversed(ids[:k])), top_up):
-        x(d + 2, '<onup condition="%s">%d</onup>' % (cond, target))
+        x(d + 2, '<onup condition="%s">%s</onup>' % (cond, target))
     x(d + 2, '<onleft>noop</onleft><onright>noop</onright>')
     if tab.get('hidden'):
         x(d + 2, '<onback>9000</onback>')
