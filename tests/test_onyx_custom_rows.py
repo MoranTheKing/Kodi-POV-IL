@@ -47,7 +47,10 @@ class SkinRowsTests(unittest.TestCase):
                     self.assertEqual([r[1] for r in custom], ['custom:%s_%d' % (tab['id'], n) for n in (1, 2, 3)])
                     self.assertEqual(tab['rows'][-3:], custom, 'at the end, after the build\'s own rows')
                     for n, row in enumerate(custom, 1):
-                        self.assertEqual(row[0], '$INFO[Skin.String(POVILRow_%s_%d_name)]' % (tab['id'], n))
+                        self.assertEqual(row[0], '$VAR[POVIL_RowName_%s_%d]' % (tab['id'], n))
+                        name = variable('POVIL_RowName_%s_%d' % (tab['id'], n))
+                        self.assertIn('$INFO[Skin.String(POVILRow_%s_%d_name)]' % (tab['id'], n), name)
+                        self.assertIn('<value>השורה שלי</value>', name, 'a row with no name of its own')
             else:
                 self.assertEqual(custom, [], tab['id'])
 
@@ -75,10 +78,15 @@ class SkinRowsTests(unittest.TestCase):
         for addon in gen_home().RTL_ADDONS:
             self.assertIn(addon, patched)
 
-    def test_the_settings_tile_opens_the_wizard_s_list(self):
+    def test_the_settings_tile_asks_the_wizard_only_when_it_says_it_can(self):
+        # a viewer's CoreELEC box, Nov 2026: the skin updated first, the Wizard there did not know the mode -- nothing
         home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')
-        self.assertIn('RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=custom_rows)', home)
-        self.assertIn('שורות משלי', home)
+        tile = home.split('<label>שורות משלי</label>')[1].split('</item>')[0]
+        able = 'String.Contains(Window(home).Property(povil.wizard.modes),custom_rows)'
+        self.assertIn('<onclick condition="%s">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=custom_rows)</onclick>' % able, tile)
+        self.assertIn('<onclick condition="!%s">ActivateWindow(1162)</onclick>' % able, tile)
+        startup = (WIZARD / 'startup.py').read_text(encoding='utf-8')
+        self.assertIn("xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows')", startup)
         router = (WIZARD / 'resources/libs/common/router.py').read_text(encoding='utf-8')
         self.assertRegex(router, r"mode == 'custom_rows':\s*\n(\s*#[^\n]*\n)?\s*from resources\.libs import custom_rows\s*\n\s*custom_rows\.choose\(\)")
 
@@ -119,7 +127,13 @@ class WizardDialogTests(unittest.TestCase):
             if m:
                 strings.pop(m.group(1), None)
 
-        xbmc = types.SimpleNamespace(executebuiltin=builtin, sleep=lambda ms: None,
+        library = self.library if hasattr(self, 'library') else {}
+
+        def rpc(request):
+            import json
+            method = json.loads(request)['method']
+            return json.dumps({'result': {'limits': {'total': library.get(method, 0)}}})
+        xbmc = types.SimpleNamespace(executebuiltin=builtin, sleep=lambda ms: None, executeJSONRPC=rpc,
                                      getInfoLabel=lambda l: strings.get(l[len('Skin.String('):-1], ''))
         xbmcgui = types.SimpleNamespace(Dialog=lambda: dialog)
         # by its file: in the full suite another add-on's "resources" package may already be imported
@@ -136,6 +150,27 @@ class WizardDialogTests(unittest.TestCase):
         self.assertEqual(strings['POVILRow_movies_1_path'], 'D:\\Films\\')
         self.assertIn('Skin.SetString(POVILRow_movies_1_path,D:\\Films\\)', done, 'bare: Kodi drops a trailing \\ inside quotes')
         self.assertEqual(strings['POVILRow_movies_1_name'], 'סרטים מהדיסק')
+
+    def test_a_folder_whose_films_are_in_the_library_shows_the_films(self):
+        # a viewer, Nov 2026: his films' folder added to Kodi as films and scanned; the row showed file names
+        from urllib.parse import unquote
+        import json
+        self.library = {'VideoLibrary.GetMovies': 12}
+        strings, done = self.run_choose(FakeDialog([0, 0, 0, 3], inputs=['הסרטים שלי'], browse='smb://nas/Films, 4K/'))
+        path = strings['POVILRow_movies_1_path']
+        self.assertTrue(path.startswith('videodb://movies/titles/?xsp='), path)
+        self.assertNotIn(',', path)
+        self.assertNotIn('"', path)
+        xsp = json.loads(unquote(path.split('?xsp=')[1]))
+        self.assertEqual(xsp['rules'], {'and': [{'field': 'path', 'operator': 'startswith', 'value': ['smb://nas/Films, 4K/']}]})
+        self.assertEqual((xsp['type'], xsp['order']['method'], xsp['order']['direction']), ('movies', 'dateadded', 'descending'))
+        # series in the library: the library's series; nothing there: the folder as it is
+        self.library = {'VideoLibrary.GetTVShows': 3}
+        strings, _ = self.run_choose(FakeDialog([1, 0, 0, 3], browse='/storage/Series/'))
+        self.assertTrue(strings['POVILRow_tv_1_path'].startswith('videodb://tvshows/titles/?xsp='))
+        self.library = {}
+        strings, _ = self.run_choose(FakeDialog([1, 0, 0, 3], browse='/storage/Clips/'))
+        self.assertEqual(strings['POVILRow_tv_1_path'], '/storage/Clips/')
 
     def test_a_comma_in_the_name_cannot_break_the_command(self):
         strings, _ = self.run_choose(FakeDialog([1, 2, 0, 0], inputs=['אקשן, מתח (HD "חדש"']))
@@ -156,3 +191,56 @@ class WizardDialogTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class StandaloneTests(unittest.TestCase):
+    """Onyx alone, without the Wizard (a viewer's CoreELEC box, Nov 2026): the skin's own dialogs."""
+
+    def test_the_rows_dialog_offers_the_library_the_viewer_s_sources_and_any_folder(self):
+        rows = (SKIN / 'xml/Custom_POVILRows.xml').read_text(encoding='utf-8')
+        self.assertIn('<window type="dialog" id="1162">', rows)
+        self.assertEqual(rows.count('SetProperty(povil.rows.slot,'), 12, 'four tabs, three rows each')
+        key = 'POVILRow_$INFO[Window(home).Property(povil.rows.slot)]'
+        for path in ('videodb://movies/titles/', 'videodb://tvshows/titles/', 'videodb://recentlyaddedmovies/'):
+            self.assertIn('Skin.SetString(%s_path,%s)' % (key, path), rows)
+        self.assertIn('<content>sources://video/</content>', rows)
+        self.assertIn('Skin.SetString(%s_path,$ESCINFO[ListItem.FolderPath])' % key, rows)
+        self.assertIn('Skin.SetString(%s_name,$ESCINFO[ListItem.Label])' % key, rows, 'a comma in a source name cannot split it')
+        self.assertIn('Skin.SetPath(%s_path)' % key, rows)
+        self.assertIn('Skin.Reset(%s_path)' % key, rows)
+        self.assertIn('Skin.SetString(%s_name)' % key, rows, 'the name, in Kodi\'s keyboard')
+        self.assertIn('allowhiddenfocus="true"', rows, 'the source list takes the focus as it appears')
+
+    def test_the_choice_dialog_sets_what_the_wizard_would(self):
+        choice = (SKIN / 'xml/Custom_POVILChoice.xml').read_text(encoding='utf-8')
+        self.assertIn('<window type="dialog" id="1161">', choice)
+        for value in ('netflix', 'advanced', 'simple', 'pretty'):
+            self.assertIn('Skin.SetString(POVILPlayer,%s)' % value, choice)
+        self.assertIn('Skin.Reset(POVILPlayer)', choice)
+        for tab in ('tv', 'continue', 'israeli', 'live', 'kids', 'favourites', 'search'):
+            self.assertIn('Skin.ToggleSetting(POVILHideTab_%s)' % tab, choice)
+        self.assertNotIn('POVILHideTab_movies', choice)
+        self.assertNotIn('POVILHideTab_settings', choice)
+
+    def test_tiles_without_the_wizard(self):
+        home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')
+        wiz = 'System.HasAddon(plugin.program.kodipovilwizard)'
+
+        def tile(label):
+            return home.split('<label>%s</label>' % label)[1].split('</item>')[0]
+        # the log: the Wizard's uploader, else Kodi's own (installed when first asked for)
+        log = tile('שליחת לוג')
+        self.assertIn('<onclick condition="%s">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=uploadlog)</onclick>' % wiz, log)
+        self.assertIn('<onclick condition="!%s + System.HasAddon(script.kodi.loguploader)">RunScript(script.kodi.loguploader)</onclick>' % wiz, log)
+        self.assertIn('<onclick condition="!%s + !System.HasAddon(script.kodi.loguploader)">InstallAddon(script.kodi.loguploader)</onclick>' % wiz, log)
+        self.assertNotIn('<visible>', log, 'always there')
+        # the player and the screens: the skin's own dialog without the Wizard
+        for label, mode in (('בחירת מסכים', 'tabs'), ('$VAR[POVIL_PlayerTile]', 'player')):
+            with self.subTest(label):
+                part = tile(label)
+                self.assertIn('<onclick condition="!%s">SetProperty(povil.choice,%s,home)</onclick>' % (wiz, mode), part)
+                self.assertIn('<onclick condition="!%s">ActivateWindow(1161)</onclick>' % wiz, part)
+        # what only the Wizard does shows only with it
+        for label in ('הוויזארד', 'החלפת סקין', 'סנכרון בין מכשירים', 'פרופילים', '$VAR[POVIL_TrailersTile]', 'תזמון טריילרים'):
+            with self.subTest(label):
+                self.assertRegex(tile(label), r'<visible>[^<]*%s' % re.escape(wiz))
