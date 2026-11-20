@@ -7,6 +7,7 @@
 	<onload condition="!Skin.HasSetting(POVILParentDirOff)">Skin.SetBool(POVILParentDirOff)</onload>
 	<onload condition="Window.Previous(favouritesbrowser)">SetProperty(povil.fav.t,$INFO[System.Time(hh:mm:ss)],home)</onload>
 	<onload>ClearProperty(povil.swipe,home)</onload>
+	<onload>ClearProperty(povil.chips.at,home)</onload>
 	<onload>ClearProperty(povil.hub.enter,home)</onload>
 	<onload condition="System.Platform.Android + String.IsEmpty(Window(home).Property(povil.touchmap))">RunScript(special://skin/scripts/onyx_tools.py,touchkeymap)</onload>
 	<onload condition="System.Platform.Android">SetProperty(povil.touchmap,1,home)</onload>
@@ -387,10 +388,11 @@
 				</control>
 			</control>
 			<control type="grouplist" id="9100" description="chips">
-				<left>90</left><top>538</top><width>1740</width><height>50</height>
+				<left>0</left><top>538</top><width>1920</width><height>50</height>
 				<orientation>horizontal</orientation><align>right</align><itemgap>14</itemgap>
 				<scrolltime tween="cubic" easing="out">240</scrolltime>
 				<onup>9000</onup>
+				<control type="label" description="edge"><width>76</width><height>48</height><label></label></control>
 				<control type="button" id="9257">
 					<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
 					<font>povil_chip_home</font><align>center</align><aligny>center</aligny>
@@ -2373,6 +2375,7 @@
 					<ondown>5101</ondown>
 					<visible>String.IsEqual(Window(home).Property(povil.tab),continue)</visible>
 				</control>
+				<control type="label" description="edge"><width>76</width><height>48</height><label></label></control>
 			</control>
 			<control type="group" description="rows movies">
 				<left>0</left><top>618</top>
@@ -5189,21 +5192,21 @@
 								<property name="povil_rtl">1</property>
 								<icon>DefaultAddonLookAndFeel.png</icon>
 								<onclick condition="String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=menu_editor)</onclick>
-								<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">ActivateWindow(1162)</onclick>
+								<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">RunScript(special://skin/scripts/povil_menu_editor.py)</onclick>
 							</item>
 							<item>
 								<label>סדר השורות</label>
 								<property name="povil_rtl">1</property>
 								<icon>DefaultPlaylist.png</icon>
 								<onclick condition="String.Contains(Window(home).Property(povil.wizard.modes),home_rows)">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=home_rows)</onclick>
-								<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),home_rows)">ActivateWindow(1163)</onclick>
+								<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),home_rows)">RunScript(special://skin/scripts/povil_menu_editor.py,home_rows)</onclick>
 							</item>
 							<item>
 								<label>שורות וכפתורים משלי</label>
 								<property name="povil_rtl">1</property>
 								<icon>DefaultFolder.png</icon>
 								<onclick condition="String.Contains(Window(home).Property(povil.wizard.modes),custom_chips)">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=custom_rows)</onclick>
-								<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),custom_chips)">ActivateWindow(1162)</onclick>
+								<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),custom_chips)">RunScript(special://skin/scripts/povil_menu_editor.py,custom_rows)</onclick>
 							</item>
 							<item>
 								<label>$VAR[POVIL_PlayerTile]</label>

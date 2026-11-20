@@ -391,6 +391,10 @@ WIZ = 'System.HasAddon(plugin.program.kodipovilwizard)'
 WIZARD_MODES = 'Window(home).Property(povil.wizard.modes)'
 
 
+# the build's menu editor inside the skin, for Onyx without the Wizard (gen_standalone.py, Onyx 1.0.29)
+EDITOR_SCRIPT = 'special://skin/scripts/povil_menu_editor.py'
+
+
 def by_wizard(wizard_action, *own_actions, mode=None):
     """onclick for a tile: the Wizard's action when it is installed (and, with `mode`, says it has that mode), else
     the skin's own (in order)."""
@@ -427,16 +431,18 @@ SETTINGS_ITEMS = [
     ('$VAR[POVIL_PlayerTile]', 'povil/osd/layout.png',
      by_wizard(plugin_run(WIZARD + '?mode=player_style'), 'SetProperty(povil.choice,player,home)', 'ActivateWindow(1161)'), ''),
     # the viewer's own rows (CUSTOM_TABS)
-    # (without the Wizard: the skin's own dialog -- the library, the viewer's video sources or any folder)
-    # (and the viewer's own chips, CUSTOM_CHIPS: a Wizard before 0.5.28 knows the rows only -- the skin's own dialog then)
+    # (without the Wizard -- or one before 0.5.28, which knows the rows only: the same dialogs, inside the skin,
+    # Onyx 1.0.29: gen_standalone.py copies the Wizard's menu_editor.py, custom_rows.py and home_rows.py)
     ('שורות וכפתורים משלי', 'DefaultFolder.png',
-     by_wizard(plugin_run(WIZARD + '?mode=custom_rows'), 'ActivateWindow(1162)', mode='custom_chips'), ''),
-    # the order of a screen's rows: up, down, hidden, shown again (SLOT_TABS; without the Wizard: window 1163)
-    ('סדר השורות', 'DefaultPlaylist.png', by_wizard(plugin_run(WIZARD + '?mode=home_rows'), 'ActivateWindow(1163)', mode='home_rows'), ''),
+     by_wizard(plugin_run(WIZARD + '?mode=custom_rows'), 'RunScript(%s,custom_rows)' % EDITOR_SCRIPT, mode='custom_chips'), ''),
+    # the order of a screen's rows: up, down, hidden, shown again (SLOT_TABS)
+    ('סדר השורות', 'DefaultPlaylist.png',
+     by_wizard(plugin_run(WIZARD + '?mode=home_rows'), 'RunScript(%s,home_rows)' % EDITOR_SCRIPT, mode='home_rows'), ''),
     # the menu editor (the Wizard's menu_editor.py, Onyx 1.0.28): the bar's order, names and buttons of the viewer's
-    # own; the chips under each tab; the rows. Without a Wizard that has it: the skin's own rows and chips dialog
+    # own; the chips under each tab; the rows. Without a Wizard that has it: the same editor inside the skin (a
+    # viewer with Onyx alone, Nov 2026, had the rows and chips only -- the skin's windows 1162 and 1163)
     ('עריכת התפריט', 'DefaultAddonLookAndFeel.png',
-     by_wizard(plugin_run(WIZARD + '?mode=menu_editor'), 'ActivateWindow(1162)', mode='menu_editor'), ''),
+     by_wizard(plugin_run(WIZARD + '?mode=menu_editor'), 'RunScript(%s)' % EDITOR_SCRIPT, mode='menu_editor'), ''),
     # the watched mark's colour (WATCHED_COLOURS)
     ('$VAR[POVIL_WatchedTile]', 'povil/check.png', WATCHED_CHOICE, ''),
     # the trailer behind the hero (trailers.py): on unless switched off here; the tile says which
@@ -996,6 +1002,27 @@ def gen_timers():
     x(2, '<onstart>NotifyAll(povil.trailer,stop)</onstart>')
     x(2, '<stop>true</stop>')
     x(1, '</timer>')
+    # A screen's chips, brought to their right end -- the first chip -- the first time the screen is shown (Kodi shows
+    # a row longer than the screen from its left end until a chip of it has the focus: chips()). The focus goes to the
+    # first chip and straight back in one go (nothing is drawn between), and povil.focus is put back as it was.
+    # (not while a dialog is up, not while a service's page is being entered: povil_hub_enter gives the focus there)
+    for ti, tab in enumerate(TABS):
+        if not tab['chips'] or tab.get('hidden'):
+            continue
+        x(1, '<timer>')
+        x(2, '<name>povil_chips_%s</name>' % tab['id'])
+        x(2, '<start reset="true">Window.IsActive(home) + !System.HasActiveModalDialog + Control.IsVisible(9100) + '
+             '!String.IsEmpty(System.CurrentControlId) + String.IsEmpty(Window(home).Property(povil.%s.enter)) + '
+             'String.IsEqual(Window(home).Property(povil.tab),%s) + !String.IsEqual(Window(home).Property(povil.chips.at),%s)</start>'
+          % (HUB, tab['id'], tab['id']))
+        x(2, '<onstart>SetProperty(povil.chips.at,%s,home)</onstart>' % tab['id'])
+        x(2, '<onstart>SetProperty(povil.chips.back,$INFO[System.CurrentControlId],home)</onstart>')
+        x(2, '<onstart>SetProperty(povil.chips.focus,$INFO[Window(home).Property(povil.focus)],home)</onstart>')
+        x(2, '<onstart>%s</onstart>' % first_chip(ti, tab))
+        x(2, '<onstart>SetFocus($INFO[Window(home).Property(povil.chips.back)])</onstart>')
+        x(2, '<onstart>SetProperty(povil.focus,$INFO[Window(home).Property(povil.chips.focus)],home)</onstart>')
+        x(2, '<stop>true</stop>')
+        x(1, '</timer>')
     # A swipe on a phone (the touch keymap) names its direction; Onyx moves the focus
     x(1, '<timer>')
     x(2, '<name>povil_swipe</name>')
@@ -1717,6 +1744,7 @@ def gen_home():
     # povil.swipe, the timer povil_swipe moves; once per session). A swipe left over
     # from another skin does not move anything here.
     x(1, '<onload>ClearProperty(povil.swipe,home)</onload>')
+    x(1, '<onload>ClearProperty(povil.chips.at,home)</onload>')
     x(1, '<onload>ClearProperty(povil.%s.enter,home)</onload>' % HUB)
     x(1, '<onload condition="System.Platform.Android + String.IsEmpty(Window(home).Property(povil.touchmap))">'
          'RunScript(special://skin/scripts/onyx_tools.py,touchkeymap)</onload>')
@@ -2060,11 +2088,18 @@ def hero(x, d):
 def chips(x, d):
     for tab in TABS:
         assert not tab['chips'] or not (tab['chips'][0] + (None,))[2], 'a tab\'s first chip must always show: %s' % tab['id']
+    # The screen's whole width, with MARGIN of nothing at either end (CHIP_EDGE): a row that fits stands exactly
+    # where it always did, and a longer one is cut at the screen's edges, as the rows of posters are -- never in the
+    # middle of the picture. The owner, Nov 2026 (a viewer's shortcuts made the films' row longer than the screen):
+    # its first chip stood cut at the margin "even though the picture covers the whole TV". Kodi shows a grouplist
+    # longer than itself from its LEFT end until one of its controls has the focus: the timers povil_chips_<tab>
+    # (gen_timers) bring each screen's row to its right end -- its first chip -- the first time the screen is shown.
     x(d, '<control type="grouplist" id="9100" description="chips">')
-    x(d + 1, '<left>%d</left><top>538</top><width>%d</width><height>50</height>' % (MARGIN, 1920 - 2 * MARGIN))
-    x(d + 1, '<orientation>horizontal</orientation><align>right</align><itemgap>14</itemgap>')
+    x(d + 1, '<left>0</left><top>538</top><width>1920</width><height>50</height>')
+    x(d + 1, '<orientation>horizontal</orientation><align>right</align><itemgap>%d</itemgap>' % CHIP_GAP)
     x(d + 1, '<scrolltime tween="cubic" easing="out">240</scrolltime>')
     x(d + 1, '<onup>9000</onup>')
+    chip_edge(x, d + 1)
     for ti, tab in enumerate(TABS):
         ids = chip_ids(ti, tab)
         down = row_id(ti, 0) if tab['rows'] else ''
@@ -2111,7 +2146,17 @@ def chips(x, d):
                 own_chips(x, d + 1, ti, tab, down, 'mid')
         if editable:
             own_chips(x, d + 1, ti, tab, down, 'start')
+    chip_edge(x, d + 1)
     x(d, '</control>')
+
+
+CHIP_GAP = 14
+
+
+def chip_edge(x, d):
+    """MARGIN of nothing at an end of the chips' row (with the gap after it)."""
+    x(d, '<control type="label" description="edge"><width>%d</width><height>48</height><label></label></control>'
+      % (MARGIN - CHIP_GAP))
 
 
 def own_chips(x, d, ti, tab, down, point):
