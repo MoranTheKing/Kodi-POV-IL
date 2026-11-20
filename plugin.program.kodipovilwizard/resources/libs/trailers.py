@@ -1523,9 +1523,18 @@ def watch():
         provider.get_client(context=context).load_stream_info(video_id=video)
 
     from resources.libs import trailer_subs
+    def moransubs_answers():
+        # (MoranSubs 0.3.100+ always gives its word: none yet = it has not started; an older one leaves "no" empty)
+        try:
+            return (xbmc.getCondVisibility('System.AddonIsEnabled(service.subtitles.kodipovilai)') and
+                    trailer_subs.version_at_least(xbmc.getInfoLabel('System.AddonVersion(service.subtitles.kodipovilai)'),
+                                                  trailer_subs.WORD_FROM))
+        except Exception:
+            return False
+
     subs = trailer_subs.Subs(home, player, log, xbmcvfs.translatePath, xbmc.executebuiltin, describe=describe,
                              setting=lambda name: xbmc.getCondVisibility('Skin.HasSetting(%s)' % name),
-                             captions=load_captions)
+                             captions=load_captions, answers=moransubs_answers)
     desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready, acting=acting,
                 halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)'),
                 wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture, translated=translated,
