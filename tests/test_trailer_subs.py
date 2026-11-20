@@ -195,6 +195,20 @@ class MoranSubsTests(unittest.TestCase):
         source = (ROOT / 'service.subtitles.kodipovilai/resources/lib/trailer_subs.py').read_text(encoding='utf-8')
         self.assertIn('if not tier_cached() and listener.waitForAbort(20):', source)
 
+    def test_a_trailer_playing_when_the_service_starts_gets_no_search(self):
+        """0.3.101: the owner, Nov 2026 -- at Kodi's first start the home's first trailer began before the service,
+        and its start-up 'kick' (no trailer check) brought the subtitles' overlay up over it."""
+        source = (ROOT / 'service.subtitles.kodipovilai/resources/lib/autosub_service.py').read_text(encoding='utf-8')
+        self.assertIn('if xbmc.Player().isPlayingVideo() and not _home_trailer(xbmc.Player()):', source)
+        self.assertIn('            if _home_trailer(self):\n                return', source.replace('\r\n', '\n'))
+        body = source.split('def _home_trailer(player):')[1].split('\nif xbmc is not None:')[0]
+        namespace = {}
+        exec('def _home_trailer(player):' + body, namespace)
+        window = types.SimpleNamespace(getProperty=lambda k: 'trailer-file' if k == 'povil.tr.file' else '')
+        with mock.patch.dict(sys.modules, {'xbmcgui': types.SimpleNamespace(Window=lambda wid: window)}):
+            self.assertTrue(namespace['_home_trailer'](types.SimpleNamespace(getPlayingFile=lambda: 'trailer-file')))
+            self.assertFalse(namespace['_home_trailer'](types.SimpleNamespace(getPlayingFile=lambda: 'a-film')))
+
     def test_a_free_key_is_told_from_a_billed_one_at_no_cost(self):
         free = json.dumps({'error': {'details': [{'violations': [{'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier'}]}]}})
         self.assertEqual(self.ms.classify_probe(429, free), 'free')
@@ -321,6 +335,103 @@ class WordTests(unittest.TestCase):
         self.assertIn("System.AddonVersion(service.subtitles.kodipovilai)", source)
 
 
+class DrawnLinesTests(unittest.TestCase):
+    """Wizard 0.5.33 / Onyx 1.0.30: the skin draws the lines. The owner, Nov 2026, Android: "much of the trailer passed,
+    and no Hebrew subtitle appeared yet" -- the subtitle was loaded into the player at once, but Kodi draws no subtitles
+    over a video window whose picture is on a layer of its own (MediaCodec surface; CGUIVideoControl::Render)."""
+
+    def make(self, draws, times):
+        ts = load('plugin.program.kodipovilwizard/resources/libs/trailer_subs.py', 'povil_wizard_trailer_subs_lines')
+        home = {'povil.tr.file': 'trailer-file'}
+        seen, calls = [], []
+
+        class Home:
+            def getProperty(self, k):
+                return home.get(k, '')
+
+            def setProperty(self, k, v):
+                home[k] = v
+                seen.append((k, v))
+
+            def clearProperty(self, k):
+                home.pop(k, None)
+                seen.append((k, None))
+
+        class Player:
+            def isPlayingVideo(self):
+                return True
+
+            def getPlayingFile(self):
+                return 'trailer-file'
+
+            def getTime(self):
+                return times.pop(0) if times else 99.0
+
+            def setSubtitles(self, path):
+                calls.append(('set', path))
+
+            def showSubtitles(self, on):
+                calls.append(('show', on))
+
+        subs = None
+
+        class Waiting:
+            def wait(self, seconds):
+                if not times:
+                    subs.gone()          # the trailer ended
+                return False
+        subs = ts.Subs(Home(), Player(), lambda m: None, lambda w: w, lambda b: None, waiting=Waiting(),
+                       draws=lambda: draws)
+        subs.current = 'aBc_dEf-123'
+        return ts, subs, home, seen, calls
+
+    def test_the_line_of_the_moment_and_kodi_s_tags_kept_out(self):
+        ts = load('plugin.program.kodipovilwizard/resources/libs/trailer_subs.py', 'povil_wizard_trailer_subs_lines2')
+        cues = [[1000, 2500, 'שלום'], [3000, 4000, 'שורה ראשונה\nשורה שנייה']]
+        self.assertEqual(ts.line_at(cues, 999), '')
+        self.assertEqual(ts.line_at(cues, 1000), 'שלום')
+        self.assertEqual(ts.line_at(cues, 2600), '', 'between lines: nothing')
+        self.assertEqual(ts.label_text(cues[1][2]), 'שורה ראשונה[CR]שורה שנייה')
+        self.assertEqual(ts.label_text('[B]מה?[/B]'), '(B)מה?(/B)', 'never a Kodi tag')
+
+    def test_with_onyx_1_0_30_the_skin_draws_them_by_the_trailer_s_clock(self):
+        ts, subs, home, seen, calls = self.make(True, [0.5, 1.2, 1.3, 2.7, 3.2])
+        subs._ready('aBc_dEf-123', 'unused.srt', [[1000, 2500, 'שלום'], [3000, 4000, 'עוד שורה']])
+        for _ in range(100):
+            if 'povil.tsub.on' not in home and seen:
+                break
+            import time as _t
+            _t.sleep(0.02)
+        lines = [v for k, v in seen if k == ts.LINE]
+        self.assertEqual(lines, ['שלום', None, 'עוד שורה', None], 'set when it changes, cleared between and at the end')
+        self.assertIn((ts.LINES_ON, 'aBc_dEf-123'), seen)
+        self.assertNotIn(ts.LINES_ON, home, 'gone with the trailer')
+        self.assertEqual(calls, [], 'no subtitle file for the player')
+
+    def test_with_an_older_skin_the_player_gets_the_file_as_before(self):
+        ts, subs, home, seen, calls = self.make(False, [])
+        subs.is_alone = True
+        subs._ready('aBc_dEf-123', 'trailer.he.srt', [[0, 1000, 'שלום']])
+        self.assertEqual(calls, [('set', 'trailer.he.srt')])
+
+    def test_the_skin_draws_it_only_while_the_trailer_has_the_screen(self):
+        sys.path.insert(0, str(ROOT / 'tools' / 'skin_onyx'))
+        import gen_home as H
+        for name in ('Home.xml', 'View_POVIL.xml'):
+            text = (ROOT / 'skin.povil.onyx/xml' / name).read_text(encoding='utf-8')
+            label = text.split('<control type="label" description="trailer subtitles">')[1].split('</control>')[0]
+            self.assertIn('<label>$INFO[Window(home).Property(povil.tsub.line)]</label>', label, name)
+            self.assertIn('<visible>%s + !String.IsEmpty(Window(home).Property(povil.tsub.line))</visible>'
+                          % H.TRAILER_ALONE, label, name)
+            self.assertIn('<font>povil_trailer_sub</font>', label)
+            shade = text.split('<control type="image" description="trailer subtitles backdrop">')[1].split('</control>')[0]
+            self.assertIn('!String.IsEmpty(Window(home).Property(povil.tsub.on))', shade, 'a shade only under a trailer that has them')
+        fonts = (ROOT / 'skin.povil.onyx/xml/Font.xml').read_text(encoding='utf-8')
+        self.assertEqual(fonts.count('<name>povil_trailer_sub</name>'), 2, 'Heebo and the Arial fallback')
+        source = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/trailers.py').read_text(encoding='utf-8')
+        self.assertIn("xbmc.getSkinDir() == 'skin.povil.onyx'", source)
+
+
 class WithdrawnTests(unittest.TestCase):
     """The reviewer (Nov 2026): a bad translation must be takeable back -- from Pages AND from the devices' own copies."""
 
@@ -339,7 +450,7 @@ class WithdrawnTests(unittest.TestCase):
                 return ''
         subs = ts.Subs(Home(), None, said.append, lambda where: os.path.join(folder, where.rsplit('/', 2)[-2]),
                        lambda builtin: None, fetch=fetch, clock=lambda: now[0])
-        subs._ready = lambda video, path: said.append('ready ' + video)
+        subs._ready = lambda video, path, cues=None: said.append('ready ' + video)
         return ts, subs, asked, said, now
 
     def test_a_withdrawn_trailer_is_never_shown_even_from_this_device_s_copy(self):

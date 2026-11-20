@@ -45,6 +45,13 @@ FETCH_S = 5
 JOB_WAIT_S = 120                        # MoranSubs' answer, while the trailer still plays
 ABLE_WAIT_S = 30                        # MoranSubs' word (may this device translate?) right after Kodi's start
 WORD_FROM = (0, 3, 100)                 # the first MoranSubs that always gives the word ('1' or '0')
+# The lines DRAWN BY THE SKIN (Onyx 1.0.30): the line of the moment in Window(home).Property(LINE), and LINES_ON while
+# the trailer playing has subtitles. Kodi draws no subtitles over a video window whose picture is on a layer of its
+# own -- Android's MediaCodec surface (the owner's devices, Nov 2026: the subtitle loaded at once, none shown); on a
+# PC the picture and its subtitles are drawn together, which is why the QA Kodi showed them.
+LINE, LINES_ON = 'povil.tsub.line', 'povil.tsub.on'
+DRAWN_FROM = (1, 0, 30)                 # the first Onyx that draws them
+LINE_TICK_S = 0.2
 KEEP = 3000                             # trailers kept in CACHE
 _VIDEO = re.compile(r'^[A-Za-z0-9_-]{11}$')
 _HEBREW = re.compile('[\u05d0-\u05ea]')
@@ -54,6 +61,20 @@ RLE, PDF = '\u202b', '\u202c'
 def version_at_least(text, least):
     parts = tuple(int(p) for p in re.findall(r'\d+', text or '')[:3])
     return bool(parts) and parts >= tuple(least)
+
+
+def line_at(cues, ms):
+    """The text of the cue [start_ms, end_ms, text] the moment ms is in, or ''."""
+    for start, end, text in cues:
+        if start <= ms < end:
+            return text
+    return ''
+
+
+def label_text(text):
+    """A cue's text for a skin label: lines joined by Kodi's [CR], brackets that Kodi would read as tags made round."""
+    lines = [line.strip() for line in str(text).replace('[', '(').replace(']', ')').split('\n') if line.strip()]
+    return '[CR]'.join(lines)
 
 
 def path_of(video):
@@ -257,13 +278,14 @@ class Subs(object):
     """One per Wizard service. started()/gone() follow the trailer the desk plays; alone() the skin's word."""
 
     def __init__(self, home, player, log, translate_path, notify, fetch=None, describe=None, clock=time.time,
-                 setting=lambda name: False, waiting=None, captions=None, answers=lambda: False):
+                 setting=lambda name: False, waiting=None, captions=None, answers=lambda: False, draws=lambda: False):
         self.home, self.player, self.log = home, player, log
         self.translate_path, self.notify = translate_path, notify
         self.fetch = fetch or self._fetch
         self.describe = describe or (lambda video, key: {})
         self.captions = captions          # captions(video): reads the stream's information with subtitles asked for
         self.answers = answers            # answers(): this MoranSubs always gives the word (WORD_FROM), so none = not yet
+        self.draws = draws                # draws(): the skin draws the lines (DRAWN_FROM): no subtitle file for the player
         self.clock, self.setting = clock, setting
         self.waiting = waiting or threading.Event()
         self.lock = threading.Lock()
@@ -288,6 +310,8 @@ class Subs(object):
     def gone(self):
         with self.lock:
             self.current, self.path, self.loaded, self.shown = None, None, False, False
+        self.home.clearProperty(LINE)
+        self.home.clearProperty(LINES_ON)
 
     def alone(self, on):
         self.is_alone = bool(on)
@@ -317,12 +341,44 @@ class Subs(object):
             except Exception as exc:
                 self.log('subtitles: %s' % type(exc).__name__)
 
-    def _ready(self, video, path):
+    def _ready(self, video, path, cues=None):
         with self.lock:
             if self.current != video:
                 return
-            self.path = path
-        self._apply()
+            drawn = bool(cues) and self.draws()
+            if not drawn:
+                self.path = path
+        if drawn:
+            threading.Thread(target=self._lines, args=(video, cues), name='POVILTrailerLines').start()
+        else:
+            self._apply()
+
+    def _lines(self, video, cues):
+        """The line of the moment into LINE while this trailer plays; the skin shows it while the trailer has the
+        screen to itself (TRAILER_ALONE)."""
+        cues = sorted([int(a), int(b), t] for a, b, t in cues)
+        self.home.setProperty(LINES_ON, video)
+        said = ''
+        try:
+            while not self.waiting.wait(LINE_TICK_S):
+                if self.current != video:
+                    break
+                if not self._ours():
+                    continue
+                try:
+                    text = line_at(cues, self.player.getTime() * 1000.0)
+                except Exception:
+                    continue
+                if text != said:
+                    said = text
+                    if text:
+                        self.home.setProperty(LINE, label_text(text))
+                    else:
+                        self.home.clearProperty(LINE)
+        finally:
+            if self.home.getProperty(LINES_ON) == video:
+                self.home.clearProperty(LINE)
+                self.home.clearProperty(LINES_ON)
 
     # ------------------------------------------------ finding them
     def _prepare(self, video, stream, key):
@@ -343,7 +399,7 @@ class Subs(object):
                 where = 'MoranSubs'
                 cues = self.translated_here(video, stream, key, config)
             if cues:
-                self._ready(video, self._write(video, cues))
+                self._ready(video, self._write(video, cues), cues)
                 self.log('trailer subtitles: %s from %s (%d lines)' % (video, where, len(cues)))
             elif where == 'MoranSubs' and self.home.getProperty(ABLE) != '1':
                 said = self.home.getProperty(ABLE)

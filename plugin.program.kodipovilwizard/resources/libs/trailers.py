@@ -1532,9 +1532,18 @@ def watch():
         except Exception:
             return False
 
+    def skin_draws():
+        # (Onyx 1.0.30+ draws the trailer's lines itself: Kodi draws none over a video window on Android)
+        try:
+            return (xbmc.getSkinDir() == 'skin.povil.onyx' and
+                    trailer_subs.version_at_least(xbmc.getInfoLabel('System.AddonVersion(skin.povil.onyx)'),
+                                                  trailer_subs.DRAWN_FROM))
+        except Exception:
+            return False
+
     subs = trailer_subs.Subs(home, player, log, xbmcvfs.translatePath, xbmc.executebuiltin, describe=describe,
                              setting=lambda name: xbmc.getCondVisibility('Skin.HasSetting(%s)' % name),
-                             captions=load_captions, answers=moransubs_answers)
+                             captions=load_captions, answers=moransubs_answers, draws=skin_draws)
     desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready, acting=acting,
                 halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)'),
                 wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture, translated=translated,

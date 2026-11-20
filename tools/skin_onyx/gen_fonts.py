@@ -22,6 +22,8 @@ FONTS = [
     # bar (was povil_menu 31), the chips (povil_chip 23), the hero's details and ratings (povil_meta 26). Fonts of
     # their own: the player, the info screen and the dialogs keep theirs
     ('povil_tab', M, 34), ('povil_chip_home', M, 26), ('povil_hero_meta', R, 28), ('povil_hero_meta_bold', SB, 28),
+    # the Hebrew subtitles of a trailer, drawn by the skin (gen_home.py trailer_lines)
+    ('povil_trailer_sub', SB, 46),
 ]
 ARIAL = {'Heebo-Regular.ttf': ('arial.ttf', ''), 'Heebo-Medium.ttf': ('arial.ttf', ''),
          'Heebo-Light.ttf': ('arial.ttf', ''), 'Heebo-SemiBold.ttf': ('arial.ttf', 'bold'),

@@ -1,3 +1,6 @@
+0.5.33
+- The trailers' Hebrew subtitles shown on Android too (the owner, Nov 2026: "much of the trailer passed, and no Hebrew subtitle appeared yet"; his log had the subtitle loaded into the player at once). Kodi draws no subtitles over a video window whose picture is on a layer of its own (Android's MediaCodec surface; a PC draws them, which is why the QA Kodi showed them). With Onyx 1.0.30+ the skin draws them: this Wizard writes the line of the moment into Window(home).Property(povil.tsub.line), five times a second by the trailer's own clock, and povil.tsub.on while the trailer playing has them; no subtitle file is handed to the player. With an older skin, as before.
+
 0.5.32
 - Trailer subtitles from the first trailer after Kodi starts (the owner's log, 20 Nov 2026, Android: the first trailer after the start was left untranslated -- "not on Pages; this device does not translate" -- and MoranSubs said "this device translates" 11 s later). With MoranSubs 0.3.100+, which always gives its word ('1' or '0'), no word yet means it has not started: the trailer waits for it (up to 30 s, while it plays) instead of taking silence for "no". An older MoranSubs is read as before.
 
