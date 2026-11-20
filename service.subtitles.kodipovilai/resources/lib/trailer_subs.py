@@ -43,6 +43,8 @@ ABLE, READY = 'povil.tsub.able', 'povil.tsub.ready'
 FOLDER = 'special://temp/povil_tsub/'
 STATE_FILE = 'trailer_subs.json'
 FAILED_S = 86400                    # a trailer that could not be translated is not tried again for this long
+BUSY_S = 1800                       # ... one Gemini was busy for (or the network failed), twice in a row: this long
+BUSY_RETRY_S = 2.0                  # the one retry at once, while the trailer still plays
 REQUEST_TIMEOUT = 90
 _VIDEO = re.compile(r'^[A-Za-z0-9_-]{11}$')
 _HEB = re.compile(u'[א-ת]')
@@ -254,19 +256,25 @@ def _quota_out():
         _save(data)
 
 
-def _failed(video, now=None):
+def _failed(video, now=None, seconds=FAILED_S):
+    """Not tried again until now + seconds (failed: {video: until}; an older entry -- the time of the failure -- is in
+    the past by now and asks again)."""
     now = now or time.time()
     with _LOCK:
         data = _load()
-        failed = {v: t for v, t in (data.get('failed') or {}).items() if now - t < FAILED_S}
-        failed[video] = now
+        failed = {v: t for v, t in (data.get('failed') or {}).items() if t > now}
+        failed[video] = now + seconds
         data['failed'] = failed
         _save(data)
 
 
 def _recently_failed(video, now=None):
     now = now or time.time()
-    return now - ((_load().get('failed') or {}).get(video) or 0) < FAILED_S
+    return now < ((_load().get('failed') or {}).get(video) or 0)
+
+
+class Busy(Exception):
+    """Gemini busy (5xx) or the network failing: a passing trouble, tried again soon (BUSY_RETRY_S, BUSY_S)."""
 
 
 # ---------------------------------------------------------------- the request
@@ -347,9 +355,19 @@ def ask(key, parts, post=None):
              headers={'x-goog-api-key': key, 'Content-Type': 'application/json'}, timeout=REQUEST_TIMEOUT)
     if r.status_code == 429:
         raise gemini._classify_429(r)
+    if r.status_code in (500, 502, 503, 504):
+        raise Busy('HTTP %d' % r.status_code)
     if r.status_code != 200:
         raise gemini.GeminiError('HTTP %d' % r.status_code)
     return gemini._generated_text(r.json())
+
+
+def _passing(exc):
+    """Is it a passing trouble -- Gemini busy, the network failing -- rather than the request's own fault?"""
+    if isinstance(exc, Busy):
+        return True
+    name = type(exc).__name__
+    return name in ('ConnectionError', 'Timeout', 'ReadTimeout', 'ConnectTimeout', 'ChunkedEncodingError')
 
 
 def hebrew_enough(cues):
@@ -385,8 +403,16 @@ def handle(job, key=None, post=None, write=None, now=None):
     used = _count_request()
     began = time.time()
     try:
-        from resources.lib import gemini
-        text = ask(key, parts, post=post)
+        try:
+            text = ask(key, parts, post=post)
+        except Exception as exc:
+            if not _passing(exc):
+                raise
+            # (the owner's log, Nov 2026: a trailer QA translated at once failed on his device in a second -- and was
+            # not asked again for a day. A passing trouble is asked once more at once, then in BUSY_S)
+            time.sleep(BUSY_RETRY_S)
+            used = _count_request()
+            text = ask(key, parts, post=post)
     except Exception as exc:
         try:
             from resources.lib import gemini
@@ -396,8 +422,10 @@ def handle(job, key=None, post=None, write=None, now=None):
                 return None
         except Exception:
             pass
-        log('%s: not translated (%s)' % (video, type(exc).__name__))
-        _failed(video, now)
+        passing = _passing(exc)
+        log('%s: not translated (%s %s; again in %s)' % (video, type(exc).__name__, str(exc)[:80],
+                                                         '30 minutes' if passing else 'a day'))
+        _failed(video, now, BUSY_S if passing else FAILED_S)
         return None
     if (text or '').strip().upper().startswith('NONE'):
         log('%s: already Hebrew' % video)
@@ -440,6 +468,8 @@ def share(job, cues):
             return
         body = {'v': job['v'], 's': job.get('src') if job.get('src') in ('asr', 'manual') else 'listen', 'm': MODEL,
                 'n': job.get('title') or job.get('original') or '', 'y': job.get('year') or '',
+                # a film or a series, and a series' trailer's season (the Wizard 0.5.34): the channel's post says it
+                'k': job.get('kind') or '', 'e': job.get('season') or '',
                 'c': [[int(a * 1000), int(b * 1000), t] for a, b, t in cues]}
         status, answer = pool.share_trailer(body)
         if status == 429 and (answer or {}).get('closed'):
@@ -450,6 +480,35 @@ def share(job, cues):
         log('%s shared: %s' % (job['v'], status))
     except Exception as exc:
         log('not shared: %s' % type(exc).__name__)
+
+
+# ---------------------------------------------------------------- the device, once a day
+def say_seen(now=None):
+    """Once a UTC day: this device to the pool's dashboard -- whether it keeps its lists in sync through its own Google
+    Drive (the Wizard's cloud sync) and runs Onyx. The owner, 20 Nov 2026: "how many have connected to the syncs" --
+    their Drives are theirs alone, nothing else could tell. The install's anonymous id only (as every pool request)."""
+    try:
+        day = time.strftime('%Y%m%d', time.gmtime(now or time.time()))
+        with _LOCK:
+            if _load().get('seen_day') == day:
+                return False
+        import xbmc
+        import xbmcvfs
+        from resources.lib import pool
+        if not (pool.use_enabled() or pool.share_enabled()):
+            return False            # the viewer told this device not to talk to the pool: nothing (the reviewer)
+        tokens = xbmcvfs.translatePath('special://profile/addon_data/plugin.program.kodipovilwizard/cloud_sync/tokens.json')
+        # ONE try a day, whatever the answer: a Worker without /seen yet answers its landing page, and a retry at every
+        # ten-minute round on every device would cost the free plan thousands of requests (a day not counted is all)
+        with _LOCK:
+            data = _load()
+            data['seen_day'] = day
+            _save(data)
+        status, answer = pool.say_seen({'sync': os.path.isfile(tokens), 'onyx': xbmc.getSkinDir() == 'skin.povil.onyx'})
+        return status == 200 and bool((answer or {}).get('ok'))
+    except Exception:
+        pass
+    return False
 
 
 # ---------------------------------------------------------------- the service
@@ -493,6 +552,7 @@ def start(monitor):
             return
         able, why = refresh()
         log('trailer subtitles: %s' % ('this device translates' if able else 'no (%s)' % why))
+        threading.Thread(target=say_seen, name='MoranSubsSeen').start()
         idle = 0.0
         while not listener.abortRequested():
             if listener.waitForAbort(0.5):
@@ -503,6 +563,7 @@ def start(monitor):
                 if idle >= 600:
                     idle = 0.0
                     refresh()
+                    threading.Thread(target=say_seen, name='MoranSubsSeen').start()      # (a new UTC day)
                 continue
             idle = 0.0
             able, why = refresh()
