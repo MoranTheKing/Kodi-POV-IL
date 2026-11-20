@@ -108,7 +108,10 @@ def withdraw(folder, drop):
     try:
         old = json.load(open(path, encoding='utf-8'))
     except (OSError, ValueError):
-        old = None if drop else data         # (no file and nothing withdrawn: none is needed)
+        # (written even when nothing is withdrawn: every device asks for it every 6 hours, and GitHub Pages answers a
+        # missing file with a 404 or, for a while after a publish, a 503 -- which a device takes for "no answer" and
+        # asks again 10 minutes later; seen on the first run, 20 Nov 2026)
+        old = None
     if old != data:
         with open(path, 'w', encoding='utf-8', newline='\n') as f:
             json.dump(data, f, separators=(',', ':'))
