@@ -414,6 +414,13 @@
 		<stop>![Window.IsActive(home) | Window.IsActive(videos)] | ![Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))]</stop>
 	</timer>
 	<timer>
+		<name>povil_trailer_a_back</name>
+		<start reset="true">Window.IsActive(fullscreenvideo) + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Player.FilenameAndPath,Window(home).Property(povil.tr.file))</start>
+		<onstart>Action(FullScreen)</onstart>
+		<onstart condition="Window.Previous(home) + String.IsEqual(Window(home).Property(povil.tab),hub) + !Skin.TimerIsRunning(povil_trailer_alone)">SetFocus(9000)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
 		<name>povil_trailer_alone</name>
 		<start reset="true">[Window.IsActive(home) | Window.IsActive(videos)] + Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening)) + Skin.TimerIsRunning(povil_trailer_shown) + [[String.IsEqual(Skin.String(POVILTrailerFull),2) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),2) + System.IdleTime(2)] | [String.IsEqual(Skin.String(POVILTrailerFull),3) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),3) + System.IdleTime(3)] | [[String.IsEqual(Skin.String(POVILTrailerFull),4) | String.IsEmpty(Skin.String(POVILTrailerFull))] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)] | [String.IsEqual(Skin.String(POVILTrailerFull),6) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),6) + System.IdleTime(3)] | [String.IsEqual(Skin.String(POVILTrailerFull),8) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),8) + System.IdleTime(3)] | [String.IsEqual(Skin.String(POVILTrailerFull),12) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),12) + System.IdleTime(3)]]</start>
 		<onstart>NotifyAll(povil.trailer,alone)</onstart>
@@ -422,7 +429,7 @@
 	</timer>
 	<timer>
 		<name>povil_trailer_stop</name>
-		<start reset="true">!String.IsEmpty(Window(home).Property(povil.tr.ask)) + [![Window.IsActive(home) | Window.IsActive(videos)] | [System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)] | Skin.HasSetting(POVILNoTrailers) | [!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask))]]</start>
+		<start reset="true">!String.IsEmpty(Window(home).Property(povil.tr.ask)) + [![[Window.IsActive(home) | Window.IsActive(videos)] | [Window.IsActive(fullscreenvideo) + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Player.FilenameAndPath,Window(home).Property(povil.tr.file))]] | [System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)] | Skin.HasSetting(POVILNoTrailers) | [[Window.IsActive(home) | Window.IsActive(videos)] + [!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask))]]]</start>
 		<onstart>Skin.TimerStop(povil_trailer_shown)</onstart>
 		<onstart>ClearProperty(povil.tr.ask,home)</onstart>
 		<onstart>NotifyAll(povil.trailer,stop)</onstart>

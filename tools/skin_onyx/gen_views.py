@@ -163,6 +163,8 @@ def view(x, vid, label, layout):
     x(4, '<scrolltime tween="cubic" easing="out">260</scrolltime>')
     x(4, '<onup condition="!Skin.HasSetting(ViewOptions_Hide)">9000</onup>')
     x(4, '<onleft>noop</onleft><onright>noop</onright>')   # no wrap: the far end stays put
+    # Back while the trailer has the screen to itself only brings the view back (gen_home.py TRAILER_BACK)
+    x(4, '<onback condition="%s">%d</onback>' % (H.TRAILER_WAS_ALONE, H.TRAILER_BACK))
     # a list shorter than a page starts at the right margin too
     # (NumAllItems: Kodi's ".." counts when the user shows it)
     if layout == 'episodes':
@@ -194,6 +196,14 @@ def view(x, vid, label, layout):
         # views' groups -- two controls of one id, one of them in a hidden group, are not read reliably
         x(2, '<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
              '<label>$VAR[POVIL_V_Trailer]</label></control>' % H.TRAILER_KEY)
+        # ... and the button Back gives the focus to while the trailer has the screen to itself: off the screen, it
+        # gives the focus straight back to the view. (Its "focus" animation, of no time, has Kodi run onfocus a frame
+        # later: run at once, inside the move that focused it, the view and the button would both hold the focus.)
+        x(2, '<control type="button" id="%d" description="Back over a trailer"><left>-2000</left><top>0</top>'
+             '<width>10</width><height>10</height>'
+             '<animation effect="fade" start="100" end="100" time="0">Focus</animation>'
+             '<onfocus condition="Control.IsVisible(55)">SetFocus(55)</onfocus>'
+             '<onfocus condition="!Control.IsVisible(55)">SetFocus(51)</onfocus></control>' % H.TRAILER_BACK)
     x(1, '</include>')
 
 

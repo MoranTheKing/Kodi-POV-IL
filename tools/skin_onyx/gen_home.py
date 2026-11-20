@@ -130,6 +130,26 @@ TRAILER_FADE = ('<animation effect="fade" start="100" end="0" time="900" tween="
 # together, which is why the QA Kodi showed them. The owner, Nov 2026: "much of the trailer passed, and no Hebrew
 # subtitle appeared yet" -- his log had the subtitle loaded at once.
 TRAILER_LINE = 'Window(home).Property(povil.tsub.line)'
+# Back over a trailer (a viewer, Nov 2026, on his phone: "after Back on the trailer when it is full screen it should come
+# back to the title ... and not play the trailer again" -- his Back left the seasons' screen, then showed "a screen that has
+# nothing to do with it"). Two things Kodi 21 does (its code):
+#  * the home: Kodi's own home window turns Back into its full-screen player whenever anything plays (CGUIWindowHome::
+#    OnAction, before any control of the skin sees the key). The trailer's timers took that for "the home was left" and
+#    stopped it, and the home asked for it again: the bare player for a moment, then the trailer from its start. Now the
+#    skin leaves that player at once when it is the trailer's (TRAILER_PLAYER, the timer povil_trailer_a_back), the trailer
+#    plays on meanwhile, and Back does on the home what it would have done: on a service's page it goes to the tabs --
+#    unless the trailer had the screen to itself, when Back only brings the page back;
+#  * the Videos window's views: Back while the trailer has the screen to itself only brings the view back -- the list
+#    sends the focus to TRAILER_BACK, a button off the screen that gives it straight back (gen_views.py), instead of
+#    leaving the list.
+# "Had the screen to itself" is the timer povil_trailer_alone, not TRAILER_ALONE: the key itself has made the remote
+# busy again before the skin reads anything, and Kodi looks at the timers only every 500 ms.
+TRAILER_BACK = 9810
+TRAILER_WAS_ALONE = 'Skin.TimerIsRunning(povil_trailer_alone)'
+# (the trailer's own file: a film or a channel started from the home has Kodi's player come up before the Wizard hears of
+# it and clears povil.tr.on -- that player is never taken away -- the reviewer)
+TRAILER_PLAYER = ('Window.IsActive(fullscreenvideo) + !String.IsEmpty(Window(home).Property(povil.tr.on)) + '
+                  'String.IsEqual(Player.FilenameAndPath,Window(home).Property(povil.tr.file))')
 TRAILER_HAS_LINES = 'Window(home).Property(povil.tsub.on)'     # the trailer playing has them (the shade)
 PLAYER_RATINGS_KEY, PLAYER_RATINGS_SLOT = 7920, 'povil.rtp.'
 
@@ -983,6 +1003,17 @@ def gen_timers():
     # The trailer has the screen to itself, and when the home comes back over it: the Wizard shows the trailer's
     # Hebrew subtitles only meanwhile (trailer_subs.py; Onyx 1.0.28) -- Kodi draws subtitles over the home's video
     # window too, under the rows (QA Kodi)
+    # Kodi's full-screen player over the trailer (Back on the home -- see TRAILER_PLAYER): back to the screen at once.
+    # (named to come before povil_trailer_alone: Kodi keeps the timers by name and looks at them in that order -- here
+    # the alone timer has not yet seen the key)
+    x(1, '<timer>')
+    x(2, '<name>povil_trailer_a_back</name>')
+    x(2, '<start reset="true">%s</start>' % TRAILER_PLAYER)
+    x(2, '<onstart>Action(FullScreen)</onstart>')
+    x(2, '<onstart condition="Window.Previous(home) + String.IsEqual(Window(home).Property(povil.tab),%s) + !%s">'
+         'SetFocus(9000)</onstart>' % (HUB, TRAILER_WAS_ALONE))
+    x(2, '<stop>true</stop>')
+    x(1, '</timer>')
     x(1, '<timer>')
     x(2, '<name>povil_trailer_alone</name>')
     x(2, '<start reset="true">%s + %s</start>' % (TRAILER_SCREEN, TRAILER_ALONE))
@@ -1003,8 +1034,10 @@ def gen_timers():
     # dialog on the screen.
     changed = ('[!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + '
                '!String.IsEqual(Control.GetLabel(%d),%s)]' % (TRAILER_KEY, asked))
-    x(2, '<start reset="true">!String.IsEmpty(%s) + [!%s | %s | '
-         '%s | %s]</start>' % (asked, TRAILER_SCREEN, dialog, TRAILERS_OFF, changed))
+    # (not while Kodi's full-screen player has come over the trailer for a moment -- povil_trailer_a_back takes it back;
+    # the title is read only on the screen that shows it)
+    x(2, '<start reset="true">!String.IsEmpty(%s) + [![%s | [%s]] | %s | '
+         '%s | [%s + %s]]</start>' % (asked, TRAILER_SCREEN, TRAILER_PLAYER, dialog, TRAILERS_OFF, TRAILER_SCREEN, changed))
     x(2, '<onstart>Skin.TimerStop(povil_trailer_shown)</onstart>')
     x(2, '<onstart>ClearProperty(povil.tr.ask,home)</onstart>')
     x(2, '<onstart>NotifyAll(povil.trailer,stop)</onstart>')

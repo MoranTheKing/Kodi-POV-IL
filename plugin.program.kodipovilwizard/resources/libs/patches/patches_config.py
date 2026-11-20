@@ -43,6 +43,12 @@ PATCH_CONFIG = [
      'target_file': 'resources/lib/indexers/metadata.py', 'marker': '# WIZARD_POV_TRAILER_PICK_v1',
      'anchor': "trailer_key = (i['key'] for i in videos if i['site'] == 'YouTube' and i['type'] in trailers_test)", 'action': 'prepend_before',
      'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_trailer_pick\n\t_povil_key = pov_trailer_pick.pick(videos, self.data, self.lang, self.mediatype)\n\tif _povil_key: return youtube_url % _povil_key\nexcept Exception:\n\tpass\n"},
+    # (TMDb keeps many a season's trailers on the season itself: the season list reads them first -- Wizard 0.5.36)
+    {'id': 'pov_trailer_season_videos', 'name': "The seasons' own trailers, read for the season list",
+     'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
+     'target_file': 'resources/lib/menus/seasons.py', 'marker': '# WIZARD_POV_TRAILER_SEASON_VIDEOS_v1',
+     'anchor': 'running_ep_count = show.total_aired_eps', 'action': 'append_after',
+     'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_trailer_pick\n\tpov_trailer_pick.read_season_videos(show.meta, [i.get('season_number') for i in season_data])\nexcept Exception:\n\tpass\n"},
     {'id': 'pov_trailer_season', 'name': 'A season item gets its own season trailer',
      'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
      'target_file': 'resources/lib/menus/seasons.py', 'marker': '# WIZARD_POV_TRAILER_SEASON_v1',

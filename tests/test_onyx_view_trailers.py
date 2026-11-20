@@ -39,7 +39,9 @@ class SkinTests(unittest.TestCase):
 
     def test_it_is_stopped_when_neither_is_on_the_screen(self):
         start = re.search(r'<start[^>]*>([^<]*)</start>', timer('povil_trailer_stop')).group(1)
-        self.assertIn('[!%s | ' % SCREEN, start)
+        self.assertIn('[![%s | [Window.IsActive(fullscreenvideo) + !String.IsEmpty(Window(home).Property(povil.tr.on)) + '
+                      'String.IsEqual(Player.FilenameAndPath,Window(home).Property(povil.tr.file))]] | '
+                      % SCREEN, start)
         self.assertNotIn('!Window.IsActive(home) |', start)
         self.assertIn('System.HasActiveModalDialog', start, 'a menu over the list stops it, as on the home')
 
@@ -57,7 +59,9 @@ class SkinTests(unittest.TestCase):
         self.assertIn('!Container.IsUpdating', cond)
         # the label is outside the views' own groups (each shows with its view only)
         include = view_include(views, 51)
-        self.assertTrue(include.rstrip().endswith('<label>$VAR[POVIL_V_Trailer]</label></control>'), include[-200:])
+        self.assertRegex(include, r'\n\t\t<control type="label" id="9809">[^\n]*<label>\$VAR\[POVIL_V_Trailer\]</label></control>',
+                         'beside the view\'s group (its own depth), not inside it')
+        self.assertNotIn('id="9809"', view_include(views, 55))
         group = include.split('<control type="group" description=')[1]
         self.assertNotIn('id="9809"', group.split('<control type="videowindow">')[0])
 
