@@ -330,7 +330,9 @@ class ExportTests(unittest.TestCase):
         exporter = load('tools/trailer_subs_export.py', 'povil_trailer_subs_export3')
         folder = tempfile.mkdtemp()
         row = {'seq': 1, 'v': 'aBc_dEf-123', 'c': [[0, 1000, 'א']], 's': 'asr', 'ts': 1}
-        self.assertEqual(exporter.export(folder, lambda a: {'rows': [row] if a == 0 else [], 'drop': []}), (1, 0, 1))
+        self.assertEqual(exporter.export(folder, lambda a: {'rows': [row] if a == 0 else [], 'drop': []}), (1, 1, 1))
+        # nothing withdrawn: an empty list all the same (the devices get a 200, not a missing file)
+        self.assertEqual(json.load(open(os.path.join(folder, 'drop.json'))), {'drop': []})
         sub, name = exporter.path_of('aBc_dEf-123')
         self.assertTrue(os.path.exists(os.path.join(folder, sub, name)))
         # withdrawn: the file goes, the list is written; a row of it that still comes is not written again
