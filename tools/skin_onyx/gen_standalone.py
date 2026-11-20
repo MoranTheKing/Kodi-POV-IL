@@ -13,6 +13,8 @@ So, when the Wizard is not installed (gen_home.py SETTINGS_ITEMS, WIZ):
     of the viewer's video sources (sources://video/, the disks and network shares Kodi already knows), or any
     folder through Kodi's own browser (Skin.SetPath) -- then its name; or the row deleted. The same skin strings
     the Wizard's custom_rows.py writes (POVILRow_<tab>_<n>_path / _name).
+    Onyx 1.0.27: the viewer's own chips too (POVILChip_<tab>_<n>_path / _name, gen_home.py CUSTOM_CHIPS), and a
+    library row's order (POVILRow_<tab>_<n>_sort / _order, gen_home.py LIBRARY_SORTS) -- a step after the library.
   * Custom_POVILChoice.xml (window 1161) -- which player (POVILPlayer, as onyx_player_style.py) or which screens
     the top bar shows (POVILHideTab_<tab>, as onyx_tabs.py), by Window(home).Property(povil.choice).
 With the Wizard installed the tiles ask the Wizard, as before.
@@ -31,7 +33,7 @@ SCREENS = (('tv', 'סדרות'), ('continue', 'המשך צפייה'), ('israeli'
 LIBRARY = (('videodb://movies/titles/', 'הספרייה של קודי: סרטים', 'סרטים מהספרייה'),
            ('videodb://tvshows/titles/', 'הספרייה של קודי: סדרות', 'סדרות מהספרייה'),
            ('videodb://recentlyaddedmovies/', 'הספרייה של קודי: סרטים שנוספו לאחרונה', 'נוספו לאחרונה'))
-SLOT = 'Window(home).Property(povil.rows.slot)'
+SLOT = 'Window(home).Property(povil.rows.slot)'     # Row_<tab>_<n> or Chip_<tab>_<n>: the skin strings' names after POVIL
 STEP = 'Window(home).Property(povil.rows.step)'
 TAB_NAMES = dict(H.CUSTOM_TAB_NAMES)
 
@@ -145,6 +147,7 @@ def rows():
     x = H.X()
     frame(x, ROWS_ID, None)
     picking = 'String.IsEqual(%s,source)' % STEP
+    ordering = 'String.IsEqual(%s,order)' % STEP
     x(1, '<defaultcontrol always="true">9000</defaultcontrol>')
     x(1, '<include>DialogOpenClose</include>')
     x(1, '<onload>ClearProperty(povil.rows.step,home)</onload>')
@@ -153,29 +156,31 @@ def rows():
     x(1, '<controls>')
     x(2, '<control type="group">')
     panel(x, 3)
-    heading(x, 3, 'שורות משלי', '!' + picking)
+    heading(x, 3, 'שורות וכפתורים משלי', '![%s | %s]' % (picking, ordering))
     x(3, '<control type="label">')
     x(4, '<centerleft>960</centerleft><posy>70</posy><width>690</width><height>52</height>')
     x(4, '<label>$VAR[POVIL_RowPicking]</label><align>center</align><aligny>center</aligny>')
     x(4, '<textcolor>$VAR[HighlightColor]</textcolor><include>TitleCommons</include>')
-    x(4, '<animation effect="slide" end="3000,0" time="0" condition="![%s]">Conditional</animation>' % picking)
+    x(4, '<animation effect="slide" end="3000,0" time="0" condition="![%s | %s]">Conditional</animation>' % (picking, ordering))
     x(3, '</control>')
     # --- the slots: every tab's rows, each with its name or "(ריקה)"
     x(3, '<control type="grouplist" id="9000">')
     x(4, '<centerleft>960</centerleft><posy>135</posy><width>640</width><height>792</height>')
     x(4, '<onleft>noop</onleft><onright>noop</onright><onup>9000</onup><ondown>9000</ondown><itemgap>0</itemgap>')
-    x(4, '<animation effect="slide" end="3000,0" time="0" condition="%s">Conditional</animation>' % picking)
+    x(4, '<animation effect="slide" end="3000,0" time="0" condition="%s | %s">Conditional</animation>' % (picking, ordering))
     cid = 7800
     for tab in H.CUSTOM_TABS:
-        for n in range(1, H.CUSTOM_SLOTS + 1):
-            button(x, 4, cid, '$VAR[POVIL_RowSlot_%s_%d]' % (tab, n),
-                   ['SetProperty(povil.rows.slot,%s_%d,home)' % (tab, n), 'SetProperty(povil.rows.step,source,home)',
-                    'SetFocus(9100)'])
-            cid += 1
+        for kind, count in (('Row', H.CUSTOM_SLOTS), ('Chip', H.CUSTOM_CHIPS)):
+            for n in range(1, count + 1):
+                button(x, 4, cid, '$VAR[POVIL_%sSlot_%s_%d]' % (kind, tab, n),
+                       ['SetProperty(povil.rows.slot,%s_%s_%d,home)' % (kind, tab, n), 'SetProperty(povil.rows.step,source,home)',
+                        'SetFocus(9100)'])
+                cid += 1
     x(3, '</control>')
-    note(x, 3, 'שורה מופיעה בסוף המסך שלה, כשיש בה פריטים.', '!' + picking)
+    note(x, 3, 'שורה מופיעה בסוף המסך שלה וכפתור בשורת הכפתורים, כשיש להם מקור.', '![%s | %s]' % (picking, ordering))
     # --- the source of the chosen slot
-    key = 'POVILRow_$INFO[%s]' % SLOT
+    key = 'POVIL$INFO[%s]' % SLOT
+    row = 'String.StartsWith(%s,Row_)' % SLOT
     then_name = 'Skin.SetString(%s_name)' % key          # Kodi's keyboard, with the name it has
     back = ['ClearProperty(povil.rows.step,home)', 'SetFocus(9000)']
     x(3, '<control type="grouplist" id="9100">')
@@ -184,11 +189,30 @@ def rows():
     x(4, '<animation effect="slide" end="3000,0" time="0" condition="![%s]">Conditional</animation>' % picking)
     for back_action in back:
         x(4, '<onback>%s</onback>' % back_action)
+    plain = ['Skin.Reset(%s_sort)' % key, 'Skin.Reset(%s_order)' % key]     # not the library: no order of its own
     for n, (path, label, name) in enumerate(LIBRARY):
-        button(x, 4, 9110 + n, label, ['Skin.SetString(%s_path,%s)' % (key, path), 'Skin.SetString(%s_name,%s)' % (key, name),
-                                       then_name] + back)
-    button(x, 4, 9120, 'תיקייה אחרת (דפדוף)...', ['Skin.SetPath(%s_path)' % key, then_name] + back)
-    button(x, 4, 9121, 'מחיקת השורה', ['Skin.Reset(%s_path)' % key, 'Skin.Reset(%s_name)' % key] + back)
+        sets = ['Skin.SetString(%s_path,%s)' % (key, path), 'Skin.SetString(%s_name,%s)' % (key, name)]
+        if path.startswith('videodb://recentlyadded'):
+            # (its order is its point: the newest added first)
+            button(x, 4, 9110 + n, label, sets + plain + [then_name] + back)
+        else:
+            # a row: the order of its items next; a chip opens the library, which has Kodi's own sort menu
+            button(x, 4, 9110 + n, label, sets + [(row, 'SetProperty(povil.rows.step,order,home)'), (row, 'SetFocus(9300)'),
+                                                  ('!' + row, then_name)] + [('!' + row, b) for b in back])
+    button(x, 4, 9120, 'תיקייה אחרת (דפדוף)...', ['Skin.SetPath(%s_path)' % key] + plain + [then_name] + back)
+    button(x, 4, 9121, 'מחיקה', ['Skin.Reset(%s_path)' % key, 'Skin.Reset(%s_name)' % key] + plain + back)
+    x(3, '</control>')
+    # --- a library row's order (gen_home.py LIBRARY_SORTS; the skin sorts it, slot_sorts)
+    x(3, '<control type="grouplist" id="9300">')
+    x(4, '<centerleft>960</centerleft><posy>135</posy><width>640</width><height>400</height>')
+    x(4, '<onleft>noop</onleft><onright>noop</onright><onup>9300</onup><ondown>9300</ondown><itemgap>0</itemgap>')
+    x(4, '<animation effect="slide" end="3000,0" time="0" condition="![%s]">Conditional</animation>' % ordering)
+    for back_action in back:
+        x(4, '<onback>%s</onback>' % back_action)
+    for n, (method, direction, label) in enumerate(H.LIBRARY_SORTS):
+        button(x, 4, 9310 + n, label, ['Skin.SetString(%s_sort,%s)' % (key, method),
+                                       'Skin.SetString(%s_order,%s)' % (key, direction),
+                                       'SetProperty(povil.rtl.reset,1,home)', then_name] + back)
     x(3, '</control>')
     # the viewer's own video sources, as Kodi lists them (a disk, a network share)
     x(3, '<control type="label"><centerleft>960</centerleft><posy>545</posy><width>640</width><height>44</height>'
@@ -203,7 +227,7 @@ def rows():
         x(4, '<onback>%s</onback>' % back_action)
     # ($ESCINFO: quoted, so a comma in a source's name or path cannot split the command -- the reviewer, 1.0.26)
     for click in ['Skin.SetString(%s_path,$ESCINFO[ListItem.FolderPath])' % key,
-                  'Skin.SetString(%s_name,$ESCINFO[ListItem.Label])' % key, then_name] + back:
+                  'Skin.SetString(%s_name,$ESCINFO[ListItem.Label])' % key] + plain + [then_name] + back:
         x(4, '<onclick>%s</onclick>' % e(click))
     for layout, focused in (('itemlayout', False), ('focusedlayout', True)):
         x(4, '<%s height="66" width="640">' % layout)
@@ -332,11 +356,21 @@ def variables():
               % (key, TAB_NAMES[tab], n, key))
             x(2, '<value>%s · שורה %d: השורה שלי</value>' % (TAB_NAMES[tab], n))
             x(1, '</variable>')
+        for n in range(1, H.CUSTOM_CHIPS + 1):
+            key = 'POVILChip_%s_%d' % (tab, n)
+            x(1, '<variable name="POVIL_ChipSlot_%s_%d">' % (tab, n))
+            x(2, '<value condition="String.IsEmpty(Skin.String(%s_path))">%s · כפתור %d: (ריק)</value>' % (key, TAB_NAMES[tab], n))
+            x(2, '<value>%s · כפתור %d: $INFO[Skin.String(%s_name)]</value>' % (TAB_NAMES[tab], n, key))
+            x(1, '</variable>')
     x(1, '<variable name="POVIL_RowPicking">')
     for tab in H.CUSTOM_TABS:
         for n in range(1, H.CUSTOM_SLOTS + 1):
-            x(2, '<value condition="String.IsEqual(%s,%s_%d)">מקור לשורה: %s · שורה %d</value>' % (SLOT, tab, n, TAB_NAMES[tab], n))
-    x(2, '<value>מקור לשורה</value>')
+            x(2, '<value condition="String.IsEqual(%s,Row_%s_%d) + String.IsEqual(%s,order)">סדר הפריטים: %s · שורה %d</value>'
+              % (SLOT, tab, n, STEP, TAB_NAMES[tab], n))
+            x(2, '<value condition="String.IsEqual(%s,Row_%s_%d)">מקור לשורה: %s · שורה %d</value>' % (SLOT, tab, n, TAB_NAMES[tab], n))
+        for n in range(1, H.CUSTOM_CHIPS + 1):
+            x(2, '<value condition="String.IsEqual(%s,Chip_%s_%d)">מקור לכפתור: %s · כפתור %d</value>' % (SLOT, tab, n, TAB_NAMES[tab], n))
+    x(2, '<value>מקור</value>')
     x(1, '</variable>')
     # the order dialog (1163): a place's label, and its heading
     for ti, tab in enumerate(H.TABS):
