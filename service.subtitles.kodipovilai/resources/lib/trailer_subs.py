@@ -336,6 +336,12 @@ def by_words(text, words, info=None):
             if times[i] - times[i - 1] > GAP_S:
                 said, after = times[i - 1], times[i]
                 break
+        # ... and the first word or two long before the rest (an exclamation, then the sentence -- the blind judges, Nov
+        # 2026: such lines came 5-7 s early): the subtitle comes with the words after that pause
+        for i in range(1, min(TAIL_WORDS, len(times) - 1) + 1):
+            if times[i] - times[i - 1] > GAP_S and times[i] <= said:
+                start = times[i]
+                break
         spoken_end = min(after, said + WORD_S)
         reading = min(6.0, 0.8 + len(text_) / 17.0)
         end = min(max(spoken_end + 0.4, start + reading), start + 7.0)
