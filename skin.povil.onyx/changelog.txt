@@ -1,3 +1,6 @@
+[B]Kodi POV IL - Onyx 1.0.25[/B]
+- The viewer's own rows (the settings tile "שורות משלי", the Wizard's custom_rows, Wizard 0.5.26): 3 slots at the end of the films, series, kids and favourites screens, each shown only while it has an address and the address has items; read when its screen is opened, like the build's rows. A list of POV, Umbrella or Idan Plus (the add-ons the Wizard's povil_rtl patches) is read right to left like the build's own rows; any other address is handed over untouched. QA Kodi, on the screen: a POV row (21 films, first on the right), a folder row (7 files), a deleted row gone.
+
 [B]Kodi POV IL - Onyx 1.0.24[/B]
 - The settings tile "סנכרון בין מכשירים": POV's and Umbrella's own lists on every device of the viewer, through the viewer's own Google Drive (the Wizard's cloud_sync, Wizard 0.5.24).
 
