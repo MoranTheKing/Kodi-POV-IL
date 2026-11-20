@@ -258,6 +258,10 @@ class MoranSubsTests(unittest.TestCase):
         long = [(1.0, 'a'), (1.2, 'b'), (5.0, 'c'), (5.2, 'd'), (5.4, 'e')]
         cues = self.ms.by_words('1-5|א ב ג ד ה', long, info)
         self.assertGreater(cues[0][1], 5.4)
+        # an exclamation long before the sentence (the blind judges: such lines came 5-7 s early): with the sentence
+        head = [(10.0, 'wooo'), (16.0, 'searching'), (16.3, 'for'), (16.6, 'him')]
+        cues = self.ms.by_words('1-4|וואו, מחפשים אותו', head, info)
+        self.assertEqual(cues[0][0], 15.9)
         # never into the next line, a lead of 0.1 s at most
         cues = self.ms.by_words('1-1|אני\n2-4|אוהב את המקום הזה מאוד מאוד מאוד', words, info)
         self.assertLessEqual(cues[0][1], cues[1][0])
