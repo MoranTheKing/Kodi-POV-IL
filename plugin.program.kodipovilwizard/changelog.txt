@@ -1,3 +1,6 @@
+0.5.38
+- An episode of a streaming service is no longer shown as not aired (blue) all through the day it came out (a viewer, Nov 2026: "episode 6 shows in blue, meaning no sources, but there are sources"). POV put every episode at 20:00 US Eastern of its date plus 5 hours -- a network's evening broadcast; Netflix, Disney+, Apple TV, Prime Video, Hulu, Max, Paramount+, Peacock and the like put theirs out at midnight US time, morning in Israel. POV now keeps a series' networks, and an episode of a series shown only on streaming services counts as out from its date (one a broadcaster shows too keeps the evening) (Tulsa King's episode 6 on Paramount+, QA); a network's (HBO's Real Time, QA) still from the next morning. The running series POV saved before are asked again once.
+
 0.5.37
 - The trailer desk takes a folder of its own and runs for as long as it is told (watch(data, stay)): Onyx 1.0.32 runs a copy of it on a Kodi without the Wizard. Nothing changes with the Wizard.
 

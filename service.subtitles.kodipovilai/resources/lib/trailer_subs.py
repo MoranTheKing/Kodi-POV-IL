@@ -79,6 +79,20 @@ WORD_S = 0.6                        # how long a word lasts at most (the caption
 LEAD_S = 0.1                        # a subtitle comes this much before its first word
 GAP_S = 2.5                         # a pause this long inside a subtitle, then a word or two: those are not waited for
 TAIL_WORDS = 2
+# A reply that counted the words wrong (The Big Bang Theory's trailer, the owner, Nov 2026: "something was not right with the
+# subtitles" -- some 40 s with none): Flash-Lite now and then numbers a subtitle's words wrong, and every subtitle after it
+# holds the words -- and the times -- of the one before. Its Hebrew is fine. The lengths tell: a subtitle's Hebrew is about as
+# long as the English it holds. Split the words the reply holds into as many spans as there are subtitles by length
+# alone: a sound reply's own split costs a little more (40 QA replies of 6 trailers: 38 at 0.01-0.085 a subtitle), a
+# miscounted one far more (the other two, 0.19 and 0.22). Words a reply leaves out (a song) count for nothing.
+# Then the trailer is asked once more -- the same request, about one in twenty -- and should that one drift too, the
+# lengths place the subtitles of the better of the two (pulled to its own subtitle ends and to the pauses).
+DRIFT = 0.15                        # more than this a subtitle: miscounted
+DRIFT_LINES = 4                     # (fewer subtitles say nothing)
+SPLIT_WORDS = 45                    # a subtitle holds at most this many words (the split by length)
+SPLIT_BAND = 60                     # ... and ends at most this many words from where the reply ended it
+PAUSE_PULL = 0.15
+END_PULL = 0.2
 
 MANUAL_PROMPT = u'''You are writing the Hebrew subtitles of a trailer: {what}.
 
@@ -308,7 +322,109 @@ def indexed(words):
     return ' '.join('[%d]%s' % (n, word) for n, (_at, word) in enumerate(words, 1))
 
 
-def by_words(text, words, info=None):
+def _hebrew_length(text):
+    return len(re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', '', text or '', flags=re.UNICODE)).strip())
+
+
+def _span_cost(words, lengths):
+    """cost(i, a, b): subtitle i holding words a+1..b -- how far its Hebrew length is from those words' English length
+    (the whole reply's ratio)."""
+    import math
+    total = [0]
+    for _at, word in words:
+        total.append(total[-1] + len(re.sub(r'[^a-z0-9]', '', str(word).lower())) + 1)
+    ratio = sum(lengths) / float(total[-1] or 1)
+
+    def cost(i, a, b):
+        return math.log((lengths[i] + 4.0) / ((total[b] - total[a]) * ratio + 4.0)) ** 2
+    return cost
+
+
+def _pause(words, b):
+    """(a split after word b -- 1-based -- at a pause is cheaper)"""
+    if b <= 0 or b >= len(words):
+        return 0.0
+    return -PAUSE_PULL * min(float(words[b][0]) - float(words[b - 1][0]), 2.0)
+
+
+def split_by_length(words, lengths, near, ends=(), pull=0.0):
+    """([(first, last)], cost): all the words, in order, in len(lengths) spans whose English lengths follow the
+    subtitles' Hebrew lengths. near: where the reply ended each subtitle -- a span ends within SPLIT_BAND words of it;
+    a split at a pause costs less, and (pull) at one of `ends`."""
+    W, N = len(words), len(lengths)
+    cost = _span_cost(words, lengths)
+    inf = float('inf')
+    best = [{0: 0.0}] + [None] * N
+    back = [None] * (N + 1)
+    for i in range(1, N + 1):
+        if i == N:
+            stops = [W]
+        else:
+            stops = range(max(i, near[i - 1] - SPLIT_BAND), min(W - (N - i), near[i - 1] + SPLIT_BAND) + 1)
+        row, came = {}, {}
+        for b in stops:
+            extra = _pause(words, b) - (pull if b in ends else 0.0)
+            here = inf
+            for a, before in best[i - 1].items():
+                if 0 < b - a <= SPLIT_WORDS:
+                    c = before + cost(i - 1, a, b)
+                    if c < here:
+                        here, came[b] = c, a
+            if here < inf:
+                row[b] = here + extra
+        if not row:
+            return None, inf
+        best[i], back[i] = row, came
+    spans, b = [], W
+    for i in range(N, 0, -1):
+        a = back[i][b]
+        spans.append((a + 1, b))
+        b = a
+    spans.reverse()
+    return spans, best[N][W]
+
+
+def _held(rows, words):
+    """(the words the subtitles hold, in order; each subtitle's span among them; each one's place among all the words).
+    A reply may leave words out -- a song, a sound, a line it judged not worth a subtitle: those say nothing of how it
+    counted (the reviewer: counted over all the words, such a reply looked miscounted and its subtitles were moved)."""
+    places, spans = [], []
+    for first, last, _t in rows:
+        start = len(places)
+        places.extend(range(first - 1, last))
+        spans.append((start + 1, len(places)))
+    return [words[i] for i in places], spans, places
+
+
+def drift(rows, words):
+    """How much more a subtitle the reply's own split of the words it holds costs than their best split by length
+    (0 for a short reply)."""
+    if len(rows) < DRIFT_LINES:
+        return 0.0
+    held, spans, _places = _held(rows, words)
+    if len(held) < len(rows):
+        return 0.0
+    lengths = [_hebrew_length(t) for _f, _l, t in rows]
+    _spans, best = split_by_length(held, lengths, [l for _f, l in spans])
+    if best == float('inf'):
+        return 0.0
+    cost, own, W = _span_cost(held, lengths), 0.0, len(held)
+    for i, (first, last) in enumerate(spans):
+        own += cost(i, first - 1, last) + (_pause(held, last) if last < W else 0.0)
+    return (own - best) / len(rows)
+
+
+def respan(rows, words):
+    """The rows with the words they hold placed among them by length, pulled to the reply's own subtitle ends."""
+    held, spans, places = _held(rows, words)
+    lengths = [_hebrew_length(t) for _f, _l, t in rows]
+    new, _cost = split_by_length(held, lengths, [l for _f, l in spans], ends={l for _f, l in spans}, pull=END_PULL)
+    if not new:
+        return rows
+    return [(places[f - 1] + 1, places[l - 1] + 1, t) for (f, l), (_f, _l, t) in zip(new, rows)]
+
+
+def by_words(text, words, info=None, fix=False):
     """FIRST-LAST|text lines (word numbers) as [(start, end, text)] in seconds, timed by the words themselves: from just
     before the first word, to a moment after the last -- long enough to be read, never into the next subtitle. Lines out
     of order, overlapping or naming words that are not there are left out. info['covered']: how many words they hold."""
@@ -321,6 +437,15 @@ def by_words(text, words, info=None):
         if not (1 <= first <= last <= len(words)) or (rows and first <= rows[-1][1]):
             continue
         rows.append((first, last, m.group(3).strip()))
+    if info is not None or fix:
+        try:
+            score = drift(rows, words)
+        except Exception:
+            score = 0.0
+        if info is not None:
+            info['drift'] = round(score, 3)
+        if fix and score > DRIFT:
+            rows = respan(rows, words)
     if info is not None:
         info['covered'] = sum(last - first + 1 for first, last, _t in rows)
         info['words'] = len(words)
@@ -396,8 +521,8 @@ def request_parts(job):
         prompt = ASR_PROMPT.format(what=what, lang=lang, speech=indexed(words))
         info = {}
 
-        def read(text):
-            return by_words(text, words, info)
+        def read(text, fix=False):
+            return by_words(text, words, info, fix)
         read.info = info
         return [{'text': prompt}], read
     if job.get('src') == 'manual' and job.get('cues'):
@@ -498,11 +623,38 @@ def handle(job, key=None, post=None, write=None, now=None):
         _failed(video, now)
         return None
     cues = read(text)
+    info = getattr(read, 'info', None) or {}
+    if cues and info.get('drift', 0) > DRIFT:
+        # the reply counted the words wrong (DRIFT): asked once more; should that drift too, the better of the two is
+        # placed by the lengths
+        first = (info['drift'], text)
+        log('%s: the reply counted the words wrong (%.2f a subtitle): asked once more' % (video, info['drift']))
+        try:
+            used = _count_request()
+            again = ask(key, parts, post=post)
+            cues_again = read(again)
+            usable = bool(cues_again) and hebrew_enough(cues_again)
+            if usable and info.get('drift', 0) <= DRIFT:
+                text, cues = again, cues_again
+            else:
+                # (the one that miscounted less -- a second reply that is not Hebrew enough is not a choice: the reviewer)
+                text = again if usable and info.get('drift', 0) < first[0] else first[1]
+                cues = read(text, fix=True)
+                log('%s: placed by the lengths' % video)
+        except Exception as exc:
+            try:
+                from resources.lib import gemini
+                if isinstance(exc, gemini.QuotaExceeded):
+                    _quota_out()
+            except Exception:
+                pass
+            log('%s: asked once more: %s -- placed by the lengths' % (video, type(exc).__name__))
+            cues = read(first[1], fix=True)
+        info = getattr(read, 'info', None) or {}
     if not cues or not hebrew_enough(cues):
         log('%s: no usable subtitles in the reply' % video)
         _failed(video, now)
         return None
-    info = getattr(read, 'info', None) or {}
     held = (', %d of %d words' % (info['covered'], info['words'])) if info.get('words') else ''
     log('%s: %d subtitles (%s%s, %.1f s, request %d today)' % (video, len(cues), job.get('src') or 'listen', held,
                                                                   time.time() - began, used))

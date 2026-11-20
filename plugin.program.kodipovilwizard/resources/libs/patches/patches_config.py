@@ -44,6 +44,24 @@ PATCH_CONFIG = [
      'anchor': "trailer_key = (i['key'] for i in videos if i['site'] == 'YouTube' and i['type'] in trailers_test)", 'action': 'prepend_before',
      'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_trailer_pick\n\t_povil_key = pov_trailer_pick.pick(videos, self.data, self.lang, self.mediatype)\n\tif _povil_key: return youtube_url % _povil_key\nexcept Exception:\n\tpass\n"},
     # (TMDb keeps many a season's trailers on the season itself: the season list reads them first -- Wizard 0.5.36)
+    # When a streaming service's episode counts as aired (Wizard 0.5.38; patches/pov_air_time.py): POV keeps a series'
+    # networks, and its episode lists put a streaming service's episode at midnight Pacific of its date, not 20:00 Eastern
+    # + 5 h -- a viewer, Nov 2026: "episode 6 shows in blue, meaning no sources, but there are sources".
+    {'id': 'pov_air_networks', 'name': "A series' networks kept in POV's data",
+     'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
+     'target_file': 'resources/lib/indexers/metadata.py', 'marker': '# WIZARD_POV_AIR_NETWORKS_v1',
+     'anchor': "'last_episode_to_air': ei_last_ep", 'action': 'prepend_before',
+     'hook': "'povil_networks': [n.get('id') for n in (data.get('networks') or []) if isinstance(n, dict)],\n"},
+    {'id': 'pov_air_time_season', 'name': "A season's episodes: a streaming service's are out on their date",
+     'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
+     'target_file': 'resources/lib/menus/seasons.py', 'marker': '# WIZARD_POV_AIR_TIME_SEASON_v1',
+     'anchor': "else: episodes_data = season_episodes_meta(params['season'], show.meta, self.meta_user_info)", 'action': 'append_after',
+     'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_air_time\n\tadjust_hours = pov_air_time.hours(show.meta, adjust_hours)\nexcept Exception:\n\tpass\n"},
+    {'id': 'pov_air_time_episodes', 'name': "The episode lists: a streaming service's episodes are out on their date",
+     'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
+     'target_file': 'resources/lib/menus/episodes.py', 'marker': '# WIZARD_POV_AIR_TIME_EPISODES_v1',
+     'anchor': 'episode_date, premiered = adjust_premiered_date(orig_premiered, self.adjust_hours)', 'action': 'append_after',
+     'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_air_time\n\t_povil_hours = pov_air_time.hours(meta, self.adjust_hours)\n\tif _povil_hours != self.adjust_hours: episode_date, premiered = adjust_premiered_date(orig_premiered, _povil_hours)\nexcept Exception:\n\tpass\n"},
     {'id': 'pov_trailer_season_videos', 'name': "The seasons' own trailers, read for the season list",
      'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
      'target_file': 'resources/lib/menus/seasons.py', 'marker': '# WIZARD_POV_TRAILER_SEASON_VIDEOS_v1',

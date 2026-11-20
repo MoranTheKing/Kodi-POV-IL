@@ -26,6 +26,15 @@ NOT_LIVE_SOURCE = ('!String.Contains(Player.Folderpath,plugin.video.idanplus) + 
                    ' + !String.Contains(Player.Folderpath,plugin.video.flashstream)')
 SOURCE_SHOWN = '[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + ' + NOT_LIVE_SOURCE
 SUBS_SHOWN = '!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles'
+# The channels while a channel plays (Onyx 1.0.33; the owner, Nov 2026: "add a channel list button to Onyx's players --
+# I think the other skins have it"): live TV's own list (Kodi's channels dialog), or Idan Plus's channels and radio
+# stations (gen_osd.py channels_window) -- in every player style. Only while live TV or Idan Plus plays: the rows are full
+# while a film or an episode of another add-on plays.
+CHANNELS_ID = 1164
+CHANNELS_KIND = 'Window(home).Property(povil.ch.kind)'
+CHANNELS_SHOWN = 'VideoPlayer.Content(LiveTV) | String.Contains(Player.FolderPath,plugin.video.idanplus)'
+CHANNELS = ['Dialog.Close(VideoOSD,true)', ('VideoPlayer.Content(LiveTV)', 'ActivateWindow(PVROSDChannels)'),
+            ('!VideoPlayer.Content(LiveTV)', 'ActivateWindow(%d)' % CHANNELS_ID)]
 SEEK_SHOWN = 'Player.SeekEnabled + !VideoPlayer.Content(livetv)'
 RIGHT = 1920 - H.MARGIN
 WIDE = 1920 - 2 * H.MARGIN
@@ -89,9 +98,12 @@ def chip(x, d, bid, icon, name, clicks, visible='', size=84, toggle=False):
     x(d + 1, '<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>')
     x(d + 1, '<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>')
     for c in clicks:
-        x(d + 1, '<onclick>%s</onclick>' % e(c))
+        # (an action may come with its condition: (condition, action))
+        cond, c = c if isinstance(c, tuple) else ('', c)
+        attr = ' condition="%s"' % e(cond) if cond else ''
+        x(d + 1, '<onclick%s>%s</onclick>' % (attr, e(c)))
         if toggle:
-            x(d + 1, '<altclick>%s</altclick>' % e(c))
+            x(d + 1, '<altclick%s>%s</altclick>' % (attr, e(c)))
     if visible:
         x(d + 1, '<visible>%s</visible>' % e(visible))
     x(d, '</control>')
@@ -105,7 +117,8 @@ def text_button(x, d, bid, text, clicks, visible='', height=84, top=GROW):
              '<texturefocus border="24" colordiffuse="FFD9B77E">povil/pill48.png</texturefocus>')
     x(d + 1, '<label>%s</label>' % e(text))
     for c in clicks:
-        x(d + 1, '<onclick>%s</onclick>' % e(c))
+        cond, c = c if isinstance(c, tuple) else ('', c)
+        x(d + 1, '<onclick%s>%s</onclick>' % (' condition="%s"' % e(cond) if cond else '', e(c)))
     if visible:
         x(d + 1, '<visible>%s</visible>' % e(visible))
     x(d, '</control>')
@@ -173,7 +186,7 @@ def simple(x, d):
     label(x, d, RIGHT - 600, 810, 600, 44, '$VAR[POVIL_PS_Part]', 'povil_meta', 'povil_gold', 'right')
     progress(x, d, H.MARGIN, 866, WIDE)
     height = size + 2 * GROW
-    row_open(x, d, 7101, H.MARGIN - 10 - 14, 904, 960, height, 'left', 'noop', [7120, 7121], style=style)
+    row_open(x, d, 7101, H.MARGIN - 10 - 14, 904, 960, height, 'left', 'noop', [7126, 7120, 7121], style=style)
     chip(x, d + 1, 7110, 'subtitles', 'הגדרות כתוביות', ['ActivateWindow(OSDSubtitleSettings)'], SUBS_SHOWN)
     chip(x, d + 1, 7111, 'sync', 'סנכרון כתוביות', SYNC, 'VideoPlayer.SubtitlesEnabled')
     text_button(x, d + 1, 7112, 'בחירת כתוביות', [SUBS_SEARCH], SUBS_SHOWN)
@@ -183,6 +196,7 @@ def simple(x, d):
     chip(x, d + 1, 7116, 'forward', 'הרצה קדימה', ['PlayerControl(Forward)'], SEEK_SHOWN + ' + !Player.Paused')
     row_close(x, d, height, style)
     row_open(x, d, 7102, RIGHT - 900 + 10 + 14, 904, 900, height, 'right', [7116, 7115], 'noop', style=style)
+    chip(x, d + 1, 7126, 'channels', 'רשימת ערוצים', CHANNELS, CHANNELS_SHOWN)
     chip(x, d + 1, 7120, 'source', 'החלפת מקור', [SOURCE], SOURCE_SHOWN)
     chip(x, d + 1, 7121, 'layout', 'החלפת נגן', [SWITCH])
     chip(x, d + 1, 7122, 'audio', 'רצועת השמע הבאה', ['AudioNextLanguage'], 'Integer.IsGreater(VideoPlayer.AudioStreamCount,1)')
@@ -217,6 +231,7 @@ def advanced(x, d):
     chip(x, d + 1, 7156, 'subtitles', '$VAR[POVIL_PS_Subs]', ['ShowSubtitles'], 'VideoPlayer.HasSubtitles', **small)
     chip(x, d + 1, 7157, 'search', 'חיפוש כתובית', [SUBS_SEARCH], SUBS_SHOWN, **small)
     chip(x, d + 1, 7158, 'sync', 'סנכרון כתוביות', SYNC, 'VideoPlayer.SubtitlesEnabled', **small)
+    chip(x, d + 1, 7163, 'channels', 'רשימת ערוצים', CHANNELS, CHANNELS_SHOWN, **small)
     chip(x, d + 1, 7159, 'settings', 'הגדרות וידאו', ['ActivateWindow(OSDVideoSettings)'], **small)
     chip(x, d + 1, 7160, 'audio', 'הגדרות שמע', ['ActivateWindow(OSDAudioSettings)'], **small)
     chip(x, d + 1, 7161, 'source', 'החלפת מקור', [SOURCE], SOURCE_SHOWN, **small)
@@ -273,7 +288,7 @@ def netflix(x, d):
     step_list(x, d, FORWARD_STEPS, 7198, False)
     height = size + 2 * GROW
     small = dict(size=size)
-    row_open(x, d, 7181, H.MARGIN - 10 - 12, 936, 1060, height, 'left', 'noop', [7210, 7211, 7212], itemgap=12, style=style)
+    row_open(x, d, 7181, H.MARGIN - 10 - 12, 936, 1060, height, 'left', 'noop', [7215, 7210, 7211, 7212], itemgap=12, style=style)
     chip(x, d + 1, 7190, 'previous', 'הקודם', ['PlayerControl(Previous)'], **small)
     chip(x, d + 1, 7191, 'rewind', 'אחורה: בחירת קפיצה', ['SetFocus(%d)' % REWIND_STEPS], SEEK_SHOWN, **small)
     chip(x, d + 1, MAIN[style], 'pause', 'השהיה', ['PlayerControl(Play)'], 'Player.PauseEnabled', toggle=True, **small)
@@ -286,6 +301,7 @@ def netflix(x, d):
     chip(x, d + 1, 7197, 'sync', 'סנכרון כתוביות', SYNC, 'VideoPlayer.SubtitlesEnabled', **small)
     row_close(x, d, height, style)
     row_open(x, d, 7182, RIGHT - 640 + 10 + 12, 936, 640, height, 'right', [7197, 7196, 7195, 7194], 'noop', itemgap=12, style=style)
+    chip(x, d + 1, 7215, 'channels', 'רשימת ערוצים', CHANNELS, CHANNELS_SHOWN, **small)
     chip(x, d + 1, 7210, 'episodes', 'הפרק הבא', [EPISODES], 'VideoPlayer.Content(episodes) + !VideoPlayer.Content(LiveTV)', **small)
     chip(x, d + 1, 7211, 'source', 'החלפת מקור', [SOURCE], SOURCE_SHOWN, **small)
     chip(x, d + 1, 7212, 'audio', 'הגדרות שמע', ['ActivateWindow(OSDAudioSettings)'], **small)
@@ -318,6 +334,7 @@ def pretty(x, d, pills_row):
     row_open(x, d, 7241, H.MARGIN, 870, WIDE, 96, 'center', itemgap=20)
     text_button(x, d + 1, 7250, 'עצירה', ['PlayerControl(Stop)'], height=80)
     text_button(x, d + 1, MAIN[style], '$VAR[POVIL_PS_Play]', ['PlayerControl(Play)'], 'Player.PauseEnabled', height=80)
+    text_button(x, d + 1, 7256, 'רשימת ערוצים', CHANNELS, CHANNELS_SHOWN, height=80)
     text_button(x, d + 1, 7252, 'חיפוש כתובית', [SUBS_SEARCH], SUBS_SHOWN, height=80)
     text_button(x, d + 1, 7253, 'החלפת מקור', [SOURCE], SOURCE_SHOWN, height=80)
     text_button(x, d + 1, 7254, '$VAR[POVIL_PS_Subs]', ['ShowSubtitles'], 'VideoPlayer.HasSubtitles', height=80)
