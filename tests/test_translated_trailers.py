@@ -181,8 +181,15 @@ class TranslatedTests(unittest.TestCase):
         # its own are speech recognition or a machine translation, and they were refused when asked for every
         # trailer (429 in the QA Kodi)
         source = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/trailers.py').read_text('utf-8')
-        for gone in ('translate.googleapis', 'SUBTITLE_SELECTIONS', 'get_subtitle_selection', 'setSubtitles', 'tlang'):
+        for gone in ('translate.googleapis', 'SUBTITLE_SELECTIONS', 'setSubtitles', 'tlang'):
             self.assertNotIn(gone, source, gone)
+        # (Wizard 0.5.31: captions are asked for a trailer MoranSubs is about to translate only -- load_captions,
+        # handed to trailer_subs -- never by the reading every trailer goes through)
+        light = source.split('def light_streams(')[1].split('\ndef ')[0]
+        self.assertNotIn('get_subtitle_selection', light)
+        self.assertEqual(source.count('get_subtitle_selection'), 1)
+        self.assertIn('def load_captions(video):', source)
+        self.assertIn('captions=load_captions)', source)
 
 
 if __name__ == '__main__':

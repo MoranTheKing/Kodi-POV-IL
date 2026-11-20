@@ -1,0 +1,503 @@
+# -*- coding: utf-8 -*-
+"""Hebrew subtitles for the trailers the build's home plays (MoranSubs 0.3.99; the Wizard 0.5.29 plays the trailers
+and shows the subtitles).
+
+The owner, Nov 2026, after a blind study (Gemini 3.1 Flash Lite against Google Translate on 13 trailers: Gemini won
+13 of 13): "translate the trailers with Gemini 3.1 Flash Lite, one request a trailer ... let the viewers' 500 free
+daily requests of that model be used -- we use it nowhere else -- but remember there are paying users: only their
+FREE quota may be used, nothing beyond it".
+
+So a trailer is translated here, once, with the viewer's OWN key, and shared through the pool (pool.share_trailer;
+the Worker publishes it to GitHub Pages, where every device reads it -- the Wizard asks there first):
+  * ONLY A FREE KEY. A key is checked once a week at no cost to anyone (free_tier): an INVALID request (role
+    "nobody", never billed) to a model that has no free quota -- a free key is refused on its quota first (429,
+    a "...-FreeTier" quota), a billed key passes the quota and is refused as invalid (400). Seen on the QA key
+    (free): 429 FreeTier on gemini-3.1-pro-preview and gemini-pro-latest. Anything but that 429 -- a billed key, an
+    unknown answer, no network -- and nothing is translated (fails closed).
+  * At most DAY_CAP requests a quota day (Google's Pacific day, gemini_quota) -- the free tier's 500 less a margin;
+    the day's 429 stops it until the next. Not at all when the viewer's own translation model is this one (his
+    films come first), nor when he chose Google Translate (no AI).
+  * One request a trailer: the words of YouTube's captions (the Wizard reads them with the YouTube add-on's code)
+    with the second each is spoken at -- or, with no captions, Gemini listens to the trailer itself (a fallback:
+    clearly more meaning errors in the study).
+
+The Wizard asks by a job file and NotifyAll(povil.tsub,job); this module answers with <video>.he.srt in the same
+folder, Window(home).Property(povil.tsub.ready) = the video, and NotifyAll(povil.tsub,ready). While this device may
+translate, Window(home).Property(povil.tsub.able) is "1" -- the Wizard reads no captions from YouTube otherwise.
+"""
+import hashlib
+import json
+import os
+import re
+import threading
+import time
+
+from resources.lib import kodi_utils
+
+MODEL = 'gemini-3.1-flash-lite'
+DAY_CAP = 480
+PROBE_MODELS = ('gemini-3.1-pro-preview', 'gemini-pro-latest')
+TIER_S = 7 * 86400
+SENDER = 'povil.tsub'
+ABLE, READY = 'povil.tsub.able', 'povil.tsub.ready'
+FOLDER = 'special://temp/povil_tsub/'
+STATE_FILE = 'trailer_subs.json'
+FAILED_S = 86400                    # a trailer that could not be translated is not tried again for this long
+REQUEST_TIMEOUT = 90
+_VIDEO = re.compile(r'^[A-Za-z0-9_-]{11}$')
+_HEB = re.compile(u'[א-ת]')
+_LATIN = re.compile(r'[A-Za-z]')
+_LOCK = threading.Lock()
+
+ASR_PROMPT = u'''You are writing the Hebrew subtitles of a trailer: {what}.
+
+Below is everything spoken in the trailer, as automatic speech recognition heard it ({lang}). A number in square brackets is the second at which the words after it are spoken.
+The recognition has no punctuation and mishears words, names above all. First work out what was actually said -- you know this title: its characters, places and terms -- and where each sentence begins and ends; several people speak in turn. Never translate a misheard word literally.
+If the speech is already Hebrew, answer only: NONE
+
+Write the Hebrew a professional Israeli subtitler would: natural spoken Hebrew, not word-for-word; correct grammatical gender; names of people and places in their accepted Hebrew spelling.
+One subtitle per sentence or short exchange: at most about 60 characters and about 6 seconds. A longer sentence is split into two subtitles at a natural pause. Translate everything that is said, to the last word.
+
+Answer with one subtitle per line, in this exact form and nothing else:
+START-END|Hebrew text
+START is the bracketed second closest before the subtitle's first word, END the bracketed second closest after its last word. In order, never overlapping.
+
+Speech:
+{speech}
+'''
+
+MANUAL_PROMPT = u'''You are writing the Hebrew subtitles of a trailer: {what}.
+
+Below are the trailer's subtitles ({lang}), written by a person, one numbered line each.
+Translate each line into the Hebrew a professional Israeli subtitler would write: natural spoken Hebrew, not word-for-word; correct grammatical gender; names of people and places in their accepted Hebrew spelling; short. A sentence that runs over several lines is translated so that each line still holds its own part, in Hebrew word order.
+A line that is only a sound or music mark ([Music], an applause) is answered empty.
+
+Answer with exactly one line per numbered line, in this exact form and nothing else:
+NUMBER|Hebrew text
+
+Lines:
+{lines}
+'''
+
+LISTEN_PROMPT = u'''This video is a trailer: {what}.
+If the video already shows Hebrew subtitles on the screen, or its speech is Hebrew, answer only: NONE
+Otherwise listen to everything that is spoken in it and write its Hebrew subtitles, the way a professional Israeli subtitler would: natural spoken Hebrew, correct grammatical gender, names of people and places in their accepted Hebrew spelling, short lines (about 42 characters at most), each subtitle a whole thought.
+Text shown on screen in English (title cards) is translated too. Music and sounds get no subtitle.
+
+Answer with one subtitle per line, in this exact form and nothing else:
+START-END|Hebrew text
+START and END are the times in the video in seconds with one decimal (for example 12.4-15.0), END after START, in order, not overlapping.
+'''
+
+
+def log(msg):
+    try:
+        kodi_utils.log('[trailer_subs] ' + msg)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------- state
+def _state_path():
+    return os.path.join(kodi_utils.addon_profile_path(), STATE_FILE)
+
+
+def _load():
+    try:
+        with open(_state_path(), encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save(data):
+    try:
+        path = _state_path()
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+        os.replace(tmp, path)
+    except Exception:
+        pass
+
+
+def _quota_day():
+    from resources.lib import gemini_quota
+    return gemini_quota._today_utc()
+
+
+def _key():
+    return (kodi_utils.get_setting('api_key', '') or '').strip()
+
+
+def _key_id(key):
+    return hashlib.sha256(key.encode('utf-8', 'replace')).hexdigest()[:12]
+
+
+# ---------------------------------------------------------------- the free tier, at no cost
+def classify_probe(status, body):
+    """'free' | 'billed' | 'unknown' from the answer to the invalid probe request (free_tier)."""
+    if status == 429:
+        try:
+            err = (json.loads(body) or {}).get('error') or {}
+            for d in err.get('details') or []:
+                for v in (d.get('violations') or []) if isinstance(d, dict) else []:
+                    if 'freetier' in str(v.get('quotaId', '')).lower():
+                        return 'free'
+        except Exception:
+            pass
+        return 'unknown'
+    if status == 400:
+        return 'billed'
+    return 'unknown'
+
+
+def free_tier(key, post=None):
+    """Is the key on Google's free tier? One invalid request (never billed), to the first probe model that exists."""
+    import requests
+    from resources.lib import gemini
+    post = post or requests.post
+    body = {'contents': [{'role': 'nobody', 'parts': [{'text': 'OK'}]}]}
+    for model in PROBE_MODELS:
+        try:
+            r = post('%s/models/%s:generateContent' % (gemini.API_BASE, model), json=body,
+                     headers={'x-goog-api-key': key}, timeout=30)
+        except Exception:
+            return 'unknown'
+        if r.status_code == 404:
+            continue                # the model is gone: the next
+        return classify_probe(r.status_code, r.text or '')
+    return 'unknown'
+
+
+def tier(key, now=None, probe=free_tier):
+    """The key's tier, checked at most once in TIER_S (a key that changed is checked again)."""
+    now = now or time.time()
+    with _LOCK:
+        data = _load()
+        known = (data.get('tier') or {}).get(_key_id(key))
+        if known and now - known[1] < TIER_S and known[0] in ('free', 'billed'):
+            return known[0]
+    found = probe(key)
+    with _LOCK:
+        data = _load()
+        data['tier'] = {_key_id(key): [found, now]}       # only the key in use is remembered
+        _save(data)
+    log('the key is checked: %s' % found)
+    return found
+
+
+# ---------------------------------------------------------------- may this device translate a trailer now?
+def eligible(now=None, probe=free_tier):
+    """(True, '') or (False, why)."""
+    try:
+        from resources.lib import gemini
+        if not gemini.ai_mode_on():
+            return False, 'not AI translation'
+    except Exception:
+        return False, 'no AI'
+    key = _key()
+    if not key:
+        return False, 'no key'
+    if (kodi_utils.get_setting('model', '') or '').strip().lower() == MODEL:
+        return False, 'the films use this model'
+    data = _load()
+    day = _quota_day()
+    if data.get('quota_out') == day:
+        return False, 'the day\'s free quota is used'
+    if data.get('day') == day and int(data.get('used') or 0) >= DAY_CAP:
+        return False, 'the day\'s requests are used'
+    found = tier(key, now=now, probe=probe)
+    if found != 'free':
+        return False, 'not a free key (%s)' % found
+    return True, ''
+
+
+def publish_able(able):
+    try:
+        import xbmcgui
+        xbmcgui.Window(10000).setProperty(ABLE, '1' if able else '')
+    except Exception:
+        pass
+
+
+def _count_request():
+    with _LOCK:
+        data = _load()
+        day = _quota_day()
+        if data.get('day') != day:
+            data['day'], data['used'] = day, 0
+        data['used'] = int(data.get('used') or 0) + 1
+        _save(data)
+        return data['used']
+
+
+def _quota_out():
+    with _LOCK:
+        data = _load()
+        data['quota_out'] = _quota_day()
+        _save(data)
+
+
+def _failed(video, now=None):
+    now = now or time.time()
+    with _LOCK:
+        data = _load()
+        failed = {v: t for v, t in (data.get('failed') or {}).items() if now - t < FAILED_S}
+        failed[video] = now
+        data['failed'] = failed
+        _save(data)
+
+
+def _recently_failed(video, now=None):
+    now = now or time.time()
+    return now - ((_load().get('failed') or {}).get(video) or 0) < FAILED_S
+
+
+# ---------------------------------------------------------------- the request
+def marked(words, every=6, gap=0.7):
+    """[(second, word)] as one line with a [second] before every few words and after every pause."""
+    out, since, last = [], every, None
+    for at, word in words:
+        if since >= every or last is None or at - last > gap:
+            out.append('[%.1f]' % at)
+            since = 0
+        out.append(word)
+        since += 1
+        last = at
+    return ' '.join(out)
+
+
+def timed(text, end_of_speech):
+    """START-END|text lines as [(start, end, text)] in seconds: each kept in order, at least 1.2 s and at most 7 s
+    long, ending before the next begins."""
+    cues = []
+    for line in (text or '').splitlines():
+        m = re.match(r'\s*\[?(\d+(?:\.\d+)?)\]?\s*-\s*\[?(\d+(?:\.\d+)?)\]?\s*\|(.*)$', line)
+        if m and m.group(3).strip():
+            cues.append([float(m.group(1)), float(m.group(2)), m.group(3).strip()])
+    out = []
+    for n, (a, b, t) in enumerate(cues):
+        nxt = cues[n + 1][0] if n + 1 < len(cues) else end_of_speech + 1.5
+        b = min(max(b, a + 1.2), nxt, a + 7.0) if nxt > a else a + 1.2
+        if out and a < out[-1][0]:
+            continue
+        out.append((round(a, 2), round(b, 2), t))
+    return out
+
+
+def numbered(text, english):
+    got = {}
+    for line in (text or '').splitlines():
+        m = re.match(r'\s*(\d+)\s*\|(.*)$', line)
+        if m and 1 <= int(m.group(1)) <= len(english):
+            got[int(m.group(1))] = m.group(2).strip()
+    return [(a, b, got[n]) for n, (a, b, _t) in enumerate(english, 1) if got.get(n)]
+
+
+def what_of(job):
+    name = job.get('original') or job.get('title') or 'an unknown title'
+    kind = 'series' if job.get('kind') == 'tv' else 'film'
+    he = job.get('title') if job.get('title') and job.get('title') != name else ''
+    return '%s "%s"%s%s' % ('the ' + kind, name, (' (%s)' % job['year']) if job.get('year') else '',
+                            (', known in Hebrew as "%s"' % he) if he else '')
+
+
+def request_parts(job):
+    """(parts, read) for the job: read(text) -> [(start, end, text)]."""
+    what = what_of(job)
+    lang = job.get('lang') or 'en'
+    if job.get('src') == 'asr' and job.get('words'):
+        words = [(float(a), str(w)) for a, w in job['words']]
+        prompt = ASR_PROMPT.format(what=what, lang=lang, speech=marked(words))
+        return [{'text': prompt}], lambda text: timed(text, words[-1][0])
+    if job.get('src') == 'manual' and job.get('cues'):
+        english = [(float(a), float(b), str(t)) for a, b, t in job['cues']]
+        prompt = MANUAL_PROMPT.format(what=what, lang=lang, lines='\n'.join('%d|%s' % (n, t) for n, (_a, _b, t) in enumerate(english, 1)))
+        return [{'text': prompt}], lambda text: numbered(text, english)
+    parts = [{'fileData': {'fileUri': 'https://www.youtube.com/watch?v=' + job['v'], 'mimeType': 'video/*'}},
+             {'text': LISTEN_PROMPT.format(what=what)}]
+    return parts, lambda text: timed(text, float(job.get('duration') or 600))
+
+
+def ask(key, parts, post=None):
+    """One request to MODEL. The reply's text; raises gemini's errors (QuotaExceeded on the day's 429)."""
+    import requests
+    from resources.lib import gemini
+    post = post or requests.post
+    payload = {'contents': [{'parts': parts}],
+               'generationConfig': {'maxOutputTokens': 8192, 'thinkingConfig': {'thinkingLevel': 'low'}},
+               'safetySettings': gemini._safety_settings(MODEL)}
+    r = post('%s/models/%s:generateContent' % (gemini.API_BASE, MODEL), json=payload,
+             headers={'x-goog-api-key': key, 'Content-Type': 'application/json'}, timeout=REQUEST_TIMEOUT)
+    if r.status_code == 429:
+        raise gemini._classify_429(r)
+    if r.status_code != 200:
+        raise gemini.GeminiError('HTTP %d' % r.status_code)
+    return gemini._generated_text(r.json())
+
+
+def hebrew_enough(cues):
+    text = ' '.join(t for _a, _b, t in cues)
+    heb, latin = len(_HEB.findall(text)), len(_LATIN.findall(text))
+    return heb >= 20 and heb / float(heb + latin) >= 0.6
+
+
+def to_srt(cues):
+    from resources.lib import srt as srt_mod
+
+    def stamp(s):
+        ms = int(round(s * 1000))
+        return '%02d:%02d:%02d,%03d' % (ms // 3600000, ms // 60000 % 60, ms // 1000 % 60, ms % 1000)
+    text = '\n'.join('%d\n%s --> %s\n%s\n' % (n, stamp(a), stamp(b), t) for n, (a, b, t) in enumerate(cues, 1))
+    try:
+        # the punctuation on the right side, as the viewer's own subtitles (his rtl_punct_mode)
+        return srt_mod.fix_rtl_punctuation(text)
+    except Exception:
+        return text
+
+
+# ---------------------------------------------------------------- a job
+def handle(job, key=None, post=None, write=None, now=None):
+    """Translates the job's trailer. Returns the cues, or None (and why, in the log)."""
+    video = str(job.get('v') or '')
+    if not _VIDEO.match(video):
+        return None
+    if _recently_failed(video, now):
+        return None
+    key = key or _key()
+    parts, read = request_parts(job)
+    used = _count_request()
+    began = time.time()
+    try:
+        from resources.lib import gemini
+        text = ask(key, parts, post=post)
+    except Exception as exc:
+        try:
+            from resources.lib import gemini
+            if isinstance(exc, gemini.QuotaExceeded):
+                _quota_out()
+                log('the day\'s free quota of %s is used' % MODEL)
+                return None
+        except Exception:
+            pass
+        log('%s: not translated (%s)' % (video, type(exc).__name__))
+        _failed(video, now)
+        return None
+    if (text or '').strip().upper().startswith('NONE'):
+        log('%s: already Hebrew' % video)
+        _failed(video, now)
+        return None
+    cues = read(text)
+    if not cues or not hebrew_enough(cues):
+        log('%s: no usable subtitles in the reply' % video)
+        _failed(video, now)
+        return None
+    log('%s: %d subtitles (%s, %.1f s, request %d today)' % (video, len(cues), job.get('src') or 'listen', time.time() - began, used))
+    (write or _write)(video, cues)
+    return cues
+
+
+def _folder():
+    import xbmcvfs
+    path = xbmcvfs.translatePath(FOLDER)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _write(video, cues):
+    import xbmc
+    import xbmcgui
+    path = os.path.join(_folder(), video + '.he.srt')
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(to_srt(cues))
+    with open(os.path.join(_folder(), video + '.he.json'), 'w', encoding='utf-8') as f:
+        json.dump([[int(a * 1000), int(b * 1000), t] for a, b, t in cues], f, ensure_ascii=False)
+    xbmcgui.Window(10000).setProperty(READY, video)
+    xbmc.executebuiltin('NotifyAll(%s,ready)' % SENDER)
+
+
+def share(job, cues):
+    """The translation to the pool (the Worker's /tsub), when the viewer shares (pool_share)."""
+    try:
+        from resources.lib import pool
+        if not pool.share_enabled() or time.time() < float(_load().get('closed_until') or 0):
+            return
+        body = {'v': job['v'], 's': job.get('src') if job.get('src') in ('asr', 'manual') else 'listen', 'm': MODEL,
+                'n': job.get('title') or job.get('original') or '', 'y': job.get('year') or '',
+                'c': [[int(a * 1000), int(b * 1000), t] for a, b, t in cues]}
+        status, answer = pool.share_trailer(body)
+        if status == 429 and (answer or {}).get('closed'):
+            with _LOCK:
+                data = _load()
+                data['closed_until'] = time.time() + float((answer or {}).get('retry_s') or 3600)
+                _save(data)
+        log('%s shared: %s' % (job['v'], status))
+    except Exception as exc:
+        log('not shared: %s' % type(exc).__name__)
+
+
+# ---------------------------------------------------------------- the service
+def start(monitor):
+    """Listens for the Wizard's jobs; says whether this device may translate. Never raises."""
+    try:
+        import xbmc
+    except Exception:
+        return
+    pending = {'job': None}
+    wake = threading.Event()
+
+    def refresh():
+        try:
+            able, why = eligible()
+        except Exception as exc:
+            able, why = False, type(exc).__name__
+        publish_able(able)
+        return able, why
+
+    class Listener(xbmc.Monitor):
+        def onNotification(self, sender, method, data):
+            if sender != SENDER or not method.endswith('job'):
+                return
+            try:
+                with open(os.path.join(_folder(), 'job.json'), encoding='utf-8') as f:
+                    pending['job'] = json.load(f)
+                wake.set()
+            except Exception:
+                pass
+
+    def run():
+        # The listener lives in this thread and this thread waits on it: Kodi hands a Monitor its notifications on
+        # the thread that made it, while that thread waits (QA Kodi: made on the service's own thread, the Wizard's
+        # job never arrived -- that thread waits elsewhere)
+        listener = Listener()
+        # (a moment after Kodi's start: the key is checked then, once a week at most)
+        if listener.waitForAbort(20):
+            return
+        able, why = refresh()
+        log('trailer subtitles: %s' % ('this device translates' if able else 'no (%s)' % why))
+        idle = 0.0
+        while not listener.abortRequested():
+            if listener.waitForAbort(0.5):
+                break
+            job, pending['job'] = pending['job'], None
+            if not job:
+                idle += 0.5
+                if idle >= 600:
+                    idle = 0.0
+                    refresh()
+                continue
+            idle = 0.0
+            able, why = refresh()
+            if not able:
+                log('%s: not translated (%s)' % (job.get('v'), why))
+                continue
+            log('%s: translating (%s)' % (job.get('v'), job.get('src') or 'listen'))
+            cues = handle(job)
+            if cues:
+                threading.Thread(target=share, args=(job, cues), name='MoranSubsTrailerShare').start()
+            refresh()
+        del listener
+
+    threading.Thread(target=run, name='MoranSubsTrailers').start()
