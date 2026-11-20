@@ -52,6 +52,18 @@ WORD_FROM = (0, 3, 100)                 # the first MoranSubs that always gives 
 LINE, LINES_ON = 'povil.tsub.line', 'povil.tsub.on'
 DRAWN_FROM = (1, 0, 30)                 # the first Onyx that draws them
 LINE_TICK_S = 0.2
+# A translation's version (f): 2 = timed by the words of the captions (MoranSubs 0.3.103). One from YouTube's automatic
+# captions of an older version is OUTDATED: a device that translates makes it again, and the new one replaces it
+# everywhere (Pages, the devices, the channel) -- the owner, Nov 2026: "replace what was there until now". The old one is
+# shown meanwhile.
+FORMAT = 2
+
+
+def outdated(data):
+    try:
+        return (data or {}).get('s') == 'asr' and int((data or {}).get('f') or 1) < FORMAT
+    except (TypeError, ValueError):
+        return False
 KEEP = 3000                             # trailers kept in CACHE
 _VIDEO = re.compile(r'^[A-Za-z0-9_-]{11}$')
 _HEBREW = re.compile('[\u05d0-\u05ea]')
@@ -395,6 +407,11 @@ class Subs(object):
             cues, where = self.cached(video), 'this device'
             if cues is None:
                 cues, where = self.from_pages(video), 'Pages'
+            if cues and outdated(self.cached_data(video)) and self.home.getProperty(ABLE) == '1':
+                # timed the old way: made again here, and shared (the old one if that fails)
+                renewed = self.translated_here(video, stream, key, config)
+                if renewed:
+                    cues, where = renewed, 'MoranSubs (renewed)'
             if cues is None:
                 where = 'MoranSubs'
                 cues = self.translated_here(video, stream, key, config)
@@ -428,6 +445,14 @@ class Subs(object):
             os.remove(os.path.join(self._folder(CACHE), sub + name))
         except OSError:
             pass
+
+    def cached_data(self, video):
+        sub, name = path_of(video)
+        try:
+            with open(os.path.join(self._folder(CACHE), sub + name), encoding='utf-8') as handle:
+                return json.load(handle)
+        except (OSError, ValueError):
+            return None
 
     def keep(self, video, data):
         sub, name = path_of(video)
@@ -547,10 +572,14 @@ class Subs(object):
             if self.home.getProperty(READY) == video and os.path.exists(answer):
                 try:
                     with open(answer, encoding='utf-8') as handle:
-                        cues = json.load(handle)
+                        got = json.load(handle)
                 except (OSError, ValueError):
                     return None
-                self.keep(video, {'c': cues, 's': read[0]})
+                # (MoranSubs 0.3.103 answers {"c": lines, "f": version}; before, the lines alone)
+                cues, version = (got.get('c'), got.get('f') or 1) if isinstance(got, dict) else (got, 1)
+                if not cues:
+                    return None
+                self.keep(video, {'c': cues, 's': read[0], 'f': version})
                 return cues
         return None
 

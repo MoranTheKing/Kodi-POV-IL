@@ -234,12 +234,40 @@ class MoranSubsTests(unittest.TestCase):
             body = [x for x in said if isinstance(x, tuple)][0][1]
             self.assertEqual((body['k'], body['e']), ('tv', 2))
 
+    def test_the_words_time_the_lines_and_a_bad_line_is_left_out(self):
+        # The Simpsons' trailer (the owner, Nov 2026: "lines come early or late"): "green screen", spoken at 12.2-12.6
+        # with nothing more until 31.1, stayed seven seconds; now about one and a half
+        words = [(4.4, 'i'), (4.7, 'love'), (5.0, 'this'), (5.4, 'place'), (12.2, 'green'), (12.6, 'screen'),
+                 (31.1, 'wait'), (31.4, 'who'), (31.5, 'are'), (31.7, 'you')]
+        info = {}
+        cues = self.ms.by_words('1-4|אני מת על המקום הזה.\n5-6|מסך ירוק.\n7-10|רגע, מי אתה?', words, info)
+        self.assertEqual([c[0] for c in cues], [4.3, 12.1, 31.0], 'each with its first word')
+        self.assertLess(cues[0][1], 7.0, 'gone a moment after "place" (5.4), not at the next line (12.2)')
+        self.assertLess(cues[1][1], 14.0, '"green screen" no longer stays seven seconds')
+        self.assertEqual((info['covered'], info['words']), (10, 10))
+        # out of order, overlapping, past the last word, or empty: left out
+        cues = self.ms.by_words('5-6|ב\n3-4|א\n6-7|ג\n9-12|ד\n7-8|\n7-8|ה', words, info)
+        self.assertEqual([c[2] for c in cues], ['ב', 'ה'])
+        self.assertEqual(info['covered'], 4)
+        # the captions heard the last word long after the rest ("...a car accident last [8 s] night", QA): not waited for
+        tail = [(2.9, 'dr'), (3.2, 'larsson'), (3.4, 'was'), (3.5, 'in'), (3.6, 'a'), (3.7, 'car'), (3.9, 'accident'),
+                (4.2, 'last'), (12.5, 'night'), (13.5, 'she')]
+        cues = self.ms.by_words('1-9|ד"ר לארסון עברה תאונת דרכים אמש.\n10-10|היא', tail, info)
+        self.assertLess(cues[0][1], 6.0, 'gone after "last", not at "night" eight seconds later')
+        # a long pause inside a line, then MORE than two words: the line holds them, so it stays
+        long = [(1.0, 'a'), (1.2, 'b'), (5.0, 'c'), (5.2, 'd'), (5.4, 'e')]
+        cues = self.ms.by_words('1-5|א ב ג ד ה', long, info)
+        self.assertGreater(cues[0][1], 5.4)
+        # never into the next line, a lead of 0.1 s at most
+        cues = self.ms.by_words('1-1|אני\n2-4|אוהב את המקום הזה מאוד מאוד מאוד', words, info)
+        self.assertLessEqual(cues[0][1], cues[1][0])
+
     def test_gemini_busy_is_asked_once_more_and_then_again_soon(self):
         answers = []
 
         def post(url, json=None, headers=None, timeout=None):
             code = answers.pop(0)
-            return types.SimpleNamespace(status_code=code, json=lambda: {'text': '1.0-2.5|שלום לכם חברים יקרים מאוד, מה שלומכם היום הזה?'})
+            return types.SimpleNamespace(status_code=code, json=lambda: {'text': '1-2|שלום לכם חברים יקרים מאוד, מה שלומכם היום הזה?'})
         job = {'v': 'busy0000001', 'src': 'asr', 'words': [[1.0, 'hello'], [2.0, 'there']], 'lang': 'en'}
         with mock.patch.object(self.ms, 'BUSY_RETRY_S', 0), mock.patch.object(self.ms, '_write', lambda v, c: None):
             answers[:] = [503, 200]
@@ -305,15 +333,18 @@ class MoranSubsTests(unittest.TestCase):
         job = {'v': 'aBc_dEf-123', 'src': 'asr', 'title': 'משחקי הכס', 'original': 'Game of Thrones', 'year': '2011', 'kind': 'tv',
                'words': [[1.0, 'winter'], [1.5, 'is'], [1.9, 'coming'], [3.4, 'my'], [3.8, 'lord']], 'lang': 'en'}
         parts, read = self.ms.request_parts(job)
-        self.assertIn('[1.0] winter is coming', parts[0]['text'])
+        self.assertIn('[1]winter [2]is [3]coming [4]my [5]lord', parts[0]['text'], 'every word numbered (0.3.103)')
+        self.assertIn('FIRST-LAST|Hebrew text', parts[0]['text'])
         self.assertIn('the series "Game of Thrones" (2011), known in Hebrew as "משחקי הכס"', parts[0]['text'])
         written = []
-        reply = '1.0-3.0|החורף מגיע\n3.4-4.0|אדוני, ואנחנו צריכים להתכונן עכשיו לבאות'
+        reply = '1-3|החורף מגיע\n4-5|אדוני, ואנחנו צריכים להתכונן עכשיו לבאות'
         cues = self.ms.handle(job, key='k', post=lambda *a, **k: types.SimpleNamespace(status_code=200, json=lambda: {'text': reply}),
                               write=lambda v, c: written.append((v, c)))
         self.assertEqual([c[2] for c in cues], ['החורף מגיע', 'אדוני, ואנחנו צריכים להתכונן עכשיו לבאות'])
-        self.assertEqual(cues[0][1], 3.0)
-        self.assertGreaterEqual(round(cues[1][1] - cues[1][0], 2), 1.2, 'at least 1.2 s on the screen')
+        # timed by the words: a moment before "winter" (1.0) to a moment after "coming" (1.9) -- not the next line's start
+        self.assertEqual(cues[0][:2], (0.9, 2.9))
+        self.assertEqual(cues[1][0], 3.3, 'with "my" (3.4)')
+        self.assertGreaterEqual(round(cues[1][1] - cues[1][0], 2), 3.0, 'a long line stays long enough to be read')
         self.assertEqual(written[0][0], 'aBc_dEf-123')
         # no captions: Gemini listens to the trailer itself, and a trailer Hebrew already is answered NONE
         parts, _read = self.ms.request_parts({'v': 'aBc_dEf-123', 'src': 'listen'})
@@ -419,6 +450,53 @@ class SeasonTests(unittest.TestCase):
                                                      'one00000001'), 1, 'a series of one season')
         source = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/trailers.py').read_text(encoding='utf-8')
         self.assertIn("season = trailer_season(meta, video)", source)
+
+
+class RenewedTests(unittest.TestCase):
+    """0.5.35 / MoranSubs 0.3.103: the automatic captions' translations timed the old way are made again (the owner,
+    Nov 2026: "replace what was there until now, as exact as can be")."""
+
+    def test_only_the_old_automatic_captions_ones_are_outdated(self):
+        ts = load('plugin.program.kodipovilwizard/resources/libs/trailer_subs.py', 'povil_wizard_trailer_subs_renew')
+        self.assertTrue(ts.outdated({'c': [[0, 1, 'א']], 's': 'asr'}), 'no version: the old way')
+        self.assertTrue(ts.outdated({'s': 'asr', 'f': 1}))
+        self.assertFalse(ts.outdated({'s': 'asr', 'f': 2}))
+        self.assertFalse(ts.outdated({'s': 'manual'}), 'a person\'s captions keep their own times')
+        self.assertFalse(ts.outdated({'s': 'listen'}), 'nothing better there')
+        self.assertFalse(ts.outdated(None))
+
+    def test_an_outdated_one_is_made_again_on_a_device_that_translates(self):
+        ts = load('plugin.program.kodipovilwizard/resources/libs/trailer_subs.py', 'povil_wizard_trailer_subs_renew2')
+        folder = tempfile.mkdtemp()
+        home = {ts.ABLE: '1'}
+
+        class Home:
+            def getProperty(self, k):
+                return home.get(k, '')
+
+            def setProperty(self, k, v):
+                home[k] = v
+
+            def clearProperty(self, k):
+                home.pop(k, None)
+        said = []
+        subs = ts.Subs(Home(), None, said.append, lambda where: os.path.join(folder, where.rsplit('/', 2)[-2]),
+                       lambda b: None, fetch=lambda u: (404, b''))
+        subs.keep('aBc_dEf-123', {'c': [[0, 1000, 'ישן']], 's': 'asr'})
+        new = [[100, 900, 'חדש']]
+        subs.translated_here = lambda video, stream, key, config: (subs.keep(video, {'c': new, 's': 'asr', 'f': 2}) or new)
+        subs._ready = lambda video, path, cues=None: said.append(('ready', cues))
+        subs.current = 'aBc_dEf-123'
+        subs._prepare('aBc_dEf-123', {'video': 'aBc_dEf-123'}, None)
+        self.assertIn(('ready', new), said)
+        self.assertIn('trailer subtitles: aBc_dEf-123 from MoranSubs (renewed) (1 lines)', said)
+        self.assertEqual(subs.cached_data('aBc_dEf-123')['f'], 2, 'kept: not made again next time')
+        # a device that does not translate shows the old one
+        subs.keep('bBc_dEf-123', {'c': [[0, 1000, 'ישן']], 's': 'asr'})
+        home[ts.ABLE] = '0'
+        subs.current = 'bBc_dEf-123'
+        subs._prepare('bBc_dEf-123', {'video': 'bBc_dEf-123'}, None)
+        self.assertIn(('ready', [[0, 1000, 'ישן']]), said)
 
 
 class DrawnLinesTests(unittest.TestCase):
@@ -625,6 +703,19 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(json.load(open(os.path.join(folder, 'drop.json'))), {'drop': []})
         # an older Worker that sends no list leaves the list alone
         self.assertEqual(exporter.export(folder, lambda a: {'rows': []}), (0, 0, 2))
+
+    def test_a_newer_version_overwrites_the_file_and_the_same_does_not(self):
+        exporter = load('tools/trailer_subs_export.py', 'povil_trailer_subs_export4')
+        folder = tempfile.mkdtemp()
+        old = {'seq': 1, 'v': 'aBc_dEf-123', 'c': [[0, 1000, 'ישן']], 's': 'asr', 'ts': 1}
+        new = dict(old, seq=2, c=[[100, 900, 'חדש']], f=2, k='tv', e=3)
+        same = dict(new, seq=3, c=[[0, 1, 'עוד']])
+        pages = {0: [old], 1: [new], 2: [same]}
+        for after in (0, 1, 2):
+            exporter.export(folder, lambda a, after=after: {'rows': pages[after] if a == after else [], 'drop': []})
+        sub, name = exporter.path_of('aBc_dEf-123')
+        data = json.load(open(os.path.join(folder, sub, name), encoding='utf-8'))
+        self.assertEqual((data['c'], data['f'], data['k'], data['e']), ([[100, 900, 'חדש']], 2, 'tv', 3))
 
     def test_the_workflow_asks_github_s_token_and_publishes_through_pages(self):
         flow = (ROOT / '.github/workflows/trailer-subs.yml').read_text(encoding='utf-8')
