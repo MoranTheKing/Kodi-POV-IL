@@ -34,6 +34,12 @@ def hero_vars(x):
     x(2, '<value condition="Container.Content(tvshows)">סדרות</value>')
     x(2, '<value>$INFO[Container.FolderName]</value>')
     x(1, '</variable>')
+    # The trailer POV names for the focused title (the YouTube add-on's address) -- a film's, a series', a season's
+    # own (the Wizard's pov_trailer_pick.py); nothing for any other item (".." , a next-page tile, a folder)
+    x(1, '<variable name="POVIL_V_Trailer">')
+    x(2, '<value condition="[Control.IsVisible(51) | Control.IsVisible(55)] + !Container.IsUpdating + '
+         'String.StartsWith(ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[ListItem.Trailer]</value>')
+    x(1, '</variable>')
     x(1, '<variable name="POVIL_V_Fanart">')
     for art in ('fanart', 'landscape', 'thumb'):
         x(2, '<value condition="!String.IsEmpty(ListItem.Art(%s)) + !Container.Content(addons) + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]">$INFO[ListItem.Art(%s)]</value>' % (art, art))
@@ -85,6 +91,20 @@ def view(x, vid, label, layout):
     x(3, '<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture>povil/ambient.jpg</texture></control>')
     x(3, '<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height>'
          '<texture background="true">$VAR[POVIL_V_Fanart]</texture><aspectratio>scale</aspectratio><fadetime>420</fadetime></control>')
+    # The focused title's trailer behind the hero, as on the home (the owner, Nov 2026: "on a season's poster
+    # there should be the season's trailer ... and in the search, in every screen, the inner menus"): the Wizard
+    # starts it (trailers.py), Kodi's preview picture shows it over the still and under the shades, only while the
+    # trailer that plays is the focused title's. Black under it; the window takes no clicks (see gen_home.py).
+    x(3, '<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height>'
+         '<texture colordiffuse="FF000000">povil/white.png</texture><visible>%s</visible>'
+         '<animation effect="fade" start="0" end="100" time="400">Visible</animation></control>' % H.TRAILER_SHOWN)
+    x(3, '<control type="videowindow"><left>0</left><top>0</top><width>1920</width><height>1080</height>'
+         '<hitrect x="-10" y="-10" w="1" h="1"/><visible>%s</visible>'
+         '<animation effect="fade" start="0" end="100" time="600">Visible</animation>'
+         '<animation effect="fade" start="100" end="0" time="250">Hidden</animation></control>' % H.TRAILER_SHOWN)
+    # everything over the picture is one group: it fades away while a trailer has the screen to itself
+    x(3, '<control type="group" description="over the picture">')
+    x(3, H.TRAILER_FADE)
     for left, top, w, h, tex in ((520, -160, 1400, 1400, 'grad_right'), (-320, 330, 2560, 750, 'grad_bottom'),
                                  (-320, 0, 2560, 240, 'grad_top'), (0, 0, 1920, 1080, 'vignette')):
         x(3, '<control type="image"><left>%d</left><top>%d</top><width>%d</width><height>%d</height>'
@@ -127,7 +147,10 @@ def view(x, vid, label, layout):
     x(3, '<control type="textbox"><left>%d</left><top>440</top><width>860</width><height>152</height><font>povil_plot</font>'
          '<textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label>'
          '<animation effect="slide" end="0,-38" time="140" tween="cubic" easing="out" '
-         'condition="String.IsEmpty(Control.GetLabel(%d))">Conditional</animation></control>' % (right - 860, H.RATINGS_KEY))
+         'condition="String.IsEmpty(Control.GetLabel(%d))">Conditional</animation>'
+         # while the title's trailer plays the plot steps aside, as on the home (the title, details and ratings stay)
+         '<animation effect="fade" start="100" end="0" time="400" condition="%s">Conditional</animation></control>'
+         % (right - 860, H.RATINGS_KEY, H.TRAILER_SHOWN))
     # The row: right to left (reversed by the add-on), whole slots flush with the right margin
     g = H.GEOM['landscape' if layout == 'episodes' else 'poster']
     left, width, _peek = H.rtl_slots(g)
@@ -162,7 +185,13 @@ def view(x, vid, label, layout):
             x(4, '<include content="POVIL_ViewItem_%s"><param name="id" value="%d" /></include>' % (kind, vid))
     x(3, '</control>')
     H.peek(x, 3, vid, 'landscape' if layout == 'episodes' else 'poster', 640)
+    x(3, '</control>')
     x(2, '</control>')
+    if vid == min(VIEWS):
+        # the hidden label the trailer's timers read (gen_home.py TRAILER_KEY): ONE for the window, outside the
+        # views' groups -- two controls of one id, one of them in a hidden group, are not read reliably
+        x(2, '<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
+             '<label>$VAR[POVIL_V_Trailer]</label></control>' % H.TRAILER_KEY)
     x(1, '</include>')
 
 

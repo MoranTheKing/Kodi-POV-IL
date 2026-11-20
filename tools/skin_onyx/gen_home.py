@@ -74,6 +74,9 @@ WATCHED_CHOICE = 'Skin.SelectBool(31900,%s)' % ','.join('%d|%s' % (sid, s) for s
 # The players the controls can show besides Onyx's own (gen_osd_styles.py), as the settings tile names them
 PLAYER_STYLES = (('netflix', 'נטפליקס'), ('advanced', 'מתקדם'), ('simple', 'פשוט'), ('pretty', 'גדול'))
 TRAILERS_ON, TRAILERS_OFF = '!Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH, 'Skin.HasSetting(%s)' % TRAILER_OFF_SWITCH
+# Where a title's trailer plays behind its hero: the home, and the Videos window's views 51 and 55 (gen_views.py --
+# a season's list, a search's results, the inner lists; Onyx 1.0.26). Each has the hidden label TRAILER_KEY.
+TRAILER_SCREEN = '[Window.IsActive(home) | Window.IsActive(videos)]'
 
 
 def by_choice(setting, default, choices, cond):
@@ -370,10 +373,37 @@ TABS = [
                 ('כל הפרקים הבאים', videos(pov_mode('build_next_episode')))]),
 ]
 
+# The build's Wizard is installed. Onyx also runs on a Kodi without it (a viewer, Nov 2026: Onyx alone on his CoreELEC
+# box, the build on his Shield -- the tiles that ran the Wizard did nothing there). A tile asks the Wizard when it is
+# there and the skin's own dialog when it is not (gen_standalone.py); a tile with nothing to do without the Wizard
+# shows only with it.
+WIZ = 'System.HasAddon(plugin.program.kodipovilwizard)'
+
+
+# ... and says it can do what a tile asks (the Wizard's start-up names the modes it has, from 0.5.27): the skin can be
+# newer than the Wizard for a while, and a Wizard that does not know a mode does nothing at all
+WIZARD_MODES = 'Window(home).Property(povil.wizard.modes)'
+
+
+def by_wizard(wizard_action, *own_actions, mode=None):
+    """onclick for a tile: the Wizard's action when it is installed (and, with `mode`, says it has that mode), else
+    the skin's own (in order)."""
+    able = WIZ if not mode else 'String.Contains(%s,%s)' % (WIZARD_MODES, mode)
+    return [(able, wizard_action)] + [('!' + able, action) for action in own_actions]
+
+
+# The log, without the Wizard: Kodi's own uploader (script.kodi.loguploader, in Kodi's official repository), installed
+# the first time it is asked for (Kodi asks the viewer); with the Wizard, its uploader (address and QR), as the
+# favourite "שליחת לוג" does.
+LOG_UPLOADER = 'script.kodi.loguploader'
+SEND_LOG = [(WIZ, plugin_run(WIZARD + '?mode=uploadlog')),
+            ('!%s + System.HasAddon(%s)' % (WIZ, LOG_UPLOADER), 'RunScript(%s)' % LOG_UPLOADER),
+            ('!%s + !System.HasAddon(%s)' % (WIZ, LOG_UPLOADER), 'InstallAddon(%s)' % LOG_UPLOADER)]
+
 SETTINGS_ITEMS = [
-    # label, icon, onclick, visible
-    ('הוויזארד', '$INFO[System.AddonIcon(plugin.program.kodipovilwizard)]', videos(WIZARD), ''),
-    ('החלפת סקין', '$INFO[System.AddonIcon(plugin.program.kodipovilwizard)]', plugin_run(WIZARD + '?mode=profile_skin'), ''),
+    # label, icon, onclick (one action, or [(condition, action)] run in order), visible
+    ('הוויזארד', '$INFO[System.AddonIcon(plugin.program.kodipovilwizard)]', videos(WIZARD), WIZ),
+    ('החלפת סקין', '$INFO[System.AddonIcon(plugin.program.kodipovilwizard)]', plugin_run(WIZARD + '?mode=profile_skin'), WIZ),
     ('כתוביות', '$INFO[System.AddonIcon(service.subtitles.kodipovilai)]', 'Addon.OpenSettings(service.subtitles.kodipovilai)', 'System.HasAddon(service.subtitles.kodipovilai)'),
     ('מנוע החיפוש', 'special://home/addons/plugin.video.pov/resources/skins/Default/media/search.png',
      'RunScript(service.subtitles.kodipovilai,action=search_provider)', 'System.HasAddon(service.subtitles.kodipovilai)'),
@@ -382,26 +412,31 @@ SETTINGS_ITEMS = [
     # POV's own clear-all-cache (the owner, 17 Nov 2026: the other skins have the button, Onyx had none)
     ('ניקוי קאש', 'DefaultAddonRepository.png', plugin_run(POV + '?mode=clear_all_cache&isFolder=false'), 'System.HasAddon(plugin.video.pov)'),
     # which screens the top bar shows (the Wizard asks, onyx_tabs.py): any but films and settings can go
-    ('בחירת מסכים', 'DefaultAddonLookAndFeel.png', plugin_run(WIZARD + '?mode=onyx_tabs'), ''),
+    ('בחירת מסכים', 'DefaultAddonLookAndFeel.png',
+     by_wizard(plugin_run(WIZARD + '?mode=onyx_tabs'), 'SetProperty(povil.choice,tabs,home)', 'ActivateWindow(1161)'), ''),
     # POV's and Umbrella's own lists on every device of the viewer, through the viewer's own Google Drive
     # (the Wizard's cloud_sync)
-    ('סנכרון בין מכשירים', 'DefaultNetwork.png', plugin_run(WIZARD + '?mode=cloud_sync'), ''),
+    ('סנכרון בין מכשירים', 'DefaultNetwork.png', plugin_run(WIZARD + '?mode=cloud_sync'), WIZ),
     # which player the controls show (the Wizard asks, onyx_player_style.py; gen_osd_styles.py draws them)
-    ('$VAR[POVIL_PlayerTile]', 'povil/osd/layout.png', plugin_run(WIZARD + '?mode=player_style'), ''),
+    ('$VAR[POVIL_PlayerTile]', 'povil/osd/layout.png',
+     by_wizard(plugin_run(WIZARD + '?mode=player_style'), 'SetProperty(povil.choice,player,home)', 'ActivateWindow(1161)'), ''),
     # the viewer's own rows (CUSTOM_TABS)
-    ('שורות משלי', 'DefaultFolder.png', plugin_run(WIZARD + '?mode=custom_rows'), ''),
+    # (without the Wizard: the skin's own dialog -- the library, the viewer's video sources or any folder)
+    ('שורות משלי', 'DefaultFolder.png', by_wizard(plugin_run(WIZARD + '?mode=custom_rows'), 'ActivateWindow(1162)', mode='custom_rows'), ''),
     # the watched mark's colour (WATCHED_COLOURS)
     ('$VAR[POVIL_WatchedTile]', 'povil/check.png', WATCHED_CHOICE, ''),
     # the trailer behind the hero (trailers.py): on unless switched off here; the tile says which
+    # (the Wizard plays them: without it there are none to switch)
     ('$VAR[POVIL_TrailersTile]', 'DefaultAddonVideo.png', 'Skin.ToggleSetting(%s)' % TRAILER_OFF_SWITCH,
-     'System.HasAddon(plugin.video.youtube)'),
+     'System.HasAddon(plugin.video.youtube) + ' + WIZ),
     # how soon it starts, and how soon it has the screen to itself (the Wizard asks, trailer_timing.py)
     ('תזמון טריילרים', 'DefaultAddonVideo.png', plugin_run(WIZARD + '?mode=trailer_timing'),
-     'System.HasAddon(plugin.video.youtube) + ' + TRAILERS_ON),
+     'System.HasAddon(plugin.video.youtube) + %s + %s' % (WIZ, TRAILERS_ON)),
+    ('שליחת לוג', 'DefaultAddonProgram.png', SEND_LOG, ''),
     ('הגדרות הסקין', 'DefaultAddonSkin.png', 'ActivateWindow(SkinSettings)', ''),
     ('הגדרות קודי', 'DefaultAddonService.png', 'ActivateWindow(Settings)', ''),
     ('הרחבות', 'DefaultAddonsInstalled.png', 'ActivateWindow(AddonBrowser)', ''),
-    ('פרופילים', 'DefaultUser.png', plugin_run(WIZARD + '?mode=profiles'), ''),
+    ('פרופילים', 'DefaultUser.png', plugin_run(WIZARD + '?mode=profiles'), WIZ),
     ('כיבוי', 'DefaultAddonProgram.png', 'ActivateWindow(ShutdownMenu)', ''),
 ]
 
@@ -506,9 +541,10 @@ def row_focus(ti, ri):
 # the films on my hard drive"): CUSTOM_SLOTS rows at the end of these tabs, each the folder in a skin string, shown
 # only while it has one and it has items
 CUSTOM_TABS, CUSTOM_SLOTS = ('movies', 'tv', 'kids', 'favourites'), 3
+CUSTOM_TAB_NAMES = (('movies', 'סרטים'), ('tv', 'סדרות'), ('kids', 'ילדים'), ('favourites', 'מועדפים'))
 for _tab in TABS:
     if _tab['id'] in CUSTOM_TABS:
-        _tab['rows'] = list(_tab['rows']) + [('$INFO[Skin.String(POVILRow_%s_%d_name)]' % (_tab['id'], _n), 'custom:%s_%d' % (_tab['id'], _n),
+        _tab['rows'] = list(_tab['rows']) + [('$VAR[POVIL_RowName_%s_%d]' % (_tab['id'], _n), 'custom:%s_%d' % (_tab['id'], _n),
                                              'poster', True) for _n in range(1, CUSTOM_SLOTS + 1)]
 
 
@@ -599,7 +635,7 @@ def gen_timers():
     x(2, '<name>povil_trailer</name>')
     # (none while an add-on is finding or opening a title's sources under Kodi's background progress:
     # the viewer pressed a title, a film is about to start -- review, Nov 2026)
-    x(2, '<start reset="true">Window.IsActive(home) + %s + !System.HasActiveModalDialog + '
+    x(2, '<start reset="true">' + TRAILER_SCREEN + ' + %s + !System.HasActiveModalDialog + '
          '!Window.IsVisible(extendedprogressdialog) + %s + '
          '!String.IsEmpty(Control.GetLabel(%d)) + !String.IsEqual(Control.GetLabel(%d),%s) + '
          '[!Player.HasMedia | !String.IsEmpty(Window(home).Property(povil.tr.on))]</start>'
@@ -619,7 +655,7 @@ def gen_timers():
     peeked = 'Window(home).Property(povil.tr.peek)'
     x(1, '<timer>')
     x(2, '<name>povil_trailer_peek</name>')
-    x(2, '<start reset="true">Window.IsActive(home) + %s + !System.HasActiveModalDialog + '
+    x(2, '<start reset="true">' + TRAILER_SCREEN + ' + %s + !System.HasActiveModalDialog + '
          '!Window.IsVisible(extendedprogressdialog) + '
          '!String.IsEmpty(Control.GetLabel(%d)) + !String.IsEqual(Control.GetLabel(%d),%s)</start>'
       % (TRAILERS_ON, TRAILER_KEY, TRAILER_KEY, peeked))
@@ -637,8 +673,8 @@ def gen_timers():
     # how long the trailer has been on the screen (TRAILER_ALONE counts from it)
     x(1, '<timer>')
     x(2, '<name>povil_trailer_shown</name>')
-    x(2, '<start reset="true">Window.IsActive(home) + %s</start>' % TRAILER_SHOWN)
-    x(2, '<stop>!Window.IsActive(home) | ![%s]</stop>' % TRAILER_SHOWN)
+    x(2, '<start reset="true">%s + %s</start>' % (TRAILER_SCREEN, TRAILER_SHOWN))
+    x(2, '<stop>!%s | ![%s]</stop>' % (TRAILER_SCREEN, TRAILER_SHOWN))
     x(1, '</timer>')
     x(1, '<timer>')
     x(2, '<name>povil_trailer_stop</name>')
@@ -653,8 +689,8 @@ def gen_timers():
     # dialog on the screen.
     changed = ('[!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + '
                '!String.IsEqual(Control.GetLabel(%d),%s)]' % (TRAILER_KEY, asked))
-    x(2, '<start reset="true">!String.IsEmpty(%s) + [!Window.IsActive(home) | %s | '
-         '%s | %s]</start>' % (asked, dialog, TRAILERS_OFF, changed))
+    x(2, '<start reset="true">!String.IsEmpty(%s) + [!%s | %s | '
+         '%s | %s]</start>' % (asked, TRAILER_SCREEN, dialog, TRAILERS_OFF, changed))
     x(2, '<onstart>Skin.TimerStop(povil_trailer_shown)</onstart>')
     x(2, '<onstart>ClearProperty(povil.tr.ask,home)</onstart>')
     x(2, '<onstart>NotifyAll(povil.trailer,stop)</onstart>')
@@ -994,6 +1030,14 @@ def gen_includes():
              '$INFO[Container(%d).ListItem.Trailer]</value>' % (cond, more_page % (cid, cid), cid, cid))
         x(2, '<value condition="%s"></value>' % cond)
     x(1, '</variable>')
+    # a row of the viewer's own: the name given, else "השורה שלי"
+    for _tab in CUSTOM_TABS:
+        for _n in range(1, CUSTOM_SLOTS + 1):
+            x(1, '<variable name="POVIL_RowName_%s_%d">' % (_tab, _n))
+            x(2, '<value condition="!String.IsEmpty(Skin.String(POVILRow_%s_%d_name))">$INFO[Skin.String(POVILRow_%s_%d_name)]</value>'
+              % (_tab, _n, _tab, _n))
+            x(2, '<value>השורה שלי</value>')
+            x(1, '</variable>')
     x(1, '<variable name="POVIL_WatchedColour">')
     for setting, _name, colour, _sid in WATCHED_COLOURS[1:]:
         x(2, '<value condition="Skin.HasSetting(%s)">%s</value>' % (setting, colour))
@@ -1814,7 +1858,9 @@ def rows(x, d):
                     x(d + 5, '<label>%s</label>' % e(label))
                     x(d + 5, '<property name="povil_rtl">1</property>')
                     x(d + 5, '<icon>%s</icon>' % e(icon))
-                    x(d + 5, '<onclick>%s</onclick>' % e(click))
+                    for cond, action in (click if isinstance(click, list) else [('', click)]):
+                        x(d + 5, ('<onclick condition="%s">%s</onclick>' % (cond, e(action))) if cond else
+                              ('<onclick>%s</onclick>' % e(action)))
                     if vis_item:
                         x(d + 5, '<visible>%s</visible>' % vis_item)
                     x(d + 4, '</item>')

@@ -440,11 +440,12 @@ class GeneratedXmlTests(unittest.TestCase):
         try:
             copy = tmp / 'skin.povil.onyx'
             shutil.copytree(SKIN, copy)
-            for script in ('gen_strings.py', 'patch_onyx.py', 'gen_home.py', 'gen_views.py', 'gen_osd.py', 'gen_info.py', 'gen_dialogs.py',
-                           'gen_settings.py'):
+            for script in ('gen_strings.py', 'patch_onyx.py', 'gen_home.py', 'gen_standalone.py', 'gen_views.py', 'gen_osd.py',
+                           'gen_info.py', 'gen_dialogs.py', 'gen_settings.py'):
                 subprocess.run([sys.executable, str(TOOLS / script), str(copy)], cwd=str(TOOLS), check=True,
                                stdout=subprocess.DEVNULL)
             for rel in ('xml/Home.xml', 'xml/Includes_POVIL_Home.xml', 'xml/View_POVIL.xml', 'xml/VideoOSD.xml',
+                        'xml/Custom_POVILChoice.xml', 'xml/Custom_POVILRows.xml',
                         'xml/DialogVideoInfo.xml', 'xml/Timers.xml', 'xml/DialogKeyboard.xml',
                         'xml/DialogButtonMenu.xml', 'xml/DialogBusy.xml', 'xml/DialogNotification.xml', 'xml/DialogConfirm.xml',
                         'xml/DialogSeekBar.xml', 'xml/VideoFullScreen.xml', 'xml/Settings.xml', 'xml/SettingsCategory.xml',

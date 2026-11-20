@@ -1661,13 +1661,13 @@
 						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5013).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_movies_1_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_movies_1]">
 					<left>0</left><top>1126</top>
 					<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5015) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5015)]] | [Control.HasFocus(5016) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5016)]]">Conditional</animation>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5014]</textcolor><label>$INFO[Skin.String(POVILRow_movies_1_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5014]</textcolor><label>$VAR[POVIL_RowName_movies_1]</label>
 						<visible>Integer.IsGreater(Container(5014).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -1714,13 +1714,13 @@
 						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture background="true" diffuse="povil/mask_poster.png" colordiffuse="66FFFFFF">$INFO[Container(5014).ListItemPosition(-1).Art(poster)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_movies_2_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_movies_2]">
 					<left>0</left><top>1528</top>
 					<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5016) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5016)]]">Conditional</animation>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5015]</textcolor><label>$INFO[Skin.String(POVILRow_movies_2_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5015]</textcolor><label>$VAR[POVIL_RowName_movies_2]</label>
 						<visible>Integer.IsGreater(Container(5015).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -1767,12 +1767,12 @@
 						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture background="true" diffuse="povil/mask_poster.png" colordiffuse="66FFFFFF">$INFO[Container(5015).ListItemPosition(-1).Art(poster)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_movies_3_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_movies_3]">
 					<left>0</left><top>1930</top>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5016]</textcolor><label>$INFO[Skin.String(POVILRow_movies_3_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5016]</textcolor><label>$VAR[POVIL_RowName_movies_3]</label>
 						<visible>Integer.IsGreater(Container(5016).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -1983,13 +1983,13 @@
 						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5023).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_tv_1_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_tv_1]">
 					<left>0</left><top>1126</top>
 					<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5025) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5025)]] | [Control.HasFocus(5026) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5026)]]">Conditional</animation>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5024]</textcolor><label>$INFO[Skin.String(POVILRow_tv_1_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5024]</textcolor><label>$VAR[POVIL_RowName_tv_1]</label>
 						<visible>Integer.IsGreater(Container(5024).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -2036,13 +2036,13 @@
 						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture background="true" diffuse="povil/mask_poster.png" colordiffuse="66FFFFFF">$INFO[Container(5024).ListItemPosition(-1).Art(poster)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_tv_2_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_tv_2]">
 					<left>0</left><top>1528</top>
 					<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5026) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5026)]]">Conditional</animation>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5025]</textcolor><label>$INFO[Skin.String(POVILRow_tv_2_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5025]</textcolor><label>$VAR[POVIL_RowName_tv_2]</label>
 						<visible>Integer.IsGreater(Container(5025).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -2089,12 +2089,12 @@
 						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture background="true" diffuse="povil/mask_poster.png" colordiffuse="66FFFFFF">$INFO[Container(5025).ListItemPosition(-1).Art(poster)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_tv_3_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_tv_3]">
 					<left>0</left><top>1930</top>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5026]</textcolor><label>$INFO[Skin.String(POVILRow_tv_3_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5026]</textcolor><label>$VAR[POVIL_RowName_tv_3]</label>
 						<visible>Integer.IsGreater(Container(5026).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -2630,13 +2630,13 @@
 						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5053).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_kids_1_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_kids_1]">
 					<left>0</left><top>1166</top>
 					<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5055) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5055)]] | [Control.HasFocus(5056) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5056)]]">Conditional</animation>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5054]</textcolor><label>$INFO[Skin.String(POVILRow_kids_1_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5054]</textcolor><label>$VAR[POVIL_RowName_kids_1]</label>
 						<visible>Integer.IsGreater(Container(5054).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -2683,13 +2683,13 @@
 						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture background="true" diffuse="povil/mask_poster.png" colordiffuse="66FFFFFF">$INFO[Container(5054).ListItemPosition(-1).Art(poster)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_kids_2_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_kids_2]">
 					<left>0</left><top>1568</top>
 					<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5056) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5056)]]">Conditional</animation>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5055]</textcolor><label>$INFO[Skin.String(POVILRow_kids_2_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5055]</textcolor><label>$VAR[POVIL_RowName_kids_2]</label>
 						<visible>Integer.IsGreater(Container(5055).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -2736,12 +2736,12 @@
 						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture background="true" diffuse="povil/mask_poster.png" colordiffuse="66FFFFFF">$INFO[Container(5055).ListItemPosition(-1).Art(poster)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_kids_3_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_kids_3]">
 					<left>0</left><top>1970</top>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5056]</textcolor><label>$INFO[Skin.String(POVILRow_kids_3_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5056]</textcolor><label>$VAR[POVIL_RowName_kids_3]</label>
 						<visible>Integer.IsGreater(Container(5056).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -3067,13 +3067,13 @@
 						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture background="true" diffuse="povil/mask_poster.png" colordiffuse="66FFFFFF">$INFO[Container(5065).ListItemPosition(-1).Art(poster)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_favourites_1_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_favourites_1]">
 					<left>0</left><top>1960</top>
 					<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5067) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5067)]] | [Control.HasFocus(5068) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5068)]]">Conditional</animation>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5066]</textcolor><label>$INFO[Skin.String(POVILRow_favourites_1_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5066]</textcolor><label>$VAR[POVIL_RowName_favourites_1]</label>
 						<visible>Integer.IsGreater(Container(5066).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -3122,13 +3122,13 @@
 						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture background="true" diffuse="povil/mask_poster.png" colordiffuse="66FFFFFF">$INFO[Container(5066).ListItemPosition(-1).Art(poster)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_favourites_2_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_favourites_2]">
 					<left>0</left><top>2362</top>
 					<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5068) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5068)]]">Conditional</animation>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5067]</textcolor><label>$INFO[Skin.String(POVILRow_favourites_2_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5067]</textcolor><label>$VAR[POVIL_RowName_favourites_2]</label>
 						<visible>Integer.IsGreater(Container(5067).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -3177,12 +3177,12 @@
 						<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture background="true" diffuse="povil/mask_poster.png" colordiffuse="66FFFFFF">$INFO[Container(5067).ListItemPosition(-1).Art(poster)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
-				<control type="group" description="$INFO[Skin.String(POVILRow_favourites_3_name)]">
+				<control type="group" description="$VAR[POVIL_RowName_favourites_3]">
 					<left>0</left><top>2764</top>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
-						<textcolor>$VAR[POVIL_RowTitleColor_5068]</textcolor><label>$INFO[Skin.String(POVILRow_favourites_3_name)]</label>
+						<textcolor>$VAR[POVIL_RowTitleColor_5068]</textcolor><label>$VAR[POVIL_RowName_favourites_3]</label>
 						<visible>Integer.IsGreater(Container(5068).NumItems,0)</visible>
 					</control>
 					<control type="group" description="loading">
@@ -3371,6 +3371,7 @@
 								<property name="povil_rtl">1</property>
 								<icon>DefaultUser.png</icon>
 								<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profiles)</onclick>
+								<visible>System.HasAddon(plugin.program.kodipovilwizard)</visible>
 							</item>
 							<item>
 								<label>הרחבות</label>
@@ -3391,18 +3392,26 @@
 								<onclick>ActivateWindow(SkinSettings)</onclick>
 							</item>
 							<item>
+								<label>שליחת לוג</label>
+								<property name="povil_rtl">1</property>
+								<icon>DefaultAddonProgram.png</icon>
+								<onclick condition="System.HasAddon(plugin.program.kodipovilwizard)">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=uploadlog)</onclick>
+								<onclick condition="!System.HasAddon(plugin.program.kodipovilwizard) + System.HasAddon(script.kodi.loguploader)">RunScript(script.kodi.loguploader)</onclick>
+								<onclick condition="!System.HasAddon(plugin.program.kodipovilwizard) + !System.HasAddon(script.kodi.loguploader)">InstallAddon(script.kodi.loguploader)</onclick>
+							</item>
+							<item>
 								<label>תזמון טריילרים</label>
 								<property name="povil_rtl">1</property>
 								<icon>DefaultAddonVideo.png</icon>
 								<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=trailer_timing)</onclick>
-								<visible>System.HasAddon(plugin.video.youtube) + !Skin.HasSetting(POVILNoTrailers)</visible>
+								<visible>System.HasAddon(plugin.video.youtube) + System.HasAddon(plugin.program.kodipovilwizard) + !Skin.HasSetting(POVILNoTrailers)</visible>
 							</item>
 							<item>
 								<label>$VAR[POVIL_TrailersTile]</label>
 								<property name="povil_rtl">1</property>
 								<icon>DefaultAddonVideo.png</icon>
 								<onclick>Skin.ToggleSetting(POVILNoTrailers)</onclick>
-								<visible>System.HasAddon(plugin.video.youtube)</visible>
+								<visible>System.HasAddon(plugin.video.youtube) + System.HasAddon(plugin.program.kodipovilwizard)</visible>
 							</item>
 							<item>
 								<label>$VAR[POVIL_WatchedTile]</label>
@@ -3414,25 +3423,31 @@
 								<label>שורות משלי</label>
 								<property name="povil_rtl">1</property>
 								<icon>DefaultFolder.png</icon>
-								<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=custom_rows)</onclick>
+								<onclick condition="String.Contains(Window(home).Property(povil.wizard.modes),custom_rows)">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=custom_rows)</onclick>
+								<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),custom_rows)">ActivateWindow(1162)</onclick>
 							</item>
 							<item>
 								<label>$VAR[POVIL_PlayerTile]</label>
 								<property name="povil_rtl">1</property>
 								<icon>povil/osd/layout.png</icon>
-								<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_style)</onclick>
+								<onclick condition="System.HasAddon(plugin.program.kodipovilwizard)">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=player_style)</onclick>
+								<onclick condition="!System.HasAddon(plugin.program.kodipovilwizard)">SetProperty(povil.choice,player,home)</onclick>
+								<onclick condition="!System.HasAddon(plugin.program.kodipovilwizard)">ActivateWindow(1161)</onclick>
 							</item>
 							<item>
 								<label>סנכרון בין מכשירים</label>
 								<property name="povil_rtl">1</property>
 								<icon>DefaultNetwork.png</icon>
 								<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=cloud_sync)</onclick>
+								<visible>System.HasAddon(plugin.program.kodipovilwizard)</visible>
 							</item>
 							<item>
 								<label>בחירת מסכים</label>
 								<property name="povil_rtl">1</property>
 								<icon>DefaultAddonLookAndFeel.png</icon>
-								<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=onyx_tabs)</onclick>
+								<onclick condition="System.HasAddon(plugin.program.kodipovilwizard)">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=onyx_tabs)</onclick>
+								<onclick condition="!System.HasAddon(plugin.program.kodipovilwizard)">SetProperty(povil.choice,tabs,home)</onclick>
+								<onclick condition="!System.HasAddon(plugin.program.kodipovilwizard)">ActivateWindow(1161)</onclick>
 							</item>
 							<item>
 								<label>ניקוי קאש</label>
@@ -3474,12 +3489,14 @@
 								<property name="povil_rtl">1</property>
 								<icon>$INFO[System.AddonIcon(plugin.program.kodipovilwizard)]</icon>
 								<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profile_skin)</onclick>
+								<visible>System.HasAddon(plugin.program.kodipovilwizard)</visible>
 							</item>
 							<item>
 								<label>הוויזארד</label>
 								<property name="povil_rtl">1</property>
 								<icon>$INFO[System.AddonIcon(plugin.program.kodipovilwizard)]</icon>
 								<onclick>ActivateWindow(Videos,"plugin://plugin.program.kodipovilwizard/",return)</onclick>
+								<visible>System.HasAddon(plugin.program.kodipovilwizard)</visible>
 							</item>
 						</content>
 					</control>

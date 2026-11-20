@@ -377,7 +377,7 @@
 	</timer>
 	<timer>
 		<name>povil_trailer</name>
-		<start reset="true">Window.IsActive(home) + !Skin.HasSetting(POVILNoTrailers) + !System.HasActiveModalDialog + !Window.IsVisible(extendedprogressdialog) + [[[String.IsEqual(Skin.String(POVILTrailerWait),1) | String.IsEmpty(Skin.String(POVILTrailerWait))] + System.IdleTime(1)] | [String.IsEqual(Skin.String(POVILTrailerWait),2) + System.IdleTime(2)] | [String.IsEqual(Skin.String(POVILTrailerWait),3) + System.IdleTime(3)] | [String.IsEqual(Skin.String(POVILTrailerWait),5) + System.IdleTime(5)]] + !String.IsEmpty(Control.GetLabel(9809)) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask)) + [!Player.HasMedia | !String.IsEmpty(Window(home).Property(povil.tr.on))]</start>
+		<start reset="true">[Window.IsActive(home) | Window.IsActive(videos)] + !Skin.HasSetting(POVILNoTrailers) + !System.HasActiveModalDialog + !Window.IsVisible(extendedprogressdialog) + [[[String.IsEqual(Skin.String(POVILTrailerWait),1) | String.IsEmpty(Skin.String(POVILTrailerWait))] + System.IdleTime(1)] | [String.IsEqual(Skin.String(POVILTrailerWait),2) + System.IdleTime(2)] | [String.IsEqual(Skin.String(POVILTrailerWait),3) + System.IdleTime(3)] | [String.IsEqual(Skin.String(POVILTrailerWait),5) + System.IdleTime(5)]] + !String.IsEmpty(Control.GetLabel(9809)) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask)) + [!Player.HasMedia | !String.IsEmpty(Window(home).Property(povil.tr.on))]</start>
 		<onstart>Skin.TimerStop(povil_trailer_shown)</onstart>
 		<onstart>SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(9809)],home)</onstart>
 		<onstart>NotifyAll(povil.trailer,ask)</onstart>
@@ -385,7 +385,7 @@
 	</timer>
 	<timer>
 		<name>povil_trailer_peek</name>
-		<start reset="true">Window.IsActive(home) + !Skin.HasSetting(POVILNoTrailers) + !System.HasActiveModalDialog + !Window.IsVisible(extendedprogressdialog) + !String.IsEmpty(Control.GetLabel(9809)) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.peek))</start>
+		<start reset="true">[Window.IsActive(home) | Window.IsActive(videos)] + !Skin.HasSetting(POVILNoTrailers) + !System.HasActiveModalDialog + !Window.IsVisible(extendedprogressdialog) + !String.IsEmpty(Control.GetLabel(9809)) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.peek))</start>
 		<onstart>SetProperty(povil.tr.peek,$ESCINFO[Control.GetLabel(9809)],home)</onstart>
 		<onstart>NotifyAll(povil.trailer,peek)</onstart>
 		<stop>true</stop>
@@ -397,12 +397,12 @@
 	</timer>
 	<timer>
 		<name>povil_trailer_shown</name>
-		<start reset="true">Window.IsActive(home) + Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))</start>
-		<stop>!Window.IsActive(home) | ![Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))]</stop>
+		<start reset="true">[Window.IsActive(home) | Window.IsActive(videos)] + Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))</start>
+		<stop>![Window.IsActive(home) | Window.IsActive(videos)] | ![Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))]</stop>
 	</timer>
 	<timer>
 		<name>povil_trailer_stop</name>
-		<start reset="true">!String.IsEmpty(Window(home).Property(povil.tr.ask)) + [!Window.IsActive(home) | [System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)] | Skin.HasSetting(POVILNoTrailers) | [!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask))]]</start>
+		<start reset="true">!String.IsEmpty(Window(home).Property(povil.tr.ask)) + [![Window.IsActive(home) | Window.IsActive(videos)] | [System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)] | Skin.HasSetting(POVILNoTrailers) | [!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask))]]</start>
 		<onstart>Skin.TimerStop(povil_trailer_shown)</onstart>
 		<onstart>ClearProperty(povil.tr.ask,home)</onstart>
 		<onstart>NotifyAll(povil.trailer,stop)</onstart>
