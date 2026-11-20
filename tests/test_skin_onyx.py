@@ -172,7 +172,8 @@ class GeneratedXmlTests(unittest.TestCase):
             self.assertNotIn('!!', cond)
         self.assertTrue(any('!Integer.IsGreater(Container(5011).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5011),2)' in c
                             for c in empty), 'the placeholder stays up while it retries')
-        self.assertTrue(any(c.startswith('!String.IsEmpty(') and '+ String.IsEqual(Window(home).Property(povil.retry.5011),2)' in c
+        # (5011 is a slot of the films screen: "nothing here" is for the rows it shows that retry, $EXP[...] first)
+        self.assertTrue(any('!String.IsEmpty(Window(home).Property(povil.tab.movies)) + String.IsEqual(Window(home).Property(povil.retry.5011),2)' in c
                             for c in empty), '"nothing here" only once the retries are spent')
 
     def test_the_player_buttons_reach_each_other(self):

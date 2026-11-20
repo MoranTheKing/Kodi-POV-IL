@@ -48,7 +48,7 @@ from resources.libs import update
 # than the Wizard for a while -- a viewer's CoreELEC box, Nov 2026: the tile "שורות משלי" came with the skin's
 # update and did nothing, the Wizard there not knowing it yet.
 try:
-    xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows')
+    xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows home_rows')
 except Exception:
     pass
 
