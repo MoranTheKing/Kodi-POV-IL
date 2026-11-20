@@ -94,7 +94,8 @@ EDITS = [
     # Skin settings: Onyx's Homepage category is back (Onyx 1.0.28; it was hidden: it shaped Onyx's own home, which
     # this skin replaces). A viewer, Nov 2026, looked for "Home menus customizer" where the original Onyx has it: its
     # two entries open the build's menu editor (the Wizard's menu_editor.py) and the rows; the rest of the category
-    # (slideshows, backgrounds, hiding the shelves) does nothing on this home and stays hidden.
+    # (slideshows, backgrounds, hiding the shelves) does nothing on this home and stays hidden. Without the Wizard
+    # (Onyx 1.0.29): the same editor, inside the skin (gen_standalone.py, scripts/povil_menu_editor.py).
     ('SkinSettings.xml',
      '<item id="3104" description="Homepage">' + NL + '					<visible>false</visible>' + NL + '					<label>$LOCALIZE[31102]</label>',
      '<item id="3104" description="Homepage">' + NL + '					<label>$LOCALIZE[31102]</label>'),
@@ -102,12 +103,23 @@ EDITS = [
      '<onclick>ActivateWindow(1116)</onclick>',
      '<onclick condition="String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">'
      'RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=menu_editor)</onclick>' + NL +
-     '					<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">ActivateWindow(1162)</onclick>'),
+     '					<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">ActivateWindow(1162)</onclick>',
+     'RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=menu_editor)</onclick>'),
     ('SkinSettings.xml',
      '<onclick>ActivateWindow(1117)</onclick>',
      '<onclick condition="String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">'
      'RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=menu_editor&amp;part=rows)</onclick>' + NL +
-     '					<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">ActivateWindow(1163)</onclick>'),
+     '					<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">ActivateWindow(1163)</onclick>',
+     'RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=menu_editor&amp;part=rows)</onclick>'),
+    # ... and without the Wizard, since Onyx 1.0.29: the same editor inside the skin, not the skin's own rows windows
+    ('SkinSettings.xml',
+     '<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">ActivateWindow(1162)</onclick>',
+     '<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">'
+     'RunScript(special://skin/scripts/povil_menu_editor.py)</onclick>'),
+    ('SkinSettings.xml',
+     '<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">ActivateWindow(1163)</onclick>',
+     '<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">'
+     'RunScript(special://skin/scripts/povil_menu_editor.py,rows)</onclick>'),
     ('SkinSettings.xml', '<control type="radiobutton" id="3413" description="Hide media shelves">', '<control type="radiobutton" id="3413" description="Hide media shelves">' + NL + '\t\t\t\t\t<visible>false</visible>'),
     ('SkinSettings.xml', '<control type="radiobutton" id="3410" description="Use fanart slideshow">', '<control type="radiobutton" id="3410" description="Use fanart slideshow">' + NL + '\t\t\t\t\t<visible>false</visible>'),
     ('SkinSettings.xml', '<control type="button" id="3411" description="Fanart slideshow source">', '<control type="button" id="3411" description="Fanart slideshow source">' + NL + '\t\t\t\t\t<visible>false</visible>'),
