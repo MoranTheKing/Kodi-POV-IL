@@ -14,27 +14,27 @@
 			</control>
 			<control type="label">
 				<centerleft>960</centerleft><posy>70</posy><width>690</width><height>52</height>
-				<label>שורות משלי</label><align>center</align><aligny>center</aligny>
+				<label>שורות וכפתורים משלי</label><align>center</align><aligny>center</aligny>
 				<textcolor>$VAR[HighlightColor]</textcolor><include>TitleCommons</include>
-				<visible>!String.IsEqual(Window(home).Property(povil.rows.step),source)</visible>
+				<visible>![String.IsEqual(Window(home).Property(povil.rows.step),source) | String.IsEqual(Window(home).Property(povil.rows.step),order)]</visible>
 			</control>
 			<control type="label">
 				<centerleft>960</centerleft><posy>70</posy><width>690</width><height>52</height>
 				<label>$VAR[POVIL_RowPicking]</label><align>center</align><aligny>center</aligny>
 				<textcolor>$VAR[HighlightColor]</textcolor><include>TitleCommons</include>
-				<animation effect="slide" end="3000,0" time="0" condition="![String.IsEqual(Window(home).Property(povil.rows.step),source)]">Conditional</animation>
+				<animation effect="slide" end="3000,0" time="0" condition="![String.IsEqual(Window(home).Property(povil.rows.step),source) | String.IsEqual(Window(home).Property(povil.rows.step),order)]">Conditional</animation>
 			</control>
 			<control type="grouplist" id="9000">
 				<centerleft>960</centerleft><posy>135</posy><width>640</width><height>792</height>
 				<onleft>noop</onleft><onright>noop</onright><onup>9000</onup><ondown>9000</ondown><itemgap>0</itemgap>
-				<animation effect="slide" end="3000,0" time="0" condition="String.IsEqual(Window(home).Property(povil.rows.step),source)">Conditional</animation>
+				<animation effect="slide" end="3000,0" time="0" condition="String.IsEqual(Window(home).Property(povil.rows.step),source) | String.IsEqual(Window(home).Property(povil.rows.step),order)">Conditional</animation>
 				<control type="button" id="7800">
 					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_RowSlot_movies_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,movies_1,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Row_movies_1,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
@@ -44,7 +44,7 @@
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,movies_2,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Row_movies_2,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
@@ -54,97 +54,177 @@
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,movies_3,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Row_movies_3,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
 				<control type="button" id="7803">
 					<width>640</width><height>66</height><font>size22</font>
-					<label>$VAR[POVIL_RowSlot_tv_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<label>$VAR[POVIL_ChipSlot_movies_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,tv_1,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Chip_movies_1,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
 				<control type="button" id="7804">
 					<width>640</width><height>66</height><font>size22</font>
-					<label>$VAR[POVIL_RowSlot_tv_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<label>$VAR[POVIL_ChipSlot_movies_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,tv_2,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Chip_movies_2,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
 				<control type="button" id="7805">
 					<width>640</width><height>66</height><font>size22</font>
-					<label>$VAR[POVIL_RowSlot_tv_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<label>$VAR[POVIL_RowSlot_tv_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,tv_3,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Row_tv_1,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
 				<control type="button" id="7806">
 					<width>640</width><height>66</height><font>size22</font>
-					<label>$VAR[POVIL_RowSlot_kids_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<label>$VAR[POVIL_RowSlot_tv_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,kids_1,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Row_tv_2,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
 				<control type="button" id="7807">
 					<width>640</width><height>66</height><font>size22</font>
-					<label>$VAR[POVIL_RowSlot_kids_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<label>$VAR[POVIL_RowSlot_tv_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,kids_2,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Row_tv_3,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
 				<control type="button" id="7808">
 					<width>640</width><height>66</height><font>size22</font>
-					<label>$VAR[POVIL_RowSlot_kids_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<label>$VAR[POVIL_ChipSlot_tv_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,kids_3,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Chip_tv_1,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
 				<control type="button" id="7809">
 					<width>640</width><height>66</height><font>size22</font>
-					<label>$VAR[POVIL_RowSlot_favourites_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<label>$VAR[POVIL_ChipSlot_tv_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,favourites_1,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Chip_tv_2,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
 				<control type="button" id="7810">
 					<width>640</width><height>66</height><font>size22</font>
-					<label>$VAR[POVIL_RowSlot_favourites_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<label>$VAR[POVIL_RowSlot_kids_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,favourites_2,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Row_kids_1,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
 				<control type="button" id="7811">
 					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_RowSlot_kids_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Row_kids_2,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7812">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_RowSlot_kids_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Row_kids_3,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7813">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_kids_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_kids_1,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7814">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_kids_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_kids_2,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7815">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_RowSlot_favourites_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Row_favourites_1,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7816">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_RowSlot_favourites_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Row_favourites_2,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7817">
+					<width>640</width><height>66</height><font>size22</font>
 					<label>$VAR[POVIL_RowSlot_favourites_3]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>SetProperty(povil.rows.slot,favourites_3,home)</onclick>
+					<onclick>SetProperty(povil.rows.slot,Row_favourites_3,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7818">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_favourites_1]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_favourites_1,home)</onclick>
+					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
+					<onclick>SetFocus(9100)</onclick>
+				</control>
+				<control type="button" id="7819">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>$VAR[POVIL_ChipSlot_favourites_2]</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>SetProperty(povil.rows.slot,Chip_favourites_2,home)</onclick>
 					<onclick>SetProperty(povil.rows.step,source,home)</onclick>
 					<onclick>SetFocus(9100)</onclick>
 				</control>
@@ -152,8 +232,8 @@
 			<control type="textbox">
 				<centerleft>960</centerleft><posy>930</posy><width>640</width><height>70</height>
 				<font>size18</font><align>center</align><textcolor>$VAR[HighlightColor]</textcolor>
-				<label>שורה מופיעה בסוף המסך שלה, כשיש בה פריטים.</label>
-				<visible>!String.IsEqual(Window(home).Property(povil.rows.step),source)</visible>
+				<label>שורה מופיעה בסוף המסך שלה וכפתור בשורת הכפתורים, כשיש להם מקור.</label>
+				<visible>![String.IsEqual(Window(home).Property(povil.rows.step),source) | String.IsEqual(Window(home).Property(povil.rows.step),order)]</visible>
 			</control>
 			<control type="grouplist" id="9100">
 				<centerleft>960</centerleft><posy>135</posy><width>640</width><height>400</height>
@@ -167,11 +247,13 @@
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_path,videodb://movies/titles/)</onclick>
-					<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_name,סרטים מהספרייה)</onclick>
-					<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
-					<onclick>ClearProperty(povil.rows.step,home)</onclick>
-					<onclick>SetFocus(9000)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_path,videodb://movies/titles/)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name,סרטים מהספרייה)</onclick>
+					<onclick condition="String.StartsWith(Window(home).Property(povil.rows.slot),Row_)">SetProperty(povil.rows.step,order,home)</onclick>
+					<onclick condition="String.StartsWith(Window(home).Property(povil.rows.slot),Row_)">SetFocus(9300)</onclick>
+					<onclick condition="!String.StartsWith(Window(home).Property(povil.rows.slot),Row_)">Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
+					<onclick condition="!String.StartsWith(Window(home).Property(povil.rows.slot),Row_)">ClearProperty(povil.rows.step,home)</onclick>
+					<onclick condition="!String.StartsWith(Window(home).Property(povil.rows.slot),Row_)">SetFocus(9000)</onclick>
 				</control>
 				<control type="button" id="9111">
 					<width>640</width><height>66</height><font>size22</font>
@@ -179,11 +261,13 @@
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_path,videodb://tvshows/titles/)</onclick>
-					<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_name,סדרות מהספרייה)</onclick>
-					<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
-					<onclick>ClearProperty(povil.rows.step,home)</onclick>
-					<onclick>SetFocus(9000)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_path,videodb://tvshows/titles/)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name,סדרות מהספרייה)</onclick>
+					<onclick condition="String.StartsWith(Window(home).Property(povil.rows.slot),Row_)">SetProperty(povil.rows.step,order,home)</onclick>
+					<onclick condition="String.StartsWith(Window(home).Property(povil.rows.slot),Row_)">SetFocus(9300)</onclick>
+					<onclick condition="!String.StartsWith(Window(home).Property(povil.rows.slot),Row_)">Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
+					<onclick condition="!String.StartsWith(Window(home).Property(povil.rows.slot),Row_)">ClearProperty(povil.rows.step,home)</onclick>
+					<onclick condition="!String.StartsWith(Window(home).Property(povil.rows.slot),Row_)">SetFocus(9000)</onclick>
 				</control>
 				<control type="button" id="9112">
 					<width>640</width><height>66</height><font>size22</font>
@@ -191,9 +275,11 @@
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_path,videodb://recentlyaddedmovies/)</onclick>
-					<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_name,נוספו לאחרונה)</onclick>
-					<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_path,videodb://recentlyaddedmovies/)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name,נוספו לאחרונה)</onclick>
+					<onclick>Skin.Reset(POVIL$INFO[Window(home).Property(povil.rows.slot)]_sort)</onclick>
+					<onclick>Skin.Reset(POVIL$INFO[Window(home).Property(povil.rows.slot)]_order)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
 					<onclick>ClearProperty(povil.rows.step,home)</onclick>
 					<onclick>SetFocus(9000)</onclick>
 				</control>
@@ -203,19 +289,95 @@
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>Skin.SetPath(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_path)</onclick>
-					<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
+					<onclick>Skin.SetPath(POVIL$INFO[Window(home).Property(povil.rows.slot)]_path)</onclick>
+					<onclick>Skin.Reset(POVIL$INFO[Window(home).Property(povil.rows.slot)]_sort)</onclick>
+					<onclick>Skin.Reset(POVIL$INFO[Window(home).Property(povil.rows.slot)]_order)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
 					<onclick>ClearProperty(povil.rows.step,home)</onclick>
 					<onclick>SetFocus(9000)</onclick>
 				</control>
 				<control type="button" id="9121">
 					<width>640</width><height>66</height><font>size22</font>
-					<label>מחיקת השורה</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<label>מחיקה</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
 					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
 					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
 					<texturenofocus />
-					<onclick>Skin.Reset(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_path)</onclick>
-					<onclick>Skin.Reset(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
+					<onclick>Skin.Reset(POVIL$INFO[Window(home).Property(povil.rows.slot)]_path)</onclick>
+					<onclick>Skin.Reset(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
+					<onclick>Skin.Reset(POVIL$INFO[Window(home).Property(povil.rows.slot)]_sort)</onclick>
+					<onclick>Skin.Reset(POVIL$INFO[Window(home).Property(povil.rows.slot)]_order)</onclick>
+					<onclick>ClearProperty(povil.rows.step,home)</onclick>
+					<onclick>SetFocus(9000)</onclick>
+				</control>
+			</control>
+			<control type="grouplist" id="9300">
+				<centerleft>960</centerleft><posy>135</posy><width>640</width><height>400</height>
+				<onleft>noop</onleft><onright>noop</onright><onup>9300</onup><ondown>9300</ondown><itemgap>0</itemgap>
+				<animation effect="slide" end="3000,0" time="0" condition="![String.IsEqual(Window(home).Property(povil.rows.step),order)]">Conditional</animation>
+				<onback>ClearProperty(povil.rows.step,home)</onback>
+				<onback>SetFocus(9000)</onback>
+				<control type="button" id="9310">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>החדשים שנוספו קודם</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_sort,dateadded)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_order,descending)</onclick>
+					<onclick>SetProperty(povil.rtl.reset,1,home)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
+					<onclick>ClearProperty(povil.rows.step,home)</onclick>
+					<onclick>SetFocus(9000)</onclick>
+				</control>
+				<control type="button" id="9311">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>לפי שנה, החדשים קודם</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_sort,year)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_order,descending)</onclick>
+					<onclick>SetProperty(povil.rtl.reset,1,home)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
+					<onclick>ClearProperty(povil.rows.step,home)</onclick>
+					<onclick>SetFocus(9000)</onclick>
+				</control>
+				<control type="button" id="9312">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>לפי שם, א-ת</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_sort,title)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_order,ascending)</onclick>
+					<onclick>SetProperty(povil.rtl.reset,1,home)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
+					<onclick>ClearProperty(povil.rows.step,home)</onclick>
+					<onclick>SetFocus(9000)</onclick>
+				</control>
+				<control type="button" id="9313">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>לפי דירוג, הגבוה קודם</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_sort,rating)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_order,descending)</onclick>
+					<onclick>SetProperty(povil.rtl.reset,1,home)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
+					<onclick>ClearProperty(povil.rows.step,home)</onclick>
+					<onclick>SetFocus(9000)</onclick>
+				</control>
+				<control type="button" id="9314">
+					<width>640</width><height>66</height><font>size22</font>
+					<label>בסדר אקראי</label><align>right</align><aligny>center</aligny><textoffsetx>24</textoffsetx>
+					<focusedcolor>$VAR[FocusTextColor]</focusedcolor>
+					<texturefocus border="14" colordiffuse="$VAR[FocusBoxColor]">povil/focus_box.png</texturefocus>
+					<texturenofocus />
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_sort,random)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_order,descending)</onclick>
+					<onclick>SetProperty(povil.rtl.reset,1,home)</onclick>
+					<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
 					<onclick>ClearProperty(povil.rows.step,home)</onclick>
 					<onclick>SetFocus(9000)</onclick>
 				</control>
@@ -228,9 +390,11 @@
 				<animation effect="slide" end="3000,0" time="0" condition="![String.IsEqual(Window(home).Property(povil.rows.step),source)]">Conditional</animation>
 				<onback>ClearProperty(povil.rows.step,home)</onback>
 				<onback>SetFocus(9000)</onback>
-				<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_path,$ESCINFO[ListItem.FolderPath])</onclick>
-				<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_name,$ESCINFO[ListItem.Label])</onclick>
-				<onclick>Skin.SetString(POVILRow_$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
+				<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_path,$ESCINFO[ListItem.FolderPath])</onclick>
+				<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name,$ESCINFO[ListItem.Label])</onclick>
+				<onclick>Skin.Reset(POVIL$INFO[Window(home).Property(povil.rows.slot)]_sort)</onclick>
+				<onclick>Skin.Reset(POVIL$INFO[Window(home).Property(povil.rows.slot)]_order)</onclick>
+				<onclick>Skin.SetString(POVIL$INFO[Window(home).Property(povil.rows.slot)]_name)</onclick>
 				<onclick>ClearProperty(povil.rows.step,home)</onclick>
 				<onclick>SetFocus(9000)</onclick>
 				<itemlayout height="66" width="640">

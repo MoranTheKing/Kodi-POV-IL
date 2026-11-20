@@ -426,7 +426,9 @@ SETTINGS_ITEMS = [
      by_wizard(plugin_run(WIZARD + '?mode=player_style'), 'SetProperty(povil.choice,player,home)', 'ActivateWindow(1161)'), ''),
     # the viewer's own rows (CUSTOM_TABS)
     # (without the Wizard: the skin's own dialog -- the library, the viewer's video sources or any folder)
-    ('שורות משלי', 'DefaultFolder.png', by_wizard(plugin_run(WIZARD + '?mode=custom_rows'), 'ActivateWindow(1162)', mode='custom_rows'), ''),
+    # (and the viewer's own chips, CUSTOM_CHIPS: a Wizard before 0.5.28 knows the rows only -- the skin's own dialog then)
+    ('שורות וכפתורים משלי', 'DefaultFolder.png',
+     by_wizard(plugin_run(WIZARD + '?mode=custom_rows'), 'ActivateWindow(1162)', mode='custom_chips'), ''),
     # the order of a screen's rows: up, down, hidden, shown again (SLOT_TABS; without the Wizard: window 1163)
     ('סדר השורות', 'DefaultPlaylist.png', by_wizard(plugin_run(WIZARD + '?mode=home_rows'), 'ActivateWindow(1163)', mode='home_rows'), ''),
     # the watched mark's colour (WATCHED_COLOURS)
@@ -554,6 +556,20 @@ for _tab in TABS:
                                              'poster', True) for _n in range(1, CUSTOM_SLOTS + 1)]
 
 
+# The viewer's own chips (Onyx 1.0.27 / Wizard 0.5.28; a viewer, via the owner, Nov 2026: "how can I add a button that
+# takes me into my films library, like the buttons on top -- Netflix, Disney?"): CUSTOM_CHIPS on each screen of
+# CUSTOM_TABS, each the folder in the skin strings POVILChip_<tab>_<n>_path / _name (the same tile and dialogs as the
+# rows), shown only while it has one; it opens the folder in the Videos window -- Kodi's library there has its own
+# sort menu. After a screen's services (CUSTOM_CHIP_AT), else last. Their ids are their own (custom_chip_ids): the
+# build's chips keep theirs.
+CUSTOM_CHIPS = 2
+CUSTOM_CHIP_AT = {'movies': 4, 'tv': 4}
+
+
+def custom_chip_ids(ti):
+    return [9240 + ti * CUSTOM_CHIPS + n for n in range(CUSTOM_CHIPS)]
+
+
 RTL_ADDONS = ('plugin.video.pov', 'plugin.video.umbrella', 'plugin.video.idanplus')   # patches_config.py's povil_rtl hooks
 
 
@@ -606,6 +622,58 @@ def slot_kinds(ti, k):
     return {kind: '$EXP[POVIL_SlotKind_%d_%s]' % (row_id(ti, k), kind) for kind in groups}
 
 
+# A row of the viewer's own from Kodi's library (a videodb:// address -- the library, its recently added, a folder
+# of it): sorted by the skin as the viewer chose (POVILRow_<tab>_<n>_sort / _order; Kodi 21 applies an address's
+# filter, not its order -- QA Kodi, every order came out by name), newest added first unless chosen otherwise, and
+# started on the right like the add-ons' rows (rtl_waiting). Kodi reads a list's sortby / sortorder from a variable and
+# follows it when it changes (QA Kodi 21: year, name, rating, date added, each in its order).
+LIBRARY_SORTS = (('dateadded', 'descending', 'החדשים שנוספו קודם'), ('year', 'descending', 'לפי שנה, החדשים קודם'),
+                 ('title', 'ascending', 'לפי שם, א-ת'), ('rating', 'descending', 'לפי דירוג, הגבוה קודם'),
+                 ('random', 'descending', 'בסדר אקראי'))
+
+
+def library_row(ti, k, named=True):
+    """The condition that slot k shows a row of the viewer's own from Kodi's library ('' when it never can); named:
+    the expression POVIL_Library_<id> (not in Timers.xml: Kodi reads it without the skin's expressions)."""
+    tab = TABS[ti]
+    if not slot_tab(tab):
+        return ''
+    parts = []
+    for i, _when in candidates(ti, k):
+        path = tab['rows'][i][1]
+        if is_custom(path):
+            parts.append('[%s + String.StartsWith(Skin.String(POVILRow_%s_path),videodb://)]' % (shows_raw(ti, k, i), path[7:]))
+    if not parts:
+        return ''
+    return '$EXP[POVIL_Library_%d]' % row_id(ti, k) if named else ' | '.join(parts)
+
+
+def slot_sorts(x):
+    """POVIL_SortBy_<id> / POVIL_SortOrder_<id>: a slot's order -- by size (none: a stable order that a playback does
+    not make Kodi ask again) unless it shows a library row of the viewer's own; then the viewer's order, reversed
+    because the row starts at its far end, on the right."""
+    for ti, tab in enumerate(TABS):
+        if not slot_tab(tab):
+            continue
+        for k in range(len(tab['rows'])):
+            rid = row_id(ti, k)
+            customs = [(when, tab['rows'][i][1][7:]) for i, when in candidates(ti, k) if is_custom(tab['rows'][i][1])]
+            x(1, '<variable name="POVIL_SortBy_%d">' % rid)
+            for when, key in customs:
+                lib = '%s + String.StartsWith(Skin.String(POVILRow_%s_path),videodb://)' % (when, key)
+                x(2, '<value condition="%s + !String.IsEmpty(Skin.String(POVILRow_%s_sort))">$INFO[Skin.String(POVILRow_%s_sort)]</value>'
+                  % (lib, key, key))
+                x(2, '<value condition="%s">dateadded</value>' % lib)
+            x(2, '<value>size</value>')
+            x(1, '</variable>')
+            x(1, '<variable name="POVIL_SortOrder_%d">' % rid)
+            for when, key in customs:
+                lib = '%s + String.StartsWith(Skin.String(POVILRow_%s_path),videodb://)' % (when, key)
+                x(2, '<value condition="%s + String.IsEqual(Skin.String(POVILRow_%s_order),ascending)">descending</value>' % (lib, key))
+            x(2, '<value>ascending</value>')
+            x(1, '</variable>')
+
+
 def slot_expressions(x):
     """The named conditions of the slots (Includes_POVIL_Home.xml): which row a slot shows, and which kind of row."""
     for ti, tab in enumerate(TABS):
@@ -620,6 +688,8 @@ def slot_expressions(x):
             if len(groups) > 1:
                 for kind, conds in groups.items():
                     x(1, '<expression name="POVIL_SlotKind_%d_%s">%s</expression>' % (rid, kind, ' | '.join(conds)))
+            if library_row(ti, k):
+                x(1, '<expression name="POVIL_Library_%d">%s</expression>' % (rid, library_row(ti, k, named=False)))
 
 
 def slot_block(tab):
@@ -680,15 +750,27 @@ def rtl_path(path):
     return path + ('&' if '?' in path else '?') + 'povil_rtl=1'
 
 
-def rtl_waiting(cid, home=True):
+RESORT = 'Window(home).Property(povil.rtl.reset)'     # a library row's order changed: it starts on the right again
+
+
+def rtl_waiting(cid, home=True, library=''):
+    """library: the condition that the row is a library row of the viewer's own (library_row): sorted reversed by the
+    skin, so it too starts at its far end -- an add-on's list says so by the mark on its items."""
     c = 'Container(%d)' % cid if cid else 'Container'
     prop = 'Window(home).Property(povil.rtl.%s)' % (cid or 'view')
-    return ('!%(c)s.IsUpdating + Integer.IsGreater(%(c)s.NumItems,1) + Integer.IsEqual(%(c)s.CurrentItem,1)'
-            ' + String.IsEqual(%(c)s.ListItemAbsolute(0).Property(povil_rtl),1)'
-            # the container's label FIRST: as the second argument Kodi reads
-            # Container(id).ListItemAbsolute(0).Label as plain text, the guard never
-            # matched, and a row's far end threw the user back to its start
-            ' + !String.IsEqual(%(c)s.ListItemAbsolute(0).Label,%(p)s)') % {'c': c, 'p': prop}
+    # the container's label FIRST: as the second argument Kodi reads Container(id).ListItemAbsolute(0).Label as plain
+    # text, the guard never matched, and a row's far end threw the user back to its start
+    changed = '!String.IsEqual(%(c)s.ListItemAbsolute(0).Label,%(p)s)'
+    addon = ('Integer.IsEqual(%(c)s.CurrentItem,1) + String.IsEqual(%(c)s.ListItemAbsolute(0).Property(povil_rtl),1) + '
+             + changed)
+    if library:
+        # A library row: whenever its first item is another (a new order, the library read again), wherever its
+        # selection is -- Kodi reads the row before the skin's order applies and keeps the selected film through the
+        # re-sort (QA Kodi: the focus ended on the 2nd and 3rd tile); the timer moves to the far end from any item
+        # (Control.Move by minus the current item). And once more when a dialog re-ordered it (RESORT: the same
+        # first item may stand first in the new order).
+        addon = '[[%s] | [%s + [%s | !String.IsEmpty(%s)]]]' % (addon, library, changed, RESORT)
+    return ('!%(c)s.IsUpdating + Integer.IsGreater(%(c)s.NumItems,1) + ' + addon) % {'c': c, 'p': prop}
 
 
 def gen_timers():
@@ -840,7 +922,10 @@ def gen_timers():
     # most. Only the tab on screen, only rows that are never empty by design.
     for ti, tab in enumerate(TABS):
         for ri, row in enumerate(tab['rows']):
-            whens = [when for i, when in candidates(ti, ri) if retries(tab['rows'][i])]
+            # (written out: a timer's condition is read without the skin's named expressions -- $EXP there was
+            # "Error parsing boolean expression" at every start and the slot rows never asked again, Onyx 1.0.26; 1.0.27)
+            whens = [(shows_raw(ti, ri, i) if slot_tab(tab) else when)
+                     for i, when in candidates(ti, ri) if retries(tab['rows'][i])]
             if not whens:
                 continue
             # (a slot: only while it shows one of the rows that retry)
@@ -909,9 +994,15 @@ def gen_timers():
             rid = row_id(ti, ri)
             x(1, '<timer>')
             x(2, '<name>povil_rtl_%d</name>' % rid)
-            x(2, '<start reset="true">Window.IsVisible(home) + %s + %s</start>' % (tab_cond(tab), rtl_waiting(rid)))
+            x(2, '<start reset="true">Window.IsVisible(home) + %s + %s</start>'
+              % (tab_cond(tab), rtl_waiting(rid, library=library_row(ti, ri, named=False))))
             x(2, '<onstart>SetProperty(povil.rtl.%d,$ESCINFO[Container(%d).ListItemAbsolute(0).Label],home)</onstart>' % (rid, rid))
-            x(2, '<onstart>Control.Move(%d,-1)</onstart>' % rid)
+            if library_row(ti, ri):
+                # (to the far end from any item: back by the current item's number, the last wrapping round)
+                x(2, '<onstart>Control.Move(%d,-$INFO[Container(%d).CurrentItem])</onstart>' % (rid, rid))
+                x(2, '<onstart>ClearProperty(povil.rtl.reset,home)</onstart>')
+            else:
+                x(2, '<onstart>Control.Move(%d,-1)</onstart>' % rid)
             x(2, '<stop>true</stop>')
             x(1, '</timer>')
     # The power menu (its items are in right-to-left order): open on the rightmost, once per opening
@@ -977,6 +1068,7 @@ def gen_includes():
     x(0, '<!-- Generated by tools/skin_onyx/gen_home.py. Do not edit by hand. -->')
     x(0, '<includes>')
     slot_expressions(x)
+    slot_sorts(x)
     sources = []  # (condition, container id)
     # (condition, container, its kind): a slot that may show rows of several kinds is one source per kind
     for ti, tab in enumerate(TABS):
@@ -1777,8 +1869,11 @@ def chips(x, d):
     for ti, tab in enumerate(TABS):
         ids = chip_ids(ti, tab)
         down = row_id(ti, 0) if tab['rows'] else ''
+        at = CUSTOM_CHIP_AT.get(tab['id'], len(tab['chips'])) if tab['id'] in CUSTOM_TABS else None
         # XML order is left to right: last chip first, so the first chip is the rightmost
         for ci in reversed(range(len(tab['chips']))):
+            if ci == at - 1 if at else False:
+                own_chips(x, d + 1, ti, tab, down)
             chip = tuple(tab['chips'][ci]) + (None, None)
             label = chip[0]
             # one action, or several in order (a service's chip names the service, then shows its page)
@@ -1810,6 +1905,29 @@ def chips(x, d):
             x(d + 2, '<visible>%s</visible>' % vis)
             x(d + 1, '</control>')
     x(d, '</control>')
+
+
+def own_chips(x, d, ti, tab, down):
+    """The viewer's own chips of a screen (CUSTOM_CHIPS), right to left: shown while each has a folder."""
+    for n in reversed(range(1, CUSTOM_CHIPS + 1)):
+        key = 'POVILChip_%s_%d' % (tab['id'], n)
+        cid = custom_chip_ids(ti)[n - 1]
+        x(d, '<control type="button" id="%d">' % cid)
+        x(d + 1, '<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>')
+        x(d + 1, '<font>povil_chip_home</font><align>center</align><aligny>center</aligny>')
+        x(d + 1, '<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>')
+        x(d + 1, '<texturenofocus border="24" colordiffuse="24FFFFFF">povil/pill48.png</texturenofocus>')
+        x(d + 1, '<texturefocus border="24" colordiffuse="%s">povil/pill48.png</texturefocus>' % GOLD)
+        x(d + 1, '<label>$INFO[Skin.String(%s_name)]</label>' % key)
+        # ($ESCINFO: quoted, so a comma in the folder cannot split the command)
+        x(d + 1, '<onclick>ActivateWindow(Videos,$ESCINFO[Skin.String(%s_path)],return)</onclick>' % key)
+        x(d + 1, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
+        x(d + 1, '<onfocus>SetProperty(povil.focus,%d,home)</onfocus>' % cid)
+        x(d + 1, '<onup>%d</onup>' % tab_button(ti))
+        if down:
+            x(d + 1, '<ondown>%d</ondown>' % down)
+        x(d + 1, '<visible>%s + !String.IsEmpty(Skin.String(%s_path))</visible>' % (tab_cond(tab), key))
+        x(d, '</control>')
 
 
 def rtl_slots(g):
@@ -1899,7 +2017,7 @@ def skeleton(x, d, ti, ri, rid, kind, path, optional, members=None):
     for when, m_path, m_optional in members:
         parts = ['Container(%d).IsUpdating' % rid]
         if is_rtl(m_path) and not m_path.startswith('static:'):
-            parts.append('[%s]' % rtl_waiting(rid))
+            parts.append('[%s]' % rtl_waiting(rid, library=library_row(ti, ri)))
         if retries((None, m_path, kind, m_optional)):
             parts.append('[!%s + !%s]' % (has, spent))       # until the retries are spent
             retrying.append(when)
@@ -2066,7 +2184,8 @@ def slot_row(x, d, ti, k, ids, top):
     x(d + 2, '<onfocus>SetProperty(povil.focus,%d,home)</onfocus>' % rid)
     for cond, target in nav_chain(ids[k + 1:]):
         x(d + 2, '<ondown condition="%s">%d</ondown>' % (cond, target))
-    x(d + 2, '<animation effect="fade" start="100" end="0" time="0" condition="%s">Conditional</animation>' % rtl_waiting(rid))
+    x(d + 2, '<animation effect="fade" start="100" end="0" time="0" condition="%s">Conditional</animation>'
+      % rtl_waiting(rid, library=library_row(ti, k)))
     for kind, kcond in kinds.items():
         if kind != base:
             # a row of another kind in a poster row's place: its whole tiles end flush with the right margin
@@ -2083,7 +2202,10 @@ def slot_row(x, d, ti, k, ids, top):
               % (shape(kind) if kind != 'ranked' else 'poster', rid, kcond))
         else:
             x(d + 2, '<include content="POVIL_Item_%s"><param name="id" value="%d" /></include>' % (kind, rid))
-    x(d + 2, '<content target="videos" sortby="size">$VAR[POVIL_Path_%d]</content>' % rid)
+    # (by size: no order that a playback makes Kodi ask the row again -- unless a library row of the viewer's own
+    # is shown, sorted as the viewer chose: slot_sorts)
+    x(d + 2, '<content target="videos" sortby="$VAR[POVIL_SortBy_%d]" sortorder="$VAR[POVIL_SortOrder_%d]">'
+             '$VAR[POVIL_Path_%d]</content>' % (rid, rid, rid))
     x(d + 1, '</control>')
     for kind, kcond in kinds.items():
         if kcond:

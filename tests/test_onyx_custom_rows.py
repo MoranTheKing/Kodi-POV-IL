@@ -88,12 +88,13 @@ class SkinRowsTests(unittest.TestCase):
     def test_the_settings_tile_asks_the_wizard_only_when_it_says_it_can(self):
         # a viewer's CoreELEC box, Nov 2026: the skin updated first, the Wizard there did not know the mode -- nothing
         home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')
-        tile = home.split('<label>שורות משלי</label>')[1].split('</item>')[0]
-        able = 'String.Contains(Window(home).Property(povil.wizard.modes),custom_rows)'
+        # (and the chips, Onyx 1.0.27: a Wizard before 0.5.28 knows the rows only -- the skin's own dialog then)
+        tile = home.split('<label>שורות וכפתורים משלי</label>')[1].split('</item>')[0]
+        able = 'String.Contains(Window(home).Property(povil.wizard.modes),custom_chips)'
         self.assertIn('<onclick condition="%s">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=custom_rows)</onclick>' % able, tile)
         self.assertIn('<onclick condition="!%s">ActivateWindow(1162)</onclick>' % able, tile)
         startup = (WIZARD / 'startup.py').read_text(encoding='utf-8')
-        self.assertIn("xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows home_rows')", startup)
+        self.assertIn("xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows home_rows custom_chips')", startup)
         router = (WIZARD / 'resources/libs/common/router.py').read_text(encoding='utf-8')
         self.assertRegex(router, r"mode == 'custom_rows':\s*\n(\s*#[^\n]*\n)?\s*from resources\.libs import custom_rows\s*\n\s*custom_rows\.choose\(\)")
 
@@ -163,31 +164,77 @@ class WizardDialogTests(unittest.TestCase):
         from urllib.parse import unquote
         import json
         self.library = {'VideoLibrary.GetMovies': 12}
-        strings, done = self.run_choose(FakeDialog([0, 0, 0, 3], inputs=['הסרטים שלי'], browse='smb://nas/Films, 4K/'))
+        strings, done = self.run_choose(FakeDialog([0, 0, 0, 3, 0], inputs=['הסרטים שלי'], browse='smb://nas/Films, 4K/'))
         path = strings['POVILRow_movies_1_path']
         self.assertTrue(path.startswith('videodb://movies/titles/?xsp='), path)
         self.assertNotIn(',', path)
         self.assertNotIn('"', path)
         xsp = json.loads(unquote(path.split('?xsp=')[1]))
         self.assertEqual(xsp['rules'], {'and': [{'field': 'path', 'operator': 'startswith', 'value': ['smb://nas/Films, 4K/']}]})
-        self.assertEqual((xsp['type'], xsp['order']['method'], xsp['order']['direction']), ('movies', 'dateadded', 'descending'))
-        # series in the library: the library's series; nothing there: the folder as it is
+        # (Kodi 21 applies an address's filter, not its order -- QA Kodi: every order came out by name; the skin
+        # sorts the row, Onyx 1.0.27)
+        self.assertEqual(xsp['type'], 'movies')
+        self.assertNotIn('order', xsp)
+        self.assertEqual((strings['POVILRow_movies_1_sort'], strings['POVILRow_movies_1_order']), ('dateadded', 'descending'))
+        # series in the library: the library's series, by year; nothing there: the folder as it is, no order of its own
         self.library = {'VideoLibrary.GetTVShows': 3}
-        strings, _ = self.run_choose(FakeDialog([1, 0, 0, 3], browse='/storage/Series/'))
+        strings, _ = self.run_choose(FakeDialog([1, 0, 0, 3, 1], browse='/storage/Series/'))
         self.assertTrue(strings['POVILRow_tv_1_path'].startswith('videodb://tvshows/titles/?xsp='))
+        self.assertEqual((strings['POVILRow_tv_1_sort'], strings['POVILRow_tv_1_order']), ('year', 'descending'))
         self.library = {}
-        strings, _ = self.run_choose(FakeDialog([1, 0, 0, 3], browse='/storage/Clips/'))
+        strings, done = self.run_choose(FakeDialog([1, 0, 0, 3], browse='/storage/Clips/'),
+                                        {'POVILRow_tv_1_sort': 'year', 'POVILRow_tv_1_order': 'descending'})
         self.assertEqual(strings['POVILRow_tv_1_path'], '/storage/Clips/')
+        self.assertNotIn('POVILRow_tv_1_sort', strings)
+        self.assertNotIn('POVILRow_tv_1_order', strings)
 
     def test_a_comma_in_the_name_cannot_break_the_command(self):
-        strings, _ = self.run_choose(FakeDialog([1, 2, 0, 0], inputs=['אקשן, מתח (HD "חדש"']))
+        # (the library: its order next -- by name)
+        strings, _ = self.run_choose(FakeDialog([1, 2, 0, 0, 2], inputs=['אקשן, מתח (HD "חדש"']))
         self.assertEqual(strings['POVILRow_tv_3_path'], 'videodb://movies/titles/')
         self.assertEqual(strings['POVILRow_tv_3_name'], 'אקשן מתח HD חדש')
+        self.assertEqual((strings['POVILRow_tv_3_sort'], strings['POVILRow_tv_3_order']), ('title', 'ascending'))
+
+    def test_a_library_row_s_order_is_asked_and_changed_and_its_recently_added_has_none(self):
+        # the same viewer, Nov 2026: "I have no way to order the films -- by year, by name..."
+        # cancelling the order cancels the row: nothing is written
+        strings, done = self.run_choose(FakeDialog([0, 0, 0, 0, -1]))
+        self.assertEqual(strings, {})
+        # a library row of his: "סדר הפריטים" is its second action; by rating
+        have = {'POVILRow_movies_1_path': 'videodb://movies/titles/', 'POVILRow_movies_1_name': 'הסרטים שלי'}
+        strings, _ = self.run_choose(FakeDialog([0, 0, 1, 3]), have)
+        self.assertEqual((strings['POVILRow_movies_1_sort'], strings['POVILRow_movies_1_order']), ('rating', 'descending'))
+        self.assertEqual(strings['POVILRow_movies_1_path'], 'videodb://movies/titles/')
+        # recently added: in its own order, never asked; a folder row has no "סדר הפריטים" (its second action renames)
+        strings, _ = self.run_choose(FakeDialog([0, 1, 0, 2], inputs=['חדשים']))
+        self.assertEqual(strings['POVILRow_movies_2_path'], 'videodb://recentlyaddedmovies/')
+        self.assertNotIn('POVILRow_movies_2_sort', strings)
+        strings, _ = self.run_choose(FakeDialog([0, 0, 1], inputs=['שם חדש']), {'POVILRow_movies_1_path': 'D:\\x\\', 'POVILRow_movies_1_name': 'x'})
+        self.assertEqual(strings['POVILRow_movies_1_name'], 'שם חדש')
+
+    def test_a_chip_of_the_viewer_s_own_opens_his_library(self):
+        # the same viewer: "how can I add a button that takes me into my films library, like Netflix, Disney?"
+        # tab 0, the 4th entry (after three rows) is chip 1; source; the library's films -- no order asked
+        strings, done = self.run_choose(FakeDialog([0, 3, 0, 0], inputs=['הסרטים שלי']))
+        self.assertEqual(strings['POVILChip_movies_1_path'], 'videodb://movies/titles/')
+        self.assertEqual(strings['POVILChip_movies_1_name'], 'הסרטים שלי')
+        self.assertFalse([k for k in strings if k.startswith('POVILRow_')])
+        # renamed, then deleted
+        strings, _ = self.run_choose(FakeDialog([0, 3, 1], inputs=['ספרייה']), strings)
+        self.assertEqual(strings['POVILChip_movies_1_name'], 'ספרייה')
+        strings, done = self.run_choose(FakeDialog([0, 3, 2]), strings)
+        self.assertEqual(strings, {})
+        self.assertIn('Skin.Reset(POVILChip_movies_1_path)', done)
 
     def test_deleting_a_row_resets_both_strings(self):
         strings, done = self.run_choose(FakeDialog([0, 1, 2]), {'POVILRow_movies_2_path': 'D:\\x\\', 'POVILRow_movies_2_name': 'x'})
         self.assertNotIn('POVILRow_movies_2_path', strings)
         self.assertNotIn('POVILRow_movies_2_name', strings)
+        # (a library row's order goes with it)
+        strings, done = self.run_choose(FakeDialog([0, 1, 3]), {'POVILRow_movies_2_path': 'videodb://movies/titles/',
+                                                                 'POVILRow_movies_2_name': 'x', 'POVILRow_movies_2_sort': 'year',
+                                                                 'POVILRow_movies_2_order': 'descending'})
+        self.assertEqual(strings, {})
         self.assertIn('Skin.Reset(POVILRow_movies_2_path)', done)
 
     def test_an_empty_row_offers_only_a_source_and_cancel_changes_nothing(self):
@@ -206,8 +253,9 @@ class StandaloneTests(unittest.TestCase):
     def test_the_rows_dialog_offers_the_library_the_viewer_s_sources_and_any_folder(self):
         rows = (SKIN / 'xml/Custom_POVILRows.xml').read_text(encoding='utf-8')
         self.assertIn('<window type="dialog" id="1162">', rows)
-        self.assertEqual(rows.count('SetProperty(povil.rows.slot,'), 12, 'four tabs, three rows each')
-        key = 'POVILRow_$INFO[Window(home).Property(povil.rows.slot)]'
+        self.assertEqual(rows.count('SetProperty(povil.rows.slot,Row_'), 12, 'four tabs, three rows each')
+        self.assertEqual(rows.count('SetProperty(povil.rows.slot,Chip_'), 8, 'and two chips each (Onyx 1.0.27)')
+        key = 'POVIL$INFO[Window(home).Property(povil.rows.slot)]'
         for path in ('videodb://movies/titles/', 'videodb://tvshows/titles/', 'videodb://recentlyaddedmovies/'):
             self.assertIn('Skin.SetString(%s_path,%s)' % (key, path), rows)
         self.assertIn('<content>sources://video/</content>', rows)
@@ -220,6 +268,23 @@ class StandaloneTests(unittest.TestCase):
         # default one, and that overrode the dialog's own SetFocus (QA Kodi, window 1163)
         self.assertNotIn('allowhiddenfocus', rows)
         self.assertIn('<animation effect="slide" end="3000,0" time="0" condition="![String.IsEqual(Window(home).Property(povil.rows.step),source)]">', rows)
+
+    def test_the_rows_dialog_asks_a_library_row_s_order_and_lists_the_chips(self):
+        rows = (SKIN / 'xml/Custom_POVILRows.xml').read_text(encoding='utf-8')
+        key = 'POVIL$INFO[Window(home).Property(povil.rows.slot)]'
+        row = 'String.StartsWith(Window(home).Property(povil.rows.slot),Row_)'
+        films = rows.split('<control type="button" id="9110">')[1].split('</control>')[0]
+        self.assertIn('<onclick condition="%s">SetProperty(povil.rows.step,order,home)</onclick>' % row, films)
+        self.assertIn('<onclick condition="!%s">Skin.SetString(%s_name)</onclick>' % (row, key), films, 'a chip: its name at once')
+        order = rows.split('<control type="grouplist" id="9300">')[1].split('</control>\n\t\t\t</control>')[0]
+        for method, direction in (('dateadded', 'descending'), ('year', 'descending'), ('title', 'ascending'),
+                                  ('rating', 'descending'), ('random', 'descending')):
+            self.assertIn('Skin.SetString(%s_sort,%s)' % (key, method), order)
+        self.assertIn('Skin.SetString(%s_order,ascending)' % key, order)
+        # a folder or a source is not the library: no order of its own
+        self.assertIn('Skin.Reset(%s_sort)' % key, rows.split('<control type="button" id="9120">')[1].split('</control>')[0])
+        includes = (SKIN / 'xml/Includes_POVIL_Home.xml').read_text(encoding='utf-8')
+        self.assertIn('<variable name="POVIL_ChipSlot_movies_1">', includes)
 
     def test_the_choice_dialog_sets_what_the_wizard_would(self):
         choice = (SKIN / 'xml/Custom_POVILChoice.xml').read_text(encoding='utf-8')
@@ -288,6 +353,18 @@ class HomeOrderTests(unittest.TestCase):
         self.assertNotIn('$EXP', block)
         self.assertNotIn('POVIL_SlotTitle_5031', (SKIN / 'xml/Includes_POVIL_Home.xml').read_text(encoding='utf-8'))
 
+    def test_a_timer_names_no_expression_and_an_empty_slot_row_still_asks_again(self):
+        # Onyx 1.0.26 as published: the retry timers of the slot screens named $EXP[POVIL_Shows_..] -- Kodi reads
+        # Timers.xml without the skin's expressions: "Error parsing boolean expression" 36 times at every start (QA
+        # Kodi log), and an empty row of these screens never asked again. Written out since 1.0.27.
+        H = gen_home()
+        timers = (SKIN / 'xml/Timers.xml').read_text(encoding='utf-8')
+        self.assertNotIn('$EXP[', timers)
+        ti = [t['id'] for t in H.TABS].index('movies')
+        rid = H.row_id(ti, 0)
+        timer = timers.split('<name>povil_retry_%d</name>' % rid)[1].split('</timer>')[0]
+        self.assertIn('[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_0),0)]', timer)
+
     def test_slots_are_one_height_ask_nothing_again_on_a_playback_and_draw_the_kind_they_show(self):
         H = gen_home()
         home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')
@@ -297,7 +374,10 @@ class HomeOrderTests(unittest.TestCase):
         for k in range(len(tab['rows'])):
             rid = H.row_id(ti, k)
             part = home.split('<control type="list" id="%d">' % rid)[1].split('</content>')[0]
-            self.assertIn('<content target="videos" sortby="size">$VAR[POVIL_Path_%d]</content' % rid, part + '</content')
+            self.assertIn('<content target="videos" sortby="$VAR[POVIL_SortBy_%d]" sortorder="$VAR[POVIL_SortOrder_%d]">'
+                          '$VAR[POVIL_Path_%d]</content' % (rid, rid, rid), part + '</content')
+            self.assertTrue(variable('POVIL_SortBy_%d' % rid).rstrip().endswith('<value>size</value>'),
+                            'by size unless a library row of the viewer\'s own is shown')
             # the movies screen's rows are posters and wide pictures: a layout for each, while it is the kind shown
             self.assertIn('<include content="POVIL_SlotItem_poster"><param name="id" value="%d" /><param name="when" value="$EXP[POVIL_SlotKind_%d_poster]" /></include>' % (rid, rid), part)
             self.assertIn('<include content="POVIL_SlotItem_landscape"><param name="id" value="%d" /><param name="when" value="$EXP[POVIL_SlotKind_%d_landscape]" /></include>' % (rid, rid), part)
@@ -344,6 +424,53 @@ class HomeOrderTests(unittest.TestCase):
             built = next(t for t in H.TABS if t['id'] == tab['id'])
             self.assertEqual(len(tab['rows']), len(built['rows']))
             self.assertEqual([r['custom'] for r in tab['rows'] if r['custom']], ['%s_%d' % (tab['id'], n) for n in (1, 2, 3)])
+
+
+class ChipsAndLibraryOrderTests(unittest.TestCase):
+    """Onyx 1.0.27 / Wizard 0.5.28. A viewer, via the owner, Nov 2026: "how can I add a button that takes me into my
+    films library, like the buttons on top -- Netflix, Disney?" and "I have no way to order the films -- by year, by
+    name". QA Kodi with a library of five films: each order on the screen, the first film on the right."""
+
+    def test_the_viewer_s_chips_come_after_the_services_and_open_their_folder(self):
+        H = gen_home()
+        home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')
+        chips = home.split('<control type="grouplist" id="9100" description="chips">')[1].split('\n\t\t\t</control>')[0]
+        ti = [t['id'] for t in H.TABS].index('movies')
+        first, second = H.custom_chip_ids(ti)
+        mine = chips.split('<control type="button" id="%d">' % first)[1].split('</control>')[0]
+        self.assertIn('<label>$INFO[Skin.String(POVILChip_movies_1_name)]</label>', mine)
+        self.assertIn('<onclick>ActivateWindow(Videos,$ESCINFO[Skin.String(POVILChip_movies_1_path)],return)</onclick>', mine)
+        self.assertIn('<visible>String.IsEqual(Window(home).Property(povil.tab),movies) + '
+                      '!String.IsEmpty(Skin.String(POVILChip_movies_1_path))</visible>', mine)
+        # XML order is left to right: the 5th build chip, then chip 2, chip 1, then the 4th service (rightmost first)
+        ids = H.chip_ids(ti, H.TABS[ti])
+        at = [chips.index('<control type="button" id="%d">' % cid) for cid in (ids[4], second, first, ids[3])]
+        self.assertEqual(at, sorted(at))
+        # the build's chips keep their ids
+        self.assertEqual(ids[0], 9112)
+        self.assertFalse(set(H.custom_chip_ids(ti)) & {cid for i, t in enumerate(H.TABS) for cid in H.chip_ids(i, t)})
+
+    def test_a_library_row_is_sorted_as_chosen_and_starts_on_the_right(self):
+        H = gen_home()
+        ti = [t['id'] for t in H.TABS].index('movies')
+        k = [r[1] for r in H.TABS[ti]['rows']].index('custom:movies_1')
+        rid = H.row_id(ti, k)
+        sort_by, sort_order = variable('POVIL_SortBy_%d' % rid), variable('POVIL_SortOrder_%d' % rid)
+        lib = '$EXP[POVIL_Shows_%d_%d] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)' % (rid, k)
+        self.assertIn('<value condition="%s + !String.IsEmpty(Skin.String(POVILRow_movies_1_sort))">$INFO[Skin.String(POVILRow_movies_1_sort)]</value>' % lib, sort_by)
+        self.assertIn('<value condition="%s">dateadded</value>' % lib, sort_by, 'newest added first unless chosen')
+        # reversed: the row starts at its far end, on the right -- A to Z is descending in Kodi's list
+        self.assertIn('<value condition="%s + String.IsEqual(Skin.String(POVILRow_movies_1_order),ascending)">descending</value>' % lib, sort_order)
+        self.assertTrue(sort_order.rstrip().endswith('<value>ascending</value>'))
+        timers = (SKIN / 'xml/Timers.xml').read_text(encoding='utf-8')
+        timer = timers.split('<name>povil_rtl_%d</name>' % rid)[1].split('</timer>')[0]
+        self.assertIn('String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)', timer)
+        # (to the far end from wherever the selection is: Kodi keeps the selected film through a re-sort)
+        self.assertIn('<onstart>Control.Move(%d,-$INFO[Container(%d).CurrentItem])</onstart>' % (rid, rid), timer)
+        self.assertIn('<onstart>ClearProperty(povil.rtl.reset,home)</onstart>', timer)
+        # a row of the build has no library row to show: by size, its timer as before
+        rid0 = H.row_id(ti, 0)
+        self.assertNotIn('videodb://', timers.split('<name>povil_rtl_%d</name>' % rid0)[1].split('</timer>')[0].split('povil_rtl),1)')[0])
 
 
 class WizardOrderTests(unittest.TestCase):

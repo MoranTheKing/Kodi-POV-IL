@@ -9,6 +9,7 @@
 	<expression name="POVIL_Shows_5011_5">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),5)]</expression>
 	<expression name="POVIL_SlotKind_5011_poster">[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_0),0)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),3)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),4)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),5)]</expression>
 	<expression name="POVIL_SlotKind_5011_landscape">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),1)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),2)]</expression>
+	<expression name="POVIL_Library_5011">[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_0),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5012_0">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),0)]</expression>
 	<expression name="POVIL_Shows_5012_1">[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_1),1)]</expression>
 	<expression name="POVIL_Shows_5012_2">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),2)]</expression>
@@ -17,6 +18,7 @@
 	<expression name="POVIL_Shows_5012_5">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),5)]</expression>
 	<expression name="POVIL_SlotKind_5012_poster">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),0)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),3)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),4)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),5)]</expression>
 	<expression name="POVIL_SlotKind_5012_landscape">[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_1),1)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),2)]</expression>
+	<expression name="POVIL_Library_5012">[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_1),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5013_0">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),0)]</expression>
 	<expression name="POVIL_Shows_5013_1">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),1)]</expression>
 	<expression name="POVIL_Shows_5013_2">[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_2),2)]</expression>
@@ -25,6 +27,7 @@
 	<expression name="POVIL_Shows_5013_5">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),5)]</expression>
 	<expression name="POVIL_SlotKind_5013_poster">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),0)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),3)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),4)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),5)]</expression>
 	<expression name="POVIL_SlotKind_5013_landscape">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),1)] | [!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_2),2)]</expression>
+	<expression name="POVIL_Library_5013">[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_2),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5014_0">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),0)]</expression>
 	<expression name="POVIL_Shows_5014_1">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),1)]</expression>
 	<expression name="POVIL_Shows_5014_2">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),2)]</expression>
@@ -33,6 +36,7 @@
 	<expression name="POVIL_Shows_5014_5">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),5)]</expression>
 	<expression name="POVIL_SlotKind_5014_poster">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),0)] | [!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_3),3)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),4)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),5)]</expression>
 	<expression name="POVIL_SlotKind_5014_landscape">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),1)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),2)]</expression>
+	<expression name="POVIL_Library_5014">[[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_3),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5015_0">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),0)]</expression>
 	<expression name="POVIL_Shows_5015_1">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),1)]</expression>
 	<expression name="POVIL_Shows_5015_2">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),2)]</expression>
@@ -41,6 +45,7 @@
 	<expression name="POVIL_Shows_5015_5">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),5)]</expression>
 	<expression name="POVIL_SlotKind_5015_poster">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),0)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),3)] | [!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_4),4)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),5)]</expression>
 	<expression name="POVIL_SlotKind_5015_landscape">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),1)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),2)]</expression>
+	<expression name="POVIL_Library_5015">[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_4),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_4),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5016_0">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),0)]</expression>
 	<expression name="POVIL_Shows_5016_1">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),1)]</expression>
 	<expression name="POVIL_Shows_5016_2">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),2)]</expression>
@@ -49,6 +54,7 @@
 	<expression name="POVIL_Shows_5016_5">[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_5),5)]</expression>
 	<expression name="POVIL_SlotKind_5016_poster">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),0)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),3)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),4)] | [!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_5),5)]</expression>
 	<expression name="POVIL_SlotKind_5016_landscape">[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),1)] | [Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),2)]</expression>
+	<expression name="POVIL_Library_5016">[[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),3)] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_5),4)] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_movies) | String.IsEqual(Skin.String(POVILSlot_movies_5),5)] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5021_0">[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_0),0)]</expression>
 	<expression name="POVIL_Shows_5021_1">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),1)]</expression>
 	<expression name="POVIL_Shows_5021_2">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),2)]</expression>
@@ -57,6 +63,7 @@
 	<expression name="POVIL_Shows_5021_5">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),5)]</expression>
 	<expression name="POVIL_SlotKind_5021_poster">[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_0),0)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),3)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),4)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),5)]</expression>
 	<expression name="POVIL_SlotKind_5021_landscape">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),1)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),2)]</expression>
+	<expression name="POVIL_Library_5021">[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_0),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5022_0">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),0)]</expression>
 	<expression name="POVIL_Shows_5022_1">[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_1),1)]</expression>
 	<expression name="POVIL_Shows_5022_2">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),2)]</expression>
@@ -65,6 +72,7 @@
 	<expression name="POVIL_Shows_5022_5">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),5)]</expression>
 	<expression name="POVIL_SlotKind_5022_poster">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),0)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),3)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),4)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),5)]</expression>
 	<expression name="POVIL_SlotKind_5022_landscape">[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_1),1)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),2)]</expression>
+	<expression name="POVIL_Library_5022">[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_1),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5023_0">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),0)]</expression>
 	<expression name="POVIL_Shows_5023_1">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),1)]</expression>
 	<expression name="POVIL_Shows_5023_2">[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_2),2)]</expression>
@@ -73,6 +81,7 @@
 	<expression name="POVIL_Shows_5023_5">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),5)]</expression>
 	<expression name="POVIL_SlotKind_5023_poster">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),0)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),3)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),4)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),5)]</expression>
 	<expression name="POVIL_SlotKind_5023_landscape">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),1)] | [!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_2),2)]</expression>
+	<expression name="POVIL_Library_5023">[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_2),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5024_0">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),0)]</expression>
 	<expression name="POVIL_Shows_5024_1">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),1)]</expression>
 	<expression name="POVIL_Shows_5024_2">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),2)]</expression>
@@ -81,6 +90,7 @@
 	<expression name="POVIL_Shows_5024_5">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),5)]</expression>
 	<expression name="POVIL_SlotKind_5024_poster">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),0)] | [!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_3),3)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),4)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),5)]</expression>
 	<expression name="POVIL_SlotKind_5024_landscape">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),1)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),2)]</expression>
+	<expression name="POVIL_Library_5024">[[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_3),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_3),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5025_0">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),0)]</expression>
 	<expression name="POVIL_Shows_5025_1">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),1)]</expression>
 	<expression name="POVIL_Shows_5025_2">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),2)]</expression>
@@ -89,6 +99,7 @@
 	<expression name="POVIL_Shows_5025_5">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),5)]</expression>
 	<expression name="POVIL_SlotKind_5025_poster">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),0)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),3)] | [!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_4),4)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),5)]</expression>
 	<expression name="POVIL_SlotKind_5025_landscape">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),1)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),2)]</expression>
+	<expression name="POVIL_Library_5025">[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_4),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_4),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5026_0">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),0)]</expression>
 	<expression name="POVIL_Shows_5026_1">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),1)]</expression>
 	<expression name="POVIL_Shows_5026_2">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),2)]</expression>
@@ -97,6 +108,7 @@
 	<expression name="POVIL_Shows_5026_5">[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_5),5)]</expression>
 	<expression name="POVIL_SlotKind_5026_poster">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),0)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),3)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),4)] | [!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_5),5)]</expression>
 	<expression name="POVIL_SlotKind_5026_landscape">[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),1)] | [Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),2)]</expression>
+	<expression name="POVIL_Library_5026">[[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),3)] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_tv) + String.IsEqual(Skin.String(POVILSlot_tv_5),4)] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_tv) | String.IsEqual(Skin.String(POVILSlot_tv_5),5)] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5051_0">[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_0),0)]</expression>
 	<expression name="POVIL_Shows_5051_1">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),1)]</expression>
 	<expression name="POVIL_Shows_5051_2">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),2)]</expression>
@@ -105,6 +117,7 @@
 	<expression name="POVIL_Shows_5051_5">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),5)]</expression>
 	<expression name="POVIL_SlotKind_5051_poster">[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_0),0)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),1)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),3)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),4)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),5)]</expression>
 	<expression name="POVIL_SlotKind_5051_landscape">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),2)]</expression>
+	<expression name="POVIL_Library_5051">[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_0),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5052_0">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),0)]</expression>
 	<expression name="POVIL_Shows_5052_1">[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_1),1)]</expression>
 	<expression name="POVIL_Shows_5052_2">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),2)]</expression>
@@ -113,6 +126,7 @@
 	<expression name="POVIL_Shows_5052_5">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),5)]</expression>
 	<expression name="POVIL_SlotKind_5052_poster">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),0)] | [!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_1),1)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),3)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),4)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),5)]</expression>
 	<expression name="POVIL_SlotKind_5052_landscape">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),2)]</expression>
+	<expression name="POVIL_Library_5052">[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_1),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5053_0">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),0)]</expression>
 	<expression name="POVIL_Shows_5053_1">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),1)]</expression>
 	<expression name="POVIL_Shows_5053_2">[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_2),2)]</expression>
@@ -121,6 +135,7 @@
 	<expression name="POVIL_Shows_5053_5">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),5)]</expression>
 	<expression name="POVIL_SlotKind_5053_poster">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),0)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),1)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),3)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),4)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),5)]</expression>
 	<expression name="POVIL_SlotKind_5053_landscape">[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_2),2)]</expression>
+	<expression name="POVIL_Library_5053">[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_2),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5054_0">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),0)]</expression>
 	<expression name="POVIL_Shows_5054_1">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),1)]</expression>
 	<expression name="POVIL_Shows_5054_2">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),2)]</expression>
@@ -129,6 +144,7 @@
 	<expression name="POVIL_Shows_5054_5">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),5)]</expression>
 	<expression name="POVIL_SlotKind_5054_poster">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),0)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),1)] | [!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_3),3)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),4)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),5)]</expression>
 	<expression name="POVIL_SlotKind_5054_landscape">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),2)]</expression>
+	<expression name="POVIL_Library_5054">[[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_3),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_3),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5055_0">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),0)]</expression>
 	<expression name="POVIL_Shows_5055_1">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),1)]</expression>
 	<expression name="POVIL_Shows_5055_2">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),2)]</expression>
@@ -137,6 +153,7 @@
 	<expression name="POVIL_Shows_5055_5">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),5)]</expression>
 	<expression name="POVIL_SlotKind_5055_poster">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),0)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),1)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),3)] | [!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_4),4)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),5)]</expression>
 	<expression name="POVIL_SlotKind_5055_landscape">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),2)]</expression>
+	<expression name="POVIL_Library_5055">[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_4),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_4),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5056_0">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),0)]</expression>
 	<expression name="POVIL_Shows_5056_1">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),1)]</expression>
 	<expression name="POVIL_Shows_5056_2">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),2)]</expression>
@@ -145,6 +162,7 @@
 	<expression name="POVIL_Shows_5056_5">[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_5),5)]</expression>
 	<expression name="POVIL_SlotKind_5056_poster">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),0)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),1)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),3)] | [Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),4)] | [!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_5),5)]</expression>
 	<expression name="POVIL_SlotKind_5056_landscape">[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),2)]</expression>
+	<expression name="POVIL_Library_5056">[[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),3)] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_kids) + String.IsEqual(Skin.String(POVILSlot_kids_5),4)] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_kids) | String.IsEqual(Skin.String(POVILSlot_kids_5),5)] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5061_0">[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_0),0)]</expression>
 	<expression name="POVIL_Shows_5061_1">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),1)]</expression>
 	<expression name="POVIL_Shows_5061_2">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),2)]</expression>
@@ -155,6 +173,7 @@
 	<expression name="POVIL_Shows_5061_7">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),7)]</expression>
 	<expression name="POVIL_SlotKind_5061_square">[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_0),0)]</expression>
 	<expression name="POVIL_SlotKind_5061_poster">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),1)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),2)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),3)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),4)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),5)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),6)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),7)]</expression>
+	<expression name="POVIL_Library_5061">[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_0),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5062_0">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),0)]</expression>
 	<expression name="POVIL_Shows_5062_1">[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_1),1)]</expression>
 	<expression name="POVIL_Shows_5062_2">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),2)]</expression>
@@ -165,6 +184,7 @@
 	<expression name="POVIL_Shows_5062_7">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),7)]</expression>
 	<expression name="POVIL_SlotKind_5062_square">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),0)]</expression>
 	<expression name="POVIL_SlotKind_5062_poster">[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_1),1)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),2)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),3)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),4)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),5)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),6)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),7)]</expression>
+	<expression name="POVIL_Library_5062">[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_1),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5063_0">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),0)]</expression>
 	<expression name="POVIL_Shows_5063_1">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),1)]</expression>
 	<expression name="POVIL_Shows_5063_2">[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_2),2)]</expression>
@@ -175,6 +195,7 @@
 	<expression name="POVIL_Shows_5063_7">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),7)]</expression>
 	<expression name="POVIL_SlotKind_5063_square">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),0)]</expression>
 	<expression name="POVIL_SlotKind_5063_poster">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),1)] | [!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_2),2)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),3)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),4)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),5)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),6)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),7)]</expression>
+	<expression name="POVIL_Library_5063">[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_2),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5064_0">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),0)]</expression>
 	<expression name="POVIL_Shows_5064_1">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),1)]</expression>
 	<expression name="POVIL_Shows_5064_2">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),2)]</expression>
@@ -185,6 +206,7 @@
 	<expression name="POVIL_Shows_5064_7">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),7)]</expression>
 	<expression name="POVIL_SlotKind_5064_square">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),0)]</expression>
 	<expression name="POVIL_SlotKind_5064_poster">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),1)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),2)] | [!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_3),3)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),4)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),5)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),6)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),7)]</expression>
+	<expression name="POVIL_Library_5064">[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_3),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5065_0">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),0)]</expression>
 	<expression name="POVIL_Shows_5065_1">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),1)]</expression>
 	<expression name="POVIL_Shows_5065_2">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),2)]</expression>
@@ -195,6 +217,7 @@
 	<expression name="POVIL_Shows_5065_7">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),7)]</expression>
 	<expression name="POVIL_SlotKind_5065_square">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),0)]</expression>
 	<expression name="POVIL_SlotKind_5065_poster">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),1)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),2)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),3)] | [!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_4),4)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),5)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),6)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),7)]</expression>
+	<expression name="POVIL_Library_5065">[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_4),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5066_0">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),0)]</expression>
 	<expression name="POVIL_Shows_5066_1">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),1)]</expression>
 	<expression name="POVIL_Shows_5066_2">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),2)]</expression>
@@ -205,6 +228,7 @@
 	<expression name="POVIL_Shows_5066_7">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),7)]</expression>
 	<expression name="POVIL_SlotKind_5066_square">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),0)]</expression>
 	<expression name="POVIL_SlotKind_5066_poster">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),1)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),2)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),3)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),4)] | [!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_5),5)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),6)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),7)]</expression>
+	<expression name="POVIL_Library_5066">[[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_5),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_5),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5067_0">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),0)]</expression>
 	<expression name="POVIL_Shows_5067_1">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),1)]</expression>
 	<expression name="POVIL_Shows_5067_2">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),2)]</expression>
@@ -215,6 +239,7 @@
 	<expression name="POVIL_Shows_5067_7">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),7)]</expression>
 	<expression name="POVIL_SlotKind_5067_square">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),0)]</expression>
 	<expression name="POVIL_SlotKind_5067_poster">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),1)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),2)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),3)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),4)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),5)] | [!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_6),6)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),7)]</expression>
+	<expression name="POVIL_Library_5067">[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_6),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_6),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)]</expression>
 	<expression name="POVIL_Shows_5068_0">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),0)]</expression>
 	<expression name="POVIL_Shows_5068_1">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),1)]</expression>
 	<expression name="POVIL_Shows_5068_2">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),2)]</expression>
@@ -225,6 +250,397 @@
 	<expression name="POVIL_Shows_5068_7">[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_7),7)]</expression>
 	<expression name="POVIL_SlotKind_5068_square">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),0)]</expression>
 	<expression name="POVIL_SlotKind_5068_poster">[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),1)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),2)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),3)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),4)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),5)] | [Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),6)] | [!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_7),7)]</expression>
+	<expression name="POVIL_Library_5068">[[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),5)] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)] | [[Skin.HasSetting(POVILOrdered_favourites) + String.IsEqual(Skin.String(POVILSlot_favourites_7),6)] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)] | [[!Skin.HasSetting(POVILOrdered_favourites) | String.IsEqual(Skin.String(POVILSlot_favourites_7),7)] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)]</expression>
+	<variable name="POVIL_SortBy_5011">
+		<value condition="$EXP[POVIL_Shows_5011_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_1_sort))">$INFO[Skin.String(POVILRow_movies_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5011_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5011_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_2_sort))">$INFO[Skin.String(POVILRow_movies_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5011_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5011_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_3_sort))">$INFO[Skin.String(POVILRow_movies_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5011_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5011">
+		<value condition="$EXP[POVIL_Shows_5011_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5011_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5011_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5012">
+		<value condition="$EXP[POVIL_Shows_5012_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_1_sort))">$INFO[Skin.String(POVILRow_movies_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5012_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5012_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_2_sort))">$INFO[Skin.String(POVILRow_movies_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5012_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5012_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_3_sort))">$INFO[Skin.String(POVILRow_movies_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5012_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5012">
+		<value condition="$EXP[POVIL_Shows_5012_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5012_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5012_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5013">
+		<value condition="$EXP[POVIL_Shows_5013_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_1_sort))">$INFO[Skin.String(POVILRow_movies_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5013_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5013_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_2_sort))">$INFO[Skin.String(POVILRow_movies_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5013_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5013_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_3_sort))">$INFO[Skin.String(POVILRow_movies_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5013_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5013">
+		<value condition="$EXP[POVIL_Shows_5013_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5013_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5013_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5014">
+		<value condition="$EXP[POVIL_Shows_5014_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_1_sort))">$INFO[Skin.String(POVILRow_movies_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5014_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5014_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_2_sort))">$INFO[Skin.String(POVILRow_movies_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5014_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5014_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_3_sort))">$INFO[Skin.String(POVILRow_movies_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5014_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5014">
+		<value condition="$EXP[POVIL_Shows_5014_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5014_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5014_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5015">
+		<value condition="$EXP[POVIL_Shows_5015_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_1_sort))">$INFO[Skin.String(POVILRow_movies_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5015_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5015_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_2_sort))">$INFO[Skin.String(POVILRow_movies_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5015_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5015_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_3_sort))">$INFO[Skin.String(POVILRow_movies_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5015_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5015">
+		<value condition="$EXP[POVIL_Shows_5015_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5015_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5015_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5016">
+		<value condition="$EXP[POVIL_Shows_5016_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_1_sort))">$INFO[Skin.String(POVILRow_movies_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5016_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5016_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_2_sort))">$INFO[Skin.String(POVILRow_movies_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5016_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5016_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_movies_3_sort))">$INFO[Skin.String(POVILRow_movies_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5016_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5016">
+		<value condition="$EXP[POVIL_Shows_5016_3] + String.StartsWith(Skin.String(POVILRow_movies_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5016_4] + String.StartsWith(Skin.String(POVILRow_movies_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5016_5] + String.StartsWith(Skin.String(POVILRow_movies_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_movies_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5021">
+		<value condition="$EXP[POVIL_Shows_5021_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_1_sort))">$INFO[Skin.String(POVILRow_tv_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5021_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5021_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_2_sort))">$INFO[Skin.String(POVILRow_tv_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5021_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5021_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_3_sort))">$INFO[Skin.String(POVILRow_tv_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5021_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5021">
+		<value condition="$EXP[POVIL_Shows_5021_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5021_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5021_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5022">
+		<value condition="$EXP[POVIL_Shows_5022_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_1_sort))">$INFO[Skin.String(POVILRow_tv_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5022_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5022_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_2_sort))">$INFO[Skin.String(POVILRow_tv_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5022_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5022_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_3_sort))">$INFO[Skin.String(POVILRow_tv_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5022_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5022">
+		<value condition="$EXP[POVIL_Shows_5022_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5022_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5022_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5023">
+		<value condition="$EXP[POVIL_Shows_5023_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_1_sort))">$INFO[Skin.String(POVILRow_tv_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5023_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5023_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_2_sort))">$INFO[Skin.String(POVILRow_tv_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5023_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5023_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_3_sort))">$INFO[Skin.String(POVILRow_tv_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5023_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5023">
+		<value condition="$EXP[POVIL_Shows_5023_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5023_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5023_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5024">
+		<value condition="$EXP[POVIL_Shows_5024_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_1_sort))">$INFO[Skin.String(POVILRow_tv_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5024_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5024_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_2_sort))">$INFO[Skin.String(POVILRow_tv_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5024_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5024_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_3_sort))">$INFO[Skin.String(POVILRow_tv_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5024_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5024">
+		<value condition="$EXP[POVIL_Shows_5024_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5024_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5024_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5025">
+		<value condition="$EXP[POVIL_Shows_5025_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_1_sort))">$INFO[Skin.String(POVILRow_tv_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5025_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5025_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_2_sort))">$INFO[Skin.String(POVILRow_tv_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5025_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5025_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_3_sort))">$INFO[Skin.String(POVILRow_tv_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5025_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5025">
+		<value condition="$EXP[POVIL_Shows_5025_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5025_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5025_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5026">
+		<value condition="$EXP[POVIL_Shows_5026_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_1_sort))">$INFO[Skin.String(POVILRow_tv_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5026_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5026_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_2_sort))">$INFO[Skin.String(POVILRow_tv_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5026_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5026_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_tv_3_sort))">$INFO[Skin.String(POVILRow_tv_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5026_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5026">
+		<value condition="$EXP[POVIL_Shows_5026_3] + String.StartsWith(Skin.String(POVILRow_tv_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5026_4] + String.StartsWith(Skin.String(POVILRow_tv_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5026_5] + String.StartsWith(Skin.String(POVILRow_tv_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_tv_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5051">
+		<value condition="$EXP[POVIL_Shows_5051_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_1_sort))">$INFO[Skin.String(POVILRow_kids_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5051_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5051_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_2_sort))">$INFO[Skin.String(POVILRow_kids_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5051_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5051_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_3_sort))">$INFO[Skin.String(POVILRow_kids_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5051_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5051">
+		<value condition="$EXP[POVIL_Shows_5051_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5051_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5051_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5052">
+		<value condition="$EXP[POVIL_Shows_5052_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_1_sort))">$INFO[Skin.String(POVILRow_kids_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5052_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5052_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_2_sort))">$INFO[Skin.String(POVILRow_kids_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5052_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5052_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_3_sort))">$INFO[Skin.String(POVILRow_kids_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5052_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5052">
+		<value condition="$EXP[POVIL_Shows_5052_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5052_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5052_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5053">
+		<value condition="$EXP[POVIL_Shows_5053_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_1_sort))">$INFO[Skin.String(POVILRow_kids_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5053_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5053_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_2_sort))">$INFO[Skin.String(POVILRow_kids_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5053_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5053_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_3_sort))">$INFO[Skin.String(POVILRow_kids_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5053_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5053">
+		<value condition="$EXP[POVIL_Shows_5053_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5053_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5053_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5054">
+		<value condition="$EXP[POVIL_Shows_5054_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_1_sort))">$INFO[Skin.String(POVILRow_kids_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5054_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5054_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_2_sort))">$INFO[Skin.String(POVILRow_kids_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5054_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5054_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_3_sort))">$INFO[Skin.String(POVILRow_kids_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5054_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5054">
+		<value condition="$EXP[POVIL_Shows_5054_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5054_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5054_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5055">
+		<value condition="$EXP[POVIL_Shows_5055_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_1_sort))">$INFO[Skin.String(POVILRow_kids_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5055_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5055_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_2_sort))">$INFO[Skin.String(POVILRow_kids_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5055_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5055_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_3_sort))">$INFO[Skin.String(POVILRow_kids_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5055_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5055">
+		<value condition="$EXP[POVIL_Shows_5055_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5055_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5055_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5056">
+		<value condition="$EXP[POVIL_Shows_5056_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_1_sort))">$INFO[Skin.String(POVILRow_kids_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5056_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5056_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_2_sort))">$INFO[Skin.String(POVILRow_kids_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5056_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5056_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_kids_3_sort))">$INFO[Skin.String(POVILRow_kids_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5056_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5056">
+		<value condition="$EXP[POVIL_Shows_5056_3] + String.StartsWith(Skin.String(POVILRow_kids_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5056_4] + String.StartsWith(Skin.String(POVILRow_kids_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5056_5] + String.StartsWith(Skin.String(POVILRow_kids_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_kids_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5061">
+		<value condition="$EXP[POVIL_Shows_5061_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_1_sort))">$INFO[Skin.String(POVILRow_favourites_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5061_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5061_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_2_sort))">$INFO[Skin.String(POVILRow_favourites_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5061_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5061_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_3_sort))">$INFO[Skin.String(POVILRow_favourites_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5061_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5061">
+		<value condition="$EXP[POVIL_Shows_5061_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5061_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5061_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5062">
+		<value condition="$EXP[POVIL_Shows_5062_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_1_sort))">$INFO[Skin.String(POVILRow_favourites_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5062_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5062_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_2_sort))">$INFO[Skin.String(POVILRow_favourites_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5062_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5062_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_3_sort))">$INFO[Skin.String(POVILRow_favourites_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5062_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5062">
+		<value condition="$EXP[POVIL_Shows_5062_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5062_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5062_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5063">
+		<value condition="$EXP[POVIL_Shows_5063_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_1_sort))">$INFO[Skin.String(POVILRow_favourites_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5063_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5063_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_2_sort))">$INFO[Skin.String(POVILRow_favourites_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5063_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5063_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_3_sort))">$INFO[Skin.String(POVILRow_favourites_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5063_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5063">
+		<value condition="$EXP[POVIL_Shows_5063_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5063_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5063_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5064">
+		<value condition="$EXP[POVIL_Shows_5064_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_1_sort))">$INFO[Skin.String(POVILRow_favourites_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5064_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5064_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_2_sort))">$INFO[Skin.String(POVILRow_favourites_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5064_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5064_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_3_sort))">$INFO[Skin.String(POVILRow_favourites_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5064_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5064">
+		<value condition="$EXP[POVIL_Shows_5064_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5064_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5064_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5065">
+		<value condition="$EXP[POVIL_Shows_5065_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_1_sort))">$INFO[Skin.String(POVILRow_favourites_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5065_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5065_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_2_sort))">$INFO[Skin.String(POVILRow_favourites_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5065_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5065_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_3_sort))">$INFO[Skin.String(POVILRow_favourites_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5065_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5065">
+		<value condition="$EXP[POVIL_Shows_5065_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5065_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5065_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5066">
+		<value condition="$EXP[POVIL_Shows_5066_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_1_sort))">$INFO[Skin.String(POVILRow_favourites_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5066_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5066_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_2_sort))">$INFO[Skin.String(POVILRow_favourites_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5066_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5066_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_3_sort))">$INFO[Skin.String(POVILRow_favourites_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5066_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5066">
+		<value condition="$EXP[POVIL_Shows_5066_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5066_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5066_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5067">
+		<value condition="$EXP[POVIL_Shows_5067_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_1_sort))">$INFO[Skin.String(POVILRow_favourites_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5067_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5067_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_2_sort))">$INFO[Skin.String(POVILRow_favourites_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5067_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5067_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_3_sort))">$INFO[Skin.String(POVILRow_favourites_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5067_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5067">
+		<value condition="$EXP[POVIL_Shows_5067_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5067_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5067_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
+	<variable name="POVIL_SortBy_5068">
+		<value condition="$EXP[POVIL_Shows_5068_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_1_sort))">$INFO[Skin.String(POVILRow_favourites_1_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5068_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5068_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_2_sort))">$INFO[Skin.String(POVILRow_favourites_2_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5068_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://)">dateadded</value>
+		<value condition="$EXP[POVIL_Shows_5068_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + !String.IsEmpty(Skin.String(POVILRow_favourites_3_sort))">$INFO[Skin.String(POVILRow_favourites_3_sort)]</value>
+		<value condition="$EXP[POVIL_Shows_5068_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://)">dateadded</value>
+		<value>size</value>
+	</variable>
+	<variable name="POVIL_SortOrder_5068">
+		<value condition="$EXP[POVIL_Shows_5068_5] + String.StartsWith(Skin.String(POVILRow_favourites_1_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_1_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5068_6] + String.StartsWith(Skin.String(POVILRow_favourites_2_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_2_order),ascending)">descending</value>
+		<value condition="$EXP[POVIL_Shows_5068_7] + String.StartsWith(Skin.String(POVILRow_favourites_3_path),videodb://) + String.IsEqual(Skin.String(POVILRow_favourites_3_order),ascending)">descending</value>
+		<value>ascending</value>
+	</variable>
 	<variable name="POVIL_HeroDetailsKey">
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]]"></value>
 		<value condition="[Control.HasFocus(5012) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5012)]]"></value>
@@ -4681,6 +5097,14 @@
 		<value condition="!String.IsEmpty(Skin.String(POVILRow_movies_3_name))">סרטים · שורה 3: $INFO[Skin.String(POVILRow_movies_3_name)]</value>
 		<value>סרטים · שורה 3: השורה שלי</value>
 	</variable>
+	<variable name="POVIL_ChipSlot_movies_1">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_movies_1_path))">סרטים · כפתור 1: (ריק)</value>
+		<value>סרטים · כפתור 1: $INFO[Skin.String(POVILChip_movies_1_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_movies_2">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_movies_2_path))">סרטים · כפתור 2: (ריק)</value>
+		<value>סרטים · כפתור 2: $INFO[Skin.String(POVILChip_movies_2_name)]</value>
+	</variable>
 	<variable name="POVIL_RowSlot_tv_1">
 		<value condition="String.IsEmpty(Skin.String(POVILRow_tv_1_path))">סדרות · שורה 1: (ריקה)</value>
 		<value condition="!String.IsEmpty(Skin.String(POVILRow_tv_1_name))">סדרות · שורה 1: $INFO[Skin.String(POVILRow_tv_1_name)]</value>
@@ -4695,6 +5119,14 @@
 		<value condition="String.IsEmpty(Skin.String(POVILRow_tv_3_path))">סדרות · שורה 3: (ריקה)</value>
 		<value condition="!String.IsEmpty(Skin.String(POVILRow_tv_3_name))">סדרות · שורה 3: $INFO[Skin.String(POVILRow_tv_3_name)]</value>
 		<value>סדרות · שורה 3: השורה שלי</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_tv_1">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_tv_1_path))">סדרות · כפתור 1: (ריק)</value>
+		<value>סדרות · כפתור 1: $INFO[Skin.String(POVILChip_tv_1_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_tv_2">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_tv_2_path))">סדרות · כפתור 2: (ריק)</value>
+		<value>סדרות · כפתור 2: $INFO[Skin.String(POVILChip_tv_2_name)]</value>
 	</variable>
 	<variable name="POVIL_RowSlot_kids_1">
 		<value condition="String.IsEmpty(Skin.String(POVILRow_kids_1_path))">ילדים · שורה 1: (ריקה)</value>
@@ -4711,6 +5143,14 @@
 		<value condition="!String.IsEmpty(Skin.String(POVILRow_kids_3_name))">ילדים · שורה 3: $INFO[Skin.String(POVILRow_kids_3_name)]</value>
 		<value>ילדים · שורה 3: השורה שלי</value>
 	</variable>
+	<variable name="POVIL_ChipSlot_kids_1">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_kids_1_path))">ילדים · כפתור 1: (ריק)</value>
+		<value>ילדים · כפתור 1: $INFO[Skin.String(POVILChip_kids_1_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_kids_2">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_kids_2_path))">ילדים · כפתור 2: (ריק)</value>
+		<value>ילדים · כפתור 2: $INFO[Skin.String(POVILChip_kids_2_name)]</value>
+	</variable>
 	<variable name="POVIL_RowSlot_favourites_1">
 		<value condition="String.IsEmpty(Skin.String(POVILRow_favourites_1_path))">מועדפים · שורה 1: (ריקה)</value>
 		<value condition="!String.IsEmpty(Skin.String(POVILRow_favourites_1_name))">מועדפים · שורה 1: $INFO[Skin.String(POVILRow_favourites_1_name)]</value>
@@ -4726,20 +5166,48 @@
 		<value condition="!String.IsEmpty(Skin.String(POVILRow_favourites_3_name))">מועדפים · שורה 3: $INFO[Skin.String(POVILRow_favourites_3_name)]</value>
 		<value>מועדפים · שורה 3: השורה שלי</value>
 	</variable>
+	<variable name="POVIL_ChipSlot_favourites_1">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_favourites_1_path))">מועדפים · כפתור 1: (ריק)</value>
+		<value>מועדפים · כפתור 1: $INFO[Skin.String(POVILChip_favourites_1_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_favourites_2">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_favourites_2_path))">מועדפים · כפתור 2: (ריק)</value>
+		<value>מועדפים · כפתור 2: $INFO[Skin.String(POVILChip_favourites_2_name)]</value>
+	</variable>
 	<variable name="POVIL_RowPicking">
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),movies_1)">מקור לשורה: סרטים · שורה 1</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),movies_2)">מקור לשורה: סרטים · שורה 2</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),movies_3)">מקור לשורה: סרטים · שורה 3</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),tv_1)">מקור לשורה: סדרות · שורה 1</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),tv_2)">מקור לשורה: סדרות · שורה 2</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),tv_3)">מקור לשורה: סדרות · שורה 3</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),kids_1)">מקור לשורה: ילדים · שורה 1</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),kids_2)">מקור לשורה: ילדים · שורה 2</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),kids_3)">מקור לשורה: ילדים · שורה 3</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),favourites_1)">מקור לשורה: מועדפים · שורה 1</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),favourites_2)">מקור לשורה: מועדפים · שורה 2</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),favourites_3)">מקור לשורה: מועדפים · שורה 3</value>
-		<value>מקור לשורה</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_movies_1) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: סרטים · שורה 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_movies_1)">מקור לשורה: סרטים · שורה 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_movies_2) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: סרטים · שורה 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_movies_2)">מקור לשורה: סרטים · שורה 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_movies_3) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: סרטים · שורה 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_movies_3)">מקור לשורה: סרטים · שורה 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_movies_1)">מקור לכפתור: סרטים · כפתור 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_movies_2)">מקור לכפתור: סרטים · כפתור 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_tv_1) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: סדרות · שורה 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_tv_1)">מקור לשורה: סדרות · שורה 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_tv_2) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: סדרות · שורה 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_tv_2)">מקור לשורה: סדרות · שורה 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_tv_3) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: סדרות · שורה 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_tv_3)">מקור לשורה: סדרות · שורה 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_tv_1)">מקור לכפתור: סדרות · כפתור 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_tv_2)">מקור לכפתור: סדרות · כפתור 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_kids_1) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: ילדים · שורה 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_kids_1)">מקור לשורה: ילדים · שורה 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_kids_2) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: ילדים · שורה 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_kids_2)">מקור לשורה: ילדים · שורה 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_kids_3) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: ילדים · שורה 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_kids_3)">מקור לשורה: ילדים · שורה 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_kids_1)">מקור לכפתור: ילדים · כפתור 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_kids_2)">מקור לכפתור: ילדים · כפתור 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_favourites_1) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: מועדפים · שורה 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_favourites_1)">מקור לשורה: מועדפים · שורה 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_favourites_2) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: מועדפים · שורה 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_favourites_2)">מקור לשורה: מועדפים · שורה 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_favourites_3) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: מועדפים · שורה 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_favourites_3)">מקור לשורה: מועדפים · שורה 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_favourites_1)">מקור לכפתור: מועדפים · כפתור 1</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_favourites_2)">מקור לכפתור: מועדפים · כפתור 2</value>
+		<value>מקור</value>
 	</variable>
 	<variable name="POVIL_OrderSlot_5011">
 		<value condition="$EXP[POVIL_Shows_5011_0]">מקום 1: פופולריים עכשיו</value>
