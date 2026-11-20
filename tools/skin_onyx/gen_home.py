@@ -388,6 +388,8 @@ SETTINGS_ITEMS = [
     ('סנכרון בין מכשירים', 'DefaultNetwork.png', plugin_run(WIZARD + '?mode=cloud_sync'), ''),
     # which player the controls show (the Wizard asks, onyx_player_style.py; gen_osd_styles.py draws them)
     ('$VAR[POVIL_PlayerTile]', 'povil/osd/layout.png', plugin_run(WIZARD + '?mode=player_style'), ''),
+    # the viewer's own rows (CUSTOM_TABS)
+    ('שורות משלי', 'DefaultFolder.png', plugin_run(WIZARD + '?mode=custom_rows'), ''),
     # the watched mark's colour (WATCHED_COLOURS)
     ('$VAR[POVIL_WatchedTile]', 'povil/check.png', WATCHED_CHOICE, ''),
     # the trailer behind the hero (trailers.py): on unless switched off here; the tile says which
@@ -500,6 +502,23 @@ def row_focus(ti, ri):
             'String.IsEqual(Window(home).Property(povil.focus),%d)]]' % (rid, rid))
 
 
+# The viewer's own rows (the Wizard's custom_rows.py, the settings tile "שורות משלי"; a viewer, Nov 2026: "let me add
+# the films on my hard drive"): CUSTOM_SLOTS rows at the end of these tabs, each the folder in a skin string, shown
+# only while it has one and it has items
+CUSTOM_TABS, CUSTOM_SLOTS = ('movies', 'tv', 'kids', 'favourites'), 3
+for _tab in TABS:
+    if _tab['id'] in CUSTOM_TABS:
+        _tab['rows'] = list(_tab['rows']) + [('$INFO[Skin.String(POVILRow_%s_%d_name)]' % (_tab['id'], _n), 'custom:%s_%d' % (_tab['id'], _n),
+                                             'poster', True) for _n in range(1, CUSTOM_SLOTS + 1)]
+
+
+RTL_ADDONS = ('plugin.video.pov', 'plugin.video.umbrella', 'plugin.video.idanplus')   # patches_config.py's povil_rtl hooks
+
+
+def is_custom(path):
+    return path.startswith('custom:')
+
+
 def row_id(ti, ri):
     return 5000 + (ti + 1) * 10 + ri + 1
 
@@ -542,7 +561,9 @@ def follows_no_playback(path):
 
 
 def is_rtl(path):
-    return path.startswith('plugin://') or path.startswith('static:') or is_hub(path)
+    # (a viewer's own row: right to left when it is an add-on's list -- its address then carries povil_rtl, see
+    # POVIL_Path_<id>; a folder of files is not reversed, and the row's guard leaves it as it is)
+    return path.startswith('plugin://') or path.startswith('static:') or is_hub(path) or path.startswith('custom:')
 
 
 def rtl_path(path):
@@ -1044,6 +1065,18 @@ def gen_includes():
                 continue
             x(1, '<variable name="POVIL_Path_%d">' % row_id(ti, ri))
             gate = row_gate(ti, ri)
+            if is_custom(row[1]):
+                key = 'POVILRow_%s_path' % row[1][7:]
+                opened = '!String.IsEmpty(Window(home).Property(%s)) + !String.IsEmpty(Skin.String(%s))' % (gate, key)
+                plugin = '[%s]' % ' | '.join('String.StartsWith(Skin.String(%s),plugin://%s/)' % (key, a) for a in RTL_ADDONS)
+                # a list of the add-ons the Wizard's povil_rtl patches is read right to left like the build's own rows;
+                # any other add-on is handed its address untouched (an unknown parameter could break its routing)
+                x(2, '<value condition="%s + %s + String.Contains(Skin.String(%s),?)">$INFO[Skin.String(%s)]&amp;povil_rtl=1</value>'
+                  % (opened, plugin, key, key))
+                x(2, '<value condition="%s + %s">$INFO[Skin.String(%s)]?povil_rtl=1</value>' % (opened, plugin, key))
+                x(2, '<value condition="%s">$INFO[Skin.String(%s)]</value>' % (opened, key))
+                x(1, '</variable>')
+                continue
             if is_hub(row[1]):
                 # one address per choice (all / films / series); the service is in the address itself
                 opened = '!String.IsEmpty(Window(home).Property(%s))' % gate

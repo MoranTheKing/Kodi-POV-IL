@@ -689,6 +689,27 @@
 		<stop>true</stop>
 	</timer>
 	<timer>
+		<name>povil_rtl_5014</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5014).IsUpdating + Integer.IsGreater(Container(5014).NumItems,1) + Integer.IsEqual(Container(5014).CurrentItem,1) + String.IsEqual(Container(5014).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5014).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5014))</start>
+		<onstart>SetProperty(povil.rtl.5014,$ESCINFO[Container(5014).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5014,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_rtl_5015</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5015).IsUpdating + Integer.IsGreater(Container(5015).NumItems,1) + Integer.IsEqual(Container(5015).CurrentItem,1) + String.IsEqual(Container(5015).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5015).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5015))</start>
+		<onstart>SetProperty(povil.rtl.5015,$ESCINFO[Container(5015).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5015,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_rtl_5016</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),movies) + !Container(5016).IsUpdating + Integer.IsGreater(Container(5016).NumItems,1) + Integer.IsEqual(Container(5016).CurrentItem,1) + String.IsEqual(Container(5016).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5016).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5016))</start>
+		<onstart>SetProperty(povil.rtl.5016,$ESCINFO[Container(5016).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5016,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
 		<name>povil_rtl_5021</name>
 		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5021).IsUpdating + Integer.IsGreater(Container(5021).NumItems,1) + Integer.IsEqual(Container(5021).CurrentItem,1) + String.IsEqual(Container(5021).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021))</start>
 		<onstart>SetProperty(povil.rtl.5021,$ESCINFO[Container(5021).ListItemAbsolute(0).Label],home)</onstart>
@@ -707,6 +728,27 @@
 		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5023).IsUpdating + Integer.IsGreater(Container(5023).NumItems,1) + Integer.IsEqual(Container(5023).CurrentItem,1) + String.IsEqual(Container(5023).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023))</start>
 		<onstart>SetProperty(povil.rtl.5023,$ESCINFO[Container(5023).ListItemAbsolute(0).Label],home)</onstart>
 		<onstart>Control.Move(5023,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_rtl_5024</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5024).IsUpdating + Integer.IsGreater(Container(5024).NumItems,1) + Integer.IsEqual(Container(5024).CurrentItem,1) + String.IsEqual(Container(5024).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5024).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5024))</start>
+		<onstart>SetProperty(povil.rtl.5024,$ESCINFO[Container(5024).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5024,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_rtl_5025</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5025).IsUpdating + Integer.IsGreater(Container(5025).NumItems,1) + Integer.IsEqual(Container(5025).CurrentItem,1) + String.IsEqual(Container(5025).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5025).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5025))</start>
+		<onstart>SetProperty(povil.rtl.5025,$ESCINFO[Container(5025).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5025,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_rtl_5026</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),tv) + !Container(5026).IsUpdating + Integer.IsGreater(Container(5026).NumItems,1) + Integer.IsEqual(Container(5026).CurrentItem,1) + String.IsEqual(Container(5026).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5026).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5026))</start>
+		<onstart>SetProperty(povil.rtl.5026,$ESCINFO[Container(5026).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5026,-1)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>
@@ -773,6 +815,27 @@
 		<stop>true</stop>
 	</timer>
 	<timer>
+		<name>povil_rtl_5054</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5054).IsUpdating + Integer.IsGreater(Container(5054).NumItems,1) + Integer.IsEqual(Container(5054).CurrentItem,1) + String.IsEqual(Container(5054).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5054).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5054))</start>
+		<onstart>SetProperty(povil.rtl.5054,$ESCINFO[Container(5054).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5054,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_rtl_5055</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5055).IsUpdating + Integer.IsGreater(Container(5055).NumItems,1) + Integer.IsEqual(Container(5055).CurrentItem,1) + String.IsEqual(Container(5055).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5055).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5055))</start>
+		<onstart>SetProperty(povil.rtl.5055,$ESCINFO[Container(5055).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5055,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_rtl_5056</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),kids) + !Container(5056).IsUpdating + Integer.IsGreater(Container(5056).NumItems,1) + Integer.IsEqual(Container(5056).CurrentItem,1) + String.IsEqual(Container(5056).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5056).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5056))</start>
+		<onstart>SetProperty(povil.rtl.5056,$ESCINFO[Container(5056).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5056,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
 		<name>povil_rtl_5061</name>
 		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5061).IsUpdating + Integer.IsGreater(Container(5061).NumItems,1) + Integer.IsEqual(Container(5061).CurrentItem,1) + String.IsEqual(Container(5061).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5061).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5061))</start>
 		<onstart>SetProperty(povil.rtl.5061,$ESCINFO[Container(5061).ListItemAbsolute(0).Label],home)</onstart>
@@ -805,6 +868,27 @@
 		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5065).IsUpdating + Integer.IsGreater(Container(5065).NumItems,1) + Integer.IsEqual(Container(5065).CurrentItem,1) + String.IsEqual(Container(5065).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5065).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5065))</start>
 		<onstart>SetProperty(povil.rtl.5065,$ESCINFO[Container(5065).ListItemAbsolute(0).Label],home)</onstart>
 		<onstart>Control.Move(5065,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_rtl_5066</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5066).IsUpdating + Integer.IsGreater(Container(5066).NumItems,1) + Integer.IsEqual(Container(5066).CurrentItem,1) + String.IsEqual(Container(5066).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5066).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5066))</start>
+		<onstart>SetProperty(povil.rtl.5066,$ESCINFO[Container(5066).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5066,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_rtl_5067</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5067).IsUpdating + Integer.IsGreater(Container(5067).NumItems,1) + Integer.IsEqual(Container(5067).CurrentItem,1) + String.IsEqual(Container(5067).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5067).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5067))</start>
+		<onstart>SetProperty(povil.rtl.5067,$ESCINFO[Container(5067).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5067,-1)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_rtl_5068</name>
+		<start reset="true">Window.IsVisible(home) + String.IsEqual(Window(home).Property(povil.tab),favourites) + !Container(5068).IsUpdating + Integer.IsGreater(Container(5068).NumItems,1) + Integer.IsEqual(Container(5068).CurrentItem,1) + String.IsEqual(Container(5068).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5068).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5068))</start>
+		<onstart>SetProperty(povil.rtl.5068,$ESCINFO[Container(5068).ListItemAbsolute(0).Label],home)</onstart>
+		<onstart>Control.Move(5068,-1)</onstart>
 		<stop>true</stop>
 	</timer>
 	<timer>

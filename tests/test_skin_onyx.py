@@ -90,7 +90,8 @@ class GeneratedXmlTests(unittest.TestCase):
         home = ET.parse(XML / 'Home.xml').getroot()
         lists = {c.get('id'): c for c in home.iter('control') if c.get('type') == 'list'}
         downs = [(n.get('condition'), n.text) for n in lists['5063'].findall('ondown')]
-        self.assertEqual([t for _c, t in downs], ['5064', '5065'])
+        # (then the viewer's own rows, 5066-5068, Onyx 1.0.25: empty unless set, skipped the same way)
+        self.assertEqual([t for _c, t in downs], ['5064', '5065', '5066', '5067', '5068'])
         self.assertIn('!Integer.IsGreater(Container(5064).NumItems,0)', downs[1][0])
         ups = [(n.get('condition'), n.text) for n in lists['5065'].findall('onup')]
         self.assertEqual([t for _c, t in ups], ['5064', '5063', '5062', '5061', '9172'])
