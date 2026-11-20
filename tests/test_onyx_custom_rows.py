@@ -94,7 +94,7 @@ class SkinRowsTests(unittest.TestCase):
         self.assertIn('<onclick condition="%s">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=custom_rows)</onclick>' % able, tile)
         self.assertIn('<onclick condition="!%s">ActivateWindow(1162)</onclick>' % able, tile)
         startup = (WIZARD / 'startup.py').read_text(encoding='utf-8')
-        self.assertIn("xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows home_rows custom_chips')", startup)
+        self.assertIn("xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows home_rows custom_chips menu_editor')", startup)
         router = (WIZARD / 'resources/libs/common/router.py').read_text(encoding='utf-8')
         self.assertRegex(router, r"mode == 'custom_rows':\s*\n(\s*#[^\n]*\n)?\s*from resources\.libs import custom_rows\s*\n\s*custom_rows\.choose\(\)")
 
@@ -148,7 +148,14 @@ class WizardDialogTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('povil_custom_rows_under_test', WIZARD / 'resources/libs/custom_rows.py')
         custom_rows = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(custom_rows)
-        with mock.patch.dict(sys.modules, {'xbmc': xbmc, 'xbmcgui': xbmcgui}):
+        spec = importlib.util.spec_from_file_location('povil_menu_editor_under_test', WIZARD / 'resources/libs/menu_editor.py')
+        menu_editor = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(menu_editor)
+        menu_editor.menu = lambda read_file=None: menu_editor.FALLBACK
+        libs = types.SimpleNamespace(custom_rows=custom_rows, menu_editor=menu_editor)
+        modules = {'xbmc': xbmc, 'xbmcgui': xbmcgui, 'resources': types.SimpleNamespace(libs=libs), 'resources.libs': libs,
+                   'resources.libs.custom_rows': custom_rows, 'resources.libs.menu_editor': menu_editor}
+        with mock.patch.dict(sys.modules, modules):
             custom_rows.choose()
         return strings, done
 
@@ -214,15 +221,19 @@ class WizardDialogTests(unittest.TestCase):
 
     def test_a_chip_of_the_viewer_s_own_opens_his_library(self):
         # the same viewer: "how can I add a button that takes me into my films library, like Netflix, Disney?"
-        # tab 0, the 4th entry (after three rows) is chip 1; source; the library's films -- no order asked
-        strings, done = self.run_choose(FakeDialog([0, 3, 0, 0], inputs=['הסרטים שלי']))
+        # tab 0, the 4th entry (after three rows) is chip 1; source; the library or a folder; the library's films --
+        # no order asked
+        strings, done = self.run_choose(FakeDialog([0, 3, 0, 0, 0], inputs=['הסרטים שלי']))
         self.assertEqual(strings['POVILChip_movies_1_path'], 'videodb://movies/titles/')
         self.assertEqual(strings['POVILChip_movies_1_name'], 'הסרטים שלי')
         self.assertFalse([k for k in strings if k.startswith('POVILRow_')])
         # renamed, then deleted
         strings, _ = self.run_choose(FakeDialog([0, 3, 1], inputs=['ספרייה']), strings)
         self.assertEqual(strings['POVILChip_movies_1_name'], 'ספרייה')
-        strings, done = self.run_choose(FakeDialog([0, 3, 2]), strings)
+        # where it stands: at the start (Onyx 1.0.28)
+        strings, _ = self.run_choose(FakeDialog([0, 3, 2, 0]), strings)
+        self.assertEqual(strings['POVILChip_movies_1_at'], 'start')
+        strings, done = self.run_choose(FakeDialog([0, 3, 3]), strings)
         self.assertEqual(strings, {})
         self.assertIn('Skin.Reset(POVILChip_movies_1_path)', done)
 
@@ -254,7 +265,7 @@ class StandaloneTests(unittest.TestCase):
         rows = (SKIN / 'xml/Custom_POVILRows.xml').read_text(encoding='utf-8')
         self.assertIn('<window type="dialog" id="1162">', rows)
         self.assertEqual(rows.count('SetProperty(povil.rows.slot,Row_'), 12, 'four tabs, three rows each')
-        self.assertEqual(rows.count('SetProperty(povil.rows.slot,Chip_'), 8, 'and two chips each (Onyx 1.0.27)')
+        self.assertEqual(rows.count('SetProperty(povil.rows.slot,Chip_'), 24, 'and six chips each (Onyx 1.0.28; two in 1.0.27)')
         key = 'POVIL$INFO[Window(home).Property(povil.rows.slot)]'
         for path in ('videodb://movies/titles/', 'videodb://tvshows/titles/', 'videodb://recentlyaddedmovies/'):
             self.assertIn('Skin.SetString(%s_path,%s)' % (key, path), rows)
@@ -436,19 +447,31 @@ class ChipsAndLibraryOrderTests(unittest.TestCase):
         home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')
         chips = home.split('<control type="grouplist" id="9100" description="chips">')[1].split('\n\t\t\t</control>')[0]
         ti = [t['id'] for t in H.TABS].index('movies')
-        first, second = H.custom_chip_ids(ti)
+        first, second = H.custom_chip_id(ti, 1, 'mid'), H.custom_chip_id(ti, 2, 'mid')
         mine = chips.split('<control type="button" id="%d">' % first)[1].split('</control>')[0]
         self.assertIn('<label>$INFO[Skin.String(POVILChip_movies_1_name)]</label>', mine)
-        self.assertIn('<onclick>ActivateWindow(Videos,$ESCINFO[Skin.String(POVILChip_movies_1_path)],return)</onclick>', mine)
+        self.assertIn('<onclick condition="String.IsEmpty(Skin.String(POVILChip_movies_1_cmd))">'
+                      'ActivateWindow(Videos,$ESCINFO[Skin.String(POVILChip_movies_1_path)],return)</onclick>', mine)
+        # (a favourite's, an add-on's or the live TV's command, as written: Onyx 1.0.28)
+        self.assertIn('<onclick condition="!String.IsEmpty(Skin.String(POVILChip_movies_1_cmd))">'
+                      '$INFO[Skin.String(POVILChip_movies_1_cmd)]</onclick>', mine)
         self.assertIn('<visible>String.IsEqual(Window(home).Property(povil.tab),movies) + '
-                      '!String.IsEmpty(Skin.String(POVILChip_movies_1_path))</visible>', mine)
-        # XML order is left to right: the 5th build chip, then chip 2, chip 1, then the 4th service (rightmost first)
+                      '[!String.IsEmpty(Skin.String(POVILChip_movies_1_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_1_cmd))] + '
+                      '[String.IsEqual(Skin.String(POVILChip_movies_1_at),mid) | String.IsEmpty(Skin.String(POVILChip_movies_1_at))]</visible>', mine)
+        # XML order is left to right: the viewer's at the end, the build's from the last, his after the services,
+        # the services, his at the start (the rightmost)
         ids = H.chip_ids(ti, H.TABS[ti])
-        at = [chips.index('<control type="button" id="%d">' % cid) for cid in (ids[4], second, first, ids[3])]
+        order = [H.custom_chip_id(ti, 1, 'end'), ids[4], second, first, ids[3], ids[0], H.custom_chip_id(ti, 1, 'start')]
+        at = [chips.index('<control type="button" id="%d">' % cid) for cid in order]
         self.assertEqual(at, sorted(at))
+        # a build chip the viewer hid
+        self.assertIn('!Skin.HasSetting(POVILHideChip_movies_0)', chips.split('<control type="button" id="%d">' % ids[0])[1].split('</control>')[0])
         # the build's chips keep their ids
         self.assertEqual(ids[0], 9112)
         self.assertFalse(set(H.custom_chip_ids(ti)) & {cid for i, t in enumerate(H.TABS) for cid in H.chip_ids(i, t)})
+        everything = [cid for i in range(len(H.TABS)) for cid in H.custom_chip_ids(i)]
+        self.assertEqual(len(everything), len(set(everything)))
+        self.assertTrue(max(everything) < 9600, 'below the bar\'s buttons')
 
     def test_a_library_row_is_sorted_as_chosen_and_starts_on_the_right(self):
         H = gen_home()

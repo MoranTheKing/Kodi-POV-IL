@@ -47,9 +47,10 @@ from resources.libs import update
 # a tile asks the Wizard only for what it says here, else the skin's own dialog answers. The skin may be newer
 # than the Wizard for a while -- a viewer's CoreELEC box, Nov 2026: the tile "שורות משלי" came with the skin's
 # update and did nothing, the Wizard there not knowing it yet. (custom_chips: the rows' dialog has the viewer's own
-# chips and a library row's order too -- 0.5.28 / Onyx 1.0.27; an older Wizard is not asked for it)
+# chips and a library row's order too -- 0.5.28 / Onyx 1.0.27; an older Wizard is not asked for it; menu_editor: the
+# menu editor, 0.5.29 / Onyx 1.0.28)
 try:
-    xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows home_rows custom_chips')
+    xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows home_rows custom_chips menu_editor')
 except Exception:
     pass
 

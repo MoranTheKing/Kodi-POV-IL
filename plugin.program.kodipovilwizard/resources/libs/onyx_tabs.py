@@ -46,5 +46,9 @@ def choose():
     if home.getProperty('povil.tab') in off:
         # the screen that was up has left the bar: the home goes back to its first
         home.setProperty('povil.tab', 'movies')
-        xbmc.executebuiltin('SetFocus(9010)')
+        # (the films' button, wherever on the bar the viewer put it -- Onyx 1.0.28; a skin before it: 9010)
+        from resources.libs import menu_editor
+        films = menu_editor.button_id('movies', xbmc.getInfoLabel, xbmc.getCondVisibility)
+        if films:
+            xbmc.executebuiltin('SetFocus(%d)' % films)
     return off

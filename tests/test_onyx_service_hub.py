@@ -48,17 +48,18 @@ class HubTests(unittest.TestCase):
 
     def test_the_page_has_no_button_in_the_tab_bar_and_back_leaves_it(self):
         tabs = self.controls['9000']
-        # (Onyx 1.0.18: the bar is a list of the tabs' buttons; nine tabs)
-        buttons = [c for c in tabs.iter('control') if c.get('type') == 'togglebutton']
-        self.assertEqual(len(buttons), 9)
-        self.assertNotIn('hub', ' '.join(c.get('description') for c in buttons))
+        # (Onyx 1.0.18: the bar is a list of the tabs' buttons; nine tabs. 1.0.28: every place holds a button of every
+        # tab, in an include of its own -- the viewer orders the bar -- and the page is none of them)
+        buttons = [inc.get('content') for inc in tabs.iter('include')]
+        self.assertEqual(len(set(buttons)), 11)
+        self.assertNotIn('POVIL_Tab_hub', buttons)
         for chip in self.chips('hub'):
             self.assertEqual((chip.findtext('onup'), chip.findtext('onback')), ('9000', '9000'), chip.findtext('label'))
         for rid in ROWS:
             self.assertEqual(self.controls[rid].findtext('onback'), '9000')
-        # the power button still sits beside the leftmost tab, the settings (the first cell of the list)
-        self.assertEqual(buttons[0].get('description'), 'tab settings')
-        self.assertEqual(self.controls['9099'].findtext('onright'), buttons[0].get('id'))
+        # the power button still sits beside the leftmost tab -- the settings in the build's bar; on the viewer's,
+        # the last place's (POVIL_BarLast)
+        self.assertEqual(self.controls['9099'].findtext('onright'), 'SetFocus($VAR[POVIL_BarLast])')
 
     def test_the_pressed_chip_leaving_the_screen_does_not_bring_its_tab_back(self):
         # Kodi hands the focus to the window's default -- a tab's button -- when the chip that was pressed

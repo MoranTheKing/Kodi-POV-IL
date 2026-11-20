@@ -199,7 +199,8 @@ class SubtitlePositionTests(unittest.TestCase):
         self.assertEqual(power.findtext('onclick'), 'ActivateWindow(ShutdownMenu)')
         # (Onyx 1.0.18: the tabs are the buttons of a list, and the list sends "left" of its first button here)
         bar = next(c for c in home.iter('control') if c.get('id') == '9000')
-        self.assertEqual([c.get('id') for c in bar if c.tag == 'control'][0], power.findtext('onright'))
+        # (Onyx 1.0.28: the bar's last place, wherever the viewer put his tabs)
+        self.assertEqual(power.findtext('onright'), 'SetFocus($VAR[POVIL_BarLast])')
         self.assertEqual(bar.findtext('onleft'), '9099', 'one step left of the last tab')
         for name in ('clock', 'date'):
             label = next(c for c in home.iter('control') if c.get('description') == name)
