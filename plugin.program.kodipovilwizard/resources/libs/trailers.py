@@ -200,6 +200,10 @@ TRANSLATED_FOUND_S, TRANSLATED_NONE_S = 14 * 86400, 3 * 86400     # a search is 
 # (v2, 0.5.17: searched again under the scam filter; v3, 0.5.30: under the film / series rule, translated_pick)
 TRANSLATED_FILE = 'translated_trailers_v4.json'      # (v4, 0.5.34: a film's upload chosen for a series is asked again)
 SEASON_OWNERS_FILE = 'season_trailers.json'          # whose season each season's own trailer is (patches/pov_trailer_pick.py)
+# This desk's files. Onyx without the Wizard runs a copy of this module (Onyx 1.0.32, scripts/povil_trailers.py; the owner,
+# Nov 2026: "whoever downloads only the Onyx skin -- the trailers won't work for him?") with its own folder.
+DATA = 'special://profile/addon_data/plugin.program.kodipovilwizard/'
+KEEP_LOOK_S = 10                    # ... and looks this often whether the Wizard has come (then its own desk plays them)
 # A translated trailer of the OTHER kind: a viewer, via the owner, Nov 2026 -- the Pokémon series (1997) played the
 # dubbed trailer of the film "Detective Pikachu" (its title names "פוקימון" too). For a series a result that says it is
 # a film is left out, for a film one that says it is a series; and one that names a year far from the title's.
@@ -1313,8 +1317,10 @@ class Desk(object):
                 self._late_stop(*late)
 
 
-def watch():
-    """The Wizard's start-up service runs this as one of its threads, for as long as Kodi runs."""
+def watch(data=None, stay=None):
+    """The Wizard's start-up service runs this as one of its threads, for as long as Kodi runs. Onyx's copy of it
+    (scripts/povil_trailers.py, Onyx without the Wizard) gives it a folder of its own (data) and runs it for as long as
+    stay() says (its own keep() is the translated trailers')."""
     import sys
     import time
     import xbmc
@@ -1375,7 +1381,8 @@ def watch():
             stream = webos_hls(stream, fetch, lambda name, text: save_named(name, text, manifest), log)
         return stream
 
-    kept_path = os.path.join(xbmcvfs.translatePath('special://profile/addon_data/plugin.program.kodipovilwizard/'), TRANSLATED_FILE)
+    data = data or DATA
+    kept_path = os.path.join(xbmcvfs.translatePath(data), TRANSLATED_FILE)
     pov_cache = xbmcvfs.translatePath('special://profile/addon_data/plugin.video.pov/metacache.db')
     owners_path = os.path.join(os.path.dirname(kept_path), SEASON_OWNERS_FILE)
 
@@ -1488,7 +1495,7 @@ def watch():
         video_codec, max_height, webos_player = WEBOS_VIDEO, WEBOS_HEIGHT, True
         log('an LG TV (webOS): trailers %dp through Kodi\'s own player (HLS)' % WEBOS_HEIGHT)
         _back, no_picture = webos_guard(
-            os.path.join(xbmcvfs.translatePath('special://profile/addon_data/plugin.program.kodipovilwizard/'), WEBOS_OFF_FILE),
+            os.path.join(xbmcvfs.translatePath(data), WEBOS_OFF_FILE),
             xbmc.getInfoLabel('System.BuildVersion'),
             off=lambda: xbmc.getCondVisibility('Skin.HasSetting(%s)' % OFF_SWITCH),
             set_off=lambda on: xbmc.executebuiltin('Skin.%s(%s)' % ('SetBool' if on else 'Reset', OFF_SWITCH)),
@@ -1588,6 +1595,9 @@ def watch():
         provider.get_client(context=context).load_stream_info(video_id=video)
 
     from resources.libs import trailer_subs
+    if data != DATA:
+        trailer_subs.CACHE = data + 'trailer_subs/'
+
     def moransubs_answers():
         # (MoranSubs 0.3.100+ always gives its word: none yet = it has not started; an older one leaves "no" empty)
         try:
@@ -1666,8 +1676,10 @@ def watch():
         log('first ask: %r' % exc)
     try:
         # callbacks are delivered while this thread waits here
-        while not listener.waitForAbort(600):
-            pass
+        while not listener.waitForAbort(600 if stay is None else KEEP_LOOK_S):
+            if stay is not None and not stay():
+                log('the Wizard is here: its own trailers take over')
+                break
     finally:
         desk.waiting.set()
         try:
