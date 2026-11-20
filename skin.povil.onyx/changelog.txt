@@ -1,3 +1,6 @@
+[B]Kodi POV IL - Onyx 1.0.33[/B]
+- A channel list in the player, in every player style (the owner, Nov 2026: "add a channel list button to Onyx's players -- I think the other skins have it"): while live TV or anything from Idan Plus plays, a button opens the list -- live TV's own channel list, or Idan Plus's channels and radio stations in a panel on the right, each with its logo and what is on now. A press plays the channel.
+
 [B]Kodi POV IL - Onyx 1.0.32[/B]
 - The home's trailers on Onyx without the Wizard (the owner, Nov 2026: "whoever downloads only the Onyx skin -- the trailers won't work for him?"): the skin only asked for a trailer, the Wizard played it. Onyx now carries the Wizard's own trailer desk (its subtitles and the timing tile too) and starts it while the Wizard is not installed; once the Wizard is, its own desk plays them. Needs the YouTube add-on, as before.
 
