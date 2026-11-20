@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import types
 import unittest
 from pathlib import Path
@@ -195,6 +196,63 @@ class MoranSubsTests(unittest.TestCase):
         source = (ROOT / 'service.subtitles.kodipovilai/resources/lib/trailer_subs.py').read_text(encoding='utf-8')
         self.assertIn('if not tier_cached() and listener.waitForAbort(20):', source)
 
+    def test_the_device_says_itself_once_a_day_and_the_season_goes_with_the_translation(self):
+        said = []
+        switches = {'use': True, 'share': True}
+        pool = types.SimpleNamespace(say_seen=lambda body: said.append(body) or (200, {'ok': True}),
+                                     use_enabled=lambda: switches['use'], share_enabled=lambda: switches['share'],
+                                     share_trailer=lambda body: said.append(('share', body)) or (200, {'ok': True}))
+        xbmc = types.SimpleNamespace(getSkinDir=lambda: 'skin.povil.onyx')
+        tokens = os.path.join(self.folder, 'tokens.json')
+        xbmcvfs = types.SimpleNamespace(translatePath=lambda p: tokens)
+        with mock.patch.dict(sys.modules, {'resources.lib.pool': pool, 'xbmc': xbmc, 'xbmcvfs': xbmcvfs}):
+            sys.modules['resources.lib'].pool = pool
+            self.assertTrue(self.ms.say_seen(now=1795190000))
+            self.assertEqual(said, [{'sync': False, 'onyx': True}])
+            self.assertFalse(self.ms.say_seen(now=1795190000 + 3600), 'once a UTC day')
+            open(tokens, 'w').close()
+            self.assertTrue(self.ms.say_seen(now=1795190000 + 86400))
+            self.assertEqual(said[-1], {'sync': True, 'onyx': True}, 'the Wizard\'s cloud sync connected')
+            switches.update(use=False, share=False)
+            n = len(said)
+            self.assertFalse(self.ms.say_seen(now=1795190000 + 2 * 86400), 'both pool switches off: nothing leaves the device')
+            self.assertEqual(len(said), n)
+            switches.update(use=True, share=True)
+            # an older Worker answers /seen with its landing page: ONE try a day all the same, never a retry storm
+            pool.say_seen = lambda body: said.append(body) or (0, {})
+            n = len(said)
+            self.assertFalse(self.ms.say_seen(now=1795190000 + 3 * 86400))
+            self.assertFalse(self.ms.say_seen(now=1795190000 + 3 * 86400 + 600))
+            self.assertEqual(len(said), n + 1, 'tried once that day')
+            pool.say_seen = lambda body: said.append(body) or (200, {'ok': True})
+            self.ms.share({'v': 'aBc_dEf-123', 'src': 'asr', 'title': 'מובלנד', 'year': '2025', 'kind': 'tv', 'season': 2},
+                          [(0.0, 1.0, 'שלום')])
+            for _ in range(50):
+                if any(isinstance(x, tuple) for x in said):
+                    break
+                time.sleep(0.02)
+            body = [x for x in said if isinstance(x, tuple)][0][1]
+            self.assertEqual((body['k'], body['e']), ('tv', 2))
+
+    def test_gemini_busy_is_asked_once_more_and_then_again_soon(self):
+        answers = []
+
+        def post(url, json=None, headers=None, timeout=None):
+            code = answers.pop(0)
+            return types.SimpleNamespace(status_code=code, json=lambda: {'text': '1.0-2.5|שלום לכם חברים יקרים מאוד, מה שלומכם היום הזה?'})
+        job = {'v': 'busy0000001', 'src': 'asr', 'words': [[1.0, 'hello'], [2.0, 'there']], 'lang': 'en'}
+        with mock.patch.object(self.ms, 'BUSY_RETRY_S', 0), mock.patch.object(self.ms, '_write', lambda v, c: None):
+            answers[:] = [503, 200]
+            self.assertTrue(self.ms.handle(dict(job), key='k', post=post, now=1000.0), 'busy, then answered at once')
+            answers[:] = [503, 503]
+            self.assertIsNone(self.ms.handle(dict(job, v='busy0000002'), key='k', post=post, now=1000.0))
+            self.assertTrue(self.ms._recently_failed('busy0000002', now=1000.0 + 60))
+            self.assertFalse(self.ms._recently_failed('busy0000002', now=1000.0 + self.ms.BUSY_S + 1), 'again in 30 minutes')
+            answers[:] = [400]
+            self.assertIsNone(self.ms.handle(dict(job, v='badreq00003'), key='k', post=post, now=1000.0))
+            self.assertEqual(answers, [], 'a request\'s own fault: not asked twice')
+            self.assertTrue(self.ms._recently_failed('badreq00003', now=1000.0 + self.ms.BUSY_S + 1), 'a day')
+
     def test_a_trailer_playing_when_the_service_starts_gets_no_search(self):
         """0.3.101: the owner, Nov 2026 -- at Kodi's first start the home's first trailer began before the service,
         and its start-up 'kick' (no trailer check) brought the subtitles' overlay up over it."""
@@ -333,6 +391,34 @@ class WordTests(unittest.TestCase):
         source = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/trailers.py').read_text(encoding='utf-8')
         self.assertIn('answers=moransubs_answers', source)
         self.assertIn("System.AddonVersion(service.subtitles.kodipovilai)", source)
+
+
+class SeasonTests(unittest.TestCase):
+    """Wizard 0.5.34 / MoranSubs 0.3.102: the channel's post says a series trailer's season (the owner, Nov 2026)."""
+
+    def test_the_season_a_series_trailer_is_of(self):
+        trailers = load('plugin.program.kodipovilwizard/resources/libs/trailers.py', 'povil_trailers_season')
+        seasons = [{'season_number': 1, 'air_date': '2021-03-01'}, {'season_number': 2, 'air_date': '2023-03-01'},
+                   {'season_number': 3, 'air_date': '2025-03-01'}]
+        meta = {'season_data': seasons, 'all_trailers': [
+            {'key': 'named000002', 'name': 'Season 2 Official Trailer', 'published_at': '2023-01-10'},
+            {'key': 'final000003', 'name': 'The Final Season | Trailer', 'published_at': '2025-02-01'},
+            {'key': 'dated000003', 'name': 'Official Trailer', 'published_at': '2025-02-20'},
+            {'key': 'stale000000', 'name': 'Official Trailer', 'published_at': '2027-06-01'}]}
+        pick = load('plugin.program.kodipovilwizard/resources/libs/patches/pov_trailer_pick.py', 'pick_for_season')
+        packages = {name: types.ModuleType(name) for name in ('resources', 'resources.libs', 'resources.libs.patches')}
+        packages['resources.libs.patches'].pov_trailer_pick = pick
+        packages['resources.libs.patches.pov_trailer_pick'] = pick
+        with mock.patch.dict(sys.modules, packages):
+            self.assertEqual(trailers.trailer_season(meta, 'named000002'), 2, 'its name')
+            self.assertEqual(trailers.trailer_season(meta, 'final000003'), 3, '"final season": the last there is')
+            self.assertEqual(trailers.trailer_season(meta, 'dated000003'), 3, 'the season it came out for')
+            self.assertIsNone(trailers.trailer_season(meta, 'stale000000'), 'long after the last season: the series\' own')
+            self.assertIsNone(trailers.trailer_season(meta, 'unknown0000'))
+            self.assertEqual(trailers.trailer_season({'season_data': seasons[:1], 'all_trailers': [{'key': 'one00000001', 'name': 'Trailer'}]},
+                                                     'one00000001'), 1, 'a series of one season')
+        source = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/trailers.py').read_text(encoding='utf-8')
+        self.assertIn("season = trailer_season(meta, video)", source)
 
 
 class DrawnLinesTests(unittest.TestCase):
