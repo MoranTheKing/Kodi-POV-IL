@@ -877,12 +877,17 @@ class SkinTests(unittest.TestCase):
                          ['Skin.TimerStop(povil_trailer_shown)',
                           'SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(9809)],home)', 'NotifyAll(povil.trailer,ask)'])
         stop = timers['povil_trailer_stop'].findtext('start')
-        # ("left": neither the home nor the Videos window's views, which play it too since Onyx 1.0.26)
-        for part in ('![Window.IsActive(home) | Window.IsActive(videos)]', '| Skin.HasSetting(POVILNoTrailers) |',
+        # ("left": neither the home nor the Videos window's views, which play it too since Onyx 1.0.26 -- nor Kodi's
+        # full-screen player over the trailer for a moment, Onyx 1.0.31: povil_trailer_a_back takes the screen back)
+        for part in ('![[Window.IsActive(home) | Window.IsActive(videos)] | [Window.IsActive(fullscreenvideo) + '
+                     '!String.IsEmpty(Window(home).Property(povil.tr.on)) + '
+                     'String.IsEqual(Player.FilenameAndPath,Window(home).Property(povil.tr.file))]]', '| Skin.HasSetting(POVILNoTrailers) |',
                      # the title is compared only with no busy dialog over the home: under one the label reads
-                     # empty (the owner's phone: the trailer stopped at its first picture, five times in a row)
+                     # empty (the owner's phone: the trailer stopped at its first picture, five times in a row) --
+                     # and only on the screen that shows it (the full-screen player has no such label)
+                     '[[Window.IsActive(home) | Window.IsActive(videos)] + '
                      '[!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + '
-                     '!String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask))]',
+                     '!String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask))]]',
                      # Kodi's own busy dialog comes up while the trailer itself opens: it must not stop it
                      # (seen in the QA Kodi: the trailer was stopped by the dialog its own start brought up)
                      '[System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)]'):
