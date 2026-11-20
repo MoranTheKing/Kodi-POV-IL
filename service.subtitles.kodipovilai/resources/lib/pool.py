@@ -637,6 +637,17 @@ def _post(body, marker_path=None):
         mark_contributed(marker_path)
 
 
+def say_seen(body):
+    """This device, once a day, to the Worker's /seen (trailer_subs.say_seen). Returns (HTTP status, answer)."""
+    try:
+        req = _urlreq.Request(POOL_URL + '/seen', data=json.dumps(body).encode('utf-8'),
+                              headers=_post_headers('/seen'), method='POST')
+        r = _urlreq.urlopen(req, timeout=_POST_TIMEOUT)
+        return r.getcode(), json.loads(r.read().decode('utf-8') or '{}')
+    except Exception as e:
+        return getattr(e, 'code', None) or 0, {}
+
+
 def share_trailer(body):
     """A trailer's Hebrew subtitles to the Worker's /tsub (trailer_subs.py). Returns (HTTP status, answer) -- 429
     {"closed": true, "retry_s"} when the Worker's day is full: nothing more until it says."""

@@ -79,6 +79,14 @@ class TranslatedTests(unittest.TestCase):
                    ('פוקימון: הבלש פיקאצ\'ו | טריילר מתורגם', 140, 'EEEEEEEEEE2', 'x'),
                    ('פוקימון - הסדרה המצוירת | פתיח מדובב', 90, 'EEEEEEEEEE3', 'x')]
         self.assertEqual(trailers.translated_pick(pokemon, ('פוקימון', 'pokémon'), kind='tv', year=1997), ['EEEEEEEEEE3'])
+        # (0.5.34, the owner: still the film's -- its name was not at the start of the upload's title)
+        quoted = [('טריילר "פוקימון: הבלש פיקאצ\'ו" (עם תרגום לעברית)', 140, 'EEEEEEEEEE4', 'PokemonPocketMonsters'),
+                  ('טריילר "פוקימון: העונה החדשה" (עם תרגום לעברית)', 120, 'EEEEEEEEEE5', 'x')]
+        self.assertTrue(trailers.another_title(quoted[0][0], ('פוקימון', 'pokémon'), 'tv'))
+        self.assertFalse(trailers.another_title(quoted[1][0], ('פוקימון', 'pokémon'), 'tv'), 'its own season')
+        self.assertEqual(trailers.translated_pick(quoted, ('פוקימון', 'pokémon'), kind='tv', year=1997), ['EEEEEEEEEE5'])
+        self.assertFalse(trailers.another_title('טריילר: פוקימון (מתורגם)', ('פוקימון',), 'tv'), 'a colon before the name says nothing')
+        self.assertTrue(trailers.another_title('דיונה: חלק שני | טריילר מתורגם', ('דיונה',), 'movie'))
         # the film itself is named by its whole name: its own uploads are taken
         names = ('פוקימון הבלש פיקאצ ו', 'pokémon detective pikachu')
         self.assertEqual(trailers.translated_pick(pokemon, names, kind='movie', year=2019), ['EEEEEEEEEE1', 'EEEEEEEEEE2'])
