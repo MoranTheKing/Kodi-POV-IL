@@ -92,7 +92,8 @@ class SkinRowsTests(unittest.TestCase):
         tile = home.split('<label>שורות וכפתורים משלי</label>')[1].split('</item>')[0]
         able = 'String.Contains(Window(home).Property(povil.wizard.modes),custom_chips)'
         self.assertIn('<onclick condition="%s">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=custom_rows)</onclick>' % able, tile)
-        self.assertIn('<onclick condition="!%s">ActivateWindow(1162)</onclick>' % able, tile)
+        # (without it, Onyx 1.0.29: the same dialogs inside the skin)
+        self.assertIn('<onclick condition="!%s">RunScript(special://skin/scripts/povil_menu_editor.py,custom_rows)</onclick>' % able, tile)
         startup = (WIZARD / 'startup.py').read_text(encoding='utf-8')
         self.assertIn("xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows home_rows custom_chips menu_editor')", startup)
         router = (WIZARD / 'resources/libs/common/router.py').read_text(encoding='utf-8')
@@ -404,7 +405,7 @@ class HomeOrderTests(unittest.TestCase):
         tile = home.split('<label>סדר השורות</label>')[1].split('</item>')[0]
         able = 'String.Contains(Window(home).Property(povil.wizard.modes),home_rows)'
         self.assertIn('<onclick condition="%s">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=home_rows)</onclick>' % able, tile)
-        self.assertIn('<onclick condition="!%s">ActivateWindow(1163)</onclick>' % able, tile)
+        self.assertIn('<onclick condition="!%s">RunScript(special://skin/scripts/povil_menu_editor.py,home_rows)</onclick>' % able, tile)
         router = (WIZARD / 'resources/libs/common/router.py').read_text(encoding='utf-8')
         self.assertRegex(router, r"mode == 'home_rows':\s*\n(\s*#[^\n]*\n)?\s*from resources\.libs import home_rows\s*\n\s*home_rows\.choose\(\)")
 

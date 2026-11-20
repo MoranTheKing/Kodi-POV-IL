@@ -20,6 +20,7 @@ So, when the Wizard is not installed (gen_home.py SETTINGS_ITEMS, WIZ):
 With the Wizard installed the tiles ask the Wizard, as before.
 """
 import os
+import shutil
 import sys
 
 import gen_home as H
@@ -408,8 +409,57 @@ def variables():
     return x.text()
 
 
+# The Wizard's menu editor, copied into the skin (Onyx 1.0.29): Onyx without the Wizard runs it with RunScript
+# (scripts/povil_menu_editor.py). A viewer, Nov 2026, had Onyx alone: its own windows (1162, 1163) edit the rows and
+# shortcuts only, the bar's order and buttons were the Wizard's. The modules use Kodi's own modules and each other only.
+EDITOR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
+                                       'plugin.program.kodipovilwizard', 'resources', 'libs'))
+EDITOR_LIBS = ('menu_editor.py', 'custom_rows.py', 'home_rows.py')
+EDITOR_SCRIPT = 'special://skin/scripts/povil_menu_editor.py'
+LAUNCHER = '''# -*- coding: utf-8 -*-
+"""The build's menu editor inside the skin (Onyx 1.0.29), for a viewer who has Onyx without the Kodi POV IL Wizard: the
+bar's order, names and the viewer's own buttons, the shortcuts under each button, the rows and their order. A viewer, Nov
+2026: Onyx alone gave him "only the rows" -- the full editor lived in the Wizard. povil_menu/resources/libs/ holds the
+Wizard's own menu_editor.py, custom_rows.py and home_rows.py, copied by tools/skin_onyx/gen_standalone.py: one source,
+never edited here.
+
+    RunScript(special://skin/scripts/povil_menu_editor.py)                the editor
+    RunScript(special://skin/scripts/povil_menu_editor.py,rows)           its rows
+    RunScript(special://skin/scripts/povil_menu_editor.py,custom_rows)    the viewer's own rows and shortcuts
+    RunScript(special://skin/scripts/povil_menu_editor.py,home_rows)      the order of the rows
+"""
+import sys
+
+import xbmcvfs
+
+sys.path.insert(0, xbmcvfs.translatePath('special://skin/scripts/povil_menu'))
+PART = sys.argv[1] if len(sys.argv) > 1 else ''
+if PART == 'custom_rows':
+    from resources.libs import custom_rows
+    custom_rows.choose()
+elif PART == 'home_rows':
+    from resources.libs import home_rows
+    home_rows.choose()
+else:
+    from resources.libs import menu_editor
+    menu_editor.choose(PART or None)
+'''
+
+
+def editor_files(skin):
+    libs = os.path.join(skin, 'scripts', 'povil_menu', 'resources', 'libs')
+    os.makedirs(libs, exist_ok=True)
+    for name in EDITOR_LIBS:
+        shutil.copyfile(os.path.join(EDITOR, name), os.path.join(libs, name))
+    for folder in (os.path.dirname(libs), libs):
+        open(os.path.join(folder, '__init__.py'), 'w').close()
+    with open(os.path.join(skin, 'scripts', 'povil_menu_editor.py'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(LAUNCHER)
+
+
 def main():
     folder = os.path.join(sys.argv[1], 'xml')
+    editor_files(sys.argv[1])
     for name, text in (('Custom_POVILChoice.xml', choice()), ('Custom_POVILRows.xml', rows()), ('Custom_POVILOrder.xml', order())):
         with open(os.path.join(folder, name), 'w', encoding='utf-8', newline=NL) as f:
             f.write(text)
