@@ -1064,8 +1064,12 @@ class SkinTests(unittest.TestCase):
         autosub = (ROOT / 'service.subtitles.kodipovilai/resources/lib/autosub_service.py').read_text('utf-8')
         start = autosub.index('def onAVStarted(self):', autosub.index('class AutoSubPlayer'))
         body = autosub[start:autosub.index('def onPlayBackStopped', start)]
-        self.assertLess(body.index("getProperty('povil.tr.file')"), body.index('snapshot_on_play'))
-        self.assertIn('self.getPlayingFile() == _trailer', body, 'by the address: a film that takes over from a trailer is a film')
+        # (MoranSubs 0.3.101: the check is _home_trailer(), for the start-up kick too -- a trailer that began before
+        # the service did got a search and the overlay, the owner, Nov 2026)
+        self.assertLess(body.index('_home_trailer(self)'), body.index('snapshot_on_play'))
+        check = autosub[autosub.index('def _home_trailer(player):'):autosub.index('class AutoSubPlayer')]
+        self.assertIn("getProperty('povil.tr.file')", check)
+        self.assertIn('player.getPlayingFile() == trailer', check, 'by the address: a film that takes over from a trailer is a film')
 
 
 if __name__ == '__main__':

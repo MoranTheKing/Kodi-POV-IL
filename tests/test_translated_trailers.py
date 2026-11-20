@@ -189,7 +189,7 @@ class TranslatedTests(unittest.TestCase):
         self.assertNotIn('get_subtitle_selection', light)
         self.assertEqual(source.count('get_subtitle_selection'), 1)
         self.assertIn('def load_captions(video):', source)
-        self.assertIn('captions=load_captions, answers=moransubs_answers)', source)
+        self.assertIn('captions=load_captions, answers=moransubs_answers, draws=skin_draws)', source)
 
 
 if __name__ == '__main__':
