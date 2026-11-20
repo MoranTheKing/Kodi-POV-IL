@@ -429,7 +429,7 @@
 	</timer>
 	<timer>
 		<name>povil_trailer_stop</name>
-		<start reset="true">!String.IsEmpty(Window(home).Property(povil.tr.ask)) + [![[Window.IsActive(home) | Window.IsActive(videos)] | [Window.IsActive(fullscreenvideo) + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Player.FilenameAndPath,Window(home).Property(povil.tr.file))]] | [System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)] | Skin.HasSetting(POVILNoTrailers) | [[Window.IsActive(home) | Window.IsActive(videos)] + [!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask))]]]</start>
+		<start reset="true">!String.IsEmpty(Window(home).Property(povil.tr.ask)) + [![[Window.IsActive(home) | Window.IsActive(videos)] | [Window.IsActive(fullscreenvideo) + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Player.FilenameAndPath,Window(home).Property(povil.tr.file))]] | [System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)] | Window.IsVisible(extendedprogressdialog) | Skin.HasSetting(POVILNoTrailers) | [[Window.IsActive(home) | Window.IsActive(videos)] + [!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + !String.IsEqual(Control.GetLabel(9809),Window(home).Property(povil.tr.ask))]]]</start>
 		<onstart>Skin.TimerStop(povil_trailer_shown)</onstart>
 		<onstart>ClearProperty(povil.tr.ask,home)</onstart>
 		<onstart>NotifyAll(povil.trailer,stop)</onstart>

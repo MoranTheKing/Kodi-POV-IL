@@ -421,6 +421,10 @@ WIZARD_MODES = 'Window(home).Property(povil.wizard.modes)'
 
 # the build's menu editor inside the skin, for Onyx without the Wizard (gen_standalone.py, Onyx 1.0.29)
 EDITOR_SCRIPT = 'special://skin/scripts/povil_menu_editor.py'
+# ... and the Wizard's trailer desk (Onyx 1.0.32; the owner, Nov 2026: "whoever downloads only the Onyx skin -- the
+# trailers won't work for him?" -- the skin only asks for a trailer, the Wizard plays it). The home starts it while the
+# Wizard is not installed; it runs once (Window(home).Property(povil.tr.desk)) and gives way once the Wizard is there.
+TRAILER_DESK = 'special://skin/scripts/povil_trailers.py'
 
 
 def by_wizard(wizard_action, *own_actions, mode=None):
@@ -474,12 +478,14 @@ SETTINGS_ITEMS = [
     # the watched mark's colour (WATCHED_COLOURS)
     ('$VAR[POVIL_WatchedTile]', 'povil/check.png', WATCHED_CHOICE, ''),
     # the trailer behind the hero (trailers.py): on unless switched off here; the tile says which
-    # (the Wizard plays them: without it there are none to switch)
+    # (the Wizard plays them -- or, without it, the skin's copy of its desk: TRAILER_DESK, Onyx 1.0.32)
     ('$VAR[POVIL_TrailersTile]', 'DefaultAddonVideo.png', 'Skin.ToggleSetting(%s)' % TRAILER_OFF_SWITCH,
-     'System.HasAddon(plugin.video.youtube) + ' + WIZ),
-    # how soon it starts, and how soon it has the screen to itself (the Wizard asks, trailer_timing.py)
-    ('תזמון טריילרים', 'DefaultAddonVideo.png', plugin_run(WIZARD + '?mode=trailer_timing'),
-     'System.HasAddon(plugin.video.youtube) + %s + %s' % (WIZ, TRAILERS_ON)),
+     'System.HasAddon(plugin.video.youtube)'),
+    # how soon it starts, and how soon it has the screen to itself (the Wizard asks, trailer_timing.py; without it the
+    # same dialog inside the skin)
+    ('תזמון טריילרים', 'DefaultAddonVideo.png',
+     by_wizard(plugin_run(WIZARD + '?mode=trailer_timing'), 'RunScript(%s,trailer_timing)' % EDITOR_SCRIPT),
+     'System.HasAddon(plugin.video.youtube) + %s' % TRAILERS_ON),
     ('שליחת לוג', 'DefaultAddonProgram.png', SEND_LOG, ''),
     ('הגדרות הסקין', 'DefaultAddonSkin.png', 'ActivateWindow(SkinSettings)', ''),
     ('הגדרות קודי', 'DefaultAddonService.png', 'ActivateWindow(Settings)', ''),
@@ -1036,7 +1042,10 @@ def gen_timers():
                '!String.IsEqual(Control.GetLabel(%d),%s)]' % (TRAILER_KEY, asked))
     # (not while Kodi's full-screen player has come over the trailer for a moment -- povil_trailer_a_back takes it back;
     # the title is read only on the screen that shows it)
-    x(2, '<start reset="true">!String.IsEmpty(%s) + [![%s | [%s]] | %s | '
+    # (and while an add-on finds or opens a pressed title's sources under Kodi's background progress -- the ask already
+    # waits for it: on Onyx without the Wizard nothing else stops the trailer before POV's player starts, and POV's
+    # player can take the trailer's stop for its own film's end -- the reviewer, Onyx 1.0.32)
+    x(2, '<start reset="true">!String.IsEmpty(%s) + [![%s | [%s]] | %s | Window.IsVisible(extendedprogressdialog) | '
          '%s | [%s + %s]]</start>' % (asked, TRAILER_SCREEN, TRAILER_PLAYER, dialog, TRAILERS_OFF, TRAILER_SCREEN, changed))
     x(2, '<onstart>Skin.TimerStop(povil_trailer_shown)</onstart>')
     x(2, '<onstart>ClearProperty(povil.tr.ask,home)</onstart>')
@@ -1795,6 +1804,8 @@ def gen_home():
     x(1, '<onload condition="String.IsEmpty(Window(home).Property(povil.tab.%s))">SetProperty(povil.tab.%s,1,home)</onload>' % (TABS[0]['id'], TABS[0]['id']))
     x(1, '<backgroundcolor>FF000000</backgroundcolor>')
     x(1, '<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/profile_bootstrap.py)</onload>')
+    x(1, '<onload condition="!%s + System.HasAddon(plugin.video.youtube) + String.IsEmpty(Window(home).Property(povil.tr.desk))">'
+         'RunScript(%s)</onload>' % (WIZ, TRAILER_DESK))
     # Onyx's one-time defaults (used by its other windows)
     for line in ('Skin.SetBool(ShowClock)', 'Skin.SetString(shutdown,quit)', 'Skin.SetBool(LibUpdateOff)',
                  'Skin.SetString(AutoCloseTimeVideoOSD,4)', 'Skin.SetBool(_ShowWatched)',

@@ -415,6 +415,10 @@ def variables():
 EDITOR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
                                        'plugin.program.kodipovilwizard', 'resources', 'libs'))
 EDITOR_LIBS = ('menu_editor.py', 'custom_rows.py', 'home_rows.py')
+# The Wizard's trailer desk, copied too (Onyx 1.0.32): without the Wizard no trailer played (the skin only asks for one).
+# Its modules use Kodi's own modules, the YouTube add-on's and each other only; trailer_timing.py is the timing tile's.
+TRAILER_LIBS = ('trailers.py', 'trailer_subs.py', 'youtube_port.py', 'trailer_timing.py')
+TRAILER_PATCHES = ('pov_trailer_pick.py',)
 EDITOR_SCRIPT = 'special://skin/scripts/povil_menu_editor.py'
 LAUNCHER = '''# -*- coding: utf-8 -*-
 """The build's menu editor inside the skin (Onyx 1.0.29), for a viewer who has Onyx without the Kodi POV IL Wizard: the
@@ -427,6 +431,7 @@ never edited here.
     RunScript(special://skin/scripts/povil_menu_editor.py,rows)           its rows
     RunScript(special://skin/scripts/povil_menu_editor.py,custom_rows)    the viewer's own rows and shortcuts
     RunScript(special://skin/scripts/povil_menu_editor.py,home_rows)      the order of the rows
+    RunScript(special://skin/scripts/povil_menu_editor.py,trailer_timing) the trailers' timing (Onyx 1.0.32)
 """
 import sys
 
@@ -434,7 +439,10 @@ import xbmcvfs
 
 sys.path.insert(0, xbmcvfs.translatePath('special://skin/scripts/povil_menu'))
 PART = sys.argv[1] if len(sys.argv) > 1 else ''
-if PART == 'custom_rows':
+if PART == 'trailer_timing':
+    from resources.libs import trailer_timing
+    trailer_timing.choose()
+elif PART == 'custom_rows':
     from resources.libs import custom_rows
     custom_rows.choose()
 elif PART == 'home_rows':
@@ -446,15 +454,83 @@ else:
 '''
 
 
+TRAILERS_LAUNCHER = '''# -*- coding: utf-8 -*-
+"""The home's trailers inside the skin (Onyx 1.0.32), for a viewer who has Onyx without the Kodi POV IL Wizard: the skin
+asks for a title's trailer (NotifyAll(povil.trailer,...)) and the Wizard's trailer desk plays it -- without the Wizard no
+trailer played (the owner, Nov 2026: "whoever downloads only the Onyx skin -- the trailers won't work for him?").
+povil_menu/resources/libs/ holds the Wizard's own trailers.py, trailer_subs.py, youtube_port.py and
+patches/pov_trailer_pick.py, copied by tools/skin_onyx/gen_standalone.py: one source, never edited here.
+
+The home starts it (Home.xml onload) only while the Wizard is not installed. It runs once (Window(home).Property(
+povil.tr.desk)), keeps its files in the skin's own folder, and gives way once the Wizard is installed (its own desk then
+plays them) or another skin is chosen.
+"""
+import sys
+import threading
+
+import xbmc
+import xbmcgui
+import xbmcvfs
+
+WIZARD = 'System.HasAddon(plugin.program.kodipovilwizard)'
+DESK = 'povil.tr.desk'
+DATA = 'special://profile/addon_data/skin.povil.onyx/'
+
+
+def log(text):
+    xbmc.log('[POV IL trailers] %s' % text, xbmc.LOGINFO)
+
+
+def stay():
+    return not xbmc.getCondVisibility(WIZARD) and xbmc.getSkinDir() == 'skin.povil.onyx'
+
+
+def port():
+    # the YouTube add-on's own server on a port this device lets it open (the Wizard's youtube_port.py, 15 s after the
+    # start, as the Wizard runs it)
+    try:
+        if xbmc.Monitor().waitForAbort(15) or not stay():
+            return
+        from resources.libs import youtube_port
+        youtube_port.run(lambda text: xbmc.log('[POV IL YouTube] ' + text, xbmc.LOGINFO))
+    except Exception as exc:
+        log('port check: %r' % (exc,))
+
+
+def main():
+    home = xbmcgui.Window(10000)
+    if not stay() or home.getProperty(DESK):
+        return
+    home.setProperty(DESK, 'skin')
+    try:
+        sys.path.insert(0, xbmcvfs.translatePath('special://skin/scripts/povil_menu'))
+        xbmcvfs.mkdirs(DATA)
+        log('the skin plays the trailers (no Wizard)')
+        threading.Thread(target=port, name='POVILYouTubePort').start()
+        from resources.libs import trailers
+        trailers.watch(data=DATA, stay=stay)
+    finally:
+        home.clearProperty(DESK)
+
+
+main()
+'''
+
+
 def editor_files(skin):
     libs = os.path.join(skin, 'scripts', 'povil_menu', 'resources', 'libs')
-    os.makedirs(libs, exist_ok=True)
-    for name in EDITOR_LIBS:
+    patches = os.path.join(libs, 'patches')
+    os.makedirs(patches, exist_ok=True)
+    for name in EDITOR_LIBS + TRAILER_LIBS:
         shutil.copyfile(os.path.join(EDITOR, name), os.path.join(libs, name))
-    for folder in (os.path.dirname(libs), libs):
+    for name in TRAILER_PATCHES:
+        shutil.copyfile(os.path.join(EDITOR, 'patches', name), os.path.join(patches, name))
+    for folder in (os.path.dirname(libs), libs, patches):
         open(os.path.join(folder, '__init__.py'), 'w').close()
     with open(os.path.join(skin, 'scripts', 'povil_menu_editor.py'), 'w', encoding='utf-8', newline='\n') as f:
         f.write(LAUNCHER)
+    with open(os.path.join(skin, 'scripts', 'povil_trailers.py'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(TRAILERS_LAUNCHER)
 
 
 def main():

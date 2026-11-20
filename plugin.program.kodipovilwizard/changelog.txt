@@ -1,3 +1,6 @@
+0.5.37
+- The trailer desk takes a folder of its own and runs for as long as it is told (watch(data, stay)): Onyx 1.0.32 runs a copy of it on a Kodi without the Wizard. Nothing changes with the Wizard.
+
 0.5.36
 - A season's poster plays the season's own trailer when TMDb keeps it on the season (Dexter: Resurrection, a viewer, Nov 2026: "season 2 showed the same trailer as the series" -- TMDb lists its "Season 2 Official Trailer" under season 2 only). The seasons' list asks TMDb once for the videos of all its seasons (one request, kept by POV's cache for 2 days); a season's own trailers come first, Hebrew first, its teasers as the alternatives; a season with none of its own keeps the series' trailers of that season as before. The trailer's subtitles and their post name the series and the season.
 
