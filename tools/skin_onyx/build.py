@@ -16,6 +16,6 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKIN = os.path.normpath(os.path.join(HERE, '..', '..', 'skin.povil.onyx'))
-for script in ('gen_strings.py', 'patch_onyx.py', 'gen_home.py', 'gen_views.py', 'gen_osd.py', 'gen_info.py', 'gen_dialogs.py',
+for script in ('gen_strings.py', 'patch_onyx.py', 'gen_home.py', 'gen_standalone.py', 'gen_views.py', 'gen_osd.py', 'gen_info.py', 'gen_dialogs.py',
                'gen_settings.py'):
     subprocess.run([sys.executable, os.path.join(HERE, script), SKIN], cwd=HERE, check=True)

@@ -31,6 +31,31 @@ def clean_name(name):
     return ' '.join(name.split()) or 'השורה שלי'
 
 
+def library_path(path, rpc=None):
+    """A folder whose films (or series) are in Kodi's library: the library's own list of just those (posters, details),
+    newest first -- else None. A viewer, Nov 2026, his films' folder added to Kodi as films and scanned: the row showed
+    the folder (file names) and not the films."""
+    import json
+    from urllib.parse import quote
+    if rpc is None:
+        import xbmc
+        rpc = xbmc.executeJSONRPC
+    for method, kind, node in (('VideoLibrary.GetMovies', 'movies', 'videodb://movies/titles/'),
+                               ('VideoLibrary.GetTVShows', 'tvshows', 'videodb://tvshows/titles/')):
+        try:
+            reply = json.loads(rpc(json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': {
+                'filter': {'field': 'path', 'operator': 'startswith', 'value': path}, 'limits': {'start': 0, 'end': 1}}})))
+            total = ((reply.get('result') or {}).get('limits') or {}).get('total') or 0
+        except Exception:
+            total = 0
+        if total:
+            # (Kodi's own smart-playlist filter; encoded, so no comma or quote reaches Skin.SetString)
+            xsp = {'rules': {'and': [{'field': 'path', 'operator': 'startswith', 'value': [path]}]}, 'type': kind,
+                   'order': {'direction': 'descending', 'method': 'dateadded'}}
+            return node + '?xsp=' + quote(json.dumps(xsp, separators=(',', ':')), safe='')
+    return None
+
+
 def favourite_paths():
     """(path, name) of Kodi favourites that open a folder."""
     import json
@@ -59,7 +84,9 @@ def pick_source(dialog):
         return LIBRARY[picked][0]
     if picked == len(LIBRARY):
         path = dialog.browse(0, 'בחירת תיקייה', 'videos', '', False, False, '')
-        return path or None
+        if not path:
+            return None
+        return library_path(path) or path
     favs = favourite_paths()
     if not favs:
         dialog.ok(HEADING, 'אין מועדפים של תיקיות.')
@@ -95,6 +122,12 @@ def choose():
                 name = dialog.input('שם השורה', current or 'השורה שלי')
                 xbmc.executebuiltin('Skin.SetString(%s,%s)' % (setting(tab, n, 'name'), clean_name(name or 'השורה שלי')))
                 xbmc.executebuiltin('Skin.SetString(%s,%s)' % (setting(tab, n, 'path'), quoted(path)))
+                # a screen whose order the viewer set: the new row joins it at its end (home_rows.py)
+                try:
+                    from resources.libs import home_rows
+                    home_rows.place_custom(tab, '%s_%d' % (tab, n), xbmc.getInfoLabel, xbmc.getCondVisibility, xbmc.executebuiltin)
+                except Exception:
+                    pass
         elif a == 1:
             current = xbmc.getInfoLabel('Skin.String(%s)' % setting(tab, n, 'name'))
             name = dialog.input('שם השורה', current)
@@ -103,4 +136,9 @@ def choose():
         elif a == 2:
             xbmc.executebuiltin('Skin.Reset(%s)' % setting(tab, n, 'path'))
             xbmc.executebuiltin('Skin.Reset(%s)' % setting(tab, n, 'name'))
+            try:
+                from resources.libs import home_rows
+                home_rows.drop_custom(tab, '%s_%d' % (tab, n), xbmc.getCondVisibility, xbmc.getInfoLabel, xbmc.executebuiltin)
+            except Exception:
+                pass
         xbmc.sleep(300)

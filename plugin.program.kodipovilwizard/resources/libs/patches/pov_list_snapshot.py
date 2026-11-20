@@ -118,6 +118,9 @@ TRAKT_PUBLIC_PREFIXES = ('trakt_movies_', 'trakt_tv_', 'trakt_moviesanime_', 'tr
 OWN_FAVOURITES_PREFIX = 'favorites_'
 OWN_FAVOURITES = 'favorites'
 LISTS_TOKEN = '$INFO[Window(home).Property(povil.lists.t)]'
+# (Onyx 1.0.26: a row that changes after a film -- continue watching, the next episode -- carries the time the last
+# film or episode ended, gen_home.py PLAY_TOKEN; empty at start, like the lists' token)
+PLAY_TOKEN = '$INFO[Window(home).Property(povil.play.t)]'
 _LISTITEM_RECORDED = ('set', 'add', 'select')
 
 
@@ -1673,7 +1676,7 @@ def skin_targets(skin_dir):
                 continue
             # the rows of the viewer's own saved titles carry a refresh token
             # (Onyx): at start it is empty, and so is the address asked then
-            for argv2 in pattern.findall(text.replace(LISTS_TOKEN, '')):
+            for argv2 in pattern.findall(text.replace(LISTS_TOKEN, '').replace(PLAY_TOKEN, '')):
                 argv2 = argv2.replace('&amp;', '&')
                 if '$' not in argv2 and '[' not in argv2 and argv2 not in found:
                     found.append(argv2)

@@ -106,7 +106,17 @@ YOUTUBE = 'plugin.video.youtube'
 # from Kodi's start for the first trailer and took the trailers for broken (the owner, Nov 2026: "it has to
 # work right when one enters Kodi"). The start is over by the time this thread exists; a few seconds are
 # left for what the Wizard still does right after it.
-QUIET_START_S = 8
+# It was 8 s, and the trailer was read from YouTube only after them -- 12 s from the home to the first
+# trailer on a fast PC (QA Kodi: thread born 2.4 s after the home, 8 s of rest, 1.7 s of reading). The owner,
+# Nov 2026: "on the first entry to Kodi the first trailer takes several seconds, without my touching
+# anything -- can the first loading be much shorter?" Now 3 s, the trailer is read DURING them (Desk._start)
+# and the YouTube add-on's code is loaded as this thread begins (watch: warm).
+QUIET_START_S = 3
+# Kodi's start: the YouTube add-on's own service may not be up yet when the first trailer is asked for, so its
+# server cannot be woken. For this long after this thread began that is waited out and tried again, and is
+# not counted among the trailers that did not play (three of those and the trailers rest ten minutes).
+START_GRACE_S = 60
+START_RETRY_S = 3
 MAX_HEIGHT = 720                # what the trailer asks of YouTube: H.264 up to this, which every box decodes in its chip
 HEAVY = ('vp9', 'av01', 'hdr', 'hfr', '3d', 'vr')
 WAKE_S = 5                      # how long the YouTube add-on's server may take to wake (its own player waits as long)
@@ -831,25 +841,36 @@ class Desk(object):
         return ticket == self.ticket and self.home.getProperty(ASK) == key
 
     def _start(self, key, video, ticket, wait=0.0):
-        if wait:
-            self.waiting.wait(wait)
-            if not self._wanted(key, ticket):
-                return False
+        began = self.clock()
         # the trailer before this one is still opening: a player that is opening is left alone
         while self._opening():
             if self.waiting.wait(0.2) or not self._wanted(key, ticket):
                 return False
-        try:
-            stream, why, gone = self._obtain(key, lambda: self._wanted(key, ticket))
-        except Asleep:
-            if self._port_moved():
-                # (not counted: the add-on starts its server again on the new port, and the next title has it)
-                self.log('the YouTube add-on did not wake its server: its port was moved')
-            else:
-                self._did_not_play('the YouTube add-on did not wake its server')
-            return False
+        while True:
+            try:
+                # (Kodi has just started -- wait: the trailer is read meanwhile, and played when the start is over)
+                stream, why, gone = self._obtain(key, lambda: self._wanted(key, ticket))
+                break
+            except Asleep:
+                if self.clock() - self.born < START_GRACE_S:
+                    # Kodi's start: the YouTube add-on's service may not be up yet. Tried again in a moment, and
+                    # not counted among the trailers that did not play.
+                    if self.waiting.wait(START_RETRY_S) or not self._wanted(key, ticket):
+                        return False
+                    continue
+                if self._port_moved():
+                    # (not counted: the add-on starts its server again on the new port, and the next title has it)
+                    self.log('the YouTube add-on did not wake its server: its port was moved')
+                else:
+                    self._did_not_play('the YouTube add-on did not wake its server')
+                return False
         if gone:
             return False
+        rest = wait - (self.clock() - began)
+        if rest > 0:
+            self.waiting.wait(rest)
+            if not self._wanted(key, ticket):
+                return False
         with self.lock:
             self.found.pop(key, None)       # (read once, played once: a later visit reads it again)
         if stream is None:
@@ -1372,19 +1393,22 @@ def watch():
 
     BUSY = 'Window.IsActive(busydialog) | Window.IsActive(busydialognocancel)'
     DIALOG = 'System.HasActiveModalDialog + !Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel)'
+    # where a trailer plays behind a title: the home, and the Videos window's views (a season's list, a search's
+    # results, the inner lists -- Onyx 1.0.26; the skin's TRAILER_SCREEN). Each holds the label HERO_LABEL.
+    SCREEN = 'Window.IsActive(home) | Window.IsActive(videos)'
 
     def wanted_now(key):
         # (Kodi's busy dialog may still be closing: what is read of the home under it is not the home's)
         for _ in range(10):
             if not xbmc.getCondVisibility(BUSY) or listener.waitForAbort(0.1):
                 break
-        return (enabled() and xbmc.getCondVisibility('Window.IsActive(home)') and not xbmc.getCondVisibility(DIALOG) and
+        return (enabled() and xbmc.getCondVisibility(SCREEN) and not xbmc.getCondVisibility(DIALOG) and
                 xbmc.getInfoLabel('Control.GetLabel(%d)' % HERO_LABEL) == key)
 
     def look(key):
         label = xbmc.getInfoLabel('Control.GetLabel(%d)' % HERO_LABEL)
         return 'home=%d dialog=%d busy=%d title=%s focus=%s' % (
-            xbmc.getCondVisibility('Window.IsActive(home)'), xbmc.getCondVisibility(DIALOG), xbmc.getCondVisibility(BUSY),
+            xbmc.getCondVisibility(SCREEN), xbmc.getCondVisibility(DIALOG), xbmc.getCondVisibility(BUSY),
             'same' if label == key else ('none' if not label else 'another'), xbmc.getInfoLabel('System.CurrentControlId') or 'none')
 
     def acting():
@@ -1425,6 +1449,21 @@ def watch():
                 log('%s: %r' % (what, exc))
 
     listener = Listener()
+
+    def warm():
+        # the YouTube add-on's code, loaded now: on a small box its first loading is a good part of the first
+        # trailer's wait (the modules resolve() names; nothing is asked of YouTube)
+        try:
+            if enabled():
+                folder = xbmcvfs.translatePath('special://home/addons/%s/resources/lib/' % YOUTUBE)
+                if folder not in sys.path:
+                    sys.path.append(folder)
+                from youtube_plugin.youtube.provider import Provider     # noqa: F401
+                from youtube_plugin.kodion.context import XbmcContext    # noqa: F401
+        except Exception as exc:
+            log('warm: %s' % _why(exc))
+
+    threading.Thread(target=warm, name='POVILTrailerWarm').start()
     try:
         # the skin may have asked before this thread was listening (Kodi's start): the skin does not
         # ask twice for the same title

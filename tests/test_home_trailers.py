@@ -168,19 +168,47 @@ class DeskTests(unittest.TestCase):
 
     def test_none_while_kodi_is_still_starting(self):
         home, player = Home(**{trailers.ASK: ADDRESS}), Player()
-        desk = self.desk(home, player, age=3.0)
+        desk = self.desk(home, player, age=1.0)
         waits = []
         desk.waiting.wait = lambda seconds: waits.append(seconds)
         job = desk.asked()
         self.assertTrue(job(), 'still the title on screen when the start is over: it plays then')
-        self.assertEqual(waits, [trailers.QUIET_START_S - 3.0])
-        self.assertLessEqual(trailers.QUIET_START_S, 10, 'the thread starts after the home has settled: a few seconds, not a minute')
-        # the viewer moved on during the wait: nothing is asked of YouTube at all
+        self.assertEqual(waits, [trailers.QUIET_START_S - 1.0])
+        self.assertLessEqual(trailers.QUIET_START_S, 3, 'the owner, Nov 2026: "can the first loading be much shorter?" (it was 8)')
+        # ... and the trailer is read from YouTube DURING that wait, not after it: it is ready when the start is over
+        self.assertEqual(self.resolved, ['hoRHBV0m1hw'])
+        # the viewer moved on during the wait: read, but never handed to the player
         home, player = Home(**{trailers.ASK: ADDRESS}), Player()
-        desk = self.desk(home, player, age=3.0)
+        desk = self.desk(home, player, age=1.0)
         desk.waiting.wait = lambda seconds: home.values.update({trailers.ASK: ''})
         self.assertFalse(desk.asked()())
-        self.assertEqual(self.resolved, [])
+        self.assertEqual(player.calls, [])
+
+    def test_the_youtube_add_on_not_up_yet_at_kodi_s_start_is_waited_out_not_counted(self):
+        # the first trailer may be asked for before the YouTube add-on's own service runs: its server cannot be
+        # woken yet. Three trailers that do not play rest the trailers ten minutes -- Kodi's start must not use them up.
+        home, player = Home(**{trailers.ASK: ADDRESS}), Player()
+        desk = self.desk(home, player, age=5.0)
+        said, waits, tries = [], [], []
+        desk.log = said.append
+        desk.waiting.wait = lambda seconds: waits.append(seconds)
+
+        def resolve(video):
+            tries.append(video)
+            if len(tries) < 3:
+                raise trailers.Asleep()
+            return [STREAM]
+        desk.resolve = resolve
+        self.assertTrue(desk.asked()(), 'it plays once the add-on is up')
+        self.assertEqual((len(tries), waits, said, desk.failed), (3, [trailers.START_RETRY_S] * 2, [], 0))
+        # the viewer moved on meanwhile: given up quietly
+        home, player = Home(**{trailers.ASK: ADDRESS}), Player()
+        desk = self.desk(home, player, age=5.0)
+        desk.resolve = lambda video: (_ for _ in ()).throw(trailers.Asleep())
+        desk.waiting.wait = lambda seconds: home.values.update({trailers.ASK: ''})
+        self.assertFalse(desk.asked()())
+        self.assertEqual((player.calls, desk.failed), ([], 0))
+        self.assertGreaterEqual(trailers.START_GRACE_S, 30)
 
     def test_it_is_on_until_the_viewer_switches_it_off(self):
         # the owner, Nov 2026: "on by default for everyone". A skin setting is unset until someone sets it,
@@ -849,7 +877,8 @@ class SkinTests(unittest.TestCase):
                          ['Skin.TimerStop(povil_trailer_shown)',
                           'SetProperty(povil.tr.ask,$ESCINFO[Control.GetLabel(9809)],home)', 'NotifyAll(povil.trailer,ask)'])
         stop = timers['povil_trailer_stop'].findtext('start')
-        for part in ('!Window.IsActive(home)', '| Skin.HasSetting(POVILNoTrailers) |',
+        # ("left": neither the home nor the Videos window's views, which play it too since Onyx 1.0.26)
+        for part in ('![Window.IsActive(home) | Window.IsActive(videos)]', '| Skin.HasSetting(POVILNoTrailers) |',
                      # the title is compared only with no busy dialog over the home: under one the label reads
                      # empty (the owner's phone: the trailer stopped at its first picture, five times in a row)
                      '[!Window.IsActive(busydialog) + !Window.IsActive(busydialognocancel) + '
@@ -940,7 +969,7 @@ class SkinTests(unittest.TestCase):
         timers = {t.findtext('name'): t for t in ET.parse(XML / 'Timers.xml').getroot().findall('timer')}
         shown = timers['povil_trailer_shown']
         self.assertIn('Player.HasVideo', shown.findtext('start'))
-        self.assertIn('!Window.IsActive(home)', shown.findtext('stop'))
+        self.assertIn('![Window.IsActive(home) | Window.IsActive(videos)]', shown.findtext('stop'))
 
     def test_it_is_on_for_everyone_and_a_tile_switches_it_off(self):
         # the owner, Nov 2026: "turn it on by default for everyone". The setting says OFF, so a device that
