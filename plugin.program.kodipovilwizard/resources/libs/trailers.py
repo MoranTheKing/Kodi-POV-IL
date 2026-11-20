@@ -199,6 +199,7 @@ def video_title(stream):
 TRANSLATED_FOUND_S, TRANSLATED_NONE_S = 14 * 86400, 3 * 86400     # a search is kept this long (found / none)
 # (v2, 0.5.17: searched again under the scam filter; v3, 0.5.30: under the film / series rule, translated_pick)
 TRANSLATED_FILE = 'translated_trailers_v4.json'      # (v4, 0.5.34: a film's upload chosen for a series is asked again)
+SEASON_OWNERS_FILE = 'season_trailers.json'          # whose season each season's own trailer is (patches/pov_trailer_pick.py)
 # A translated trailer of the OTHER kind: a viewer, via the owner, Nov 2026 -- the Pokémon series (1997) played the
 # dubbed trailer of the film "Detective Pikachu" (its title names "פוקימון" too). For a series a result that says it is
 # a film is left out, for a film one that says it is a series; and one that names a year far from the title's.
@@ -284,11 +285,36 @@ def title_of(rows, key):
     return listed or (None, False)
 
 
+def owned_title(connect, cache_path, owners_path, video):
+    """(meta, hebrew) of a season's own trailer -- TMDb keeps it on the season, not among the series' videos, and the
+    season list keeps whose it is (patches/pov_trailer_pick.py read_season_videos) -- the series' meta with the season in
+    meta['povil_season']; else (None, False)."""
+    import json
+    try:
+        from resources.libs.patches import pov_trailer_pick as pick
+        owner = pick.season_owner(owners_path, video)
+        if not owner:
+            return None, False
+        con = connect('file:%s?mode=ro' % cache_path, uri=True, timeout=2.0)
+        try:
+            row = con.execute("SELECT meta FROM metadata WHERE db_type = 'tvshow' AND tmdb_id = ?", (owner[0],)).fetchone()
+        finally:
+            con.close()
+        meta = json.loads(row[0]) if row else None
+        if not isinstance(meta, dict):
+            return None, False
+        return dict(meta, povil_id='tvshow:%s' % owner[0], povil_season=owner[1]), owner[2] == 'he'
+    except Exception:
+        return None, False
+
+
 def trailer_season(meta, video):
     """Which season of a series one of its trailers is of (the choice's own reading, patches/pov_trailer_pick.py: its
     name, else the season it came out for), or None: the series' own. For the channel's post (the owner, Nov 2026: "say
     whether it is a season's trailer or the series' own")."""
     try:
+        if meta.get('povil_season'):        # a season's own trailer (owned_title)
+            return int(meta['povil_season'])
         from resources.libs.patches import pov_trailer_pick as pick
         entry = next((v for v in meta.get('all_trailers') or [] if isinstance(v, dict) and v.get('key') == video), None)
         if not entry:
@@ -1351,6 +1377,7 @@ def watch():
 
     kept_path = os.path.join(xbmcvfs.translatePath('special://profile/addon_data/plugin.program.kodipovilwizard/'), TRANSLATED_FILE)
     pov_cache = xbmcvfs.translatePath('special://profile/addon_data/plugin.video.pov/metacache.db')
+    owners_path = os.path.join(os.path.dirname(kept_path), SEASON_OWNERS_FILE)
 
     def youtube_search(query):
         # YouTube's own search (no key): the YouTube add-on's "v1" client, as it browses with it
@@ -1416,6 +1443,8 @@ def watch():
         finally:
             con.close()
         meta, hebrew = title_of(rows, key)
+        if meta is None and owned_title(sqlite3.connect, pov_cache, owners_path, video)[0] is not None:
+            return []           # (a season's own trailer: the series' translated one is not that season's)
         if meta is None:
             return None         # (a title POV does not hold yet)
         if hebrew:
@@ -1530,6 +1559,8 @@ def watch():
         finally:
             con.close()
         meta, _hebrew = title_of(rows, key)
+        if not meta:
+            meta, _hebrew = owned_title(sqlite3.connect, pov_cache, owners_path, own)
         if not meta:
             return {}
         found = {'title': meta.get('title') or '', 'original': meta.get('original_title') or '',

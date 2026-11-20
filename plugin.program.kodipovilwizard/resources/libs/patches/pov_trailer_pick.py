@@ -28,6 +28,15 @@ carries, after the chosen trailer, up to ALTERNATIVES more in the same order of 
 (...video_id=FIRST&povil_alt=SECOND.THIRD -- the YouTube add-on ignores the extra field, seen in
 the QA Kodi), and the home's trailer desk, which learns each one's length when it reads its
 stream, plays the first that is long enough (trailers.py).
+
+A SEASON'S OWN VIDEOS (0.5.36). TMDb keeps many a season's trailers on the season, not on the
+series: Dexter: Resurrection, Nov 2026 -- "Season 2 Official Trailer" and its two teasers are
+listed under season 2 only, and a viewer saw the series' trailer on season 2's poster ("it did
+not change to another trailer"). POV reads the series' videos only. So the seasons' list asks
+TMDb once more, for the videos of all its seasons in one request (append_to_response, up to
+APPEND_MAX seasons each; POV's own cache keeps the answer SEASON_VIDEOS_HOURS), and a season's
+own trailers come first. Which season and series each one is of is kept for the Wizard
+(OWNERS_FILE): the trailer's subtitles and their post name the title by it (trailers.py).
 """
 import re
 
@@ -51,6 +60,11 @@ _WORDS = (
 PURGE_FLAG = 'povil_trailer_pick_v2'      # (v2: every cached title is asked again -- its trailer gets its alternatives)
 ALTERNATIVES = 3
 ALT_FIELD = '&povil_alt='
+APPEND_MAX = 20                 # TMDb's limit of append_to_response
+SEASON_VIDEOS_HOURS = 48
+OWNERS_FILE = 'season_trailers.json'
+OWNERS_KEEP = 3000
+_SEASON_VIDEOS = {}             # the series' TMDb id -> {season: [its own videos]}, for for_season in this run
 
 
 def named_season(name):
@@ -140,15 +154,106 @@ def pick(videos, data=None, lang='he', mediatype='movie'):
 
 
 def for_season(meta, season, lang='he', address='plugin://plugin.video.youtube/play/?video_id=%s'):
-    """The address of the trailer of one season of a series, or None (the series' own then stands)."""
+    """The address of the trailer of one season of a series, or None (the series' own then stands): the season's own
+    videos (read_season_videos) first, then the series' videos of that season; Hebrew ones first."""
     try:
         season = int(season)
     except Exception:
         return None
-    seasons = (meta or {}).get('season_data')
-    named = with_alternatives(_all(trailers((meta or {}).get('all_trailers')), (lang or 'he')[:2],
-                                   lambda v: season_of(v, seasons) == season))
+    meta = meta or {}
+    seasons = meta.get('season_data')
+    own = [v for v in _SEASON_VIDEOS.get(str(meta.get('tmdb_id') or ''), {}).get(season) or []
+           if isinstance(v, dict) and named_season(v.get('name')) in (None, season)]
+    dated = [v for v in meta.get('all_trailers') or [] if isinstance(v, dict) and season_of(v, seasons) == season]
+    named = with_alternatives(_all(trailers(own + dated), (lang or 'he')[:2], lambda v: True))
     return address % named if named else None
+
+
+def season_videos_url(tmdb_id, numbers, lang='he'):
+    return '/3/tv/%s?append_to_response=%s&include_video_language=%s,en,null' % (
+        tmdb_id, ','.join('season/%d/videos' % n for n in numbers), (lang or 'he')[:2])
+
+
+def read_season_videos(meta, numbers, lang='he', get=None, cache=None, owners=None):
+    """Ask TMDb (through POV's own request and cache: get, cache) for the videos the seasons `numbers` of the series
+    `meta` keep themselves; for for_season. Returns {season: [videos]}. owners: the file the Wizard reads them from."""
+    tmdb = str((meta or {}).get('tmdb_id') or '')
+    wanted = sorted({int(n) for n in numbers or [] if str(n).isdigit() and 0 < int(n) < 100})
+    if not tmdb or not wanted:
+        return {}
+    if get is None:
+        from indexers.tmdb_api import get_tmdb as get
+    if cache is None:
+        from caches.main_cache import cache_object as cache
+
+    def fetch(url):
+        answer = get(url)
+        if not isinstance(answer, dict):
+            return None            # (not kept: asked again next time)
+        return {k: v for k, v in answer.items() if k.startswith('season/')}
+    found = {}
+    for start in range(0, len(wanted), APPEND_MAX):
+        chunk = wanted[start:start + APPEND_MAX]
+        answer = cache(fetch, 'povil_season_videos_%s_%s_%s' % (tmdb, (lang or 'he')[:2], '.'.join(map(str, chunk))),
+                       season_videos_url(tmdb, chunk, lang), expiration=SEASON_VIDEOS_HOURS)
+        for n in chunk:
+            got = (answer or {}).get('season/%d/videos' % n) if isinstance(answer, dict) else None
+            found[n] = [v for v in (got or {}).get('results') or [] if isinstance(v, dict)]
+    _SEASON_VIDEOS[tmdb] = found
+    try:
+        if owners is None:
+            import os
+            import xbmcvfs
+            folder = xbmcvfs.translatePath('special://profile/addon_data/plugin.program.kodipovilwizard/')
+            owners = os.path.join(folder, OWNERS_FILE) if os.path.isdir(folder) else None
+        if owners:
+            remember(owners, tmdb, found)
+    except Exception:
+        pass
+    return found
+
+
+def remember(path, tmdb, found, now=None):
+    """Keep, for the Wizard, which series and season each season's own trailer is of: {video: [tmdb, season, language,
+    time]}. Written only when something is new; the oldest go past OWNERS_KEEP."""
+    import json
+    import os
+    import time
+    now = time.time() if now is None else now
+    try:
+        with open(path, encoding='utf-8') as handle:
+            kept = json.load(handle)
+        if not isinstance(kept, dict):
+            kept = {}
+    except (OSError, ValueError):
+        kept = {}
+    changed = False
+    for season, videos in found.items():
+        for video in trailers(videos):
+            entry = [tmdb, int(season), video.get('iso_639_1') or '']
+            if (kept.get(video['key']) or [])[:3] != entry:
+                kept[video['key']] = entry + [int(now)]
+                changed = True
+    if not changed:
+        return False
+    if len(kept) > OWNERS_KEEP:
+        for old in sorted(kept, key=lambda k: (kept[k] + [0, 0, 0, 0])[3])[:len(kept) - OWNERS_KEEP]:
+            kept.pop(old, None)
+    with open(path + '.tmp', 'w', encoding='utf-8') as handle:
+        json.dump(kept, handle)
+    os.replace(path + '.tmp', path)
+    return True
+
+
+def season_owner(path, video):
+    """(tmdb id, season, language) of a season's own trailer that remember() kept, or None."""
+    import json
+    try:
+        with open(path, encoding='utf-8') as handle:
+            entry = json.load(handle).get(video)
+        return (str(entry[0]), int(entry[1]), str(entry[2] or '')) if entry else None
+    except Exception:
+        return None
 
 
 def _to_renew(meta):
