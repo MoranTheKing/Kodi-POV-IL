@@ -56,6 +56,21 @@ def fetch_page(base, token, after, opener=urllib.request.urlopen):
         return json.loads(r.read().decode('utf-8'))
 
 
+def _read(path):
+    try:
+        with open(path, encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _format(data):
+    try:
+        return int((data or {}).get('f') or 1)
+    except (TypeError, ValueError):
+        return 1
+
+
 def export(folder, fetch):
     """Writes the new rows from fetch(after) into folder and takes the withdrawn ones out;
     returns (files written, files removed + drop.json changed, last seq)."""
@@ -78,9 +93,11 @@ def export(folder, fetch):
                 continue
             sub, name = path_of(video)
             target = os.path.join(folder, sub, name)
-            if not os.path.exists(target):
+            if not os.path.exists(target) or _format(row) > _format(_read(target)):
+                # (first file wins -- unless this one is of a newer version: the captions' translations timed the new
+                # way replace the old ones, the owner, Nov 2026)
                 os.makedirs(os.path.join(folder, sub), exist_ok=True)
-                data = {k: row[k] for k in ('c', 's', 'm', 'n', 'y', 'ts') if k in row}
+                data = {k: row[k] for k in ('c', 's', 'm', 'n', 'y', 'k', 'e', 'f', 'ts') if k in row}
                 with open(target, 'w', encoding='utf-8', newline='\n') as f:
                     json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
                 written += 1
