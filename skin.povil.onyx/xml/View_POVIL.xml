@@ -149,6 +149,7 @@
 				<scrolltime tween="cubic" easing="out">260</scrolltime>
 				<onup condition="!Skin.HasSetting(ViewOptions_Hide)">9000</onup>
 				<onleft>noop</onleft><onright>noop</onright>
+				<onback condition="Skin.TimerIsRunning(povil_trailer_alone)">9810</onback>
 				<animation effect="slide" end="1582,0" time="0" condition="[Container.Content(movies) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(sets)] + Integer.IsEqual(Container(51).NumAllItems,1)">Conditional</animation>
 				<animation effect="slide" end="1356,0" time="0" condition="[Container.Content(movies) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(sets)] + Integer.IsEqual(Container(51).NumAllItems,2)">Conditional</animation>
 				<animation effect="slide" end="1130,0" time="0" condition="[Container.Content(movies) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(sets)] + Integer.IsEqual(Container(51).NumAllItems,3)">Conditional</animation>
@@ -184,6 +185,7 @@
 			</control>
 		</control>
 		<control type="label" id="9809"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_V_Trailer]</label></control>
+		<control type="button" id="9810" description="Back over a trailer"><left>-2000</left><top>0</top><width>10</width><height>10</height><animation effect="fade" start="100" end="100" time="0">Focus</animation><onfocus condition="Control.IsVisible(55)">SetFocus(55)</onfocus><onfocus condition="!Control.IsVisible(55)">SetFocus(51)</onfocus></control>
 	</include>
 	<include name="View_55_POVIL">
 		<control type="group" description="תצוגת פרקים">
@@ -282,6 +284,7 @@
 				<scrolltime tween="cubic" easing="out">260</scrolltime>
 				<onup condition="!Skin.HasSetting(ViewOptions_Hide)">9000</onup>
 				<onleft>noop</onleft><onright>noop</onright>
+				<onback condition="Skin.TimerIsRunning(povil_trailer_alone)">9810</onback>
 				<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(55).NumAllItems,1)">Conditional</animation>
 				<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(55).NumAllItems,2)">Conditional</animation>
 				<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(55).NumAllItems,3)">Conditional</animation>
