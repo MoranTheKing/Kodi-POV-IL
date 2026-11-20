@@ -1,3 +1,6 @@
+0.3.101
+- No subtitles' overlay over the home's first trailer after Kodi starts (the owner, Nov 2026: "at Kodi's first start, the first trailer, if I touch nothing until it is up, MoranSubs loads -- what shows on top when a source opens -- on the trailer itself"). When the service starts while a video already plays it searches subtitles for it at once -- and that path had no trailer check (onAVStarted alone had it): at the first start the home's trailer began two seconds before the service. Both paths now leave alone a playback whose address is Window(home).Property(povil.tr.file).
+
 0.3.100
 - Trailer subtitles from the first trailer after Kodi starts (the owner's log, 20 Nov 2026: the first trailer after a start was left untranslated; MoranSubs said "this device translates" 11 s later). MoranSubs now says yes or no at once when the key's tier is known from this week's check (no request; a key still to be checked is checked 20 s after the start, as before), and says "no" as '0' rather than leaving Window(home).Property(povil.tsub.able) empty -- so the Wizard (0.5.32) can wait for the word instead of taking silence for "no".
 

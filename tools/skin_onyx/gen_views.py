@@ -102,6 +102,8 @@ def view(x, vid, label, layout):
          '<hitrect x="-10" y="-10" w="1" h="1"/><visible>%s</visible>'
          '<animation effect="fade" start="0" end="100" time="600">Visible</animation>'
          '<animation effect="fade" start="100" end="0" time="250">Hidden</animation></control>' % H.TRAILER_SHOWN)
+    # its Hebrew subtitles, drawn by the skin (gen_home.py trailer_lines)
+    H.trailer_lines(x, 3)
     # everything over the picture is one group: it fades away while a trailer has the screen to itself
     x(3, '<control type="group" description="over the picture">')
     x(3, H.TRAILER_FADE)
