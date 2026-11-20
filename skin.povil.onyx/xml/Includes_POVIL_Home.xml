@@ -1686,16 +1686,18 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),continue) + String.IsEqual(Container(5101).ListItem.DBType,episode)">$INFO[Container(5101).ListItem.TVShowTitle]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),continue) + !String.IsEmpty(Container(5101).ListItem.Title)">$INFO[Container(5101).ListItem.Title]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),continue)">$INFO[Container(5101).ListItem.Label]</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)">סרטים</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv)">סדרות</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli)">ישראלי</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.tab),live)">שידור חי</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.tab),kids)">ילדים</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites)">מועדפים</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)">חיפוש</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)">הגדרות</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),movies)">$VAR[POVIL_TabLabel_movies]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),tv)">$VAR[POVIL_TabLabel_tv]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),israeli)">$VAR[POVIL_TabLabel_israeli]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),live)">$VAR[POVIL_TabLabel_live]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),kids)">$VAR[POVIL_TabLabel_kids]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),favourites)">$VAR[POVIL_TabLabel_favourites]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),search)">$VAR[POVIL_TabLabel_search]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)">$VAR[POVIL_TabLabel_settings]</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)">$INFO[Window(home).Property(povil.hub.name)]</value>
-		<value condition="String.IsEqual(Window(home).Property(povil.tab),continue)">המשך צפייה</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),continue)">$VAR[POVIL_TabLabel_continue]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),own1)">$VAR[POVIL_TabLabel_own1]</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),own2)">$VAR[POVIL_TabLabel_own2]</value>
 	</variable>
 	<variable name="POVIL_HeroEpisode">
 		<value condition="[Control.HasFocus(5011) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5011)]] + String.IsEqual(Container(5011).ListItem.DBType,episode)">$INFO[Container(5011).ListItem.Season,עונה , · ]$INFO[Container(5011).ListItem.Episode,פרק ]$INFO[Container(5011).ListItem.Title,  ·  ]</value>
@@ -2368,6 +2370,8 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),settings)">הוויזארד, הכתוביות, POV ו-Umbrella במקום אחד.</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),hub)">מה שיש לצפות בו בשירות הזה: בחרו הכול, סרטים או סדרות.</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.tab),continue)">כל מה שאתם באמצע: הפרק הבא של הסדרות שלכם, והסרטים והפרקים שהתחלתם.</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),own1)">כפתור משלכם בסרגל: לחצו OK כדי לפתוח.</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),own2)">כפתור משלכם בסרגל: לחצו OK כדי לפתוח.</value>
 	</variable>
 	<variable name="POVIL_ItemLandscape">
 		<value condition="String.IsEqual(ListItem.DBType,episode) + !String.IsEmpty(ListItem.Art(thumb))">$INFO[ListItem.Art(thumb)]</value>
@@ -5081,6 +5085,862 @@
 			</focusedlayout>
 		</definition>
 	</include>
+	<include name="POVIL_Tab_movies">
+		<param name="id" />
+		<param name="visible" />
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]" description="tab movies">
+				<width>146</width><height>64</height>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus /><texturenofocus />
+				<alttexturefocus colordiffuse="povil_gold">povil/tab_line_146.png</alttexturefocus><alttexturenofocus colordiffuse="povil_gold">povil/tab_line_146.png</alttexturenofocus>
+				<usealttexture>String.IsEqual(Window(home).Property(povil.tab),movies)</usealttexture>
+				<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>
+				<textcolor>$VAR[POVIL_TabColor_movies]</textcolor><focusedcolor>povil_white</focusedcolor>
+				<label>$VAR[POVIL_TabLabel_movies]</label>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab,movies,home)</onfocus>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab.movies,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5011),2) + !Integer.IsGreater(Container(5011).NumItems,0)">ClearProperty(povil.retry.5011,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5012),2) + !Integer.IsGreater(Container(5012).NumItems,0)">ClearProperty(povil.retry.5012,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5013),2) + !Integer.IsGreater(Container(5013).NumItems,0)">ClearProperty(povil.retry.5013,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5014),2) + !Integer.IsGreater(Container(5014).NumItems,0)">ClearProperty(povil.retry.5014,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5015),2) + !Integer.IsGreater(Container(5015).NumItems,0)">ClearProperty(povil.retry.5015,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5016),2) + !Integer.IsGreater(Container(5016).NumItems,0)">ClearProperty(povil.retry.5016,home)</onfocus>
+				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.main&amp;action=MovieList&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D",return)</onclick>
+				<ondown>SetFocus($VAR[POVIL_FirstChip_movies])</ondown>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Tab_tv">
+		<param name="id" />
+		<param name="visible" />
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]" description="tab tv">
+				<width>140</width><height>64</height>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus /><texturenofocus />
+				<alttexturefocus colordiffuse="povil_gold">povil/tab_line_140.png</alttexturefocus><alttexturenofocus colordiffuse="povil_gold">povil/tab_line_140.png</alttexturenofocus>
+				<usealttexture>String.IsEqual(Window(home).Property(povil.tab),tv)</usealttexture>
+				<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>
+				<textcolor>$VAR[POVIL_TabColor_tv]</textcolor><focusedcolor>povil_white</focusedcolor>
+				<label>$VAR[POVIL_TabLabel_tv]</label>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab,tv,home)</onfocus>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab.tv,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5021),2) + !Integer.IsGreater(Container(5021).NumItems,0)">ClearProperty(povil.retry.5021,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5022),2) + !Integer.IsGreater(Container(5022).NumItems,0)">ClearProperty(povil.retry.5022,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5023),2) + !Integer.IsGreater(Container(5023).NumItems,0)">ClearProperty(povil.retry.5023,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5024),2) + !Integer.IsGreater(Container(5024).NumItems,0)">ClearProperty(povil.retry.5024,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5025),2) + !Integer.IsGreater(Container(5025).NumItems,0)">ClearProperty(povil.retry.5025,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5026),2) + !Integer.IsGreater(Container(5026).NumItems,0)">ClearProperty(povil.retry.5026,home)</onfocus>
+				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.main&amp;action=TVShowList&amp;name=%D7%A1%D7%93%D7%A8%D7%95%D7%AA",return)</onclick>
+				<ondown>SetFocus($VAR[POVIL_FirstChip_tv])</ondown>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Tab_continue">
+		<param name="id" />
+		<param name="visible" />
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]" description="tab continue">
+				<width>220</width><height>64</height>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus /><texturenofocus />
+				<alttexturefocus colordiffuse="povil_gold">povil/tab_line_220.png</alttexturefocus><alttexturenofocus colordiffuse="povil_gold">povil/tab_line_220.png</alttexturenofocus>
+				<usealttexture>String.IsEqual(Window(home).Property(povil.tab),continue)</usealttexture>
+				<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>
+				<textcolor>$VAR[POVIL_TabColor_continue]</textcolor><focusedcolor>povil_white</focusedcolor>
+				<label>$VAR[POVIL_TabLabel_continue]</label>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab,continue,home)</onfocus>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab.continue,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>
+				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_next_episode&amp;name=%D7%94%D7%9E%D7%A9%D7%9A%20%D7%A6%D7%A4%D7%99%D7%99%D7%94",return)</onclick>
+				<ondown>SetFocus($VAR[POVIL_FirstChip_continue])</ondown>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Tab_israeli">
+		<param name="id" />
+		<param name="visible" />
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]" description="tab israeli">
+				<width>146</width><height>64</height>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus /><texturenofocus />
+				<alttexturefocus colordiffuse="povil_gold">povil/tab_line_146.png</alttexturefocus><alttexturenofocus colordiffuse="povil_gold">povil/tab_line_146.png</alttexturenofocus>
+				<usealttexture>String.IsEqual(Window(home).Property(povil.tab),israeli)</usealttexture>
+				<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>
+				<textcolor>$VAR[POVIL_TabColor_israeli]</textcolor><focusedcolor>povil_white</focusedcolor>
+				<label>$VAR[POVIL_TabLabel_israeli]</label>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab,israeli,home)</onfocus>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab.israeli,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5031),2) + !Integer.IsGreater(Container(5031).NumItems,0)">ClearProperty(povil.retry.5031,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5032),2) + !Integer.IsGreater(Container(5032).NumItems,0)">ClearProperty(povil.retry.5032,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5033),2) + !Integer.IsGreater(Container(5033).NumItems,0)">ClearProperty(povil.retry.5033,home)</onfocus>
+				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/",return)</onclick>
+				<ondown>SetFocus($VAR[POVIL_FirstChip_israeli])</ondown>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Tab_live">
+		<param name="id" />
+		<param name="visible" />
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]" description="tab live">
+				<width>166</width><height>64</height>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus /><texturenofocus />
+				<alttexturefocus colordiffuse="povil_gold">povil/tab_line_166.png</alttexturefocus><alttexturenofocus colordiffuse="povil_gold">povil/tab_line_166.png</alttexturenofocus>
+				<usealttexture>String.IsEqual(Window(home).Property(povil.tab),live)</usealttexture>
+				<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>
+				<textcolor>$VAR[POVIL_TabColor_live]</textcolor><focusedcolor>povil_white</focusedcolor>
+				<label>$VAR[POVIL_TabLabel_live]</label>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab,live,home)</onfocus>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab.live,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5041),2) + !Integer.IsGreater(Container(5041).NumItems,0)">ClearProperty(povil.retry.5041,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5042),2) + !Integer.IsGreater(Container(5042).NumItems,0)">ClearProperty(povil.retry.5042,home)</onfocus>
+				<onclick>ActivateWindow(Videos,"plugin://plugin.video.idanplus/?iconimage=&amp;mode=1&amp;module&amp;moredata&amp;name=%5bB%5d%d7%a9%d7%99%d7%93%d7%95%d7%a8%d7%99%d7%9d%20%d7%97%d7%99%d7%99%d7%9d%5b%2fB%5d&amp;url",return)</onclick>
+				<ondown>SetFocus($VAR[POVIL_FirstChip_live])</ondown>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Tab_kids">
+		<param name="id" />
+		<param name="visible" />
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]" description="tab kids">
+				<width>140</width><height>64</height>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus /><texturenofocus />
+				<alttexturefocus colordiffuse="povil_gold">povil/tab_line_140.png</alttexturefocus><alttexturenofocus colordiffuse="povil_gold">povil/tab_line_140.png</alttexturenofocus>
+				<usealttexture>String.IsEqual(Window(home).Property(povil.tab),kids)</usealttexture>
+				<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>
+				<textcolor>$VAR[POVIL_TabColor_kids]</textcolor><focusedcolor>povil_white</focusedcolor>
+				<label>$VAR[POVIL_TabLabel_kids]</label>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab,kids,home)</onfocus>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab.kids,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5051),2) + !Integer.IsGreater(Container(5051).NumItems,0)">ClearProperty(povil.retry.5051,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5052),2) + !Integer.IsGreater(Container(5052).NumItems,0)">ClearProperty(povil.retry.5052,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5053),2) + !Integer.IsGreater(Container(5053).NumItems,0)">ClearProperty(povil.retry.5053,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5054),2) + !Integer.IsGreater(Container(5054).NumItems,0)">ClearProperty(povil.retry.5054,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5055),2) + !Integer.IsGreater(Container(5055).NumItems,0)">ClearProperty(povil.retry.5055,home)</onfocus>
+				<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.5056),2) + !Integer.IsGreater(Container(5056).NumItems,0)">ClearProperty(povil.retry.5056,home)</onfocus>
+				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_genres&amp;genre_id=10751&amp;name=%D7%99%D7%9C%D7%93%D7%99%D7%9D",return)</onclick>
+				<ondown>SetFocus($VAR[POVIL_FirstChip_kids])</ondown>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Tab_favourites">
+		<param name="id" />
+		<param name="visible" />
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]" description="tab favourites">
+				<width>170</width><height>64</height>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus /><texturenofocus />
+				<alttexturefocus colordiffuse="povil_gold">povil/tab_line_170.png</alttexturefocus><alttexturenofocus colordiffuse="povil_gold">povil/tab_line_170.png</alttexturenofocus>
+				<usealttexture>String.IsEqual(Window(home).Property(povil.tab),favourites)</usealttexture>
+				<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>
+				<textcolor>$VAR[POVIL_TabColor_favourites]</textcolor><focusedcolor>povil_white</focusedcolor>
+				<label>$VAR[POVIL_TabLabel_favourites]</label>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab,favourites,home)</onfocus>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab.favourites,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>
+				<onclick>ActivateWindow(favouritesbrowser)</onclick>
+				<ondown>SetFocus($VAR[POVIL_FirstChip_favourites])</ondown>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Tab_search">
+		<param name="id" />
+		<param name="visible" />
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]" description="tab search">
+				<width>146</width><height>64</height>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus /><texturenofocus />
+				<alttexturefocus colordiffuse="povil_gold">povil/tab_line_146.png</alttexturefocus><alttexturenofocus colordiffuse="povil_gold">povil/tab_line_146.png</alttexturenofocus>
+				<usealttexture>String.IsEqual(Window(home).Property(povil.tab),search)</usealttexture>
+				<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>
+				<textcolor>$VAR[POVIL_TabColor_search]</textcolor><focusedcolor>povil_white</focusedcolor>
+				<label>$VAR[POVIL_TabLabel_search]</label>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab,search,home)</onfocus>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab.search,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>
+				<onclick condition="String.IsEqual(Addon.SettingStr(service.subtitles.kodipovilai,search_provider),umbrella) + System.AddonIsEnabled(plugin.video.umbrella)">ActivateWindow(Videos,"plugin://plugin.video.umbrella/?action=tools_searchNavigator",return)</onclick>
+				<onclick condition="![String.IsEqual(Addon.SettingStr(service.subtitles.kodipovilai,search_provider),umbrella) + System.AddonIsEnabled(plugin.video.umbrella)]">ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.search&amp;name=%D7%97%D7%99%D7%A4%D7%95%D7%A9",return)</onclick>
+				<ondown>SetFocus($VAR[POVIL_FirstChip_search])</ondown>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Tab_settings">
+		<param name="id" />
+		<param name="visible" />
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]" description="tab settings">
+				<width>146</width><height>64</height>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus /><texturenofocus />
+				<alttexturefocus colordiffuse="povil_gold">povil/tab_line_146.png</alttexturefocus><alttexturenofocus colordiffuse="povil_gold">povil/tab_line_146.png</alttexturenofocus>
+				<usealttexture>String.IsEqual(Window(home).Property(povil.tab),settings)</usealttexture>
+				<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>
+				<textcolor>$VAR[POVIL_TabColor_settings]</textcolor><focusedcolor>povil_white</focusedcolor>
+				<label>$VAR[POVIL_TabLabel_settings]</label>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab,settings,home)</onfocus>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab.settings,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>
+				<onclick>ActivateWindow(Settings)</onclick>
+				<ondown>5081</ondown>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Tab_own1">
+		<param name="id" />
+		<param name="visible" />
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]" description="tab own1">
+				<width>140</width><height>64</height>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus /><texturenofocus />
+				<alttexturefocus colordiffuse="povil_gold">povil/tab_line_140.png</alttexturefocus><alttexturenofocus colordiffuse="povil_gold">povil/tab_line_140.png</alttexturenofocus>
+				<usealttexture>String.IsEqual(Window(home).Property(povil.tab),own1)</usealttexture>
+				<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>
+				<textcolor>$VAR[POVIL_TabColor_own1]</textcolor><focusedcolor>povil_white</focusedcolor>
+				<label>$VAR[POVIL_TabLabel_own1]</label>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab,own1,home)</onfocus>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab.own1,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>
+				<onclick condition="!String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))">$INFO[Skin.String(POVILTabOwn_1_cmd)]</onclick>
+				<onclick condition="String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))">ActivateWindow(Videos,$ESCINFO[Skin.String(POVILTabOwn_1_path)],return)</onclick>
+				<ondown>noop</ondown>
+			</control>
+		</definition>
+	</include>
+	<include name="POVIL_Tab_own2">
+		<param name="id" />
+		<param name="visible" />
+		<definition>
+			<control type="togglebutton" id="$PARAM[id]" description="tab own2">
+				<width>140</width><height>64</height>
+				<visible>$PARAM[visible]</visible>
+				<texturefocus /><texturenofocus />
+				<alttexturefocus colordiffuse="povil_gold">povil/tab_line_140.png</alttexturefocus><alttexturenofocus colordiffuse="povil_gold">povil/tab_line_140.png</alttexturenofocus>
+				<usealttexture>String.IsEqual(Window(home).Property(povil.tab),own2)</usealttexture>
+				<font>povil_tab</font><align>center</align><aligny>center</aligny><textoffsetx>0</textoffsetx><textoffsety>-2</textoffsety>
+				<textcolor>$VAR[POVIL_TabColor_own2]</textcolor><focusedcolor>povil_white</focusedcolor>
+				<label>$VAR[POVIL_TabLabel_own2]</label>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab,own2,home)</onfocus>
+				<onfocus condition="String.IsEmpty(Window(home).Property(povil.hub.enter))">SetProperty(povil.tab.own2,1,home)</onfocus>
+				<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>
+				<onclick condition="!String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))">$INFO[Skin.String(POVILTabOwn_2_cmd)]</onclick>
+				<onclick condition="String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))">ActivateWindow(Videos,$ESCINFO[Skin.String(POVILTabOwn_2_path)],return)</onclick>
+				<ondown>noop</ondown>
+			</control>
+		</definition>
+	</include>
+	<variable name="POVIL_TabButton_movies">
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_0),movies)]">9600</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),movies)]">9616</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),movies)]">9632</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),movies)]">9648</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),movies)]">9664</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),movies)]">9680</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),movies)]">9696</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),movies)]">9712</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),movies)]">9728</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),movies)]">9744</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),movies)]">9760</value>
+		<value>9000</value>
+	</variable>
+	<variable name="POVIL_TabLabel_movies">
+		<value condition="!String.IsEmpty(Skin.String(POVILTabName_movies))">$INFO[Skin.String(POVILTabName_movies)]</value>
+		<value>סרטים</value>
+	</variable>
+	<variable name="POVIL_TabButton_tv">
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),tv)]">9601</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_1),tv)]">9617</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),tv)]">9633</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),tv)]">9649</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),tv)]">9665</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),tv)]">9681</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),tv)]">9697</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),tv)]">9713</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),tv)]">9729</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),tv)]">9745</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),tv)]">9761</value>
+		<value>9000</value>
+	</variable>
+	<variable name="POVIL_TabLabel_tv">
+		<value condition="!String.IsEmpty(Skin.String(POVILTabName_tv))">$INFO[Skin.String(POVILTabName_tv)]</value>
+		<value>סדרות</value>
+	</variable>
+	<variable name="POVIL_TabButton_continue">
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),continue)]">9602</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),continue)]">9618</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_2),continue)]">9634</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),continue)]">9650</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),continue)]">9666</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),continue)]">9682</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),continue)]">9698</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),continue)]">9714</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),continue)]">9730</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),continue)]">9746</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),continue)]">9762</value>
+		<value>9000</value>
+	</variable>
+	<variable name="POVIL_TabLabel_continue">
+		<value condition="!String.IsEmpty(Skin.String(POVILTabName_continue))">$INFO[Skin.String(POVILTabName_continue)]</value>
+		<value>המשך צפייה</value>
+	</variable>
+	<variable name="POVIL_TabButton_israeli">
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),israeli)]">9603</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),israeli)]">9619</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),israeli)]">9635</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_3),israeli)]">9651</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),israeli)]">9667</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),israeli)]">9683</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),israeli)]">9699</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),israeli)]">9715</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),israeli)]">9731</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),israeli)]">9747</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),israeli)]">9763</value>
+		<value>9000</value>
+	</variable>
+	<variable name="POVIL_TabLabel_israeli">
+		<value condition="!String.IsEmpty(Skin.String(POVILTabName_israeli))">$INFO[Skin.String(POVILTabName_israeli)]</value>
+		<value>ישראלי</value>
+	</variable>
+	<variable name="POVIL_TabButton_live">
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),live)]">9604</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),live)]">9620</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),live)]">9636</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),live)]">9652</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_4),live)]">9668</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),live)]">9684</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),live)]">9700</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),live)]">9716</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),live)]">9732</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),live)]">9748</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),live)]">9764</value>
+		<value>9000</value>
+	</variable>
+	<variable name="POVIL_TabLabel_live">
+		<value condition="!String.IsEmpty(Skin.String(POVILTabName_live))">$INFO[Skin.String(POVILTabName_live)]</value>
+		<value>שידור חי</value>
+	</variable>
+	<variable name="POVIL_TabButton_kids">
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),kids)]">9605</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),kids)]">9621</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),kids)]">9637</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),kids)]">9653</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),kids)]">9669</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_5),kids)]">9685</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),kids)]">9701</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),kids)]">9717</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),kids)]">9733</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),kids)]">9749</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),kids)]">9765</value>
+		<value>9000</value>
+	</variable>
+	<variable name="POVIL_TabLabel_kids">
+		<value condition="!String.IsEmpty(Skin.String(POVILTabName_kids))">$INFO[Skin.String(POVILTabName_kids)]</value>
+		<value>ילדים</value>
+	</variable>
+	<variable name="POVIL_TabButton_favourites">
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),favourites)]">9606</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),favourites)]">9622</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),favourites)]">9638</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),favourites)]">9654</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),favourites)]">9670</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),favourites)]">9686</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_6),favourites)]">9702</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),favourites)]">9718</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),favourites)]">9734</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),favourites)]">9750</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),favourites)]">9766</value>
+		<value>9000</value>
+	</variable>
+	<variable name="POVIL_TabLabel_favourites">
+		<value condition="!String.IsEmpty(Skin.String(POVILTabName_favourites))">$INFO[Skin.String(POVILTabName_favourites)]</value>
+		<value>מועדפים</value>
+	</variable>
+	<variable name="POVIL_TabButton_search">
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),search)]">9607</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),search)]">9623</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),search)]">9639</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),search)]">9655</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),search)]">9671</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),search)]">9687</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),search)]">9703</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_7),search)]">9719</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),search)]">9735</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),search)]">9751</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),search)]">9767</value>
+		<value>9000</value>
+	</variable>
+	<variable name="POVIL_TabLabel_search">
+		<value condition="!String.IsEmpty(Skin.String(POVILTabName_search))">$INFO[Skin.String(POVILTabName_search)]</value>
+		<value>חיפוש</value>
+	</variable>
+	<variable name="POVIL_TabButton_settings">
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),settings)]">9608</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),settings)]">9624</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),settings)]">9640</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),settings)]">9656</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),settings)]">9672</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),settings)]">9688</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),settings)]">9704</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),settings)]">9720</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_8),settings)]">9736</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),settings)]">9752</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),settings)]">9768</value>
+		<value>9000</value>
+	</variable>
+	<variable name="POVIL_TabLabel_settings">
+		<value condition="!String.IsEmpty(Skin.String(POVILTabName_settings))">$INFO[Skin.String(POVILTabName_settings)]</value>
+		<value>הגדרות</value>
+	</variable>
+	<variable name="POVIL_TabButton_own1">
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),own1)]">9609</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),own1)]">9625</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),own1)]">9641</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),own1)]">9657</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),own1)]">9673</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),own1)]">9689</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),own1)]">9705</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),own1)]">9721</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),own1)]">9737</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),own1)]">9753</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),own1)]">9769</value>
+		<value>9000</value>
+	</variable>
+	<variable name="POVIL_TabLabel_own1">
+		<value>$INFO[Skin.String(POVILTabOwn_1_name)]</value>
+	</variable>
+	<variable name="POVIL_TabButton_own2">
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),own2)]">9610</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),own2)]">9626</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),own2)]">9642</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),own2)]">9658</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),own2)]">9674</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),own2)]">9690</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),own2)]">9706</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),own2)]">9722</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),own2)]">9738</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),own2)]">9754</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),own2)]">9770</value>
+		<value>9000</value>
+	</variable>
+	<variable name="POVIL_TabLabel_own2">
+		<value>$INFO[Skin.String(POVILTabOwn_2_name)]</value>
+	</variable>
+	<variable name="POVIL_BarFirst">
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_0),movies)]">9600</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9601</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9602</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9603</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),live)] + !Skin.HasSetting(POVILHideTab_live)">9604</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9605</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9606</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),search)] + !Skin.HasSetting(POVILHideTab_search)">9607</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),settings)]">9608</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9609</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9610</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),movies)]">9616</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_1),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9617</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9618</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9619</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),live)] + !Skin.HasSetting(POVILHideTab_live)">9620</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9621</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9622</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),search)] + !Skin.HasSetting(POVILHideTab_search)">9623</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),settings)]">9624</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9625</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9626</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),movies)]">9632</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9633</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_2),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9634</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9635</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),live)] + !Skin.HasSetting(POVILHideTab_live)">9636</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9637</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9638</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),search)] + !Skin.HasSetting(POVILHideTab_search)">9639</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),settings)]">9640</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9641</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9642</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),movies)]">9648</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9649</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9650</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_3),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9651</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),live)] + !Skin.HasSetting(POVILHideTab_live)">9652</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9653</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9654</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),search)] + !Skin.HasSetting(POVILHideTab_search)">9655</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),settings)]">9656</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9657</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9658</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),movies)]">9664</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9665</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9666</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9667</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_4),live)] + !Skin.HasSetting(POVILHideTab_live)">9668</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9669</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9670</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),search)] + !Skin.HasSetting(POVILHideTab_search)">9671</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),settings)]">9672</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9673</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9674</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),movies)]">9680</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9681</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9682</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9683</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),live)] + !Skin.HasSetting(POVILHideTab_live)">9684</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_5),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9685</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9686</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),search)] + !Skin.HasSetting(POVILHideTab_search)">9687</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),settings)]">9688</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9689</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9690</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),movies)]">9696</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9697</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9698</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9699</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),live)] + !Skin.HasSetting(POVILHideTab_live)">9700</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9701</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_6),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9702</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),search)] + !Skin.HasSetting(POVILHideTab_search)">9703</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),settings)]">9704</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9705</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9706</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),movies)]">9712</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9713</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9714</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9715</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),live)] + !Skin.HasSetting(POVILHideTab_live)">9716</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9717</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9718</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_7),search)] + !Skin.HasSetting(POVILHideTab_search)">9719</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),settings)]">9720</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9721</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9722</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),movies)]">9728</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9729</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9730</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9731</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),live)] + !Skin.HasSetting(POVILHideTab_live)">9732</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9733</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9734</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),search)] + !Skin.HasSetting(POVILHideTab_search)">9735</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_8),settings)]">9736</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9737</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9738</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),movies)]">9744</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9745</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9746</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9747</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),live)] + !Skin.HasSetting(POVILHideTab_live)">9748</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9749</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9750</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),search)] + !Skin.HasSetting(POVILHideTab_search)">9751</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),settings)]">9752</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9753</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9754</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),movies)]">9760</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9761</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9762</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9763</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),live)] + !Skin.HasSetting(POVILHideTab_live)">9764</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9765</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9766</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),search)] + !Skin.HasSetting(POVILHideTab_search)">9767</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),settings)]">9768</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9769</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9770</value>
+		<value>9600</value>
+	</variable>
+	<variable name="POVIL_BarLast">
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),movies)]">9760</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9761</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9762</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9763</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),live)] + !Skin.HasSetting(POVILHideTab_live)">9764</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9765</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9766</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),search)] + !Skin.HasSetting(POVILHideTab_search)">9767</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),settings)]">9768</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9769</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_10),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9770</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),movies)]">9744</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9745</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9746</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9747</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),live)] + !Skin.HasSetting(POVILHideTab_live)">9748</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9749</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9750</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),search)] + !Skin.HasSetting(POVILHideTab_search)">9751</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),settings)]">9752</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9753</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_9),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9754</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),movies)]">9728</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9729</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9730</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9731</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),live)] + !Skin.HasSetting(POVILHideTab_live)">9732</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9733</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9734</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),search)] + !Skin.HasSetting(POVILHideTab_search)">9735</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_8),settings)]">9736</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9737</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_8),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9738</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),movies)]">9712</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9713</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9714</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9715</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),live)] + !Skin.HasSetting(POVILHideTab_live)">9716</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9717</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9718</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_7),search)] + !Skin.HasSetting(POVILHideTab_search)">9719</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),settings)]">9720</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9721</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_7),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9722</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),movies)]">9696</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9697</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9698</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9699</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),live)] + !Skin.HasSetting(POVILHideTab_live)">9700</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9701</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_6),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9702</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),search)] + !Skin.HasSetting(POVILHideTab_search)">9703</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),settings)]">9704</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9705</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_6),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9706</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),movies)]">9680</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9681</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9682</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9683</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),live)] + !Skin.HasSetting(POVILHideTab_live)">9684</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_5),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9685</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9686</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),search)] + !Skin.HasSetting(POVILHideTab_search)">9687</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),settings)]">9688</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9689</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_5),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9690</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),movies)]">9664</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9665</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9666</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9667</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_4),live)] + !Skin.HasSetting(POVILHideTab_live)">9668</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9669</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9670</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),search)] + !Skin.HasSetting(POVILHideTab_search)">9671</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),settings)]">9672</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9673</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_4),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9674</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),movies)]">9648</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9649</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9650</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_3),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9651</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),live)] + !Skin.HasSetting(POVILHideTab_live)">9652</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9653</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9654</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),search)] + !Skin.HasSetting(POVILHideTab_search)">9655</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),settings)]">9656</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9657</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_3),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9658</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),movies)]">9632</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9633</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_2),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9634</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9635</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),live)] + !Skin.HasSetting(POVILHideTab_live)">9636</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9637</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9638</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),search)] + !Skin.HasSetting(POVILHideTab_search)">9639</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),settings)]">9640</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9641</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_2),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9642</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),movies)]">9616</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_1),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9617</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9618</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9619</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),live)] + !Skin.HasSetting(POVILHideTab_live)">9620</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9621</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9622</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),search)] + !Skin.HasSetting(POVILHideTab_search)">9623</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),settings)]">9624</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9625</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_1),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9626</value>
+		<value condition="[!Skin.HasSetting(POVILBarOrdered) | String.IsEqual(Skin.String(POVILBar_0),movies)]">9600</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),tv)] + !Skin.HasSetting(POVILHideTab_tv)">9601</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),continue)] + !Skin.HasSetting(POVILHideTab_continue)">9602</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),israeli)] + !Skin.HasSetting(POVILHideTab_israeli)">9603</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),live)] + !Skin.HasSetting(POVILHideTab_live)">9604</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),kids)] + !Skin.HasSetting(POVILHideTab_kids)">9605</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),favourites)] + !Skin.HasSetting(POVILHideTab_favourites)">9606</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),search)] + !Skin.HasSetting(POVILHideTab_search)">9607</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),settings)]">9608</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),own1)] + !Skin.HasSetting(POVILHideTab_own1) + [!String.IsEmpty(Skin.String(POVILTabOwn_1_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_1_cmd))]">9609</value>
+		<value condition="[Skin.HasSetting(POVILBarOrdered) + String.IsEqual(Skin.String(POVILBar_0),own2)] + !Skin.HasSetting(POVILHideTab_own2) + [!String.IsEmpty(Skin.String(POVILTabOwn_2_path)) | !String.IsEmpty(Skin.String(POVILTabOwn_2_cmd))]">9610</value>
+		<value>9600</value>
+	</variable>
+	<variable name="POVIL_FirstChip_movies">
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_1_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_1_at),start)]">9240</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_2_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_2_at),start)]">9243</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_3_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_3_at),start)]">9246</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_4_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_4_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_4_at),start)]">9249</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_5_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_5_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_5_at),start)]">9252</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_6_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_6_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_6_at),start)]">9255</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_0)">9112</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_1)">9113</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_2)">9114</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_3)">9115</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_1_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_1_at),mid) | String.IsEmpty(Skin.String(POVILChip_movies_1_at))]">9241</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_2_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_2_at),mid) | String.IsEmpty(Skin.String(POVILChip_movies_2_at))]">9244</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_3_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_3_at),mid) | String.IsEmpty(Skin.String(POVILChip_movies_3_at))]">9247</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_4_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_4_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_4_at),mid) | String.IsEmpty(Skin.String(POVILChip_movies_4_at))]">9250</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_5_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_5_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_5_at),mid) | String.IsEmpty(Skin.String(POVILChip_movies_5_at))]">9253</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_6_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_6_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_6_at),mid) | String.IsEmpty(Skin.String(POVILChip_movies_6_at))]">9256</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_4)">9116</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_5)">9117</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_6)">9118</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_7)">9119</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_8)">9120</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_9)">9121</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_10)">9122</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_movies_11)">9123</value>
+		<value condition="System.HasAddon(plugin.video.umbrella) + !Skin.HasSetting(POVILHideChip_movies_12)">9124</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_1_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_1_at),end)]">9242</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_2_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_2_at),end)]">9245</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_3_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_3_at),end)]">9248</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_4_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_4_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_4_at),end)]">9251</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_5_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_5_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_5_at),end)]">9254</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_6_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_6_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_6_at),end)]">9257</value>
+		<value>9112</value>
+	</variable>
+	<variable name="POVIL_FirstChip_tv">
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_1_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_1_at),start)]">9258</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_2_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_2_at),start)]">9261</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_3_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_3_at),start)]">9264</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_4_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_4_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_4_at),start)]">9267</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_5_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_5_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_5_at),start)]">9270</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_6_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_6_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_6_at),start)]">9273</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_0)">9124</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_1)">9125</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_2)">9126</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_3)">9127</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_1_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_1_at),mid) | String.IsEmpty(Skin.String(POVILChip_tv_1_at))]">9259</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_2_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_2_at),mid) | String.IsEmpty(Skin.String(POVILChip_tv_2_at))]">9262</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_3_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_3_at),mid) | String.IsEmpty(Skin.String(POVILChip_tv_3_at))]">9265</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_4_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_4_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_4_at),mid) | String.IsEmpty(Skin.String(POVILChip_tv_4_at))]">9268</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_5_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_5_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_5_at),mid) | String.IsEmpty(Skin.String(POVILChip_tv_5_at))]">9271</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_6_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_6_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_6_at),mid) | String.IsEmpty(Skin.String(POVILChip_tv_6_at))]">9274</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_4)">9128</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_5)">9129</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_6)">9130</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_7)">9131</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_8)">9132</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_9)">9133</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_10)">9134</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_tv_11)">9135</value>
+		<value condition="System.HasAddon(plugin.video.umbrella) + !Skin.HasSetting(POVILHideChip_tv_12)">9136</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_1_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_1_at),end)]">9260</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_2_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_2_at),end)]">9263</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_3_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_3_at),end)]">9266</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_4_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_4_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_4_at),end)]">9269</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_5_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_5_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_5_at),end)]">9272</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_6_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_6_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_6_at),end)]">9275</value>
+		<value>9124</value>
+	</variable>
+	<variable name="POVIL_FirstChip_israeli">
+		<value>9136</value>
+		<value>9137</value>
+		<value>9138</value>
+		<value>9139</value>
+		<value>9140</value>
+		<value>9141</value>
+		<value>9142</value>
+		<value>9143</value>
+		<value>9136</value>
+	</variable>
+	<variable name="POVIL_FirstChip_live">
+		<value>9148</value>
+		<value condition="[PVR.HasTVChannels | System.HasPVRAddon | System.HasAddon(pvr.iptvsimple)]">9149</value>
+		<value>9150</value>
+		<value>9151</value>
+		<value>9152</value>
+		<value>9153</value>
+		<value condition="PVR.HasTVChannels">9154</value>
+		<value>9148</value>
+	</variable>
+	<variable name="POVIL_FirstChip_kids">
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_1_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_1_at),start)]">9312</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_2_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_2_at),start)]">9315</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_3_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_3_at),start)]">9318</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_4_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_4_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_4_at),start)]">9321</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_5_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_5_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_5_at),start)]">9324</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_6_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_6_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_6_at),start)]">9327</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_kids_0)">9160</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_kids_1)">9161</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_kids_2)">9162</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_kids_3)">9163</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_kids_4)">9164</value>
+		<value condition="System.HasAddon(plugin.video.otaku) + !Skin.HasSetting(POVILHideChip_kids_5)">9165</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_1_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_1_at),end) | String.IsEmpty(Skin.String(POVILChip_kids_1_at)) | String.IsEqual(Skin.String(POVILChip_kids_1_at),mid)]">9314</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_2_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_2_at),end) | String.IsEmpty(Skin.String(POVILChip_kids_2_at)) | String.IsEqual(Skin.String(POVILChip_kids_2_at),mid)]">9317</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_3_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_3_at),end) | String.IsEmpty(Skin.String(POVILChip_kids_3_at)) | String.IsEqual(Skin.String(POVILChip_kids_3_at),mid)]">9320</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_4_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_4_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_4_at),end) | String.IsEmpty(Skin.String(POVILChip_kids_4_at)) | String.IsEqual(Skin.String(POVILChip_kids_4_at),mid)]">9323</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_5_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_5_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_5_at),end) | String.IsEmpty(Skin.String(POVILChip_kids_5_at)) | String.IsEqual(Skin.String(POVILChip_kids_5_at),mid)]">9326</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_kids_6_path)) | !String.IsEmpty(Skin.String(POVILChip_kids_6_cmd))] + [String.IsEqual(Skin.String(POVILChip_kids_6_at),end) | String.IsEmpty(Skin.String(POVILChip_kids_6_at)) | String.IsEqual(Skin.String(POVILChip_kids_6_at),mid)]">9329</value>
+		<value>9160</value>
+	</variable>
+	<variable name="POVIL_FirstChip_favourites">
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_1_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_1_at),start)]">9330</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_2_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_2_at),start)]">9333</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_3_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_3_at),start)]">9336</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_4_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_4_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_4_at),start)]">9339</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_5_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_5_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_5_at),start)]">9342</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_6_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_6_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_6_at),start)]">9345</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_favourites_0)">9172</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_favourites_1)">9173</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_favourites_2)">9174</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_favourites_3)">9175</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_favourites_4)">9176</value>
+		<value condition="[String.IsEqual(Window(home).Property(povil.svc.mdblist),1) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)] + !Skin.HasSetting(POVILHideChip_favourites_5)">9177</value>
+		<value condition="[String.IsEqual(Window(home).Property(povil.svc.mdblist),1) | Integer.IsGreater(Container(5064).NumItems,0) | Integer.IsGreater(Container(5065).NumItems,0)] + !Skin.HasSetting(POVILHideChip_favourites_6)">9178</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_favourites_7)">9179</value>
+		<value condition="!Skin.HasSetting(POVILHideChip_favourites_8)">9180</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_1_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_1_at),end) | String.IsEmpty(Skin.String(POVILChip_favourites_1_at)) | String.IsEqual(Skin.String(POVILChip_favourites_1_at),mid)]">9332</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_2_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_2_at),end) | String.IsEmpty(Skin.String(POVILChip_favourites_2_at)) | String.IsEqual(Skin.String(POVILChip_favourites_2_at),mid)]">9335</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_3_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_3_at),end) | String.IsEmpty(Skin.String(POVILChip_favourites_3_at)) | String.IsEqual(Skin.String(POVILChip_favourites_3_at),mid)]">9338</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_4_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_4_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_4_at),end) | String.IsEmpty(Skin.String(POVILChip_favourites_4_at)) | String.IsEqual(Skin.String(POVILChip_favourites_4_at),mid)]">9341</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_5_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_5_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_5_at),end) | String.IsEmpty(Skin.String(POVILChip_favourites_5_at)) | String.IsEqual(Skin.String(POVILChip_favourites_5_at),mid)]">9344</value>
+		<value condition="[!String.IsEmpty(Skin.String(POVILChip_favourites_6_path)) | !String.IsEmpty(Skin.String(POVILChip_favourites_6_cmd))] + [String.IsEqual(Skin.String(POVILChip_favourites_6_at),end) | String.IsEmpty(Skin.String(POVILChip_favourites_6_at)) | String.IsEqual(Skin.String(POVILChip_favourites_6_at),mid)]">9347</value>
+		<value>9172</value>
+	</variable>
+	<variable name="POVIL_FirstChip_search">
+		<value>9184</value>
+		<value condition="System.HasAddon(plugin.video.umbrella)">9185</value>
+		<value>9186</value>
+		<value condition="System.HasAddon(plugin.video.youtube)">9187</value>
+		<value>9184</value>
+	</variable>
+	<variable name="POVIL_FirstChip_continue">
+		<value>9220</value>
+		<value>9221</value>
+		<value>9222</value>
+		<value>9220</value>
+	</variable>
+	<variable name="POVIL_TabColor_own1">
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),own1)">povil_white</value>
+		<value>povil_faint</value>
+	</variable>
+	<variable name="POVIL_TabColor_own2">
+		<value condition="String.IsEqual(Window(home).Property(povil.tab),own2)">povil_white</value>
+		<value>povil_faint</value>
+	</variable>
 	<!-- POVIL STANDALONE BEGIN: generated by tools/skin_onyx/gen_standalone.py -->
 	<variable name="POVIL_RowSlot_movies_1">
 		<value condition="String.IsEmpty(Skin.String(POVILRow_movies_1_path))">סרטים · שורה 1: (ריקה)</value>
@@ -5105,6 +5965,22 @@
 		<value condition="String.IsEmpty(Skin.String(POVILChip_movies_2_path))">סרטים · כפתור 2: (ריק)</value>
 		<value>סרטים · כפתור 2: $INFO[Skin.String(POVILChip_movies_2_name)]</value>
 	</variable>
+	<variable name="POVIL_ChipSlot_movies_3">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_movies_3_path))">סרטים · כפתור 3: (ריק)</value>
+		<value>סרטים · כפתור 3: $INFO[Skin.String(POVILChip_movies_3_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_movies_4">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_movies_4_path))">סרטים · כפתור 4: (ריק)</value>
+		<value>סרטים · כפתור 4: $INFO[Skin.String(POVILChip_movies_4_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_movies_5">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_movies_5_path))">סרטים · כפתור 5: (ריק)</value>
+		<value>סרטים · כפתור 5: $INFO[Skin.String(POVILChip_movies_5_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_movies_6">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_movies_6_path))">סרטים · כפתור 6: (ריק)</value>
+		<value>סרטים · כפתור 6: $INFO[Skin.String(POVILChip_movies_6_name)]</value>
+	</variable>
 	<variable name="POVIL_RowSlot_tv_1">
 		<value condition="String.IsEmpty(Skin.String(POVILRow_tv_1_path))">סדרות · שורה 1: (ריקה)</value>
 		<value condition="!String.IsEmpty(Skin.String(POVILRow_tv_1_name))">סדרות · שורה 1: $INFO[Skin.String(POVILRow_tv_1_name)]</value>
@@ -5127,6 +6003,22 @@
 	<variable name="POVIL_ChipSlot_tv_2">
 		<value condition="String.IsEmpty(Skin.String(POVILChip_tv_2_path))">סדרות · כפתור 2: (ריק)</value>
 		<value>סדרות · כפתור 2: $INFO[Skin.String(POVILChip_tv_2_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_tv_3">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_tv_3_path))">סדרות · כפתור 3: (ריק)</value>
+		<value>סדרות · כפתור 3: $INFO[Skin.String(POVILChip_tv_3_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_tv_4">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_tv_4_path))">סדרות · כפתור 4: (ריק)</value>
+		<value>סדרות · כפתור 4: $INFO[Skin.String(POVILChip_tv_4_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_tv_5">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_tv_5_path))">סדרות · כפתור 5: (ריק)</value>
+		<value>סדרות · כפתור 5: $INFO[Skin.String(POVILChip_tv_5_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_tv_6">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_tv_6_path))">סדרות · כפתור 6: (ריק)</value>
+		<value>סדרות · כפתור 6: $INFO[Skin.String(POVILChip_tv_6_name)]</value>
 	</variable>
 	<variable name="POVIL_RowSlot_kids_1">
 		<value condition="String.IsEmpty(Skin.String(POVILRow_kids_1_path))">ילדים · שורה 1: (ריקה)</value>
@@ -5151,6 +6043,22 @@
 		<value condition="String.IsEmpty(Skin.String(POVILChip_kids_2_path))">ילדים · כפתור 2: (ריק)</value>
 		<value>ילדים · כפתור 2: $INFO[Skin.String(POVILChip_kids_2_name)]</value>
 	</variable>
+	<variable name="POVIL_ChipSlot_kids_3">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_kids_3_path))">ילדים · כפתור 3: (ריק)</value>
+		<value>ילדים · כפתור 3: $INFO[Skin.String(POVILChip_kids_3_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_kids_4">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_kids_4_path))">ילדים · כפתור 4: (ריק)</value>
+		<value>ילדים · כפתור 4: $INFO[Skin.String(POVILChip_kids_4_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_kids_5">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_kids_5_path))">ילדים · כפתור 5: (ריק)</value>
+		<value>ילדים · כפתור 5: $INFO[Skin.String(POVILChip_kids_5_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_kids_6">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_kids_6_path))">ילדים · כפתור 6: (ריק)</value>
+		<value>ילדים · כפתור 6: $INFO[Skin.String(POVILChip_kids_6_name)]</value>
+	</variable>
 	<variable name="POVIL_RowSlot_favourites_1">
 		<value condition="String.IsEmpty(Skin.String(POVILRow_favourites_1_path))">מועדפים · שורה 1: (ריקה)</value>
 		<value condition="!String.IsEmpty(Skin.String(POVILRow_favourites_1_name))">מועדפים · שורה 1: $INFO[Skin.String(POVILRow_favourites_1_name)]</value>
@@ -5174,6 +6082,22 @@
 		<value condition="String.IsEmpty(Skin.String(POVILChip_favourites_2_path))">מועדפים · כפתור 2: (ריק)</value>
 		<value>מועדפים · כפתור 2: $INFO[Skin.String(POVILChip_favourites_2_name)]</value>
 	</variable>
+	<variable name="POVIL_ChipSlot_favourites_3">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_favourites_3_path))">מועדפים · כפתור 3: (ריק)</value>
+		<value>מועדפים · כפתור 3: $INFO[Skin.String(POVILChip_favourites_3_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_favourites_4">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_favourites_4_path))">מועדפים · כפתור 4: (ריק)</value>
+		<value>מועדפים · כפתור 4: $INFO[Skin.String(POVILChip_favourites_4_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_favourites_5">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_favourites_5_path))">מועדפים · כפתור 5: (ריק)</value>
+		<value>מועדפים · כפתור 5: $INFO[Skin.String(POVILChip_favourites_5_name)]</value>
+	</variable>
+	<variable name="POVIL_ChipSlot_favourites_6">
+		<value condition="String.IsEmpty(Skin.String(POVILChip_favourites_6_path))">מועדפים · כפתור 6: (ריק)</value>
+		<value>מועדפים · כפתור 6: $INFO[Skin.String(POVILChip_favourites_6_name)]</value>
+	</variable>
 	<variable name="POVIL_RowPicking">
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_movies_1) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: סרטים · שורה 1</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_movies_1)">מקור לשורה: סרטים · שורה 1</value>
@@ -5183,6 +6107,10 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_movies_3)">מקור לשורה: סרטים · שורה 3</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_movies_1)">מקור לכפתור: סרטים · כפתור 1</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_movies_2)">מקור לכפתור: סרטים · כפתור 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_movies_3)">מקור לכפתור: סרטים · כפתור 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_movies_4)">מקור לכפתור: סרטים · כפתור 4</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_movies_5)">מקור לכפתור: סרטים · כפתור 5</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_movies_6)">מקור לכפתור: סרטים · כפתור 6</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_tv_1) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: סדרות · שורה 1</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_tv_1)">מקור לשורה: סדרות · שורה 1</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_tv_2) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: סדרות · שורה 2</value>
@@ -5191,6 +6119,10 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_tv_3)">מקור לשורה: סדרות · שורה 3</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_tv_1)">מקור לכפתור: סדרות · כפתור 1</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_tv_2)">מקור לכפתור: סדרות · כפתור 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_tv_3)">מקור לכפתור: סדרות · כפתור 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_tv_4)">מקור לכפתור: סדרות · כפתור 4</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_tv_5)">מקור לכפתור: סדרות · כפתור 5</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_tv_6)">מקור לכפתור: סדרות · כפתור 6</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_kids_1) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: ילדים · שורה 1</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_kids_1)">מקור לשורה: ילדים · שורה 1</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_kids_2) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: ילדים · שורה 2</value>
@@ -5199,6 +6131,10 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_kids_3)">מקור לשורה: ילדים · שורה 3</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_kids_1)">מקור לכפתור: ילדים · כפתור 1</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_kids_2)">מקור לכפתור: ילדים · כפתור 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_kids_3)">מקור לכפתור: ילדים · כפתור 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_kids_4)">מקור לכפתור: ילדים · כפתור 4</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_kids_5)">מקור לכפתור: ילדים · כפתור 5</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_kids_6)">מקור לכפתור: ילדים · כפתור 6</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_favourites_1) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: מועדפים · שורה 1</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_favourites_1)">מקור לשורה: מועדפים · שורה 1</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_favourites_2) + String.IsEqual(Window(home).Property(povil.rows.step),order)">סדר הפריטים: מועדפים · שורה 2</value>
@@ -5207,6 +6143,10 @@
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Row_favourites_3)">מקור לשורה: מועדפים · שורה 3</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_favourites_1)">מקור לכפתור: מועדפים · כפתור 1</value>
 		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_favourites_2)">מקור לכפתור: מועדפים · כפתור 2</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_favourites_3)">מקור לכפתור: מועדפים · כפתור 3</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_favourites_4)">מקור לכפתור: מועדפים · כפתור 4</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_favourites_5)">מקור לכפתור: מועדפים · כפתור 5</value>
+		<value condition="String.IsEqual(Window(home).Property(povil.rows.slot),Chip_favourites_6)">מקור לכפתור: מועדפים · כפתור 6</value>
 		<value>מקור</value>
 	</variable>
 	<variable name="POVIL_OrderSlot_5011">

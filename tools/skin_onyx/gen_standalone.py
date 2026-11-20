@@ -343,6 +343,22 @@ def rows_file():
     return json.dumps({'tabs': tabs}, ensure_ascii=False, indent=1) + NL
 
 
+def menu_file():
+    """extras/povil_menu.json: the bar and the chips as the skin has them, for the Wizard's menu editor
+    (menu_editor.py, Onyx 1.0.28) -- the places, the tabs' names and widths, the build's chips of each screen."""
+    import json
+    tabs = {}
+    for tid in H.BAR_IDS:
+        tabs[tid] = {'label': H.TABS[H.TAB_INDEX[tid]]['label'] if tid in H.TAB_INDEX else '', 'width': H.tab_width(tid),
+                     'always': tid in H.ALWAYS_SHOWN}
+    chips = {}
+    for tab in H.TABS:
+        if tab['id'] in H.CUSTOM_TABS:
+            chips[tab['id']] = {'build': [c[0] for c in tab['chips']], 'mid': tab['id'] in H.CUSTOM_CHIP_AT}
+    return json.dumps({'bar': H.BAR, 'own_tabs': H.OWN_TAB_IDS, 'places': H.BAR_PLACES, 'tabs': tabs,
+                       'chips': chips, 'own_chips': H.CUSTOM_CHIPS}, ensure_ascii=False, indent=1) + NL
+
+
 def variables():
     """The slot names the dialog shows, and the name a row has when the viewer gave none."""
     x = H.X()
@@ -399,6 +415,8 @@ def main():
             f.write(text)
     with open(os.path.join(sys.argv[1], 'extras', 'povil_rows.json'), 'w', encoding='utf-8', newline=NL) as f:
         f.write(rows_file())
+    with open(os.path.join(sys.argv[1], 'extras', 'povil_menu.json'), 'w', encoding='utf-8', newline=NL) as f:
+        f.write(menu_file())
     path = os.path.join(folder, 'Includes_POVIL_Home.xml')
     text = open(path, encoding='utf-8').read()
     begin, end = '<!-- POVIL STANDALONE BEGIN', '<!-- POVIL STANDALONE END -->'

@@ -16,7 +16,9 @@ Netflix, Disney?" and "I have no way to order the films -- by year, by name...".
 """
 TABS = (('movies', 'סרטים'), ('tv', 'סדרות'), ('kids', 'ילדים'), ('favourites', 'מועדפים'))
 SLOTS = 3
-CHIPS = 2
+# (six since Wizard 0.5.29 / Onyx 1.0.28, each standing where the viewer puts it and opening a folder or doing what a
+# favourite, an add-on or the live TV does: menu_editor.py)
+CHIPS = 6
 HEADING = 'שורות וכפתורים משלי'
 LIBRARY = (('videodb://movies/titles/', 'הספרייה של קודי: סרטים'), ('videodb://tvshows/titles/', 'הספרייה של קודי: סדרות'),
            ('videodb://recentlyaddedmovies/', 'הספרייה של קודי: סרטים שנוספו לאחרונה'))
@@ -97,9 +99,10 @@ def favourite_paths():
     return out
 
 
-def pick_source(dialog, what='השורה'):
-    """A folder the row (or chip) shows: a library node, a folder (a hard drive, the network, an add-on) or a favourite."""
-    choices = [name for _p, name in LIBRARY] + ['תיקייה (הארד-דיסק, רשת או תוסף)', 'מועדף של קודי']
+def pick_source(dialog, what='השורה', favourites=True):
+    """A folder the row (or chip) shows: a library node, a folder (a hard drive, the network, an add-on) or a favourite
+    that opens a folder (favourites=False: not offered -- the menu editor offers every favourite by its command)."""
+    choices = [name for _p, name in LIBRARY] + ['תיקייה (הארד-דיסק, רשת או תוסף)'] + (['מועדף של קודי'] if favourites else [])
     picked = dialog.select('מקור ' + what, choices)
     if picked < 0:
         return None
@@ -138,7 +141,8 @@ def drop_order(tab, n, run):
     run('Skin.Reset(%s)' % setting(tab, n, 'order'))
 
 
-def choose():
+def choose(kinds=('Row', 'Chip')):
+    """The tile "שורות וכפתורים משלי" (kinds: the menu editor asks for the rows alone)."""
     import xbmc
     import xbmcgui
     dialog = xbmcgui.Dialog()
@@ -149,13 +153,14 @@ def choose():
     tab, tab_name = TABS[t]
     while True:
         slots, names = [], []
-        for n in range(1, SLOTS + 1):
+        for n in range(1, SLOTS + 1 if 'Row' in kinds else 1):
             slots.append(('Row', n))
             names.append('שורה %d: %s' % (n, read('Skin.String(%s)' % setting(tab, n, 'name')) or '(ריקה)'))
-        for n in range(1, CHIPS + 1):
+        for n in range(1, CHIPS + 1 if 'Chip' in kinds else 1):
             slots.append(('Chip', n))
             name = read('Skin.String(%s)' % setting(tab, n, 'name', 'Chip'))
-            names.append('כפתור %d: %s' % (n, name if read('Skin.String(%s)' % setting(tab, n, 'path', 'Chip')) else '(ריק)'))
+            has = read('Skin.String(%s)' % setting(tab, n, 'path', 'Chip')) or read('Skin.String(%s)' % setting(tab, n, 'cmd', 'Chip'))
+            names.append('כפתור %d: %s' % (n, name if has else '(ריק)'))
         s = dialog.select('%s - %s' % (HEADING, tab_name), names)
         if s < 0:
             return
@@ -219,23 +224,20 @@ def row(dialog, tab, n, read, run):
 
 
 def chip(dialog, tab, n, read, run):
-    path = read('Skin.String(%s)' % setting(tab, n, 'path', 'Chip'))
-    actions = ['בחירת מקור', 'שינוי שם', 'מחיקת הכפתור'] if path else ['בחירת מקור']
-    a = dialog.select('כפתור %d' % n, actions)
-    if a < 0:
+    """A chip of the viewer's: what it opens (a folder, a favourite, an add-on, the live TV...), its name, where it
+    stands, or deleted -- the menu editor's own dialogs (menu_editor.py)."""
+    import xbmc
+    from resources.libs import menu_editor
+    key = 'POVILChip_%s_%d' % (tab, n)
+    info = (menu_editor.menu().get('chips') or {}).get(tab) or {}
+    if read('Skin.String(%s_path)' % key) or read('Skin.String(%s_cmd)' % key):
+        menu_editor.own_chip(dialog, tab, n, info, read, run, xbmc.executeJSONRPC)
         return
-    if a == 0:
-        path = pick_source(dialog, 'הכפתור')
-        if not path:
-            return
-        current = read('Skin.String(%s)' % setting(tab, n, 'name', 'Chip'))
-        name = dialog.input('שם הכפתור', current or 'הכפתור שלי')
-        run('Skin.SetString(%s,%s)' % (setting(tab, n, 'name', 'Chip'), clean_name(name or 'הכפתור שלי', 'הכפתור שלי')))
-        run('Skin.SetString(%s,%s)' % (setting(tab, n, 'path', 'Chip'), quoted(path)))
-    elif a == 1:
-        name = dialog.input('שם הכפתור', read('Skin.String(%s)' % setting(tab, n, 'name', 'Chip')))
-        if name:
-            run('Skin.SetString(%s,%s)' % (setting(tab, n, 'name', 'Chip'), clean_name(name, 'הכפתור שלי')))
-    else:
-        run('Skin.Reset(%s)' % setting(tab, n, 'path', 'Chip'))
-        run('Skin.Reset(%s)' % setting(tab, n, 'name', 'Chip'))
+    if dialog.select('כפתור %d' % n, ['בחירת מקור']) != 0:
+        return
+    target = menu_editor.pick_target(dialog, xbmc.executeJSONRPC, 'מה הכפתור יפתח?')
+    if not target:
+        return
+    name = dialog.input('שם הכפתור', target.get('name') or 'הכפתור שלי')
+    menu_editor.write_target(key, target, run)
+    run('Skin.SetString(%s_name,%s)' % (key, clean_name(name or 'הכפתור שלי', 'הכפתור שלי')))

@@ -70,7 +70,6 @@
 					<onclick>noop</onclick>
 				</item>
 				<item id="3104" description="Homepage">
-					<visible>false</visible>
 					<label>$LOCALIZE[31102]</label>
 					<onclick>noop</onclick>
 				</item>
@@ -602,14 +601,17 @@
 				<control type="button" id="3400" description="Home screen categories">
 					<include>POVIL_SkinSettingsButton</include>
 					<label>$LOCALIZE[31126]</label>
-					<onclick>ActivateWindow(1116)</onclick>
+					<onclick condition="String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=menu_editor)</onclick>
+					<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">ActivateWindow(1162)</onclick>
 				</control>
 				<control type="button" id="3401" description="Home Menu">
 					<include>POVIL_SkinSettingsButton</include>
 					<label>$LOCALIZE[31128]</label>
-					<onclick>ActivateWindow(1117)</onclick>
+					<onclick condition="String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=menu_editor&amp;part=rows)</onclick>
+					<onclick condition="!String.Contains(Window(home).Property(povil.wizard.modes),menu_editor)">ActivateWindow(1163)</onclick>
 				</control>
 				<control type="radiobutton" id="3413" description="Hide media shelves">
+					<visible>false</visible>
 					<include>POVIL_SkinSettingsButton</include>
 					<label>$LOCALIZE[31168]</label>
 					<onclick>Skin.ToggleSetting(HideMediaShelves)</onclick>
@@ -617,6 +619,7 @@
 					<radioposx>20</radioposx>
 				</control>
 				<control type="radiobutton" id="3410" description="Use fanart slideshow">
+					<visible>false</visible>
 					<include>POVIL_SkinSettingsButton</include>
 					<label>$LOCALIZE[31169]</label>
 					<onclick>Skin.ToggleSetting(UseFanartSlideshow)</onclick>
@@ -626,6 +629,7 @@
 					<radioposx>20</radioposx>
 				</control>
 				<control type="button" id="3411" description="Fanart slideshow source">
+					<visible>false</visible>
 					<visible>Skin.HasSetting(UseFanartSlideshow)</visible>
 					<include>POVIL_SkinSettingsButton</include>
 					<label>   $LOCALIZE[20445] [LOWERCASE]$LOCALIZE[21870][/LOWERCASE]</label>
@@ -633,6 +637,7 @@
 					<onclick>Skin.SelectBool(21870, 31217|FanartSource1, 342|FanartSource2, 20343|FanartSource3, 249|FanartSource4)</onclick>
 				</control>
 				<control type="button" id="3412" description="Fanart slideshow speed">
+					<visible>false</visible>
 					<visible>Skin.HasSetting(UseFanartSlideshow)</visible>
 					<include>POVIL_SkinSettingsButton</include>
 					<label>   $LOCALIZE[12378]</label>
@@ -640,6 +645,7 @@
 					<onclick>Skin.SelectBool(13603, 31210|FanartTime1, 31211|FanartTime2, 31212|FanartTime3, 31213|FanartTime4, 31214|FanartTime5, 31215|FanartTime6, 31216|FanartTime7)</onclick>
 				</control>
 				<control type="radiobutton" id="3414" description="Show fanart titles">
+					<visible>false</visible>
 					<visible>Skin.HasSetting(UseFanartSlideshow)</visible>
 					<include>POVIL_SkinSettingsButton</include>
 					<label>   $LOCALIZE[31172]</label>
@@ -648,6 +654,7 @@
 					<radioposx>20</radioposx>
 				</control>
 				<control type="radiobutton" id="3406" description="Use custom slideshow">
+					<visible>false</visible>
 					<include>POVIL_SkinSettingsButton</include>
 					<label>$LOCALIZE[31974]</label>
 					<onclick>Skin.ToggleSetting(UseCustomSlideshow)</onclick>
@@ -657,6 +664,7 @@
 					<radioposx>20</radioposx>
 				</control>
 				<control type="button" id="3407" description="Custom slideshow folder">
+					<visible>false</visible>
 					<visible>Skin.HasSetting(UseCustomSlideshow)</visible>
 					<include>POVIL_SkinSettingsValue</include>
 					<label>[COLOR=selected]$INFO[Skin.String(CustomSlideshowPath)][/COLOR]</label>
@@ -665,6 +673,7 @@
 					<enable>Skin.HasSetting(UseCustomSlideshow)</enable>
 				</control> 
 				<control type="button" id="3408" description="Slideshow speed">
+					<visible>false</visible>
 					<visible>Skin.HasSetting(UseCustomSlideshow)</visible>
 					<include>POVIL_SkinSettingsButton</include>
 					<label>   $LOCALIZE[12378]</label>
@@ -672,6 +681,7 @@
 					<onclick>Skin.SelectBool(13603, 31200|ImageTime1, 31201|ImageTime2, 31202|ImageTime3, 31203|ImageTime4, 31204|ImageTime5, 31205|ImageTime6, 31206|ImageTime7)</onclick>
 				</control>
 				<control type="radiobutton" id="3409" description="Randomise slideshow">
+					<visible>false</visible>
 					<visible>Skin.HasSetting(UseCustomSlideshow)</visible>
 					<include>POVIL_SkinSettingsButton</include>
 					<label>   $LOCALIZE[13319]</label>
@@ -680,6 +690,7 @@
 					<radioposx>20</radioposx>
 				</control>
 				<control type="radiobutton" id="3402" description="Use custom BG">
+					<visible>false</visible>
 					<include>POVIL_SkinSettingsButton</include>
 					<label>$LOCALIZE[31154]</label>
 					<onclick>Skin.ToggleSetting(UseCustomBackground)</onclick>
@@ -689,6 +700,7 @@
 					<radioposx>20</radioposx>
 				</control>
 				<control type="button" id="3403" description="Custom BG path">
+					<visible>false</visible>
 					<visible>Skin.HasSetting(UseCustomBackground)</visible>
 					<include>POVIL_SkinSettingsValue</include>
 					<label>[COLOR=selected]$INFO[Skin.String(CustomBackgroundPath)][/COLOR]</label>
