@@ -122,6 +122,12 @@ def choose():
                 name = dialog.input('שם השורה', current or 'השורה שלי')
                 xbmc.executebuiltin('Skin.SetString(%s,%s)' % (setting(tab, n, 'name'), clean_name(name or 'השורה שלי')))
                 xbmc.executebuiltin('Skin.SetString(%s,%s)' % (setting(tab, n, 'path'), quoted(path)))
+                # a screen whose order the viewer set: the new row joins it at its end (home_rows.py)
+                try:
+                    from resources.libs import home_rows
+                    home_rows.place_custom(tab, '%s_%d' % (tab, n), xbmc.getInfoLabel, xbmc.getCondVisibility, xbmc.executebuiltin)
+                except Exception:
+                    pass
         elif a == 1:
             current = xbmc.getInfoLabel('Skin.String(%s)' % setting(tab, n, 'name'))
             name = dialog.input('שם השורה', current)
@@ -130,4 +136,9 @@ def choose():
         elif a == 2:
             xbmc.executebuiltin('Skin.Reset(%s)' % setting(tab, n, 'path'))
             xbmc.executebuiltin('Skin.Reset(%s)' % setting(tab, n, 'name'))
+            try:
+                from resources.libs import home_rows
+                home_rows.drop_custom(tab, '%s_%d' % (tab, n), xbmc.getCondVisibility, xbmc.getInfoLabel, xbmc.executebuiltin)
+            except Exception:
+                pass
         xbmc.sleep(300)

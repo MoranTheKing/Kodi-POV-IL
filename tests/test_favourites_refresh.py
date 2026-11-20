@@ -20,7 +20,8 @@ class HomeRowsTests(unittest.TestCase):
     def test_the_four_personal_rows_carry_the_token_and_no_other_row_does(self):
         text = (ROOT / 'skin.povil.onyx/xml/Includes_POVIL_Home.xml').read_text('utf-8')
         paths = re.findall(r'<value condition="[^"]*">(plugin://plugin\.video\.pov/[^<]*)</value>', text)
-        with_token = sorted(re.search(r'action=([a-z_]+)', p).group(1) for p in paths if TOKEN in p)
+        # (a slot of a screen in SLOT_TABS holds every row's address of its screen: each row counted once)
+        with_token = sorted(set(re.search(r'action=([a-z_]+)', p).group(1) for p in paths if TOKEN in p))
         self.assertEqual(with_token, ['favorites_movies', 'favorites_tvshows', 'mdblist_my_movies', 'mdblist_my_tvshows'])
         self.assertGreaterEqual(len(paths), 16, 'the other rows are reloaded by nothing new')
         self.assertNotIn('UpdateLibrary', text, 'the ping that reloads every row once crashed Kodi beside Container.Refresh')

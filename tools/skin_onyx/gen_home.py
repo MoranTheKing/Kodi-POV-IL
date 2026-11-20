@@ -47,6 +47,10 @@ def pov_tv(action, **kw):
 # and the Trakt / MDBList / TMDb list manager). A changed address reloads that row alone; the ping that
 # reloads every row (UpdateLibrary) once crashed Kodi beside Container.Refresh, and is not used here.
 LISTS_TOKEN = '&povil_t=$INFO[Window(home).Property(povil.lists.t)]'
+# The time the last film or episode ended (the timers povil_play_seen / povil_play_done; never a trailer): a row on a
+# screen of SLOT_TABS that changes after a film carries it, so Kodi reads it again then -- those slots ask nothing
+# again at every playback (sortby size), and POV's own refresh after a film (UpdateLibrary) did not reach a row in QA
+PLAY_TOKEN = '&povil_p=$INFO[Window(home).Property(povil.play.t)]'
 
 
 def personal(path):
@@ -423,6 +427,8 @@ SETTINGS_ITEMS = [
     # the viewer's own rows (CUSTOM_TABS)
     # (without the Wizard: the skin's own dialog -- the library, the viewer's video sources or any folder)
     ('שורות משלי', 'DefaultFolder.png', by_wizard(plugin_run(WIZARD + '?mode=custom_rows'), 'ActivateWindow(1162)', mode='custom_rows'), ''),
+    # the order of a screen's rows: up, down, hidden, shown again (SLOT_TABS; without the Wizard: window 1163)
+    ('סדר השורות', 'DefaultPlaylist.png', by_wizard(plugin_run(WIZARD + '?mode=home_rows'), 'ActivateWindow(1163)', mode='home_rows'), ''),
     # the watched mark's colour (WATCHED_COLOURS)
     ('$VAR[POVIL_WatchedTile]', 'povil/check.png', WATCHED_CHOICE, ''),
     # the trailer behind the hero (trailers.py): on unless switched off here; the tile says which
@@ -555,6 +561,72 @@ def is_custom(path):
     return path.startswith('custom:')
 
 
+# The viewer's order of a screen's rows ("התאמת מסך הבית": the Wizard's home_rows.py, else the skin's own dialog, window
+# 1163 -- gen_standalone.py). A viewer, via the owner, Nov 2026: "let me change the order -- I can add a row now, but I
+# cannot put it where I want", "in the original Onyx it exists". On these screens every row is a SLOT: slot k shows
+# the row the viewer put there -- Skin.String(POVILSlot_<tab>_<k>) holds that row's place in the screen's list (TABS),
+# once Skin.HasSetting(POVILOrdered_<tab>) -- else the build's own row k, as always. A slot with no row is empty and
+# hidden; the dialogs keep the order compact, so no gap opens. Every slot is as tall as the screen's tallest row (a
+# row of wide pictures may stand where a row of posters stood), and asks no row again when a playback starts or stops
+# (sortby size: POV refreshes the home's rows itself after a film -- UpdateLibrary -- and a trailer is no reason).
+SLOT_TABS = CUSTOM_TABS
+
+
+def slot_tab(tab):
+    return tab['id'] in SLOT_TABS
+
+
+def shows(ti, k, i):
+    """The condition that slot k of a screen in SLOT_TABS shows row i: a named expression (slot_expressions), so the
+    long condition is written once and not at every control that asks."""
+    return '$EXP[POVIL_Shows_%d_%d]' % (row_id(ti, k), i)
+
+
+def shows_raw(ti, k, i):
+    tid = TABS[ti]['id']
+    ordered = 'Skin.HasSetting(POVILOrdered_%s)' % tid
+    chosen = 'String.IsEqual(Skin.String(POVILSlot_%s_%d),%d)' % (tid, k, i)
+    return ('[!%s | %s]' % (ordered, chosen)) if i == k else ('[%s + %s]' % (ordered, chosen))
+
+
+def candidates(ti, k):
+    """[(row, condition)]: the rows slot k may show and when ('' = always: a screen whose order is the build's)."""
+    if not slot_tab(TABS[ti]):
+        return [(k, '')]
+    return [(i, shows(ti, k, i)) for i in range(len(TABS[ti]['rows']))]
+
+
+def slot_kinds(ti, k):
+    """{kind: condition} of the rows slot k may show ('' when only one kind can be there)."""
+    groups = {}
+    for i, cond in candidates(ti, k):
+        groups.setdefault(TABS[ti]['rows'][i][2], []).append(cond)
+    if len(groups) == 1:
+        return {kind: '' for kind in groups}
+    return {kind: '$EXP[POVIL_SlotKind_%d_%s]' % (row_id(ti, k), kind) for kind in groups}
+
+
+def slot_expressions(x):
+    """The named conditions of the slots (Includes_POVIL_Home.xml): which row a slot shows, and which kind of row."""
+    for ti, tab in enumerate(TABS):
+        if not slot_tab(tab):
+            continue
+        for k in range(len(tab['rows'])):
+            rid = row_id(ti, k)
+            groups = {}
+            for i in range(len(tab['rows'])):
+                x(1, '<expression name="POVIL_Shows_%d_%d">%s</expression>' % (rid, i, shows_raw(ti, k, i)))
+                groups.setdefault(tab['rows'][i][2], []).append(shows_raw(ti, k, i))
+            if len(groups) > 1:
+                for kind, conds in groups.items():
+                    x(1, '<expression name="POVIL_SlotKind_%d_%s">%s</expression>' % (rid, kind, ' | '.join(conds)))
+
+
+def slot_block(tab):
+    """A row's height on a screen in SLOT_TABS: its tallest row's."""
+    return max(GEOM[row[2]]['block'] for row in tab['rows'])
+
+
 def row_id(ti, ri):
     return 5000 + (ti + 1) * 10 + ri + 1
 
@@ -663,6 +735,22 @@ def gen_timers():
     x(2, '<onstart>NotifyAll(povil.trailer,peek)</onstart>')
     x(2, '<stop>true</stop>')
     x(1, '</timer>')
+    # A film or an episode played (not a trailer: the Wizard sets povil.tr.on before it plays one) ...
+    x(1, '<timer>')
+    x(2, '<name>povil_play_seen</name>')
+    x(2, '<start reset="true">Player.HasVideo + String.IsEmpty(Window(home).Property(povil.tr.on)) + '
+         'String.IsEmpty(Window(home).Property(povil.play.on))</start>')
+    x(2, '<onstart>SetProperty(povil.play.on,1,home)</onstart>')
+    x(2, '<stop>true</stop>')
+    x(1, '</timer>')
+    # ... and ended: 3 s later (POV has saved the place or the watched mark), the time of it, PLAY_TOKEN
+    x(1, '<timer>')
+    x(2, '<name>povil_play_done</name>')
+    x(2, '<start reset="true">!Player.HasMedia + !String.IsEmpty(Window(home).Property(povil.play.on))</start>')
+    x(2, '<stop>Player.HasMedia | Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_play_done),3)</stop>')
+    x(2, '<onstop condition="!Player.HasMedia">ClearProperty(povil.play.on,home)</onstop>')
+    x(2, '<onstop condition="!Player.HasMedia">SetProperty(povil.play.t,$INFO[System.Time(hh:mm:ss)],home)</onstop>')
+    x(1, '</timer>')
     # how long the trailer has been opening (Kodi's busy dialog is hidden for the first seconds of it only,
     # gen_dialogs.py)
     x(1, '<timer>')
@@ -752,15 +840,18 @@ def gen_timers():
     # most. Only the tab on screen, only rows that are never empty by design.
     for ti, tab in enumerate(TABS):
         for ri, row in enumerate(tab['rows']):
-            if not retries(row):
+            whens = [when for i, when in candidates(ti, ri) if retries(tab['rows'][i])]
+            if not whens:
                 continue
+            # (a slot: only while it shows one of the rows that retry)
+            showing = ('[%s] + ' % ' | '.join(whens)) if all(whens) else ''
             rid = row_id(ti, ri)
             prop = 'Window(home).Property(povil.retry.%d)' % rid
             empty = ('!Integer.IsGreater(Container(%d).NumItems,0) + !Container(%d).IsUpdating' % (rid, rid))
             x(1, '<timer>')
             x(2, '<name>povil_retry_%d</name>' % rid)
-            x(2, '<start reset="true">%s + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(%s)) + %s + !String.IsEqual(%s,2)</start>'
-              % (tab_cond(tab), row_gate(ti, ri), empty, prop))
+            x(2, '<start reset="true">%s%s + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(%s)) + %s + !String.IsEqual(%s,2)</start>'
+              % (showing, tab_cond(tab), row_gate(ti, ri), empty, prop))
             x(2, '<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_%d),3) | Integer.IsGreater(Container(%d).NumItems,0) | Container(%d).IsUpdating</stop>'
               % (rid, rid, rid))
             # second retry first: the first one's action would satisfy it at once
@@ -813,7 +904,7 @@ def gen_timers():
         x(1, '</timer>')
     for ti, tab in enumerate(TABS):
         for ri, row in enumerate(tab['rows']):
-            if not is_rtl(row[1]):
+            if not any(is_rtl(tab['rows'][i][1]) for i, _when in candidates(ti, ri)):
                 continue
             rid = row_id(ti, ri)
             x(1, '<timer>')
@@ -885,19 +976,30 @@ def gen_includes():
     x(0, '<?xml version="1.0" encoding="UTF-8"?>')
     x(0, '<!-- Generated by tools/skin_onyx/gen_home.py. Do not edit by hand. -->')
     x(0, '<includes>')
+    slot_expressions(x)
     sources = []  # (condition, container id)
-    kinds = {}
+    # (condition, container, its kind): a slot that may show rows of several kinds is one source per kind
     for ti, tab in enumerate(TABS):
         for ri, row in enumerate(tab['rows']):
-            sources.append((row_focus(ti, ri), row_id(ti, ri)))
-            kinds[row_id(ti, ri)] = shape(row[2])
+            for kind, kcond in slot_kinds(ti, ri).items():
+                sources.append(('%s + %s' % (row_focus(ti, ri), kcond) if kcond else row_focus(ti, ri), row_id(ti, ri), shape(kind)))
     for ti, tab in enumerate(TABS):
         if tab['rows']:
-            sources.append((tab_cond(tab), row_id(ti, 0)))
+            for kind, kcond in slot_kinds(ti, 0).items():
+                sources.append(('[%s] + %s' % (tab_cond(tab), kcond) if kcond else tab_cond(tab), row_id(ti, 0), shape(kind)))
+    # ... and one per container where its kind does not matter (the title, the logo, the plot): the variables stay
+    # as short as before for every value but the backdrop's
+    plain_sources = []
+    for ti, tab in enumerate(TABS):
+        for ri, row in enumerate(tab['rows']):
+            plain_sources.append((row_focus(ti, ri), row_id(ti, ri)))
+    for ti, tab in enumerate(TABS):
+        if tab['rows']:
+            plain_sources.append((tab_cond(tab), row_id(ti, 0)))
 
     def var(name, fmt, fallback=None, empty_check=None):
         x(1, '<variable name="%s">' % name)
-        for cond, cid in sources:
+        for cond, cid in plain_sources:
             check = (' + !String.IsEmpty(%s)' % (empty_check % cid)) if empty_check else ''
             x(2, '<value condition="%s%s">%s</value>' % (cond, check, e(fmt % {'c': cid})))
         if fallback:
@@ -934,13 +1036,13 @@ def gen_includes():
 
     bare = 'String.IsEqual(Container(%d).ListItem.Art(fanart),Container(%d).ListItem.Art(thumb))'
     x(1, '<variable name="POVIL_HeroDetailsKey">')
-    for cond, cid in sources:
+    for cond, cid in plain_sources:
         if cid in detail_rows:
             x(2, '<value condition="%s + %s + %s">$INFO[Container(%d).ListItem.FolderPath]</value>' % (cond, more_page % (cid, cid), bare % (cid, cid), cid))
         x(2, '<value condition="%s"></value>' % cond)
     x(1, '</variable>')
     x(1, '<variable name="POVIL_HeroDetailsNear">')
-    for cond, cid in sources:
+    for cond, cid in plain_sources:
         if cid in detail_rows:
             x(2, '<value condition="%s">%s</value>' % (cond, ' '.join('$INFO[Container(%d).ListItem(%d).FolderPath]' % (cid, o) for o in (-2, -1, 1, 2))))
         x(2, '<value condition="%s"></value>' % cond)
@@ -948,13 +1050,13 @@ def gen_includes():
     # Backdrop: fanart, else a landscape / thumb (Israeli VOD), else nothing (the ambient base shows).
     x(1, '<variable name="POVIL_HeroFanart">')
     detail('fanart')
-    for cond, cid in sources:
-        if kinds[cid] == 'square':
+    for cond, cid, _kind in sources:
+        if _kind == 'square':
             continue  # channel logos and icons: the ambient wash, never a stretched logo
         # A poster row's thumb is its poster, and a "fanart" that is the thumb again
         # (Idan Plus: Keshet's 420x600 posters) would fill the screen ~250% enlarged:
         # the ambient backdrop then
-        poster_row = kinds[cid] == 'poster'
+        poster_row = _kind == 'poster'
         for art in (('fanart', 'landscape') if poster_row else ('fanart', 'landscape', 'thumb')):
             same = (' + !String.IsEqual(Container(%d).ListItem.Art(%s),Container(%d).ListItem.Art(thumb))' % (cid, art, cid)) if poster_row else ''
             x(2, '<value condition="%s + ![String.Contains(Container(%d).ListItem.FolderPath,new_page=) | String.Contains(Container(%d).ListItem.FolderPath,Page&amp;url=)] + !String.IsEmpty(Container(%d).ListItem.Art(%s))%s">$INFO[Container(%d).ListItem.Art(%s)]</value>'
@@ -969,11 +1071,11 @@ def gen_includes():
         # a picture the Wizard fetched (hero_details) is a real backdrop: no wash then
         for slot in slots:
             x(2, '<value condition="%s + !String.IsEmpty(Window(home).Property(povil.details.%sfanart))"></value>' % (matched(slot), slot))
-        for cond, cid in sources:
-            if kinds[cid] != 'landscape':  # a landscape row always has its own backdrop
+        for cond, cid, _kind in sources:
+            if _kind != 'landscape':  # a landscape row always has its own backdrop
                 more = more_page % (cid, cid)
                 own = ''
-                if kinds[cid] == 'poster':
+                if _kind == 'poster':
                     own = (' + [String.IsEmpty(Container(%d).ListItem.Art(fanart)) | String.IsEqual(Container(%d).ListItem.Art(fanart),Container(%d).ListItem.Art(thumb))]'
                            ' + String.IsEmpty(Container(%d).ListItem.Art(landscape))' % (cid, cid, cid, cid))
                 x(2, '<value condition="%s + %s%s">$INFO[Container(%d).ListItem.Art(%s)]</value>' % (cond, more, own, cid, art))
@@ -985,13 +1087,13 @@ def gen_includes():
     # title logo); else the title is written
     x(1, '<variable name="POVIL_HeroLogo">')
     detail('logo')
-    for cond, cid in sources:
+    for cond, cid in plain_sources:
         x(2, '<value condition="%s">$INFO[Container(%d).ListItem.Art(povil_logo)]</value>' % (cond, cid))
     x(1, '</variable>')
     x(1, '<variable name="POVIL_HeroTitle">')
-    for cond, cid in sources:
+    for cond, cid in plain_sources:
         x(2, '<value condition="%s + [String.Contains(Container(%d).ListItem.FolderPath,new_page=) | String.Contains(Container(%d).ListItem.FolderPath,Page&amp;url=)]">עוד תוצאות</value>' % (cond, cid, cid))
-    for cond, cid in sources:
+    for cond, cid in plain_sources:
         x(2, '<value condition="%s + String.IsEqual(Container(%d).ListItem.DBType,episode)">$INFO[Container(%d).ListItem.TVShowTitle]</value>' % (cond, cid, cid))
         x(2, '<value condition="%s + !String.IsEmpty(Container(%d).ListItem.Title)">$INFO[Container(%d).ListItem.Title]</value>' % (cond, cid, cid))
         x(2, '<value condition="%s">$INFO[Container(%d).ListItem.Label]</value>' % (cond, cid))
@@ -999,23 +1101,23 @@ def gen_includes():
         x(2, '<value condition="%s">%s</value>' % (cond, e(val)))
     x(1, '</variable>')
     x(1, '<variable name="POVIL_HeroEpisode">')
-    for cond, cid in sources:
+    for cond, cid in plain_sources:
         x(2, '<value condition="%s + String.IsEqual(Container(%d).ListItem.DBType,episode)">$INFO[Container(%d).ListItem.Season,עונה , · ]$INFO[Container(%d).ListItem.Episode,פרק ]$INFO[Container(%d).ListItem.Title,  ·  ]</value>'
           % (cond, cid, cid, cid, cid))
     x(1, '</variable>')
     x(1, '<variable name="POVIL_HeroMeta">')
-    for cond, cid in sources:
+    for cond, cid in plain_sources:
         x(2, '<value condition="%s + !String.IsEmpty(Container(%d).ListItem.Year)">$INFO[Container(%d).ListItem.Year]$INFO[Container(%d).ListItem.Genre,  •  ]$INFO[Container(%d).ListItem.Duration(mins),  •  , דק\']$INFO[Container(%d).ListItem.MPAA,  •  ]</value>'
           % (cond, cid, cid, cid, cid, cid))
         x(2, '<value condition="%s">$INFO[Container(%d).ListItem.Genre]$INFO[Container(%d).ListItem.Duration(mins),  •  , דק\']</value>' % (cond, cid, cid))
     x(1, '</variable>')
     x(1, '<variable name="POVIL_HeroRating">')
-    for cond, cid in sources:
+    for cond, cid in plain_sources:
         x(2, '<value condition="%s + Integer.IsGreater(Container(%d).ListItem.Rating,0)">$INFO[Container(%d).ListItem.Rating]</value>' % (cond, cid, cid))
     x(1, '</variable>')
     # The ratings row (ratings_row.py): the POV title the hero shows, named for the Wizard
     x(1, '<variable name="POVIL_RatingsKey">')
-    for cond, cid in sources:
+    for cond, cid in plain_sources:
         item = 'Container(%d).ListItem' % cid
         x(2, '<value condition="%s + %s + %s">%s</value>' % (cond, more_page % (cid, cid), RR.has_key(item), RR.key(item)))
         # the row on screen decides, also when its item has no ratings to ask for
@@ -1025,7 +1127,7 @@ def gen_includes():
     # The trailer POV names for the title in the hero (the YouTube add-on's address); nothing for any
     # other item, so nothing is asked for an Israeli show, a channel or a "more" tile
     x(1, '<variable name="POVIL_HeroTrailer">')
-    for cond, cid in sources:
+    for cond, cid in plain_sources:
         x(2, '<value condition="%s + %s + String.StartsWith(Container(%d).ListItem.Trailer,plugin://plugin.video.youtube/)">'
              '$INFO[Container(%d).ListItem.Trailer]</value>' % (cond, more_page % (cid, cid), cid, cid))
         x(2, '<value condition="%s"></value>' % cond)
@@ -1060,7 +1162,7 @@ def gen_includes():
     x(1, '</variable>')
     x(1, '<variable name="POVIL_HeroPlot">')
     detail('plot')
-    for cond, cid in sources:
+    for cond, cid in plain_sources:
         x(2, '<value condition="%s + !String.IsEmpty(Container(%d).ListItem.Plot) + !String.IsEqual(Container(%d).ListItem.Plot,Container(%d).ListItem.Label)">$INFO[Container(%d).ListItem.Plot]</value>' % (cond, cid, cid, cid, cid))
         x(2, '<value condition="%s + !String.IsEmpty(Container(%d).ListItem.PlotOutline)">$INFO[Container(%d).ListItem.PlotOutline]</value>' % (cond, cid, cid))
     for cond, val in tab_blurbs:
@@ -1103,43 +1205,62 @@ def gen_includes():
     # A tab's first row loads the first time the tab is selected (timer povil_tabs),
     # the rows below it once the user leaves the tabs for its chips or rows
     # (timer povil_deep): browsing the tabs costs one list each.
+    def path_values(ti, ri, row, gate, pre):
+        """The values of slot ri's address for one of its rows; `pre`: the condition that the slot shows it."""
+        if is_custom(row[1]):
+            key = 'POVILRow_%s_path' % row[1][7:]
+            opened = '!String.IsEmpty(Window(home).Property(%s)) + !String.IsEmpty(Skin.String(%s))' % (gate, key)
+            plugin = '[%s]' % ' | '.join('String.StartsWith(Skin.String(%s),plugin://%s/)' % (key, a) for a in RTL_ADDONS)
+            # a list of the add-ons the Wizard's povil_rtl patches is read right to left like the build's own rows;
+            # any other add-on is handed its address untouched (an unknown parameter could break its routing)
+            # (POV's: also the time the last film ended -- PLAY_TOKEN -- so a list of films in progress follows them)
+            pov_row = 'String.StartsWith(Skin.String(%s),%s)' % (key, POV)
+            x(2, '<value condition="' + pre + '%s + %s + String.Contains(Skin.String(%s),?)">$INFO[Skin.String(%s)]&amp;povil_rtl=1%s</value>'
+              % (opened, pov_row, key, key, e(PLAY_TOKEN)))
+            x(2, '<value condition="' + pre + '%s + %s">$INFO[Skin.String(%s)]?povil_rtl=1%s</value>' % (opened, pov_row, key, e(PLAY_TOKEN)))
+            x(2, '<value condition="' + pre + '%s + %s + String.Contains(Skin.String(%s),?)">$INFO[Skin.String(%s)]&amp;povil_rtl=1</value>'
+              % (opened, plugin, key, key))
+            x(2, '<value condition="' + pre + '%s + %s">$INFO[Skin.String(%s)]?povil_rtl=1</value>' % (opened, plugin, key))
+            x(2, '<value condition="' + pre + '%s">$INFO[Skin.String(%s)]</value>' % (opened, key))
+            return
+        if is_hub(row[1]):
+            # one address per choice (all / films / series); the service is in the address itself
+            opened = '!String.IsEmpty(Window(home).Property(%s))' % gate
+            for kind in HUB_TYPES:
+                path = rtl_path(HUB_ROWS[int(row[1][4:])][1][kind][1])
+                x(2, '<value condition="' + pre + '%s + %s + !String.IsEmpty(Window(home).Property(povil.retry.%d))">%s</value>'
+                  % (opened, hub_type(kind), row_id(ti, ri), e(path + '&povil_retry=$INFO[Window(home).Property(povil.retry.%d)]' % row_id(ti, ri))))
+                x(2, '<value condition="' + pre + '%s + %s">%s</value>' % (opened, hub_type(kind), e(path)))
+            return
+        path = rtl_path(named(row[1], row[0]))
+        if slot_tab(TABS[ti]) and path.startswith(POV) and not follows_no_playback(row[1]):
+            path += PLAY_TOKEN
+        if retries(row):
+            # a row that came back empty asks again (povil_retry_<id>): a new
+            # address makes Kodi fetch it anew; the plain one stays first in the
+            # file for the Wizard's prebuild, which skips addresses with $INFO
+            x(2, '<value condition="' + pre + '!String.IsEmpty(Window(home).Property(%s)) + !String.IsEmpty(Window(home).Property(povil.retry.%d))">%s</value>'
+              % (gate, row_id(ti, ri), e(path + '&povil_retry=$INFO[Window(home).Property(povil.retry.%d)]' % row_id(ti, ri))))
+        x(2, '<value condition="' + pre + '!String.IsEmpty(Window(home).Property(%s))">%s</value>'
+          % (gate, e(path)))
+
     for ti, tab in enumerate(TABS):
         for ri, row in enumerate(tab['rows']):
             if row[1].startswith('static:'):
                 continue
             x(1, '<variable name="POVIL_Path_%d">' % row_id(ti, ri))
             gate = row_gate(ti, ri)
-            if is_custom(row[1]):
-                key = 'POVILRow_%s_path' % row[1][7:]
-                opened = '!String.IsEmpty(Window(home).Property(%s)) + !String.IsEmpty(Skin.String(%s))' % (gate, key)
-                plugin = '[%s]' % ' | '.join('String.StartsWith(Skin.String(%s),plugin://%s/)' % (key, a) for a in RTL_ADDONS)
-                # a list of the add-ons the Wizard's povil_rtl patches is read right to left like the build's own rows;
-                # any other add-on is handed its address untouched (an unknown parameter could break its routing)
-                x(2, '<value condition="%s + %s + String.Contains(Skin.String(%s),?)">$INFO[Skin.String(%s)]&amp;povil_rtl=1</value>'
-                  % (opened, plugin, key, key))
-                x(2, '<value condition="%s + %s">$INFO[Skin.String(%s)]?povil_rtl=1</value>' % (opened, plugin, key))
-                x(2, '<value condition="%s">$INFO[Skin.String(%s)]</value>' % (opened, key))
-                x(1, '</variable>')
-                continue
-            if is_hub(row[1]):
-                # one address per choice (all / films / series); the service is in the address itself
-                opened = '!String.IsEmpty(Window(home).Property(%s))' % gate
-                for kind in HUB_TYPES:
-                    path = rtl_path(HUB_ROWS[int(row[1][4:])][1][kind][1])
-                    x(2, '<value condition="%s + %s + !String.IsEmpty(Window(home).Property(povil.retry.%d))">%s</value>'
-                      % (opened, hub_type(kind), row_id(ti, ri), e(path + '&povil_retry=$INFO[Window(home).Property(povil.retry.%d)]' % row_id(ti, ri))))
-                    x(2, '<value condition="%s + %s">%s</value>' % (opened, hub_type(kind), e(path)))
-                x(1, '</variable>')
-                continue
-            path = rtl_path(named(row[1], row[0]))
-            if retries(row):
-                # a row that came back empty asks again (povil_retry_<id>): a new
-                # address makes Kodi fetch it anew; the plain one stays first in the
-                # file for the Wizard's prebuild, which skips addresses with $INFO
-                x(2, '<value condition="!String.IsEmpty(Window(home).Property(%s)) + !String.IsEmpty(Window(home).Property(povil.retry.%d))">%s</value>'
-                  % (gate, row_id(ti, ri), e(path + '&povil_retry=$INFO[Window(home).Property(povil.retry.%d)]' % row_id(ti, ri))))
-            x(2, '<value condition="!String.IsEmpty(Window(home).Property(%s))">%s</value>'
-              % (gate, e(path)))
+            for i, when in candidates(ti, ri):
+                path_values(ti, ri, tab['rows'][i], gate, (when + ' + ') if when else '')
+            x(1, '</variable>')
+    # a slot's title: its row's
+    for ti, tab in enumerate(TABS):
+        if not slot_tab(tab):
+            continue
+        for ri in range(len(tab['rows'])):
+            x(1, '<variable name="POVIL_SlotTitle_%d">' % row_id(ti, ri))
+            for i, when in candidates(ti, ri):
+                x(2, '<value condition="%s">%s</value>' % (when, e(tab['rows'][i][0])))
             x(1, '</variable>')
     for ti, tab in enumerate(TABS):
         for ri, _ in enumerate(tab['rows']):
@@ -1194,9 +1315,12 @@ def item_layouts(x):
     item_layout(x, 'POVIL_ViewItem_square', 'square', VIEW_COND['square'])
     # A show's own episodes: each tile names its episode, not the show again
     item_layout(x, 'POVIL_ViewItem_episodes', 'landscape', title='POVIL_ItemEpisodeTitle', subtitle='POVIL_ItemEpisodeNumber')
+    # a slot of a screen in SLOT_TABS: the layout of the kind of row it shows now
+    for kind in ('poster', 'landscape', 'square'):
+        item_layout(x, 'POVIL_SlotItem_%s' % kind, kind, '$PARAM[when]', params=('when',))
 
 
-def item_layout(x, name, kind, cond=None, title='POVIL_ItemTitle', subtitle='POVIL_ItemSubtitle'):
+def item_layout(x, name, kind, cond=None, title='POVIL_ItemTitle', subtitle='POVIL_ItemSubtitle', params=()):
     if True:
         g = GEOM[kind]
         ranked, kind = kind == 'ranked', shape(kind)
@@ -1204,6 +1328,8 @@ def item_layout(x, name, kind, cond=None, title='POVIL_ItemTitle', subtitle='POV
         top = 22
         x(1, '<include name="%s">' % name)
         x(2, '<param name="id" />')
+        for param in params:
+            x(2, '<param name="%s" />' % param)
         x(2, '<definition>')
         for focused in (False, True):
             tag = 'focusedlayout' if focused else 'itemlayout'
@@ -1379,7 +1505,7 @@ def gen_home():
     # each RTL row move to its right end again.
     for ti, tab in enumerate(TABS):
         for ri, row in enumerate(tab['rows']):
-            if is_rtl(row[1]):
+            if any(is_rtl(tab['rows'][i][1]) for i, _when in candidates(ti, ri)):
                 x(1, '<onload>ClearProperty(povil.rtl.%d,home)</onload>' % row_id(ti, ri))
     # The views' guard: a season opened again from the home starts on its first item
     x(1, '<onload>ClearProperty(povil.rtl.view,home)</onload>')
@@ -1550,7 +1676,7 @@ def top_bar(x, d):
         # a row whose retries ran out (a box that started before its network) asks
         # again when its tab is chosen again
         for ri, row in enumerate(tab['rows']):
-            if retries(row):
+            if any(retries(tab['rows'][i]) for i, _when in candidates(ti, ri)):
                 rid = row_id(ti, ri)
                 x(d + 2, '<onfocus condition="String.IsEqual(Window(home).Property(povil.retry.%d),2) + !Integer.IsGreater(Container(%d).NumItems,0)">'
                          'ClearProperty(povil.retry.%d,home)</onfocus>' % (rid, rid, rid))
@@ -1566,6 +1692,11 @@ def top_bar(x, d):
         d = d + 1
     d = d - 1
     x(d, '</control>')
+
+# A soft shadow under the hero's text (Onyx 1.0.26): the shade behind it stops short of black at the screen's edge
+# now (gen_textures.py), and the text stays readable over a bright backdrop
+HERO_SHADOW = 'B0000000'
+
 
 def hero(x, d):
     right = 1920 - MARGIN
@@ -1584,7 +1715,7 @@ def hero(x, d):
     x(d + 1, '</control>')
     x(d + 1, '<control type="label" description="title">')
     x(d + 2, '<left>%d</left><top>150</top><width>1100</width><height>130</height>' % (right - 1100))
-    x(d + 2, '<font>povil_hero</font><textcolor>povil_white</textcolor><align>right</align><aligny>bottom</aligny>')
+    x(d + 2, '<font>povil_hero</font><textcolor>povil_white</textcolor><shadowcolor>%s</shadowcolor>' % HERO_SHADOW + '<align>right</align><aligny>bottom</aligny>')
     x(d + 2, '<label>$VAR[POVIL_HeroTitle]</label>')
     x(d + 2, '<visible>String.IsEmpty(Control.GetLabel(9800))</visible>')
     x(d + 1, '</control>')
@@ -1596,7 +1727,7 @@ def hero(x, d):
     RR.key_label(x, d + 1, RATINGS_KEY, '$VAR[POVIL_RatingsKey]')
     x(d + 1, '<control type="label" description="episode">')
     x(d + 2, '<left>%d</left><top>288</top><width>1100</width><height>34</height>' % (right - 1100))
-    x(d + 2, '<font>povil_hero_meta_bold</font><textcolor>%s</textcolor><align>right</align><aligny>center</aligny>' % GOLD)
+    x(d + 2, '<font>povil_hero_meta_bold</font><textcolor>%s</textcolor><shadowcolor>%s</shadowcolor><align>right</align><aligny>center</aligny>' % (GOLD, HERO_SHADOW))
     x(d + 2, '<label>$VAR[POVIL_HeroEpisode]</label>')
     x(d + 1, '</control>')
     # Details: rating (gold star) then year, genre, length, rating age
@@ -1604,11 +1735,11 @@ def hero(x, d):
     x(d + 2, '<left>%d</left><top>%s</top><width>1100</width><height>40</height>' % (right - 1100, 322))
     x(d + 2, '<orientation>horizontal</orientation><align>right</align><itemgap>16</itemgap><usecontrolcoords>true</usecontrolcoords>')
     x(d + 2, '<control type="label">')
-    x(d + 3, '<width>auto</width><height>40</height><font>povil_hero_meta</font><textcolor>povil_dim</textcolor><aligny>center</aligny>')
+    x(d + 3, '<width>auto</width><height>40</height><font>povil_hero_meta</font><textcolor>povil_dim</textcolor><shadowcolor>%s</shadowcolor><aligny>center</aligny>' % HERO_SHADOW)
     x(d + 3, '<label>$VAR[POVIL_HeroMeta]</label>')
     x(d + 2, '</control>')
     x(d + 2, '<control type="label">')
-    x(d + 3, '<width>auto</width><height>40</height><font>povil_hero_meta_bold</font><textcolor>%s</textcolor><aligny>center</aligny>' % GOLD)
+    x(d + 3, '<width>auto</width><height>40</height><font>povil_hero_meta_bold</font><textcolor>%s</textcolor><shadowcolor>%s</shadowcolor><aligny>center</aligny>' % (GOLD, HERO_SHADOW))
     x(d + 3, '<label>$VAR[POVIL_HeroRating]</label>')
     # the star and its number are for a title with no ratings row: there TMDb's mark says it
     x(d + 3, '<visible>String.IsEmpty(Control.GetLabel(%d))</visible>' % RATINGS_KEY)
@@ -1626,7 +1757,7 @@ def hero(x, d):
     # no ratings row: the plot follows the details as it always did (402 = 408 + 34 - 40)
     x(d + 2, '<animation effect="slide" end="0,-40" time="140" tween="cubic" easing="out" '
              'condition="String.IsEmpty(Control.GetLabel(%d))">Conditional</animation>' % RATINGS_KEY)
-    x(d + 2, '<font>povil_plot</font><textcolor>povil_dim</textcolor><align>right</align>')
+    x(d + 2, '<font>povil_plot</font><textcolor>povil_dim</textcolor><shadowcolor>%s</shadowcolor><align>right</align>' % HERO_SHADOW)
     # while the title's trailer plays the plot steps aside: moving pictures behind three lines of text
     # read as neither (the title, its details and its ratings stay)
     x(d + 2, '<animation effect="fade" start="100" end="0" time="400" condition="%s">Conditional</animation>' % TRAILER_SHOWN)
@@ -1749,46 +1880,53 @@ def row_gate(ti, ri):
     return 'povil.tab.%s' % TABS[ti]['id'] if ri == 0 else 'povil.deep.%s' % TABS[ti]['id']
 
 
-def skeleton(x, d, ti, ri, rid, kind, path, optional):
+def skeleton(x, d, ti, ri, rid, kind, path, optional, members=None):
     """While a row has nothing to show yet -- not opened, loading, or waiting to
     start on the right -- dim tiles stand where its items will be (still: a
     pulse would redraw the screen every frame, on a phone's battery), so a slow
     list (a phone, a list never seen before) reads as loading, not as empty.
     A row that retries (gen_home retries) keeps them up until its retries are
-    spent, and only then says it has nothing."""
+    spent, and only then says it has nothing.
+    A slot (SLOT_TABS): `members` are its rows of this kind, [(condition it shows the row, path, optional)] -- one
+    group of tiles for all of them."""
     g = GEOM[kind]
     has = 'Integer.IsGreater(Container(%d).NumItems,0)' % rid
     opened = '!String.IsEmpty(Window(home).Property(%s))' % row_gate(ti, ri)
     closed = 'String.IsEmpty(Window(home).Property(%s))' % row_gate(ti, ri)
     spent = 'String.IsEqual(Window(home).Property(povil.retry.%d),2)' % rid
-    parts = ['Container(%d).IsUpdating' % rid]
-    if is_rtl(path) and not path.startswith('static:'):
-        parts.append('[%s]' % rtl_waiting(rid))
-    if retries((None, path, kind, optional)):
-        parts.append('[!%s + !%s]' % (has, spent))       # until the retries are spent
-    elif not optional:
-        parts.append('[!%s + %s]' % (has, closed))
+    members = members or [('', path, optional)]
+    terms, retrying = [], []
+    for when, m_path, m_optional in members:
+        parts = ['Container(%d).IsUpdating' % rid]
+        if is_rtl(m_path) and not m_path.startswith('static:'):
+            parts.append('[%s]' % rtl_waiting(rid))
+        if retries((None, m_path, kind, m_optional)):
+            parts.append('[!%s + !%s]' % (has, spent))       # until the retries are spent
+            retrying.append(when)
+        elif not m_optional:
+            parts.append('[!%s + %s]' % (has, closed))
+        terms.append(('%s + [%s]' % (when, ' | '.join(parts))) if when else ' | '.join(parts))
     if is_rtl(path):
         left = rtl_slots(g)[0] + PAD
         slots = [left + k * g['step'] for k in range(rtl_slots(g)[1] // g['step'])]
     else:
         slots = [MARGIN + k * g['step'] for k in range((1920 - 2 * MARGIN + g['step'] - g['w']) // g['step'])]
     x(d, '<control type="group" description="loading">')
-    x(d + 1, '<visible>%s</visible>' % ' | '.join(parts))
+    x(d + 1, '<visible>%s</visible>' % (terms[0] if len(terms) == 1 else ' | '.join('[%s]' % term for term in terms)))
     x(d + 1, '<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>')
     for left in slots:
         x(d + 1, '<control type="image"><left>%d</left><top>62</top><width>%d</width><height>%d</height>'
                  '<texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>' % (left, g['w'], g['h']))
     x(d, '</control>')
-    if retries((None, path, kind, optional)):
+    if retrying:
+        showing = ('[%s] + ' % ' | '.join(retrying)) if all(retrying) else ''
         x(d, '<control type="label" description="nothing here">')
         x(d + 1, '<left>%d</left><top>%d</top><width>%d</width><height>60</height>' % (MARGIN, 62 + g['h'] // 2 - 30, 1920 - 2 * MARGIN))
         x(d + 1, '<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>')
         x(d + 1, '<label>אין כרגע מה להציג כאן</label>')
-        x(d + 1, '<visible>%s + %s + !Container(%d).IsUpdating + !%s</visible>' % (opened, spent, rid, has))
+        x(d + 1, '<visible>%s%s + %s + !Container(%d).IsUpdating + !%s</visible>' % (showing, opened, spent, rid, has))
         x(d + 1, '<animation effect="fade" start="0" end="100" time="300">Visible</animation>')
         x(d, '</control>')
-
 
 def rows(x, d):
     for ti, tab in enumerate(TABS):
@@ -1798,7 +1936,7 @@ def rows(x, d):
         offsets, y = [], 0
         for r in tab['rows']:
             offsets.append(y)
-            y += GEOM[r[2]]['block']
+            y += slot_block(tab) if slot_tab(tab) else GEOM[r[2]]['block']
         x(d, '<control type="group" description="rows %s">' % tab['id'])
         x(d + 1, '<left>0</left><top>%d</top>' % ROWS_Y)
         x(d + 1, '<visible>%s</visible>' % tab_cond(tab))
@@ -1807,6 +1945,9 @@ def rows(x, d):
             x(d + 1, '<animation effect="slide" end="0,-%d" time="320" tween="cubic" easing="out" condition="%s">Conditional</animation>'
               % (offsets[ri], row_focus(ti, ri)))
         for ri, (title, path, kind, optional) in enumerate(tab['rows']):
+            if slot_tab(tab):
+                slot_row(x, d + 1, ti, ri, ids, offsets[ri])
+                continue
             g = GEOM[kind]
             rid = ids[ri]
             x(d + 1, '<control type="group" description="%s">' % e(title))
@@ -1878,6 +2019,80 @@ def rows(x, d):
                 peek(x, d + 2, rid, kind, 40)
             x(d + 1, '</control>')
         x(d, '</control>')
+
+
+def slot_row(x, d, ti, k, ids, top):
+    """Slot k of a screen in SLOT_TABS: the row the viewer put there (shows), drawn for its kind."""
+    tab = TABS[ti]
+    rows_ = tab['rows']
+    rid = ids[k]
+    cands = candidates(ti, k)
+    kinds = slot_kinds(ti, k)
+    x(d, '<control type="group" description="slot %d">' % (k + 1))
+    x(d + 1, '<left>0</left><top>%d</top>' % top)
+    hide = ' | '.join(row_focus(ti, j) for j in range(k + 1, len(ids)))
+    if hide:
+        x(d + 1, '<animation effect="fade" start="100" end="0" time="220" condition="%s">Conditional</animation>' % hide)
+    x(d + 1, '<control type="label">')
+    x(d + 2, '<left>%d</left><top>0</top><width>%d</width><height>44</height>' % (MARGIN, 1920 - 2 * MARGIN))
+    x(d + 2, '<font>povil_row</font><align>right</align><aligny>center</aligny>')
+    x(d + 2, '<textcolor>$VAR[POVIL_RowTitleColor_%d]</textcolor><label>$VAR[POVIL_SlotTitle_%d]</label>' % (rid, rid))
+    # (an optional row's title shows with its items only; a row that is always there shows it from the start)
+    x(d + 2, '<visible>%s</visible>' % ' | '.join(['Integer.IsGreater(Container(%d).NumItems,0)' % rid] +
+                                                    [when for i, when in cands if not rows_[i][3]]))
+    x(d + 1, '</control>')
+    # loading tiles: one group per kind of the rows it may show
+    groups = {}
+    for i, when in cands:
+        _title, path, kind, optional = rows_[i]
+        groups.setdefault(kind, []).append((when, path, optional))
+    for kind, members in groups.items():
+        skeleton(x, d + 1, ti, k, rid, kind, members[0][1], members[0][2], members=members)
+    base = 'poster' if 'poster' in kinds else sorted(kinds)[0]
+    g = GEOM[base]
+    left, width, _peek = rtl_slots(g)
+    x(d + 1, '<control type="list" id="%d">' % rid)
+    x(d + 2, '<left>%d</left><top>40</top><width>%d</width><height>%d</height>'
+      % (left, width, max(GEOM[kind]['list_h'] for kind in kinds)))
+    x(d + 2, '<orientation>horizontal</orientation><preloaditems>2</preloaditems>')
+    x(d + 2, '<scrolltime tween="cubic" easing="out">260</scrolltime>')
+    top_up = chip_ids(ti, tab)[0] if tab['chips'] else tab_button(ti)
+    for cond, target in nav_chain(list(reversed(ids[:k])), top_up):
+        x(d + 2, '<onup condition="%s">%d</onup>' % (cond, target))
+    x(d + 2, '<onleft>noop</onleft><onright>noop</onright>')
+    if tab.get('hidden'):
+        x(d + 2, '<onback>9000</onback>')
+    x(d + 2, '<onfocus>SetProperty(povil.tab,%s,home)</onfocus>' % tab['id'])
+    x(d + 2, '<onfocus>SetProperty(povil.focus,%d,home)</onfocus>' % rid)
+    for cond, target in nav_chain(ids[k + 1:]):
+        x(d + 2, '<ondown condition="%s">%d</ondown>' % (cond, target))
+    x(d + 2, '<animation effect="fade" start="100" end="0" time="0" condition="%s">Conditional</animation>' % rtl_waiting(rid))
+    for kind, kcond in kinds.items():
+        if kind != base:
+            # a row of another kind in a poster row's place: its whole tiles end flush with the right margin
+            # (as the views do, gen_views.py)
+            gk = GEOM[kind]
+            per_page = (width - gk['step']) // gk['step'] + 1
+            shift = (1920 - MARGIN) - (left + PAD + (per_page - 1) * gk['step'] + gk['w'])
+            if shift:
+                x(d + 2, '<animation effect="slide" end="%d,0" time="0" condition="%s">Conditional</animation>' % (shift, kcond))
+        short_rows(x, d + 2, 'Container(%d)' % rid, kind, kcond or None)
+    for kind, kcond in kinds.items():
+        if kcond:
+            x(d + 2, '<include content="POVIL_SlotItem_%s"><param name="id" value="%d" /><param name="when" value="%s" /></include>'
+              % (shape(kind) if kind != 'ranked' else 'poster', rid, kcond))
+        else:
+            x(d + 2, '<include content="POVIL_Item_%s"><param name="id" value="%d" /></include>' % (kind, rid))
+    x(d + 2, '<content target="videos" sortby="size">$VAR[POVIL_Path_%d]</content>' % rid)
+    x(d + 1, '</control>')
+    for kind, kcond in kinds.items():
+        if kcond:
+            x(d + 1, '<control type="group"><visible>%s</visible>' % kcond)
+            peek(x, d + 2, rid, kind, 40)
+            x(d + 1, '</control>')
+        else:
+            peek(x, d + 1, rid, kind, 40)
+    x(d, '</control>')
 
 
 def main():

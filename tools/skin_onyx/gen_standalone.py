@@ -23,7 +23,7 @@ import sys
 import gen_home as H
 
 NL = chr(10)
-CHOICE_ID, ROWS_ID = 1161, 1162
+CHOICE_ID, ROWS_ID, ORDER_ID = 1161, 1162, 1163
 PLAYERS = (('', 'הנגן של Onyx (ברירת מחדל)'),) + tuple((v, 'נגן ' + n) for v, n in H.PLAYER_STYLES)
 # (the screens the bar may drop: all but films and settings -- onyx_tabs.TABS)
 SCREENS = (('tv', 'סדרות'), ('continue', 'המשך צפייה'), ('israeli', 'ישראלי'), ('live', 'שידור חי'),
@@ -61,6 +61,9 @@ def heading(x, d, label, visible=None, top=70):
     if visible:
         x(d + 1, '<visible>%s</visible>' % visible)
     x(d, '</control>')
+
+
+OFF = 'end="3000,0"'      # (a step's list off the screen: see the slide animations below)
 
 
 def note(x, d, label, visible=None, top=930):
@@ -155,13 +158,13 @@ def rows():
     x(4, '<centerleft>960</centerleft><posy>70</posy><width>690</width><height>52</height>')
     x(4, '<label>$VAR[POVIL_RowPicking]</label><align>center</align><aligny>center</aligny>')
     x(4, '<textcolor>$VAR[HighlightColor]</textcolor><include>TitleCommons</include>')
-    x(4, '<visible allowhiddenfocus="true">%s</visible>' % picking)
+    x(4, '<animation effect="slide" end="3000,0" time="0" condition="![%s]">Conditional</animation>' % picking)
     x(3, '</control>')
     # --- the slots: every tab's rows, each with its name or "(ריקה)"
     x(3, '<control type="grouplist" id="9000">')
     x(4, '<centerleft>960</centerleft><posy>135</posy><width>640</width><height>792</height>')
     x(4, '<onleft>noop</onleft><onright>noop</onright><onup>9000</onup><ondown>9000</ondown><itemgap>0</itemgap>')
-    x(4, '<visible allowhiddenfocus="true">!%s</visible>' % picking)
+    x(4, '<animation effect="slide" end="3000,0" time="0" condition="%s">Conditional</animation>' % picking)
     cid = 7800
     for tab in H.CUSTOM_TABS:
         for n in range(1, H.CUSTOM_SLOTS + 1):
@@ -178,7 +181,7 @@ def rows():
     x(3, '<control type="grouplist" id="9100">')
     x(4, '<centerleft>960</centerleft><posy>135</posy><width>640</width><height>400</height>')
     x(4, '<onleft>noop</onleft><onright>noop</onright><onup>9200</onup><ondown>9200</ondown><itemgap>0</itemgap>')
-    x(4, '<visible allowhiddenfocus="true">%s</visible>' % picking)
+    x(4, '<animation effect="slide" end="3000,0" time="0" condition="![%s]">Conditional</animation>' % picking)
     for back_action in back:
         x(4, '<onback>%s</onback>' % back_action)
     for n, (path, label, name) in enumerate(LIBRARY):
@@ -195,7 +198,7 @@ def rows():
     x(4, '<centerleft>960</centerleft><posy>590</posy><width>640</width><height>330</height>')
     x(4, '<onup>9100</onup><ondown>9100</ondown><onleft>noop</onleft><onright>noop</onright>')
     x(4, '<orientation>vertical</orientation><scrolltime>200</scrolltime>')
-    x(4, '<visible allowhiddenfocus="true">%s</visible>' % picking)
+    x(4, '<animation effect="slide" end="3000,0" time="0" condition="![%s]">Conditional</animation>' % picking)
     for back_action in back:
         x(4, '<onback>%s</onback>' % back_action)
     # ($ESCINFO: quoted, so a comma in a source's name or path cannot split the command -- the reviewer, 1.0.26)
@@ -220,6 +223,102 @@ def rows():
     return x.text()
 
 
+def order():
+    """Window 1163: the order of a screen's rows, without the Wizard (gen_home.py SLOT_TABS) -- a screen, then a place,
+    then the row that stands there (or none); or the build's order again."""
+    x = H.X()
+    frame(x, ORDER_ID)
+    tab_p, slot_p = 'Window(home).Property(povil.order.tab)', 'Window(home).Property(povil.order.slot)'
+    choosing_tab = 'String.IsEmpty(%s)' % tab_p
+    choosing_place = '!String.IsEmpty(%s) + String.IsEmpty(%s)' % (tab_p, slot_p)
+    choosing_row = '!String.IsEmpty(%s) + !String.IsEmpty(%s)' % (tab_p, slot_p)
+    x(1, '<defaultcontrol always="true">9300</defaultcontrol>')
+    x(1, '<include>DialogOpenClose</include>')
+    x(1, '<onload>ClearProperty(povil.order.tab,home)</onload>')
+    x(1, '<onload>ClearProperty(povil.order.slot,home)</onload>')
+    x(1, '<controls>')
+    x(2, '<control type="group">')
+    panel(x, 3)
+    heading(x, 3, 'סדר השורות: באיזה מסך?', choosing_tab)
+    x(3, '<control type="label"><centerleft>960</centerleft><posy>70</posy><width>690</width><height>52</height>'
+         '<label>$VAR[POVIL_OrderHeading]</label><align>center</align><aligny>center</aligny>'
+         '<textcolor>$VAR[HighlightColor]</textcolor><include>TitleCommons</include><visible>!%s</visible></control>' % choosing_tab)
+    # the screens
+    # (each screen has a list of its own places and one of its own rows: a list whose buttons are all there takes the
+    # focus at once -- a list whose buttons were still hidden for a frame lost it)
+    x(3, '<control type="grouplist" id="9300">')
+    x(4, '<centerleft>960</centerleft><posy>135</posy><width>640</width><height>792</height>')
+    x(4, '<onleft>noop</onleft><onright>noop</onright><onup>9300</onup><ondown>9300</ondown><itemgap>0</itemgap>')
+    x(4, '<animation effect="slide" end="3000,0" time="0" condition="![%s]">Conditional</animation>' % choosing_tab)
+    for n, (tab, name) in enumerate(H.CUSTOM_TAB_NAMES):
+        button(x, 4, 9301 + n, name, ['SetProperty(povil.order.tab,%s,home)' % tab, 'SetFocus(%d)' % (9400 + 20 * n)])
+    x(3, '</control>')
+    tabs = [(ti, tab) for ti, tab in enumerate(H.TABS) if H.slot_tab(tab)]
+    for n, (ti, tab) in enumerate(tabs):
+        tid, count = tab['id'], len(tab['rows'])
+        mine = 'String.IsEqual(%s,%s)' % (tab_p, tid)
+        places, choices = 9400 + 20 * n, 9600 + 20 * n
+        ordered = 'Skin.HasSetting(POVILOrdered_%s)' % tid
+        # its places, each with the row standing there
+        x(3, '<control type="grouplist" id="%d">' % places)
+        x(4, '<centerleft>960</centerleft><posy>135</posy><width>640</width><height>792</height>')
+        x(4, '<onleft>noop</onleft><onright>noop</onright><onup>%d</onup><ondown>%d</ondown><itemgap>0</itemgap>' % (places, places))
+        x(4, '<animation effect="slide" end="3000,0" time="0" condition="![%s + %s]">Conditional</animation>' % (mine, choosing_place))
+        x(4, '<onback>ClearProperty(povil.order.tab,home)</onback><onback>SetFocus(9300)</onback>')
+        for k in range(count):
+            # (povil.order.was: the row this place shows now -- it moves to the place the chosen row leaves)
+            button(x, 4, places + 1 + k, '$VAR[POVIL_OrderSlot_%d]' % H.row_id(ti, k),
+                   ['SetProperty(povil.order.slot,%d,home)' % k, 'SetProperty(povil.order.place,%d,home)' % (k + 1),
+                    (ordered, 'SetProperty(povil.order.was,$INFO[Skin.String(POVILSlot_%s_%d)],home)' % (tid, k)),
+                    ('!' + ordered, 'SetProperty(povil.order.was,%d,home)' % k),
+                    'SetFocus(%d)' % choices])
+        button(x, 4, places + 1 + count, 'חזרה לסדר של הבילד', ['Skin.Reset(POVILOrdered_%s)' % tid] +
+               ['Skin.Reset(POVILSlot_%s_%d)' % (tid, k) for k in range(count)], visible=ordered)
+        x(3, '</control>')
+        # the rows that may stand there
+        x(3, '<control type="grouplist" id="%d">' % choices)
+        x(4, '<centerleft>960</centerleft><posy>135</posy><width>640</width><height>792</height>')
+        x(4, '<onleft>noop</onleft><onright>noop</onright><onup>%d</onup><ondown>%d</ondown><itemgap>0</itemgap>' % (choices, choices))
+        x(4, '<animation effect="slide" end="3000,0" time="0" condition="![%s + %s]">Conditional</animation>' % (mine, choosing_row))
+        x(4, '<onback>ClearProperty(povil.order.slot,home)</onback><onback>SetFocus(%d)</onback>' % places)
+        # the first change of a screen writes the build's order first: then this place takes the row chosen
+        first = [('!' + ordered, 'Skin.SetString(POVILSlot_%s_%d,%d)' % (tid, k, k)) for k in range(count)]
+        done = ['ClearProperty(povil.order.slot,home)', 'SetFocus(%d)' % places]
+        was = 'Window(home).Property(povil.order.was)'
+        for i, row in enumerate(tab['rows']):
+            # the row chosen stood elsewhere: the row this place showed takes its place there (no row twice)
+            # (Kodi writes a skin setting a moment after it is asked to: a condition still reads the screen as it was before
+            # this press -- arranged, the row's place is in its setting; not yet arranged, row i stands in place i)
+            moves = [('!%s + !String.IsEqual(%s,%d)' % (ordered, slot_p, i), 'Skin.SetString(POVILSlot_%s_%d,$INFO[%s])' % (tid, i, was))]
+            for j in range(count):
+                there = '%s + String.IsEqual(Skin.String(POVILSlot_%s_%d),%d) + !String.IsEqual(%s,%d)' % (ordered, tid, j, i, slot_p, j)
+                moves.append(('%s + !String.IsEmpty(%s)' % (there, was), 'Skin.SetString(POVILSlot_%s_%d,$INFO[%s])' % (tid, j, was)))
+                moves.append(('%s + String.IsEmpty(%s)' % (there, was), 'Skin.Reset(POVILSlot_%s_%d)' % (tid, j)))
+            button(x, 4, choices + 1 + i, row[0], first + ['Skin.SetBool(POVILOrdered_%s)' % tid] + moves +
+                   ['Skin.SetString(POVILSlot_%s_$INFO[%s],%d)' % (tid, slot_p, i)] + done)
+        button(x, 4, choices + 1 + count, '(בלי שורה במקום הזה)', first + ['Skin.SetBool(POVILOrdered_%s)' % tid,
+                                                                      'Skin.Reset(POVILSlot_%s_$INFO[%s])' % (tid, slot_p)] + done)
+        x(3, '</control>')
+    note(x, 3, 'בוחרים מקום, ואז את השורה שתעמוד בו.', choosing_place)
+    x(2, '</control>')
+    x(1, '</controls>')
+    x(0, '</window>')
+    return x.text()
+
+
+def rows_file():
+    """extras/povil_rows.json: each screen's rows in the build's order, for the Wizard's home_rows.py."""
+    import json
+    tabs = []
+    for tab in H.TABS:
+        if not H.slot_tab(tab):
+            continue
+        rows = [{'title': None if H.is_custom(row[1]) else row[0], 'custom': row[1][7:] if H.is_custom(row[1]) else None}
+                for row in tab['rows']]
+        tabs.append({'id': tab['id'], 'name': dict(H.CUSTOM_TAB_NAMES)[tab['id']], 'rows': rows})
+    return json.dumps({'tabs': tabs}, ensure_ascii=False, indent=1) + NL
+
+
 def variables():
     """The slot names the dialog shows, and the name a row has when the viewer gave none."""
     x = H.X()
@@ -239,15 +338,33 @@ def variables():
             x(2, '<value condition="String.IsEqual(%s,%s_%d)">מקור לשורה: %s · שורה %d</value>' % (SLOT, tab, n, TAB_NAMES[tab], n))
     x(2, '<value>מקור לשורה</value>')
     x(1, '</variable>')
+    # the order dialog (1163): a place's label, and its heading
+    for ti, tab in enumerate(H.TABS):
+        if not H.slot_tab(tab):
+            continue
+        for k in range(len(tab['rows'])):
+            x(1, '<variable name="POVIL_OrderSlot_%d">' % H.row_id(ti, k))
+            for i, when in H.candidates(ti, k):
+                x(2, '<value condition="%s">מקום %d: %s</value>' % (when, k + 1, e(tab['rows'][i][0])))
+            x(2, '<value>מקום %d: (ריק)</value>' % (k + 1))
+            x(1, '</variable>')
+    x(1, '<variable name="POVIL_OrderHeading">')
+    for tab, name in H.CUSTOM_TAB_NAMES:
+        x(2, '<value condition="String.IsEqual(Window(home).Property(povil.order.tab),%s) + String.IsEmpty(Window(home).Property(povil.order.slot))">סדר השורות: %s</value>' % (tab, name))
+        x(2, '<value condition="String.IsEqual(Window(home).Property(povil.order.tab),%s)">איזו שורה תעמוד במקום $INFO[Window(home).Property(povil.order.place)]?</value>' % tab)
+    x(2, '<value>סדר השורות</value>')
+    x(1, '</variable>')
     x(1, '<!-- POVIL STANDALONE END -->')
     return x.text()
 
 
 def main():
     folder = os.path.join(sys.argv[1], 'xml')
-    for name, text in (('Custom_POVILChoice.xml', choice()), ('Custom_POVILRows.xml', rows())):
+    for name, text in (('Custom_POVILChoice.xml', choice()), ('Custom_POVILRows.xml', rows()), ('Custom_POVILOrder.xml', order())):
         with open(os.path.join(folder, name), 'w', encoding='utf-8', newline=NL) as f:
             f.write(text)
+    with open(os.path.join(sys.argv[1], 'extras', 'povil_rows.json'), 'w', encoding='utf-8', newline=NL) as f:
+        f.write(rows_file())
     path = os.path.join(folder, 'Includes_POVIL_Home.xml')
     text = open(path, encoding='utf-8').read()
     begin, end = '<!-- POVIL STANDALONE BEGIN', '<!-- POVIL STANDALONE END -->'
@@ -258,7 +375,7 @@ def main():
     text = text.replace('</includes>', variables() + '</includes>', 1)
     with open(path, 'w', encoding='utf-8', newline=NL) as f:
         f.write(text)
-    print('standalone dialogs generated: %d, %d' % (CHOICE_ID, ROWS_ID))
+    print('standalone dialogs generated: %d, %d, %d' % (CHOICE_ID, ROWS_ID, ORDER_ID))
 
 
 if __name__ == '__main__':

@@ -60,10 +60,15 @@ class SkinRowsTests(unittest.TestCase):
         rows = H.TABS[ti]['rows']
         rid = H.row_id(ti, len(rows) - 3)
         block = variable('POVIL_Path_%d' % rid)
-        values = re.findall(r'<value condition="([^"]*)">([^<]*)</value>', block)
-        self.assertEqual(len(values), 3)
+        # (a slot holds the address of every row of its screen, each while the slot shows it: this own row's are the
+        # ones that name its setting)
+        values = [v for v in re.findall(r'<value condition="([^"]*)">([^<]*)</value>', block) if 'POVILRow_movies_1_path' in v[0]]
+        # (POV's own lists first: they also carry the time the last film ended, PLAY_TOKEN)
+        self.assertEqual(len(values), 5)
+        values = values[2:]
         self.assertNotIn('<value>', block, 'nothing set: no address, so no row')
         for cond, _value in values:
+            self.assertTrue(cond.startswith('$EXP[POVIL_Shows_%d_%d] + ' % (rid, len(rows) - 3)), cond[:60])
             self.assertIn('!String.IsEmpty(Skin.String(POVILRow_movies_1_path))', cond)
             self.assertRegex(cond, r'Window\(home\)\.Property\(povil\.(tab|deep)\.movies\)')
         self.assertEqual(values[2][1], '$INFO[Skin.String(POVILRow_movies_1_path)]', 'a folder is read as it is')
@@ -71,7 +76,9 @@ class SkinRowsTests(unittest.TestCase):
 
     def test_only_the_add_ons_that_reverse_lists_get_the_right_to_left_mark(self):
         block = variable('POVIL_Path_5014')
-        for cond, _v in re.findall(r'<value condition="([^"]*)">([^<]*)povil_rtl=1</value>', block):
+        mine = [(c, v) for c, v in re.findall(r'<value condition="([^"]*)">([^<]*)povil_rtl=1</value>', block) if 'POVILRow_movies_1_path' in c]
+        self.assertEqual(len(mine), 2)
+        for cond, _v in mine:
             starts = re.findall(r'String\.StartsWith\(Skin\.String\(POVILRow_movies_1_path\),([^)]*)\)', cond)
             self.assertEqual(sorted(starts), ['plugin://plugin.video.idanplus/', 'plugin://plugin.video.pov/', 'plugin://plugin.video.umbrella/'])
         patched = (WIZARD / 'resources/libs/patches/patches_config.py').read_text(encoding='utf-8')
@@ -86,7 +93,7 @@ class SkinRowsTests(unittest.TestCase):
         self.assertIn('<onclick condition="%s">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=custom_rows)</onclick>' % able, tile)
         self.assertIn('<onclick condition="!%s">ActivateWindow(1162)</onclick>' % able, tile)
         startup = (WIZARD / 'startup.py').read_text(encoding='utf-8')
-        self.assertIn("xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows')", startup)
+        self.assertIn("xbmcgui.Window(10000).setProperty('povil.wizard.modes', 'custom_rows home_rows')", startup)
         router = (WIZARD / 'resources/libs/common/router.py').read_text(encoding='utf-8')
         self.assertRegex(router, r"mode == 'custom_rows':\s*\n(\s*#[^\n]*\n)?\s*from resources\.libs import custom_rows\s*\n\s*custom_rows\.choose\(\)")
 
@@ -209,7 +216,10 @@ class StandaloneTests(unittest.TestCase):
         self.assertIn('Skin.SetPath(%s_path)' % key, rows)
         self.assertIn('Skin.Reset(%s_path)' % key, rows)
         self.assertIn('Skin.SetString(%s_name)' % key, rows, 'the name, in Kodi\'s keyboard')
-        self.assertIn('allowhiddenfocus="true"', rows, 'the source list takes the focus as it appears')
+        # a step's list slides off the screen instead of hiding: Kodi gives a hidden control's focus to the window's
+        # default one, and that overrode the dialog's own SetFocus (QA Kodi, window 1163)
+        self.assertNotIn('allowhiddenfocus', rows)
+        self.assertIn('<animation effect="slide" end="3000,0" time="0" condition="![String.IsEqual(Window(home).Property(povil.rows.step),source)]">', rows)
 
     def test_the_choice_dialog_sets_what_the_wizard_would(self):
         choice = (SKIN / 'xml/Custom_POVILChoice.xml').read_text(encoding='utf-8')
@@ -244,3 +254,174 @@ class StandaloneTests(unittest.TestCase):
         for label in ('הוויזארד', 'החלפת סקין', 'סנכרון בין מכשירים', 'פרופילים', '$VAR[POVIL_TrailersTile]', 'תזמון טריילרים'):
             with self.subTest(label):
                 self.assertRegex(tile(label), r'<visible>[^<]*%s' % re.escape(wiz))
+
+
+class HomeOrderTests(unittest.TestCase):
+    """Onyx 1.0.26 / Wizard 0.5.27: the order of a screen's rows ("סדר השורות"). A viewer, via the owner, Nov 2026: "I can
+    add a row now, but I cannot change the order"; "in the original Onyx it exists". QA Kodi, on the screen: the films
+    screen with "טרנדיים השבוע" first and "פופולריים עכשיו" second (a row of wide pictures where a row of posters
+    stood), the Wizard's list (up, down, hidden, shown, the build's order again) and the skin's own window 1163."""
+
+    def test_every_row_of_these_screens_is_a_slot_that_shows_the_build_s_row_until_the_viewer_orders(self):
+        H = gen_home()
+        includes = (SKIN / 'xml/Includes_POVIL_Home.xml').read_text(encoding='utf-8')
+        for ti, tab in enumerate(H.TABS):
+            if tab['id'] not in ('movies', 'tv', 'kids', 'favourites'):
+                self.assertFalse(H.slot_tab(tab))
+                continue
+            for k in range(len(tab['rows'])):
+                rid = H.row_id(ti, k)
+                with self.subTest(tab=tab['id'], k=k):
+                    own = '<expression name="POVIL_Shows_%d_%d">[!Skin.HasSetting(POVILOrdered_%s) | String.IsEqual(Skin.String(POVILSlot_%s_%d),%d)]</expression>' % (
+                        rid, k, tab['id'], tab['id'], k, k)
+                    self.assertIn(own, includes, 'no order set: the build\'s row k')
+                    for i in range(len(tab['rows'])):
+                        if i != k:
+                            self.assertIn('<expression name="POVIL_Shows_%d_%d">[Skin.HasSetting(POVILOrdered_%s) + String.IsEqual(Skin.String(POVILSlot_%s_%d),%d)]</expression>'
+                                          % (rid, i, tab['id'], tab['id'], k, i), includes)
+                    title = variable('POVIL_SlotTitle_%d' % rid)
+                    self.assertEqual(title.count('<value condition="$EXP[POVIL_Shows_%d_' % rid), len(tab['rows']))
+
+    def test_a_screen_whose_order_is_fixed_is_drawn_as_before(self):
+        # the Israeli screen: no slot, no expression, its addresses as they were
+        block = variable('POVIL_Path_5031')
+        self.assertNotIn('$EXP', block)
+        self.assertNotIn('POVIL_SlotTitle_5031', (SKIN / 'xml/Includes_POVIL_Home.xml').read_text(encoding='utf-8'))
+
+    def test_slots_are_one_height_ask_nothing_again_on_a_playback_and_draw_the_kind_they_show(self):
+        H = gen_home()
+        home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')
+        ti = [t['id'] for t in H.TABS].index('movies')
+        tab = H.TABS[ti]
+        self.assertEqual(H.slot_block(tab), 402, 'the tallest row\'s height (posters)')
+        for k in range(len(tab['rows'])):
+            rid = H.row_id(ti, k)
+            part = home.split('<control type="list" id="%d">' % rid)[1].split('</content>')[0]
+            self.assertIn('<content target="videos" sortby="size">$VAR[POVIL_Path_%d]</content' % rid, part + '</content')
+            # the movies screen's rows are posters and wide pictures: a layout for each, while it is the kind shown
+            self.assertIn('<include content="POVIL_SlotItem_poster"><param name="id" value="%d" /><param name="when" value="$EXP[POVIL_SlotKind_%d_poster]" /></include>' % (rid, rid), part)
+            self.assertIn('<include content="POVIL_SlotItem_landscape"><param name="id" value="%d" /><param name="when" value="$EXP[POVIL_SlotKind_%d_landscape]" /></include>' % (rid, rid), part)
+        includes = (SKIN / 'xml/Includes_POVIL_Home.xml').read_text(encoding='utf-8')
+        for kind in ('poster', 'landscape', 'square'):
+            block = includes.split('<include name="POVIL_SlotItem_%s">' % kind)[1].split('</include>')[0]
+            self.assertIn('<param name="when" />', block)
+            self.assertIn('<itemlayout width=', block)
+            self.assertIn('condition="$PARAM[when]"', block)
+
+    def test_the_tile_asks_the_wizard_only_when_it_has_the_order(self):
+        home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')
+        tile = home.split('<label>סדר השורות</label>')[1].split('</item>')[0]
+        able = 'String.Contains(Window(home).Property(povil.wizard.modes),home_rows)'
+        self.assertIn('<onclick condition="%s">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=home_rows)</onclick>' % able, tile)
+        self.assertIn('<onclick condition="!%s">ActivateWindow(1163)</onclick>' % able, tile)
+        router = (WIZARD / 'resources/libs/common/router.py').read_text(encoding='utf-8')
+        self.assertRegex(router, r"mode == 'home_rows':\s*\n(\s*#[^\n]*\n)?\s*from resources\.libs import home_rows\s*\n\s*home_rows\.choose\(\)")
+
+    def test_the_skin_s_own_order_window_swaps_rows_and_writes_the_build_s_order_first(self):
+        order = (SKIN / 'xml/Custom_POVILOrder.xml').read_text(encoding='utf-8')
+        self.assertIn('<window type="dialog" id="1163">', order)
+        self.assertNotIn('allowhiddenfocus', order)
+        # the films screen's place 1 (slot 0) choosing "טרנדיים השבוע" (row 1)
+        button = order.split('<control type="button" id="9602">')[1].split('</control>')[0]
+        self.assertIn('<onclick condition="!Skin.HasSetting(POVILOrdered_movies)">Skin.SetString(POVILSlot_movies_0,0)</onclick>', button)
+        self.assertIn('<onclick>Skin.SetBool(POVILOrdered_movies)</onclick>', button)
+        # not arranged yet: row 1 stands in place 1 -- it takes the row of the place chosen; arranged: wherever it is
+        self.assertIn('<onclick condition="!Skin.HasSetting(POVILOrdered_movies) + !String.IsEqual(Window(home).Property(povil.order.slot),1)">'
+                      'Skin.SetString(POVILSlot_movies_1,$INFO[Window(home).Property(povil.order.was)])</onclick>', button)
+        self.assertIn('Skin.HasSetting(POVILOrdered_movies) + String.IsEqual(Skin.String(POVILSlot_movies_3),1)', button)
+        self.assertTrue(button.index('Skin.SetBool(POVILOrdered_movies)') < button.index('Skin.SetString(POVILSlot_movies_$INFO['))
+        self.assertIn('<onclick>Skin.SetString(POVILSlot_movies_$INFO[Window(home).Property(povil.order.slot)],1)</onclick>', button)
+        place = order.split('<control type="button" id="9401">')[1].split('</control>')[0]
+        self.assertIn('<onclick condition="!Skin.HasSetting(POVILOrdered_movies)">SetProperty(povil.order.was,0,home)</onclick>', place)
+        self.assertIn('<onclick condition="Skin.HasSetting(POVILOrdered_movies)">SetProperty(povil.order.was,$INFO[Skin.String(POVILSlot_movies_0)],home)</onclick>', place)
+
+    def test_the_rows_file_the_wizard_reads_is_the_skin_s(self):
+        import json
+        H = gen_home()
+        data = json.loads((SKIN / 'extras/povil_rows.json').read_text(encoding='utf-8'))
+        self.assertEqual([t['id'] for t in data['tabs']], ['movies', 'tv', 'kids', 'favourites'])
+        for tab in data['tabs']:
+            built = next(t for t in H.TABS if t['id'] == tab['id'])
+            self.assertEqual(len(tab['rows']), len(built['rows']))
+            self.assertEqual([r['custom'] for r in tab['rows'] if r['custom']], ['%s_%d' % (tab['id'], n) for n in (1, 2, 3)])
+
+
+class WizardOrderTests(unittest.TestCase):
+    def module(self):
+        spec = importlib.util.spec_from_file_location('povil_home_rows_under_test', WIZARD / 'resources/libs/home_rows.py')
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_order_read_written_moved(self):
+        M = self.module()
+        self.assertEqual(M.current_order('movies', 6, False, lambda key: ''), [0, 1, 2, 3, 4, 5])
+        stored = {'POVILSlot_movies_0': '2', 'POVILSlot_movies_1': '0', 'POVILSlot_movies_2': '9', 'POVILSlot_movies_3': '0'}
+        self.assertEqual(M.current_order('movies', 6, True, lambda key: stored.get(key, '')), [2, 0], 'unknown and repeated rows left out')
+        done = []
+        M.write_order('movies', 4, [1, 0], done.append)
+        self.assertEqual(done, ['Skin.SetBool(POVILOrdered_movies)', 'Skin.SetString(POVILSlot_movies_0,1)', 'Skin.SetString(POVILSlot_movies_1,0)',
+                                'Skin.Reset(POVILSlot_movies_2)', 'Skin.Reset(POVILSlot_movies_3)'])
+        self.assertEqual(M.move([0, 1, 2], 1, -1), [1, 0, 2])
+        self.assertEqual(M.move([0, 1, 2], 0, -1), [0, 1, 2])
+        self.assertEqual(M.move([0, 1, 2], 2, +1), [0, 1, 2])
+        done = []
+        M.reset('tv', 2, done.append)
+        self.assertEqual(done, ['Skin.Reset(POVILOrdered_tv)', 'Skin.Reset(POVILSlot_tv_0)', 'Skin.Reset(POVILSlot_tv_1)'])
+
+    def test_a_new_own_row_joins_an_ordered_screen_and_a_deleted_one_leaves_it(self):
+        M = self.module()
+        rows_file = str(SKIN / 'extras/povil_rows.json')
+        stored = {'POVILSlot_movies_0': '1', 'POVILSlot_movies_1': '0'}
+        done = []
+        visible = lambda cond: cond == 'Skin.HasSetting(POVILOrdered_movies)'
+        read = lambda label: stored.get(label[len('Skin.String('):-1], '')
+        self.assertTrue(M.place_custom('movies', 'movies_2', read, visible, done.append, path=rows_file))
+        self.assertIn('Skin.SetString(POVILSlot_movies_2,4)', done, 'its place in the screen\'s list, after the others')
+        self.assertFalse(M.place_custom('movies', 'movies_2', read, lambda cond: False, [].append, path=rows_file), 'the build\'s order: nothing to do')
+        stored['POVILSlot_movies_2'] = '4'
+        done = []
+        self.assertTrue(M.drop_custom('movies', 'movies_2', visible, read, done.append, path=rows_file))
+        self.assertIn('Skin.Reset(POVILSlot_movies_2)', done)
+
+
+class PlayTokenTests(unittest.TestCase):
+    """The slots ask nothing again at a playback (sortby size); a row that changes after a film carries the time the last
+    film or episode ended, so it is read again then -- never for a trailer. QA Kodi: a local clip played and stopped set
+    povil.play.t 3 s later; a home trailer playing and stopping left it as it was."""
+
+    def test_rows_that_follow_playback_carry_the_token_on_slot_screens_only(self):
+        H = gen_home()
+        # the slot screens' addresses (the continue tab's own rows are checked below)
+        includes = ''.join(variable('POVIL_Path_%d' % H.row_id(ti, k)) for ti, tab in enumerate(H.TABS) if H.slot_tab(tab)
+                           for k in range(len(tab['rows'])))
+        token = H.PLAY_TOKEN.replace('&', '&amp;')
+        for needle in ('action=in_progress_movies', 'mode=build_next_episode', 'action=favorites_movies', 'action=mdblist_my_tvshows'):
+            values = [v for v in re.findall(r'>(plugin://plugin\.video\.pov/[^<]*)</value>', includes) if needle in v]
+            self.assertTrue(values and all(token in v for v in values), needle)
+        for needle in ('action=tmdb_movies_popular', 'action=trakt_tv_trending'):
+            values = [v for v in re.findall(r'>(plugin://plugin\.video\.pov/[^<]*)</value>', includes) if needle in v]
+            self.assertTrue(values and not any(token in v for v in values), needle)
+        # the continue tab is not a slot screen: its rows follow every playback as before, no token
+        block = variable('POVIL_Path_5102')
+        self.assertNotIn('povil_p=', block)
+        # a POV row of the viewer's own carries it too
+        self.assertIn('String.StartsWith(Skin.String(POVILRow_movies_1_path),plugin://plugin.video.pov/)', variable('POVIL_Path_5014'))
+
+    def test_the_timers_note_a_film_s_end_and_never_a_trailer_s(self):
+        timers = (SKIN / 'xml/Timers.xml').read_text(encoding='utf-8')
+        seen = timers.split('<name>povil_play_seen</name>')[1].split('</timer>')[0]
+        self.assertIn('Player.HasVideo + String.IsEmpty(Window(home).Property(povil.tr.on))', seen)
+        done = timers.split('<name>povil_play_done</name>')[1].split('</timer>')[0]
+        self.assertIn('!Player.HasMedia + !String.IsEmpty(Window(home).Property(povil.play.on))', done)
+        self.assertIn('Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_play_done),3)', done)
+        self.assertIn('SetProperty(povil.play.t,$INFO[System.Time(hh:mm:ss)],home)', done)
+
+    def test_the_prebuilder_reads_the_rows_with_the_token_empty(self):
+        spec = importlib.util.spec_from_file_location('snapshot_under_test_play', WIZARD / 'resources/libs/patches/pov_list_snapshot.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.PLAY_TOKEN, '$INFO[Window(home).Property(povil.play.t)]')
+        targets = module.skin_targets(str(SKIN))
+        self.assertTrue([t for t in targets if 'action=in_progress_movies' in t and t.endswith('povil_p=')])
+        self.assertFalse([t for t in targets if '$' in t])

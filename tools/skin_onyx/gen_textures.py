@@ -80,6 +80,13 @@ def gradient(w, h, stops, axis):
     return img
 
 
+# The shades over the backdrop are dimmed, not black, at the screen's edges (Onyx 1.0.26). The owner and a viewer, Nov 2026,
+# on OLED TVs: "the skin does not reach the edge of the TV" -- the right side, behind the hero's text, was 96% black
+# and the vignette added 43% over it: an OLED shows that as a black frame. Now the picture reaches every edge, dimmed
+# enough behind the text to read it.
+VIGNETTE = 0.25          # (0.55 until 1.0.25)
+
+
 def vignette(w, h):
     img = Image.new('L', (w, h), 0)
     px = img.load()
@@ -87,7 +94,7 @@ def vignette(w, h):
         for x in range(w):
             dx = (x - w / 2) / (w / 2); dy = (y - h / 2) / (h / 2)
             d = min(1.0, math.sqrt(dx * dx * 0.8 + dy * dy * 1.1))
-            px[x, y] = int(255 * 0.55 * (d ** 2.2))
+            px[x, y] = int(255 * VIGNETTE * (d ** 2.2))
     out = Image.new('RGBA', (w, h), (0, 0, 0, 0)); out.putalpha(img)
     return out
 
@@ -101,9 +108,9 @@ save(ring(120, 120, 24, 4), 'focus_ring.png')                  # 9-slice (border
 save(ring(120, 120, 24, 2), 'focus_ring_thin.png')
 save(glow(120, 120, 24, 36, 0.9), 'focus_glow.png')            # 9-slice (border 66)
 save(shadow(120, 120, 24, 30, 0.85), 'shadow.png')             # 9-slice (border 60)
-save(gradient(1024, 8, [(0, 0), (0.30, 40), (0.62, 200), (1, 245)], 'x'), 'grad_right.png')   # dark on the right (RTL text)
-save(gradient(8, 1024, [(0, 0), (0.38, 60), (0.70, 215), (1, 250)], 'y'), 'grad_bottom.png')
-save(gradient(8, 512, [(0, 200), (0.55, 60), (1, 0)], 'y'), 'grad_top.png')
+save(gradient(1024, 8, [(0, 0), (0.30, 30), (0.60, 150), (0.84, 182), (1, 115)], 'x'), 'grad_right.png')   # dark behind the RTL text, lighter at the edge (was 245 there)
+save(gradient(8, 1024, [(0, 0), (0.38, 60), (0.70, 195), (1, 205)], 'y'), 'grad_bottom.png')   # was 250 at the edge
+save(gradient(8, 512, [(0, 150), (0.55, 50), (1, 0)], 'y'), 'grad_top.png')                     # was 200 at the edge
 save(gradient(8, 512, [(0, 0), (1, 255)], 'y'), 'grad_simple.png')
 save(vignette(480, 270), 'vignette.png')
 w = Image.new('RGBA', (8, 8), (255, 255, 255, 255)); save(w, 'white.png')

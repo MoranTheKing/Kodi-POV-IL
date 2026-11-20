@@ -391,6 +391,19 @@
 		<stop>true</stop>
 	</timer>
 	<timer>
+		<name>povil_play_seen</name>
+		<start reset="true">Player.HasVideo + String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEmpty(Window(home).Property(povil.play.on))</start>
+		<onstart>SetProperty(povil.play.on,1,home)</onstart>
+		<stop>true</stop>
+	</timer>
+	<timer>
+		<name>povil_play_done</name>
+		<start reset="true">!Player.HasMedia + !String.IsEmpty(Window(home).Property(povil.play.on))</start>
+		<stop>Player.HasMedia | Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_play_done),3)</stop>
+		<onstop condition="!Player.HasMedia">ClearProperty(povil.play.on,home)</onstop>
+		<onstop condition="!Player.HasMedia">SetProperty(povil.play.t,$INFO[System.Time(hh:mm:ss)],home)</onstop>
+	</timer>
+	<timer>
 		<name>povil_trailer_opening</name>
 		<start reset="true">!String.IsEmpty(Window(home).Property(povil.tr.opening))</start>
 		<stop>String.IsEmpty(Window(home).Property(povil.tr.opening))</stop>
@@ -447,31 +460,87 @@
 	</timer>
 	<timer>
 		<name>povil_retry_5011</name>
-		<start reset="true">String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.movies)) + !Integer.IsGreater(Container(5011).NumItems,0) + !Container(5011).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5011),2)</start>
+		<start reset="true">[$EXP[POVIL_Shows_5011_0] | $EXP[POVIL_Shows_5011_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.movies)) + !Integer.IsGreater(Container(5011).NumItems,0) + !Container(5011).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5011),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5011),3) | Integer.IsGreater(Container(5011).NumItems,0) | Container(5011).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5011).NumItems,0) + !Container(5011).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5011),1)">SetProperty(povil.retry.5011,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5011).NumItems,0) + !Container(5011).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5011))">SetProperty(povil.retry.5011,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5012</name>
-		<start reset="true">String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5012).NumItems,0) + !Container(5012).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5012),2)</start>
+		<start reset="true">[$EXP[POVIL_Shows_5012_0] | $EXP[POVIL_Shows_5012_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5012).NumItems,0) + !Container(5012).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5012),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5012),3) | Integer.IsGreater(Container(5012).NumItems,0) | Container(5012).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5012).NumItems,0) + !Container(5012).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5012),1)">SetProperty(povil.retry.5012,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5012).NumItems,0) + !Container(5012).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5012))">SetProperty(povil.retry.5012,1,home)</onstop>
 	</timer>
 	<timer>
+		<name>povil_retry_5013</name>
+		<start reset="true">[$EXP[POVIL_Shows_5013_0] | $EXP[POVIL_Shows_5013_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5013).NumItems,0) + !Container(5013).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5013),2)</start>
+		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5013),3) | Integer.IsGreater(Container(5013).NumItems,0) | Container(5013).IsUpdating</stop>
+		<onstop condition="!Integer.IsGreater(Container(5013).NumItems,0) + !Container(5013).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5013),1)">SetProperty(povil.retry.5013,2,home)</onstop>
+		<onstop condition="!Integer.IsGreater(Container(5013).NumItems,0) + !Container(5013).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5013))">SetProperty(povil.retry.5013,1,home)</onstop>
+	</timer>
+	<timer>
+		<name>povil_retry_5014</name>
+		<start reset="true">[$EXP[POVIL_Shows_5014_0] | $EXP[POVIL_Shows_5014_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5014).NumItems,0) + !Container(5014).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5014),2)</start>
+		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5014),3) | Integer.IsGreater(Container(5014).NumItems,0) | Container(5014).IsUpdating</stop>
+		<onstop condition="!Integer.IsGreater(Container(5014).NumItems,0) + !Container(5014).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5014),1)">SetProperty(povil.retry.5014,2,home)</onstop>
+		<onstop condition="!Integer.IsGreater(Container(5014).NumItems,0) + !Container(5014).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5014))">SetProperty(povil.retry.5014,1,home)</onstop>
+	</timer>
+	<timer>
+		<name>povil_retry_5015</name>
+		<start reset="true">[$EXP[POVIL_Shows_5015_0] | $EXP[POVIL_Shows_5015_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5015).NumItems,0) + !Container(5015).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5015),2)</start>
+		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5015),3) | Integer.IsGreater(Container(5015).NumItems,0) | Container(5015).IsUpdating</stop>
+		<onstop condition="!Integer.IsGreater(Container(5015).NumItems,0) + !Container(5015).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5015),1)">SetProperty(povil.retry.5015,2,home)</onstop>
+		<onstop condition="!Integer.IsGreater(Container(5015).NumItems,0) + !Container(5015).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5015))">SetProperty(povil.retry.5015,1,home)</onstop>
+	</timer>
+	<timer>
+		<name>povil_retry_5016</name>
+		<start reset="true">[$EXP[POVIL_Shows_5016_0] | $EXP[POVIL_Shows_5016_1]] + String.IsEqual(Window(home).Property(povil.tab),movies) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + !Integer.IsGreater(Container(5016).NumItems,0) + !Container(5016).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5016),2)</start>
+		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5016),3) | Integer.IsGreater(Container(5016).NumItems,0) | Container(5016).IsUpdating</stop>
+		<onstop condition="!Integer.IsGreater(Container(5016).NumItems,0) + !Container(5016).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5016),1)">SetProperty(povil.retry.5016,2,home)</onstop>
+		<onstop condition="!Integer.IsGreater(Container(5016).NumItems,0) + !Container(5016).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5016))">SetProperty(povil.retry.5016,1,home)</onstop>
+	</timer>
+	<timer>
 		<name>povil_retry_5021</name>
-		<start reset="true">String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.tv)) + !Integer.IsGreater(Container(5021).NumItems,0) + !Container(5021).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5021),2)</start>
+		<start reset="true">[$EXP[POVIL_Shows_5021_0] | $EXP[POVIL_Shows_5021_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.tv)) + !Integer.IsGreater(Container(5021).NumItems,0) + !Container(5021).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5021),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5021),3) | Integer.IsGreater(Container(5021).NumItems,0) | Container(5021).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5021).NumItems,0) + !Container(5021).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5021),1)">SetProperty(povil.retry.5021,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5021).NumItems,0) + !Container(5021).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5021))">SetProperty(povil.retry.5021,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5022</name>
-		<start reset="true">String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5022).NumItems,0) + !Container(5022).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5022),2)</start>
+		<start reset="true">[$EXP[POVIL_Shows_5022_0] | $EXP[POVIL_Shows_5022_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5022).NumItems,0) + !Container(5022).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5022),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5022),3) | Integer.IsGreater(Container(5022).NumItems,0) | Container(5022).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5022).NumItems,0) + !Container(5022).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5022),1)">SetProperty(povil.retry.5022,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5022).NumItems,0) + !Container(5022).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5022))">SetProperty(povil.retry.5022,1,home)</onstop>
+	</timer>
+	<timer>
+		<name>povil_retry_5023</name>
+		<start reset="true">[$EXP[POVIL_Shows_5023_0] | $EXP[POVIL_Shows_5023_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5023).NumItems,0) + !Container(5023).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5023),2)</start>
+		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5023),3) | Integer.IsGreater(Container(5023).NumItems,0) | Container(5023).IsUpdating</stop>
+		<onstop condition="!Integer.IsGreater(Container(5023).NumItems,0) + !Container(5023).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5023),1)">SetProperty(povil.retry.5023,2,home)</onstop>
+		<onstop condition="!Integer.IsGreater(Container(5023).NumItems,0) + !Container(5023).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5023))">SetProperty(povil.retry.5023,1,home)</onstop>
+	</timer>
+	<timer>
+		<name>povil_retry_5024</name>
+		<start reset="true">[$EXP[POVIL_Shows_5024_0] | $EXP[POVIL_Shows_5024_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5024).NumItems,0) + !Container(5024).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5024),2)</start>
+		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5024),3) | Integer.IsGreater(Container(5024).NumItems,0) | Container(5024).IsUpdating</stop>
+		<onstop condition="!Integer.IsGreater(Container(5024).NumItems,0) + !Container(5024).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5024),1)">SetProperty(povil.retry.5024,2,home)</onstop>
+		<onstop condition="!Integer.IsGreater(Container(5024).NumItems,0) + !Container(5024).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5024))">SetProperty(povil.retry.5024,1,home)</onstop>
+	</timer>
+	<timer>
+		<name>povil_retry_5025</name>
+		<start reset="true">[$EXP[POVIL_Shows_5025_0] | $EXP[POVIL_Shows_5025_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5025).NumItems,0) + !Container(5025).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5025),2)</start>
+		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5025),3) | Integer.IsGreater(Container(5025).NumItems,0) | Container(5025).IsUpdating</stop>
+		<onstop condition="!Integer.IsGreater(Container(5025).NumItems,0) + !Container(5025).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5025),1)">SetProperty(povil.retry.5025,2,home)</onstop>
+		<onstop condition="!Integer.IsGreater(Container(5025).NumItems,0) + !Container(5025).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5025))">SetProperty(povil.retry.5025,1,home)</onstop>
+	</timer>
+	<timer>
+		<name>povil_retry_5026</name>
+		<start reset="true">[$EXP[POVIL_Shows_5026_0] | $EXP[POVIL_Shows_5026_1]] + String.IsEqual(Window(home).Property(povil.tab),tv) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + !Integer.IsGreater(Container(5026).NumItems,0) + !Container(5026).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5026),2)</start>
+		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5026),3) | Integer.IsGreater(Container(5026).NumItems,0) | Container(5026).IsUpdating</stop>
+		<onstop condition="!Integer.IsGreater(Container(5026).NumItems,0) + !Container(5026).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5026),1)">SetProperty(povil.retry.5026,2,home)</onstop>
+		<onstop condition="!Integer.IsGreater(Container(5026).NumItems,0) + !Container(5026).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5026))">SetProperty(povil.retry.5026,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5031</name>
@@ -510,24 +579,45 @@
 	</timer>
 	<timer>
 		<name>povil_retry_5051</name>
-		<start reset="true">String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.kids)) + !Integer.IsGreater(Container(5051).NumItems,0) + !Container(5051).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5051),2)</start>
+		<start reset="true">[$EXP[POVIL_Shows_5051_0] | $EXP[POVIL_Shows_5051_1] | $EXP[POVIL_Shows_5051_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.tab.kids)) + !Integer.IsGreater(Container(5051).NumItems,0) + !Container(5051).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5051),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5051),3) | Integer.IsGreater(Container(5051).NumItems,0) | Container(5051).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5051).NumItems,0) + !Container(5051).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5051),1)">SetProperty(povil.retry.5051,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5051).NumItems,0) + !Container(5051).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5051))">SetProperty(povil.retry.5051,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5052</name>
-		<start reset="true">String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5052).NumItems,0) + !Container(5052).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5052),2)</start>
+		<start reset="true">[$EXP[POVIL_Shows_5052_0] | $EXP[POVIL_Shows_5052_1] | $EXP[POVIL_Shows_5052_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5052).NumItems,0) + !Container(5052).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5052),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5052),3) | Integer.IsGreater(Container(5052).NumItems,0) | Container(5052).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5052).NumItems,0) + !Container(5052).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5052),1)">SetProperty(povil.retry.5052,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5052).NumItems,0) + !Container(5052).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5052))">SetProperty(povil.retry.5052,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5053</name>
-		<start reset="true">String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5053).NumItems,0) + !Container(5053).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5053),2)</start>
+		<start reset="true">[$EXP[POVIL_Shows_5053_0] | $EXP[POVIL_Shows_5053_1] | $EXP[POVIL_Shows_5053_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5053).NumItems,0) + !Container(5053).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5053),2)</start>
 		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5053),3) | Integer.IsGreater(Container(5053).NumItems,0) | Container(5053).IsUpdating</stop>
 		<onstop condition="!Integer.IsGreater(Container(5053).NumItems,0) + !Container(5053).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5053),1)">SetProperty(povil.retry.5053,2,home)</onstop>
 		<onstop condition="!Integer.IsGreater(Container(5053).NumItems,0) + !Container(5053).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5053))">SetProperty(povil.retry.5053,1,home)</onstop>
+	</timer>
+	<timer>
+		<name>povil_retry_5054</name>
+		<start reset="true">[$EXP[POVIL_Shows_5054_0] | $EXP[POVIL_Shows_5054_1] | $EXP[POVIL_Shows_5054_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5054).NumItems,0) + !Container(5054).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5054),2)</start>
+		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5054),3) | Integer.IsGreater(Container(5054).NumItems,0) | Container(5054).IsUpdating</stop>
+		<onstop condition="!Integer.IsGreater(Container(5054).NumItems,0) + !Container(5054).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5054),1)">SetProperty(povil.retry.5054,2,home)</onstop>
+		<onstop condition="!Integer.IsGreater(Container(5054).NumItems,0) + !Container(5054).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5054))">SetProperty(povil.retry.5054,1,home)</onstop>
+	</timer>
+	<timer>
+		<name>povil_retry_5055</name>
+		<start reset="true">[$EXP[POVIL_Shows_5055_0] | $EXP[POVIL_Shows_5055_1] | $EXP[POVIL_Shows_5055_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5055).NumItems,0) + !Container(5055).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5055),2)</start>
+		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5055),3) | Integer.IsGreater(Container(5055).NumItems,0) | Container(5055).IsUpdating</stop>
+		<onstop condition="!Integer.IsGreater(Container(5055).NumItems,0) + !Container(5055).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5055),1)">SetProperty(povil.retry.5055,2,home)</onstop>
+		<onstop condition="!Integer.IsGreater(Container(5055).NumItems,0) + !Container(5055).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5055))">SetProperty(povil.retry.5055,1,home)</onstop>
+	</timer>
+	<timer>
+		<name>povil_retry_5056</name>
+		<start reset="true">[$EXP[POVIL_Shows_5056_0] | $EXP[POVIL_Shows_5056_1] | $EXP[POVIL_Shows_5056_2]] + String.IsEqual(Window(home).Property(povil.tab),kids) + Window.IsActive(home) + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + !Integer.IsGreater(Container(5056).NumItems,0) + !Container(5056).IsUpdating + !String.IsEqual(Window(home).Property(povil.retry.5056),2)</start>
+		<stop>Integer.IsGreaterOrEqual(Skin.TimerElapsed(povil_retry_5056),3) | Integer.IsGreater(Container(5056).NumItems,0) | Container(5056).IsUpdating</stop>
+		<onstop condition="!Integer.IsGreater(Container(5056).NumItems,0) + !Container(5056).IsUpdating + String.IsEqual(Window(home).Property(povil.retry.5056),1)">SetProperty(povil.retry.5056,2,home)</onstop>
+		<onstop condition="!Integer.IsGreater(Container(5056).NumItems,0) + !Container(5056).IsUpdating + String.IsEmpty(Window(home).Property(povil.retry.5056))">SetProperty(povil.retry.5056,1,home)</onstop>
 	</timer>
 	<timer>
 		<name>povil_retry_5091</name>
