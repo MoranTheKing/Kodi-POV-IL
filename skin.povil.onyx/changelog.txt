@@ -1,3 +1,6 @@
+[B]Kodi POV IL - Onyx 1.0.32[/B]
+- The home's trailers on Onyx without the Wizard (the owner, Nov 2026: "whoever downloads only the Onyx skin -- the trailers won't work for him?"): the skin only asked for a trailer, the Wizard played it. Onyx now carries the Wizard's own trailer desk (its subtitles and the timing tile too) and starts it while the Wizard is not installed; once the Wizard is, its own desk plays them. Needs the YouTube add-on, as before.
+
 [B]Kodi POV IL - Onyx 1.0.31[/B]
 - Back over a trailer (a viewer, Nov 2026, on his phone: Back on the full-screen trailer of a series' seasons "went to a screen that has nothing to do with it ... it should come back to the title, and not play the trailer again"): while the trailer has the screen to itself, Back only brings the screen back -- the title still in focus, the trailer playing on. On the home, Kodi itself turns Back into its full-screen player whenever something plays; the skin now leaves that player at once when it is the trailer's, the trailer is not stopped and started again, and on a service's page Back still goes to the tabs (unless the trailer had the screen to itself).
 

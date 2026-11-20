@@ -15,6 +15,7 @@
 	<onload condition="String.IsEmpty(Window(home).Property(povil.tab.movies))">SetProperty(povil.tab.movies,1,home)</onload>
 	<backgroundcolor>FF000000</backgroundcolor>
 	<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/profile_bootstrap.py)</onload>
+	<onload condition="!System.HasAddon(plugin.program.kodipovilwizard) + System.HasAddon(plugin.video.youtube) + String.IsEmpty(Window(home).Property(povil.tr.desk))">RunScript(special://skin/scripts/povil_trailers.py)</onload>
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetBool(ShowClock)</onload>
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetString(shutdown,quit)</onload>
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetBool(LibUpdateOff)</onload>
@@ -5185,15 +5186,16 @@
 								<label>תזמון טריילרים</label>
 								<property name="povil_rtl">1</property>
 								<icon>DefaultAddonVideo.png</icon>
-								<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=trailer_timing)</onclick>
-								<visible>System.HasAddon(plugin.video.youtube) + System.HasAddon(plugin.program.kodipovilwizard) + !Skin.HasSetting(POVILNoTrailers)</visible>
+								<onclick condition="System.HasAddon(plugin.program.kodipovilwizard)">RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=trailer_timing)</onclick>
+								<onclick condition="!System.HasAddon(plugin.program.kodipovilwizard)">RunScript(special://skin/scripts/povil_menu_editor.py,trailer_timing)</onclick>
+								<visible>System.HasAddon(plugin.video.youtube) + !Skin.HasSetting(POVILNoTrailers)</visible>
 							</item>
 							<item>
 								<label>$VAR[POVIL_TrailersTile]</label>
 								<property name="povil_rtl">1</property>
 								<icon>DefaultAddonVideo.png</icon>
 								<onclick>Skin.ToggleSetting(POVILNoTrailers)</onclick>
-								<visible>System.HasAddon(plugin.video.youtube) + System.HasAddon(plugin.program.kodipovilwizard)</visible>
+								<visible>System.HasAddon(plugin.video.youtube)</visible>
 							</item>
 							<item>
 								<label>$VAR[POVIL_WatchedTile]</label>
