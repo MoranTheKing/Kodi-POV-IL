@@ -328,9 +328,14 @@ class StandaloneTests(unittest.TestCase):
                 self.assertIn('<onclick condition="!%s">SetProperty(povil.choice,%s,home)</onclick>' % (wiz, mode), part)
                 self.assertIn('<onclick condition="!%s">ActivateWindow(1161)</onclick>' % wiz, part)
         # what only the Wizard does shows only with it
-        for label in ('הוויזארד', 'החלפת סקין', 'סנכרון בין מכשירים', 'פרופילים', '$VAR[POVIL_TrailersTile]', 'תזמון טריילרים'):
+        for label in ('הוויזארד', 'החלפת סקין', 'סנכרון בין מכשירים', 'פרופילים'):
             with self.subTest(label):
                 self.assertRegex(tile(label), r'<visible>[^<]*%s' % re.escape(wiz))
+        # the trailers' tiles show without it too: Onyx 1.0.32 plays the trailers itself (test_onyx_trailers_alone.py)
+        for label in ('$VAR[POVIL_TrailersTile]', 'תזמון טריילרים'):
+            with self.subTest(label):
+                self.assertNotRegex(tile(label), r'<visible>[^<]*%s' % re.escape(wiz))
+                self.assertRegex(tile(label), r'<visible>[^<]*System.HasAddon\(plugin.video.youtube\)')
 
 
 class HomeOrderTests(unittest.TestCase):

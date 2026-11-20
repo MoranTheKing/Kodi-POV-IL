@@ -9,6 +9,7 @@ never edited here.
     RunScript(special://skin/scripts/povil_menu_editor.py,rows)           its rows
     RunScript(special://skin/scripts/povil_menu_editor.py,custom_rows)    the viewer's own rows and shortcuts
     RunScript(special://skin/scripts/povil_menu_editor.py,home_rows)      the order of the rows
+    RunScript(special://skin/scripts/povil_menu_editor.py,trailer_timing) the trailers' timing (Onyx 1.0.32)
 """
 import sys
 
@@ -16,7 +17,10 @@ import xbmcvfs
 
 sys.path.insert(0, xbmcvfs.translatePath('special://skin/scripts/povil_menu'))
 PART = sys.argv[1] if len(sys.argv) > 1 else ''
-if PART == 'custom_rows':
+if PART == 'trailer_timing':
+    from resources.libs import trailer_timing
+    trailer_timing.choose()
+elif PART == 'custom_rows':
     from resources.libs import custom_rows
     custom_rows.choose()
 elif PART == 'home_rows':
