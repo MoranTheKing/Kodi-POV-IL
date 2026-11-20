@@ -208,6 +208,11 @@
 			<size>28</size>
 		</font>
 		<font>
+			<name>povil_trailer_sub</name>
+			<filename>Heebo-SemiBold.ttf</filename>
+			<size>46</size>
+		</font>
+		<font>
 			<name>Mono30</name>
 			<filename>Heebo-Regular.ttf</filename>
 			<size>28</size>
@@ -428,6 +433,12 @@
 			<name>povil_hero_meta_bold</name>
 			<filename>arial.ttf</filename>
 			<size>27</size>
+			<style>bold</style>
+		</font>
+		<font>
+			<name>povil_trailer_sub</name>
+			<filename>arial.ttf</filename>
+			<size>45</size>
 			<style>bold</style>
 		</font>
 		<font>

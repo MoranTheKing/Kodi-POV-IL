@@ -1040,6 +1040,18 @@ def playback_over():
     return True
 
 
+def _home_trailer(player):
+    """The build's home plays a title's trailer behind its hero (the Wizard's trailers.py names it in
+    Window(home).Property(povil.tr.file) before it starts): not a film to snapshot or to find subtitles for.
+    By the trailer's own address: a film that takes the player over from a running trailer is a film."""
+    try:
+        import xbmcgui
+        trailer = xbmcgui.Window(10000).getProperty('povil.tr.file')
+        return bool(trailer) and player.getPlayingFile() == trailer
+    except Exception:
+        return False
+
+
 if xbmc is not None:
     class AutoSubPlayer(xbmc.Player):
         def onAVStarted(self):
@@ -1048,13 +1060,8 @@ if xbmc is not None:
             # a search by a trailer's title ran for six seconds each time (QA Kodi, Nov 2026).
             # By the trailer's own address: a film that takes the player over from a running trailer
             # is a film, whichever add-on hears of it first.
-            try:
-                import xbmcgui
-                _trailer = xbmcgui.Window(10000).getProperty('povil.tr.file')
-                if _trailer and self.getPlayingFile() == _trailer:
-                    return
-            except Exception:
-                pass
+            if _home_trailer(self):
+                return
             # Always snapshot; auto-search only when the user asked for it.
             try:
                 threading.Thread(target=snapshot_on_play, daemon=True).start()
@@ -1098,9 +1105,11 @@ def start_if_enabled():
         return
     try:
         STATE['player'] = AutoSubPlayer()  # keep a ref alive
-        # If a video is already playing when the service starts, kick once.
+        # If a video is already playing when the service starts, kick once -- not for the home's trailer (the
+        # owner, Nov 2026: at Kodi's first start, the first trailer began before this service did, and the
+        # subtitles' overlay came up over it; the trailer check was in onAVStarted alone).
         try:
-            if xbmc.Player().isPlayingVideo():
+            if xbmc.Player().isPlayingVideo() and not _home_trailer(xbmc.Player()):
                 threading.Thread(target=snapshot_on_play, daemon=True).start()
                 if autosub:
                     threading.Thread(target=autosub_on_play,

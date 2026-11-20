@@ -123,6 +123,14 @@ TRAILER_ALONE = '%s + Skin.TimerIsRunning(povil_trailer_shown) + %s' % (TRAILER_
                     % (seconds, min(seconds, TRAILER_STILL_S))))
 TRAILER_FADE = ('<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="%s">Conditional</animation>'
                 % TRAILER_ALONE)
+# The trailer's Hebrew subtitles, DRAWN BY THE SKIN (Onyx 1.0.30): the Wizard (trailer_subs.py, 0.5.33) writes the line
+# of the moment into this property as the trailer plays. Kodi draws no subtitles over a video window when the video
+# is on a layer of its own -- Android's MediaCodec surface, the owner's devices: CGUIVideoControl::Render only clears
+# a hole there and never renders the overlays (Kodi 21's code); on a PC the picture and its subtitles are drawn
+# together, which is why the QA Kodi showed them. The owner, Nov 2026: "much of the trailer passed, and no Hebrew
+# subtitle appeared yet" -- his log had the subtitle loaded at once.
+TRAILER_LINE = 'Window(home).Property(povil.tsub.line)'
+TRAILER_HAS_LINES = 'Window(home).Property(povil.tsub.on)'     # the trailer playing has them (the shade)
 PLAYER_RATINGS_KEY, PLAYER_RATINGS_SLOT = 7920, 'povil.rtp.'
 
 
@@ -1817,6 +1825,7 @@ def backdrop(x, d):
     x(d + 1, '<animation effect="fade" start="0" end="100" time="600">Visible</animation>')
     x(d + 1, '<animation effect="fade" start="100" end="0" time="250">Hidden</animation>')
     x(d, '</control>')
+    trailer_lines(x, d)
     x(d, '<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
          '<label>$VAR[POVIL_HeroTrailer]</label></control>' % TRAILER_KEY)
     # a shade only 8 pixels across fades out over its last half pixel at both ends
@@ -1830,6 +1839,26 @@ def backdrop(x, d):
         x(d + 1, '<texture>%s</texture>' % tex)
         x(d + 1, TRAILER_FADE)          # the trailer to itself: no shade over it
         x(d, '</control>')
+
+
+def trailer_lines(x, d):
+    """The trailer's Hebrew subtitles (TRAILER_LINE), only while the trailer has the screen to itself: a soft shade
+    at the bottom, and the line over it -- white, a shadow, centred, two lines at most."""
+    shown = '%s + !String.IsEmpty(%s)' % (TRAILER_ALONE, TRAILER_LINE)
+    x(d, '<control type="image" description="trailer subtitles backdrop">')
+    x(d + 1, '<left>-320</left><top>700</top><width>2560</width><height>420</height>')
+    x(d + 1, '<texture colordiffuse="C0FFFFFF">povil/grad_bottom.png</texture>')
+    x(d + 1, '<visible>%s + !String.IsEmpty(%s)</visible>' % (TRAILER_ALONE, TRAILER_HAS_LINES))
+    x(d + 1, '<animation effect="fade" start="0" end="100" time="300">Visible</animation>')
+    x(d + 1, '<animation effect="fade" start="100" end="0" time="200">Hidden</animation>')
+    x(d, '</control>')
+    x(d, '<control type="label" description="trailer subtitles">')
+    x(d + 1, '<left>160</left><top>850</top><width>1600</width><height>180</height>')
+    x(d + 1, '<font>povil_trailer_sub</font><textcolor>FFFFFFFF</textcolor><shadowcolor>FF000000</shadowcolor>')
+    x(d + 1, '<align>center</align><aligny>bottom</aligny><wrapmultiline>true</wrapmultiline>')
+    x(d + 1, '<label>$INFO[%s]</label>' % TRAILER_LINE)
+    x(d + 1, '<visible>%s</visible>' % shown)
+    x(d, '</control>')
 
 
 def ambient(x, d):
