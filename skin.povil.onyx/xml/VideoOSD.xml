@@ -106,6 +106,7 @@
 				<onright condition="Player.PauseEnabled">7003</onright>
 				<onright condition="Player.SeekEnabled">7004</onright>
 				<onright condition="!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles">7024</onright>
+				<onright condition="VideoPlayer.Content(LiveTV) | String.Contains(Player.FolderPath,plugin.video.idanplus)">7027</onright>
 				<onright condition="VideoPlayer.Content(episodes) + !VideoPlayer.Content(LiveTV)">7020</onright>
 				<onright condition="[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + !String.Contains(Player.Folderpath,plugin.video.idanplus) + !String.Contains(Player.Folderpath,plugin.video.supertv) + !String.Contains(Player.Folderpath,plugin.video.flashstream)">7021</onright>
 				<onright>7022</onright>
@@ -154,6 +155,7 @@
 				<orientation>horizontal</orientation><align>center</align><itemgap>14</itemgap><usecontrolcoords>true</usecontrolcoords>
 				<onleft>7012</onleft>
 				<onright condition="!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles">7024</onright>
+				<onright condition="VideoPlayer.Content(LiveTV) | String.Contains(Player.FolderPath,plugin.video.idanplus)">7027</onright>
 				<onright condition="VideoPlayer.Content(episodes) + !VideoPlayer.Content(LiveTV)">7020</onright>
 				<onright condition="[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + !String.Contains(Player.Folderpath,plugin.video.idanplus) + !String.Contains(Player.Folderpath,plugin.video.supertv) + !String.Contains(Player.Folderpath,plugin.video.flashstream)">7021</onright>
 				<onright>7022</onright>
@@ -213,6 +215,18 @@
 					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
 					<onclick>RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
 					<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
+				</control>
+				<control type="button" id="7027">
+					<width>84</width><height>84</height><top>20</top>
+					<texturenofocus>povil/osd/channels_nf.png</texturenofocus>
+					<texturefocus>povil/osd/channels_fo.png</texturefocus>
+					<label></label>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
+					<onclick>Dialog.Close(VideoOSD,true)</onclick>
+					<onclick condition="VideoPlayer.Content(LiveTV)">ActivateWindow(PVROSDChannels)</onclick>
+					<onclick condition="!VideoPlayer.Content(LiveTV)">ActivateWindow(1164)</onclick>
+					<visible>VideoPlayer.Content(LiveTV) | String.Contains(Player.FolderPath,plugin.video.idanplus)</visible>
 				</control>
 				<control type="button" id="7020">
 					<width>84</width><height>84</height><top>20</top>
@@ -312,6 +326,7 @@
 			<control type="progress"><left>90</left><top>866</top><width>1740</width><height>8</height><info>Player.Progress</info><reveal>false</reveal><lefttexture></lefttexture><righttexture></righttexture><overlaytexture></overlaytexture><texturebg border="4" colordiffuse="00FFFFFF">povil/progress.png</texturebg><midtexture border="4" colordiffuse="FFD9B77E">povil/progress.png</midtexture></control>
 			<control type="grouplist" id="7101"><left>66</left><top>904</top><width>960</width><height>100</height><orientation>horizontal</orientation><align>left</align><itemgap>14</itemgap><usecontrolcoords>true</usecontrolcoords>
 				<onleft>noop</onleft>
+				<onright condition="Control.IsVisible(7126)">7126</onright>
 				<onright condition="Control.IsVisible(7120)">7120</onright>
 				<onright>7121</onright>
 				<onup>noop</onup><ondown>noop</ondown>
@@ -389,6 +404,17 @@
 				<onright>noop</onright>
 				<onup>noop</onup><ondown>noop</ondown>
 				<control type="image" id="7132"><width>10</width><height>100</height><texture></texture></control>
+				<control type="button" id="7126">
+					<width>84</width><height>84</height><top>8</top>
+					<texturenofocus>povil/osd/channels_nf.png</texturenofocus><texturefocus>povil/osd/channels_fo.png</texturefocus>
+					<label>רשימת ערוצים</label><font>povil_small</font><textcolor>00FFFFFF</textcolor><focusedcolor>00FFFFFF</focusedcolor>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
+					<onclick>Dialog.Close(VideoOSD,true)</onclick>
+					<onclick condition="VideoPlayer.Content(LiveTV)">ActivateWindow(PVROSDChannels)</onclick>
+					<onclick condition="!VideoPlayer.Content(LiveTV)">ActivateWindow(1164)</onclick>
+					<visible>VideoPlayer.Content(LiveTV) | String.Contains(Player.FolderPath,plugin.video.idanplus)</visible>
+				</control>
 				<control type="button" id="7120">
 					<width>84</width><height>84</height><top>8</top>
 					<texturenofocus>povil/osd/source_nf.png</texturenofocus><texturefocus>povil/osd/source_fo.png</texturefocus>
@@ -552,6 +578,17 @@
 					<onclick>Action(SubtitleDelay)</onclick>
 					<visible>VideoPlayer.SubtitlesEnabled</visible>
 				</control>
+				<control type="button" id="7163">
+					<width>64</width><height>64</height><top>8</top>
+					<texturenofocus>povil/osd/channels_nf.png</texturenofocus><texturefocus>povil/osd/channels_fo.png</texturefocus>
+					<label>רשימת ערוצים</label><font>povil_small</font><textcolor>00FFFFFF</textcolor><focusedcolor>00FFFFFF</focusedcolor>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
+					<onclick>Dialog.Close(VideoOSD,true)</onclick>
+					<onclick condition="VideoPlayer.Content(LiveTV)">ActivateWindow(PVROSDChannels)</onclick>
+					<onclick condition="!VideoPlayer.Content(LiveTV)">ActivateWindow(1164)</onclick>
+					<visible>VideoPlayer.Content(LiveTV) | String.Contains(Player.FolderPath,plugin.video.idanplus)</visible>
+				</control>
 				<control type="button" id="7159">
 					<width>64</width><height>64</height><top>8</top>
 					<texturenofocus>povil/osd/settings_nf.png</texturenofocus><texturefocus>povil/osd/settings_fo.png</texturefocus>
@@ -690,6 +727,7 @@
 			</control>
 			<control type="grouplist" id="7181"><left>68</left><top>936</top><width>1060</width><height>84</height><orientation>horizontal</orientation><align>left</align><itemgap>12</itemgap><usecontrolcoords>true</usecontrolcoords>
 				<onleft>noop</onleft>
+				<onright condition="Control.IsVisible(7215)">7215</onright>
 				<onright condition="Control.IsVisible(7210)">7210</onright>
 				<onright condition="Control.IsVisible(7211)">7211</onright>
 				<onright>7212</onright>
@@ -797,6 +835,17 @@
 				<onright>noop</onright>
 				<onup>noop</onup><ondown>noop</ondown>
 				<control type="image" id="7232"><width>10</width><height>84</height><texture></texture></control>
+				<control type="button" id="7215">
+					<width>68</width><height>68</height><top>8</top>
+					<texturenofocus>povil/osd/channels_nf.png</texturenofocus><texturefocus>povil/osd/channels_fo.png</texturefocus>
+					<label>רשימת ערוצים</label><font>povil_small</font><textcolor>00FFFFFF</textcolor><focusedcolor>00FFFFFF</focusedcolor>
+					<animation effect="zoom" start="100" end="112" center="auto" time="130" tween="cubic" easing="out">Focus</animation>
+					<animation effect="zoom" start="112" end="100" center="auto" time="130" tween="cubic" easing="out">Unfocus</animation>
+					<onclick>Dialog.Close(VideoOSD,true)</onclick>
+					<onclick condition="VideoPlayer.Content(LiveTV)">ActivateWindow(PVROSDChannels)</onclick>
+					<onclick condition="!VideoPlayer.Content(LiveTV)">ActivateWindow(1164)</onclick>
+					<visible>VideoPlayer.Content(LiveTV) | String.Contains(Player.FolderPath,plugin.video.idanplus)</visible>
+				</control>
 				<control type="button" id="7210">
 					<width>68</width><height>68</height><top>8</top>
 					<texturenofocus>povil/osd/episodes_nf.png</texturenofocus><texturefocus>povil/osd/episodes_fo.png</texturefocus>
@@ -900,6 +949,15 @@
 					<label>$VAR[POVIL_PS_Play]</label>
 					<onclick>PlayerControl(Play)</onclick>
 					<visible>Player.PauseEnabled</visible>
+				</control>
+				<control type="button" id="7256"><width>auto</width><height>80</height><top>8</top><font>povil_meta_bold</font>
+					<textcolor>povil_white</textcolor><focusedcolor>FF17130D</focusedcolor><align>center</align><aligny>center</aligny><textoffsetx>34</textoffsetx>
+					<texturenofocus border="24" colordiffuse="40FFFFFF">povil/pill48.png</texturenofocus><texturefocus border="24" colordiffuse="FFD9B77E">povil/pill48.png</texturefocus>
+					<label>רשימת ערוצים</label>
+					<onclick>Dialog.Close(VideoOSD,true)</onclick>
+					<onclick condition="VideoPlayer.Content(LiveTV)">ActivateWindow(PVROSDChannels)</onclick>
+					<onclick condition="!VideoPlayer.Content(LiveTV)">ActivateWindow(1164)</onclick>
+					<visible>VideoPlayer.Content(LiveTV) | String.Contains(Player.FolderPath,plugin.video.idanplus)</visible>
 				</control>
 				<control type="button" id="7252"><width>auto</width><height>80</height><top>8</top><font>povil_meta_bold</font>
 					<textcolor>povil_white</textcolor><focusedcolor>FF17130D</focusedcolor><align>center</align><aligny>center</aligny><textoffsetx>34</textoffsetx>
