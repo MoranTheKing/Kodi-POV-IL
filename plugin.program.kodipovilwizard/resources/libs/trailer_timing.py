@@ -13,6 +13,9 @@ FULLS = ((2, '2 שניות'), (3, '3 שניות'), (4, '4 שניות (ברירת
 DEFAULTS = {WAIT: 1, FULL: 4}
 HEADING = 'תזמון טריילרים'
 QUESTIONS = ((WAIT, WAITS, 'הטריילר מתחיל אחרי'), (FULL, FULLS, 'מסך מלא לטריילר אחרי'))
+# The trailers' Hebrew subtitles (trailer_subs.py, Wizard 0.5.29): on unless switched off here -- the skin's setting
+SUBS_OFF = 'POVILTrailerSubsOff'
+SUBS_LINE = 'כתוביות בעברית לטריילרים'
 
 
 def current(read, setting, choices):
@@ -38,9 +41,15 @@ def choose():
     now = {setting: current(xbmc.getInfoLabel, setting, choices) for setting, choices, _question in QUESTIONS}
     while True:
         lines = ['%s: %s' % (question, name_of(now[setting], choices)) for setting, choices, question in QUESTIONS]
+        subs_off = now.setdefault(SUBS_OFF, xbmc.getCondVisibility('Skin.HasSetting(%s)' % SUBS_OFF))
+        lines.append('%s: %s' % (SUBS_LINE, 'כבוי' if subs_off else 'פועל'))
         line = dialog.select(HEADING, lines)
         if line < 0:
             return
+        if line == len(QUESTIONS):
+            now[SUBS_OFF] = not subs_off
+            xbmc.executebuiltin('Skin.%s(%s)' % ('SetBool' if now[SUBS_OFF] else 'Reset', SUBS_OFF))
+            continue
         setting, choices, question = QUESTIONS[line]
         values = [value for value, _name in choices]
         picked = dialog.select(question, [name for _value, name in choices], preselect=values.index(now[setting]))

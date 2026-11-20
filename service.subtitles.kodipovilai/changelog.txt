@@ -1,3 +1,12 @@
+0.3.99
+- Hebrew subtitles for the trailers the build's home plays (trailer_subs.py; the Wizard 0.5.31 asks and shows them). The owner, Nov 2026, after a blind study (Gemini 3.1 Flash Lite against Google Translate on 13 trailers: 13-0): "let the viewers' 500 free daily requests of that model be used ... but only their FREE quota, nothing beyond it". A trailer is translated ONCE, with the viewer's own key, and shared (pool.share_trailer -> the Worker's /tsub; everyone reads it from GitHub Pages):
+  - Only a free key: checked once a week at no cost to anyone -- an invalid request (role "nobody", never billed) to a model with no free quota: a free key is refused on its quota first (429, a "...-FreeTier" quota id), a billed key passes the quota and is refused as invalid (400). Seen on the QA key: 429 FreeTier on gemini-3.1-pro-preview and gemini-pro-latest. Anything else -- billed, unknown, no network -- and nothing is translated.
+  - At most 480 requests a quota day (Google's Pacific day), and none after the day's 429; not at all when the viewer's own translation model is gemini-3.1-flash-lite (his films first), nor with Google Translate chosen.
+  - One request a trailer: the words of YouTube's captions with the second each is spoken at (START-END|Hebrew), a person's captions line by line (NUMBER|Hebrew), or -- no captions -- Gemini listening to the trailer itself (a fallback). A trailer whose speech or picture is Hebrew already is answered NONE.
+  - Nothing on the screen: no overlay, no notification -- the owner: "nothing on the trailer but the trailer and its subtitles".
+  - Its listener lives in the thread that waits on it: Kodi hands a Monitor its notifications on the thread that made it (QA Kodi: made on the service's thread, the Wizard's job never arrived).
+  QA Kodi: a trailer with no captions translated by listening in 3.3 s, one request; captions read for a trailer with a person's track (25 lines) and an automatic one (286 words).
+
 0.3.98
 - FENtastic's simple player had two "החלף מקור" buttons side by side with one id: the skin carries its own now, and the one this add-on added (fentastic_simpleplayer_source_patcher) was a second -- the remote's right key stood still on the pair (QA Kodi, Nov 2026). The patcher adds nothing where the skin has the button, and takes out the copy it added before (from the next Kodi start: the skin in memory keeps the old file until then). An older FENtastic without the button still gets one. Test: tests/test_fentastic_simpleplayer_source.py.
 

@@ -4146,6 +4146,15 @@ def main():
     except Exception:
         pass
 
+    # Hebrew subtitles for the trailers the Wizard plays on the build's home (0.3.99): a trailer is translated
+    # here once, with the viewer's own FREE Gemini quota only, when the Wizard asks (trailer_subs.py). Idle
+    # otherwise: a listener and a weekly no-cost check of the key.
+    try:
+        from resources.lib import trailer_subs
+        trailer_subs.start(xbmc.Monitor())
+    except Exception:
+        pass
+
     # SubSync S3 human anchor: watch the viewer's manual subtitle delay and
     # turn a settled fix / a long clean watch into a community sync report.
     try:
