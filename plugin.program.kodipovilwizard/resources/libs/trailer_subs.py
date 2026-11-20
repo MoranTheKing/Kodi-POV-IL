@@ -43,10 +43,17 @@ CONFIG_S = 6 * 3600                     # tsubs/config.json (the owner's switch)
 CONFIG_RETRY_S = 600                    # ... and after this long when Pages did not answer
 FETCH_S = 5
 JOB_WAIT_S = 120                        # MoranSubs' answer, while the trailer still plays
+ABLE_WAIT_S = 30                        # MoranSubs' word (may this device translate?) right after Kodi's start
+WORD_FROM = (0, 3, 100)                 # the first MoranSubs that always gives the word ('1' or '0')
 KEEP = 3000                             # trailers kept in CACHE
 _VIDEO = re.compile(r'^[A-Za-z0-9_-]{11}$')
 _HEBREW = re.compile('[\u05d0-\u05ea]')
 RLE, PDF = '\u202b', '\u202c'
+
+
+def version_at_least(text, least):
+    parts = tuple(int(p) for p in re.findall(r'\d+', text or '')[:3])
+    return bool(parts) and parts >= tuple(least)
 
 
 def path_of(video):
@@ -250,12 +257,13 @@ class Subs(object):
     """One per Wizard service. started()/gone() follow the trailer the desk plays; alone() the skin's word."""
 
     def __init__(self, home, player, log, translate_path, notify, fetch=None, describe=None, clock=time.time,
-                 setting=lambda name: False, waiting=None, captions=None):
+                 setting=lambda name: False, waiting=None, captions=None, answers=lambda: False):
         self.home, self.player, self.log = home, player, log
         self.translate_path, self.notify = translate_path, notify
         self.fetch = fetch or self._fetch
         self.describe = describe or (lambda video, key: {})
         self.captions = captions          # captions(video): reads the stream's information with subtitles asked for
+        self.answers = answers            # answers(): this MoranSubs always gives the word (WORD_FROM), so none = not yet
         self.clock, self.setting = clock, setting
         self.waiting = waiting or threading.Event()
         self.lock = threading.Lock()
@@ -338,7 +346,10 @@ class Subs(object):
                 self._ready(video, self._write(video, cues))
                 self.log('trailer subtitles: %s from %s (%d lines)' % (video, where, len(cues)))
             elif where == 'MoranSubs' and self.home.getProperty(ABLE) != '1':
-                self.log('trailer subtitles: none for %s (not on Pages; this device does not translate)' % video)
+                said = self.home.getProperty(ABLE)
+                self.log('trailer subtitles: none for %s (not on Pages; %s)'
+                         % (video, 'this device does not translate' if said == '0' or not self.answers()
+                            else 'MoranSubs gave no word yet'))
         except Exception as exc:
             self.log('trailer subtitles: %s %s' % (type(exc).__name__, str(exc)[:120]))
 
@@ -446,7 +457,7 @@ class Subs(object):
 
     def translated_here(self, video, stream, key, config):
         """MoranSubs translates it -- when it may, and the owner's switch is on. The cues, or None."""
-        if not config.get('translate', True) or self.home.getProperty(ABLE) != '1':
+        if not config.get('translate', True) or not self.able(video):
             return None
         read = read_captions(video, self.captions, self.log)
         if read[0] == 'hebrew_speech':
@@ -486,6 +497,22 @@ class Subs(object):
                 self.keep(video, {'c': cues, 's': read[0]})
                 return cues
         return None
+
+    def able(self, video):
+        """MoranSubs' word: '1' translates, '0' does not. Right after Kodi's start there is none yet: waited for (up to
+        ABLE_WAIT_S, while the trailer still plays) when this MoranSubs always gives it -- the owner, 20 Nov 2026: the
+        first trailer after a start was left untranslated, MoranSubs said "this device translates" 11 s later. (An
+        older MoranSubs leaves "no" empty: none is "no" then.)"""
+        said = self.home.getProperty(ABLE)
+        if said == '' and self.answers():
+            self.log('trailer subtitles: waiting for MoranSubs\' word (%s)' % video)
+            for _ in range(int(ABLE_WAIT_S * 2)):
+                if self.waiting.wait(0.5) or self.current != video:
+                    return False
+                said = self.home.getProperty(ABLE)
+                if said:
+                    break
+        return said == '1'
 
     def _write(self, video, cues):
         path = os.path.join(self._folder(JOBS), video + '.show.he.srt')
