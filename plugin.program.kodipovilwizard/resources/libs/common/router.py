@@ -110,6 +110,10 @@ class Router:
             # how soon the home's trailer starts and has the screen (the tile in Onyx's settings screen)
             from resources.libs import trailer_timing
             trailer_timing.choose()
+        elif mode == 'custom_rows':
+            # the viewer's own rows on the Onyx home (the tile "שורות משלי")
+            from resources.libs import custom_rows
+            custom_rows.choose()
         elif mode == 'cloud_sync':
             # the device-to-device sync of POV's and Umbrella's own lists (the tile in Onyx's settings screen)
             from resources.libs.cloud_sync import ui as cloud_sync_ui
