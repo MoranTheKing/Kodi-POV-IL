@@ -16,6 +16,12 @@ on:
   schedule:
     - cron: "11,41 * * * *"
   workflow_dispatch:
+  # (GitHub never fired the schedule above in its first five hours, 20 Nov 2026 -- 30 translations waited on the Worker
+  # while only the hand-run exports had published any. These run it as well: after every build of a push, and after the
+  # twice-daily upstream check, whose own schedule GitHub does keep. The export is cheap, and publishes only what changed.)
+  workflow_run:
+    workflows: ["Build addon zips and release", "Check upstream add-ons"]
+    types: [completed]
 
 permissions:
   contents: write
