@@ -1,0 +1,66 @@
+name: Trailer subtitles
+
+# Hebrew subtitles for the home's trailers. MoranSubs translates a trailer once, with the viewer's own free Gemini
+# quota, and uploads it to the subtitle pool's Worker; every 30 minutes this workflow takes the new ones into the
+# trailer-subs branch (one small file per trailer, tools/trailer_subs_export.py) and has deploy-pages.yml publish
+# them at tsubs/ on GitHub Pages, where every device reads them -- the Worker serves no trailer subtitle itself, so
+# it stays far inside Cloudflare's free plan however many watch trailers.
+#
+# A translation the owner withdraws (the Worker's /tsub/ban page) comes with every export: its file is deleted here
+# and tsubs/drop.json tells the devices to drop their own copies.
+#
+# The Worker gives the export to this workflow only: GitHub's OIDC token (id-token: write, audience povil-tsubs),
+# checked against GitHub's public keys -- no secret is kept anywhere. Plain git, curl and Python only (no
+# third-party actions, as deploy-pages.yml).
+on:
+  schedule:
+    - cron: "11,41 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  actions: write
+
+concurrency:
+  group: trailer-subs
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Take the new trailer subtitles into the trailer-subs branch
+        id: export
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_SLUG: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${REPO_SLUG}.git"
+          # main: only the exporter and MoranSubs' pool.py (the Worker's address is read from there)
+          git clone --depth=1 --filter=blob:none --no-checkout --single-branch --branch=main "$REMOTE" src
+          git -C src sparse-checkout set --no-cone tools/trailer_subs_export.py service.subtitles.kodipovilai/resources/lib/pool.py
+          git -C src checkout -q main
+          if git ls-remote --exit-code --heads "$REMOTE" trailer-subs >/dev/null 2>&1; then
+            git clone -q --depth=1 --single-branch --branch=trailer-subs "$REMOTE" data
+          else
+            mkdir data && git -C data init -q -b trailer-subs && git -C data remote add origin "$REMOTE"
+          fi
+          git -C data config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C data config user.name "github-actions[bot]"
+          python3 src/tools/trailer_subs_export.py data src/service.subtitles.kodipovilai/resources/lib/pool.py
+          git -C data add -A
+          if git -C data diff --cached --quiet; then
+            echo "Nothing new."
+          else
+            git -C data commit -q -m "Trailer subtitles: $(git -C data diff --cached --name-only | grep -c '\.json$' || true) files"
+            git -C data push -q origin trailer-subs
+          fi
+      - name: Publish them on GitHub Pages
+        if: steps.export.outputs.changed != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_SLUG: ${{ github.repository }}
+        run: |
+          gh api --method POST "repos/$REPO_SLUG/actions/workflows/deploy-pages.yml/dispatches" -f ref=main

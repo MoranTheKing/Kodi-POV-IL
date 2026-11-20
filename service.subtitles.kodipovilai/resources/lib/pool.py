@@ -637,6 +637,23 @@ def _post(body, marker_path=None):
         mark_contributed(marker_path)
 
 
+def share_trailer(body):
+    """A trailer's Hebrew subtitles to the Worker's /tsub (trailer_subs.py). Returns (HTTP status, answer) -- 429
+    {"closed": true, "retry_s"} when the Worker's day is full: nothing more until it says."""
+    try:
+        req = _urlreq.Request(POOL_URL + '/tsub', data=json.dumps(body, ensure_ascii=False).encode('utf-8'),
+                              headers=_post_headers('/tsub'), method='POST')
+        r = _urlreq.urlopen(req, timeout=_POST_TIMEOUT)
+        return r.getcode(), json.loads(r.read().decode('utf-8') or '{}')
+    except Exception as e:
+        code = getattr(e, 'code', None)
+        try:
+            answer = json.loads(e.read().decode('utf-8') or '{}') if code else {}
+        except Exception:
+            answer = {}
+        return code or 0, answer
+
+
 def _build_body(info, source_hash, source_lang, srt_text,
                 kind='ai', release_override=None, proofread=False):
     """Assemble the /contribute JSON body, or None if there's no usable id.

@@ -71,7 +71,10 @@ STANDALONE_LIB_FILES = (
        # imports it inside a try, so its absence raised nothing: for eleven
        # versions the standalone never queued a proofread no model answered
        # (found 15 Nov 2026 by someone reading the zip)
-       "gp_later.py"}
+       "gp_later.py",
+       # Hebrew subtitles for the Wizard's trailers (0.3.99): service.py starts it inside a try -- absent, the
+       # standalone would silently never translate a trailer for a viewer who has the Wizard
+       "trailer_subs.py"}
 )
 
 # default.py actions only the build has, and the helpers only they use.

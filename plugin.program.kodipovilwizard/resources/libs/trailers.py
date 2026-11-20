@@ -794,7 +794,7 @@ class Desk(object):
 
     def __init__(self, home, player, resolve, make_item, enabled, log=lambda text: None, clock=None,
                  ready=lambda stream: stream, halt=None, wanted_now=lambda key: False, look=lambda key: '', settle=0.0,
-                 acting=lambda: False, no_picture=None, translated=lambda key: [], repair=lambda: None):
+                 acting=lambda: False, no_picture=None, translated=lambda key: [], repair=lambda: None, subs=None):
         import time
         self.home, self.player, self.resolve, self.make_item = home, player, resolve, make_item
         self.enabled, self.log, self.ready = enabled, log, ready
@@ -811,6 +811,9 @@ class Desk(object):
         # repair(): the YouTube add-on did not wake its server -- its port is looked at, and moved when this device
         # does not let it open it (youtube_port.py); truthy when it was moved
         self.repair = repair
+        # subs: Hebrew subtitles on the trailer (trailer_subs.Subs) -- told of its first picture and of its end
+        self.subs = subs
+        self.hebrew_videos = set()      # the translated or dubbed uploads found: Hebrew already, no subtitle over them
         self.port_checked = None
         self.stream = None              # the stream of the trailer this desk handed to the player
         self.opened = {}            # the ask -> when its trailer was handed to the player, the last few times
@@ -858,6 +861,8 @@ class Desk(object):
         self.let_go = self.ours or self.let_go
         self.ours = self.key = self.opening = None
         self.stop_wanted = False
+        if self.subs is not None:
+            self.subs.gone()
         self.home.clearProperty(ON)
         self.home.clearProperty(FILE)
         self.home.clearProperty(OPENING)
@@ -975,6 +980,7 @@ class Desk(object):
             except Exception as exc:
                 self.log('no translated trailer: %s' % _why(exc))
                 found = []
+            self.hebrew_videos.update(found)
             candidates = (found + [v for v in video_ids(key) if v not in found])[:TRIES + len(found)]
         for number, candidate in enumerate(candidates):
             if number and not still():
@@ -998,7 +1004,7 @@ class Desk(object):
                 why = 'given up (no answer): %s' % candidate
                 self.choice.pop(key, None)      # (the one remembered no longer answers: its alternatives next time)
                 continue
-            found = dict(found, video=candidate)
+            found = dict(found, video=candidate, hebrew=candidate in self.hebrew_videos)
             seconds = found.get('seconds')
             if stream is None or (seconds or 0) > (stream.get('seconds') or 0):
                 stream = found
@@ -1227,6 +1233,11 @@ class Desk(object):
             if self.ours and self.is_ours():
                 self.failed = 0     # a trailer shows its picture: they work on this device
                 self.shown = self.clock()
+                if self.subs is not None and self.opening is not None:
+                    try:
+                        self.subs.started(self.stream, self.key)
+                    except Exception as exc:
+                        self.log('subtitles: %s' % _why(exc))
             if not self.ours or not self.is_ours():
                 try:
                     orphan = bool(self.let_go) and self.player.isPlaying() and self.player.getPlayingFile() == self.let_go
@@ -1478,10 +1489,48 @@ def watch():
         from resources.libs import youtube_port
         return youtube_port.run(log)
 
+    def describe(video, key):
+        # the title the trailer is of, for its translation (POV's cache, by the title's own trailer)
+        import sqlite3
+        own = video_id(key) or video
+        if not os.path.isfile(pov_cache):
+            return {}
+        con = sqlite3.connect('file:%s?mode=ro' % pov_cache, uri=True, timeout=2.0)
+        try:
+            rows = con.execute('SELECT db_type, tmdb_id, meta FROM metadata WHERE meta LIKE ?', ('%' + own + '%',)).fetchall()
+        finally:
+            con.close()
+        meta, _hebrew = title_of(rows, key)
+        if not meta:
+            return {}
+        return {'title': meta.get('title') or '', 'original': meta.get('original_title') or '',
+                'year': str(meta.get('year') or '')[:4], 'kind': 'tv' if meta['povil_id'].startswith('tv') else 'movie'}
+
+    def load_captions(video):
+        # the stream's information read again, subtitles asked for -- the YouTube add-on's own code, for a trailer
+        # MoranSubs is about to translate only (trailer_subs.capture keeps its caption tracks)
+        folder = xbmcvfs.translatePath('special://home/addons/%s/resources/lib/' % YOUTUBE)
+        if folder not in sys.path:
+            sys.path.append(folder)
+        from youtube_plugin.youtube.provider import Provider
+        from youtube_plugin.kodion.context import XbmcContext
+        from youtube_plugin.youtube.client import subtitles as yt_subtitles
+        trailer_subs.capture(yt_subtitles.Subtitles)
+        provider, context = Provider(), XbmcContext()
+        settings = context.get_settings()
+        settings.get_subtitle_selection = lambda: 2
+        settings.subtitle_download = lambda: True
+        provider.get_client(context=context).load_stream_info(video_id=video)
+
+    from resources.libs import trailer_subs
+    subs = trailer_subs.Subs(home, player, log, xbmcvfs.translatePath, xbmc.executebuiltin, describe=describe,
+                             setting=lambda name: xbmc.getCondVisibility('Skin.HasSetting(%s)' % name),
+                             captions=load_captions)
     desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready, acting=acting,
                 halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)'),
                 wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture, translated=translated,
-                repair=repair)
+                repair=repair, subs=subs)
+    subs.waiting = desk.waiting
 
     def run(job):
         threading.Thread(target=lambda: job() and desk.guard(), name='POVILTrailer').start()
@@ -1501,6 +1550,10 @@ def watch():
                         run(job)
                 elif what == 'stop':
                     desk.stop()
+                elif what in ('alone', 'shared'):
+                    # the trailer has the screen to itself (the skin's TRAILER_ALONE), or the home is back over it:
+                    # its subtitles show only on the former
+                    subs.alone(what == 'alone')
             except Exception as exc:
                 log('%s: %r' % (what, exc))
 
