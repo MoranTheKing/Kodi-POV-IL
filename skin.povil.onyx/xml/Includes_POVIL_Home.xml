@@ -6528,6 +6528,10 @@
 		<value condition="Player.Paused + Player.Caching">טוען...</value>
 		<value condition="Player.Paused">מושהה</value>
 	</variable>
+	<variable name="POVIL_ChannelsPath">
+		<value condition="String.IsEqual(Window(home).Property(povil.ch.kind),radio)">plugin://plugin.video.idanplus/?moredata=&amp;name=%5BB%5D%D7%A8%D7%93%D7%99%D7%95%5B%2FB%5D&amp;url=&amp;iconimage=&amp;module=&amp;mode=3</value>
+		<value>plugin://plugin.video.idanplus/?iconimage=&amp;mode=1&amp;module&amp;moredata&amp;name=%5bB%5d%d7%a9%d7%99%d7%93%d7%95%d7%a8%d7%99%d7%9d%20%d7%97%d7%99%d7%99%d7%9d%5b%2fB%5d&amp;url</value>
+	</variable>
 	<variable name="POVIL_OSD_Focused">
 		<value condition="Control.HasFocus(7001)">ימינה ושמאלה מדלגים · לחיצות רצופות מדלגות רחוק יותר · אישור משהה</value>
 		<value condition="Control.HasFocus(7013)">החלפת נגן</value>
@@ -6538,6 +6542,7 @@
 		<value condition="Control.HasFocus(7003)">ניגון / השהיה</value>
 		<value condition="Control.HasFocus(7004)">30 שניות קדימה</value>
 		<value condition="Control.HasFocus(7024)">כתוביות</value>
+		<value condition="Control.HasFocus(7027)">רשימת ערוצים</value>
 		<value condition="Control.HasFocus(7020)">הפרק הבא</value>
 		<value condition="Control.HasFocus(7021)">החלפת מקור</value>
 		<value condition="Control.HasFocus(7022)">שמע</value>

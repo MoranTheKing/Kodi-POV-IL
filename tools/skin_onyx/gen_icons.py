@@ -94,6 +94,14 @@ def episodes(d):
         rbar(d, 36, y, 74, y + 6, 3)
 
 
+def channels(d):
+    """A television: the screen, its two aerials and its stand (the channel list)."""
+    d.rounded_rectangle((P(18), P(32), P(78), P(70)), P(6), outline=255, width=P(5))
+    d.line((P(36), P(18), P(48), P(31)), fill=255, width=P(4))
+    d.line((P(60), P(18), P(48), P(31)), fill=255, width=P(4))
+    rbar(d, 34, 74, 62, 79, 2)
+
+
 def sync(d):
     ring(d, 48, 50, 20, 4)
     rbar(d, 46, 37, 50, 52, 2)
@@ -197,7 +205,8 @@ def layout(d):
 ICONS = dict(play=play, pause=pause, stop=stop, rewind=rewind, forward=forward, subtitles=subtitles,
              audio=audio, source=source, episodes=episodes, sync=sync, settings=settings, info=info,
              skipback=skipback, skipfwd=skipfwd, subup=subup, subdown=subdown, power=power,
-             previous=previous, next=next_, zoomin=zoomin, zoomout=zoomout, layout=layout, search=search)
+             previous=previous, next=next_, zoomin=zoomin, zoomout=zoomout, layout=layout, search=search,
+             channels=channels)
 
 for name, draw in ICONS.items():
     mask = canvas()

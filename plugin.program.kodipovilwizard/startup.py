@@ -1070,6 +1070,32 @@ def _trailer_pick_refresh():
 
 __import__('threading').Thread(target=_trailer_pick_refresh, name='POVILTrailerPick', daemon=True).start()
 
+
+# KODI-POV-IL - a streaming service's episode is out on its date (patches/pov_air_time.py): the running series POV saved
+# without their networks are asked again, once
+def _air_time_refresh():
+    try:
+        import xbmcgui
+        import xbmcvfs
+        from resources.libs.patches import pov_air_time as _air
+
+        def _ready():
+            # (POV keeps a series' networks only once the patch pov_air_networks is in: until then the one pass waits)
+            try:
+                _path = xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/indexers/metadata.py')
+                with open(_path, encoding='utf-8') as _f:
+                    return 'WIZARD_POV_AIR_NETWORKS_v1' in _f.read()
+            except Exception:
+                return False
+        _air.purge_once(xbmcvfs.translatePath('special://profile/addon_data/plugin.video.pov/'),
+                        log=lambda text: xbmc.log('[POV IL] ' + text, xbmc.LOGINFO),
+                        forget=xbmcgui.Window(10000).clearProperty, ready=_ready)
+    except Exception as _exc:
+        xbmc.log('[POV IL] air times refresh: %r' % (_exc,), xbmc.LOGWARNING)
+
+
+__import__('threading').Thread(target=_air_time_refresh, name='POVILAirTimes', daemon=True).start()
+
 # KODI-POV-IL - the build's subtitles without the box behind them: a device
 # whose background and border settings are still the ones the build shipped
 # gets the outline (once per profile; see subtitle_style.py).

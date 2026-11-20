@@ -1,3 +1,6 @@
+0.3.105
+- A trailer's reply that counted its words wrong is noticed and asked once more (the owner, Nov 2026, on The Big Bang Theory's trailer: some 40 s without a subtitle, and the lines that came were another moment's). Now and then the model numbers a subtitle's words wrong, and every subtitle after it takes the words and times of the one before; its Hebrew is fine. The lengths tell such a reply (a subtitle's Hebrew is about as long as the English it holds -- of 40 QA replies, 38 sound at 0.01-0.085, the two miscounted at 0.19 and 0.22; words a reply leaves out, a song, count for nothing); it is asked once more (the same request -- about one trailer in twenty), and should that one miscount too, the lengths place its subtitles. Asking the model for the English as well was tried first and dropped: a blind study found it cost the Hebrew (trailer-echo-012).
+
 0.3.104
 - A trailer's subtitle whose first word or two the captions heard long before the rest (an exclamation, a pause of over 2.5 s, then the sentence) comes with the sentence -- the blind check of 0.3.103 found such lines 5-7 s early. That check: two AI judges, blind, 6 trailers, the old timing against the words' own -- the new one won all 6 with both (timing better on all 6; accuracy better or equal; one judge found the old Hebrew a little more natural on two).
 
