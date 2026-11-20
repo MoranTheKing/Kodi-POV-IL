@@ -197,7 +197,13 @@ def video_title(stream):
     meta = (stream or {}).get('meta') or {}
     return meta.get('title') or ((meta.get('video') or {}).get('title')) or ''
 TRANSLATED_FOUND_S, TRANSLATED_NONE_S = 14 * 86400, 3 * 86400     # a search is kept this long (found / none)
-TRANSLATED_FILE = 'translated_trailers_v2.json'     # (v2, 0.5.17: searched again under the scam filter)
+# (v2, 0.5.17: searched again under the scam filter; v3, 0.5.30: under the film / series rule, translated_pick)
+TRANSLATED_FILE = 'translated_trailers_v3.json'
+# A translated trailer of the OTHER kind: a viewer, via the owner, Nov 2026 -- the Pokémon series (1997) played the
+# dubbed trailer of the film "Detective Pikachu" (its title names "פוקימון" too). For a series a result that says it is
+# a film is left out, for a film one that says it is a series; and one that names a year far from the title's.
+FILM_WORDS = ('הסרט', 'סרט', 'the movie', 'movie', 'film')
+SERIES_WORDS = ('הסדרה', 'סדרה', 'סדרת', 'עונה', 'עונת', 'season', 'series', 'episode', 'פרק')
 # the uploads of Israeli distributors and of the services themselves come first (no channel's logo over the
 # picture -- seen in the QA Kodi: YouTube's first answer for one series was a small channel's, its logo on it)
 TRUSTED_CHANNELS = ('hit', 'tulip', 'forum film', 'פורום פילם', 'united king', 'יונייטד קינג', 'yes', 'hot', 'netflix',
@@ -284,16 +290,65 @@ def trusted(channel):
     return any(' %s ' % _plain(name) in plain for name in TRUSTED_CHANNELS)
 
 
-def translated_pick(results, names, most=2):
+def other_kind(title, kind, year=None, names=()):
+    """Does a result's title say it is the other kind (kind: 'tv' or 'movie'), or name a year far from the title's?
+    (A word of the title's own name says nothing: "זה: פרק שני" is a film -- the reviewer.)"""
+    plain = ' %s ' % _plain(title)
+    words = FILM_WORDS if kind == 'tv' else SERIES_WORDS if kind == 'movie' else ()
+    words = [w for w in words if all(' %s ' % _plain(w) not in ' %s ' % n for n in names if n)]
+    if any(' %s ' % _plain(word) in plain for word in words):
+        return True
+    try:
+        year = int(str(year)[:4])
+    except (TypeError, ValueError):
+        return False
+    years = [int(y) for y in re.findall(r'(?<!\d)(19\d\d|20\d\d)(?!\d)', title)]
+    # (a series runs for years: only a year before it began is another title's)
+    return bool(years) and all((y < year - 1) if kind == 'tv' else abs(y - year) > 1 for y in years)
+
+
+# words that may follow a title's name in an upload's title and still be its own trailer
+PLAIN_WORDS = ('טריילר', 'מתורגם', 'מתורגמת', 'מדובב', 'מדובבת', 'רשמי', 'חדש', 'עונה', 'trailer', 'official', 'teaser',
+               'season', 'final', 'hd', '4k', 'tv')
+# ... and a series' own season, in words ("X: העונה השנייה" -- the reviewer; the ordinals of pov_trailer_pick._WORDS)
+SEASON_WORDS = ('עונה', 'העונה', 'עונת', 'season', 'הראשונה', 'ראשונה', 'השנייה', 'השניה', 'שנייה', 'שניה', 'השלישית',
+                'שלישית', 'הרביעית', 'רביעית', 'החמישית', 'חמישית', 'השישית', 'שישית', 'השביעית', 'שביעית', 'השמינית',
+                'שמינית', 'התשיעית', 'תשיעית', 'העשירית', 'עשירית', 'האחרונה', 'אחרונה', 'החדשה', 'first', 'second', 'third',
+                'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'final', 'new', 'one', 'two', 'three',
+                'four', 'five', 'six')
+
+
+def another_title(title, names, kind=None):
+    """Does the upload name ANOTHER title that begins with this one's name -- "פוקימון: הבלש פיקאצ'ו" for the series
+    "פוקימון", "דיונה: חלק שני" for "דיונה"? The part of its title that holds the name has a colon and words after the
+    name that are not a trailer's own (PLAIN_WORDS, a number)."""
+    for part in re.split(r'\s[|•\-–—]\s|\|', title or ''):
+        if ':' not in part:
+            continue
+        words = _plain(part).split()
+        for name in names:
+            name_words = (name or '').split()
+            if name_words and words[:len(name_words)] == name_words:
+                rest = [w for w in words[len(name_words):] if w not in PLAIN_WORDS and not w.isdigit()]
+                if rest and kind == 'tv' and any(w in ('עונה', 'העונה', 'עונת', 'season') for w in words[len(name_words):]):
+                    rest = [w for w in rest if w not in SEASON_WORDS]
+                if rest:
+                    return True
+    return False
+
+
+def translated_pick(results, names, most=2, kind=None, year=None):
     """The video ids of the results that are a translated trailer of the title: the title says translated and
-    names the series or film, 45 s to 5 minutes, and not a review or the like. Distributors' and services' own
-    first, then the others, each in YouTube's order; `most` at most."""
+    names the series or film, 45 s to 5 minutes, not a review or the like, and not of the other kind (other_kind).
+    Distributors' and services' own first, then the others, each in YouTube's order; `most` at most."""
     results = sorted(results, key=lambda item: not trusted(item[3] if len(item) > 3 else ''))
     picked = []
     for item in results:
         title, seconds, video = item[:3]
         plain = _plain(title)
         if not any(word in title for word in TRANSLATED):
+            continue
+        if other_kind(title, kind, year, names) or another_title(title, names, kind):
             continue
         if not any(name and (' %s ' % name) in (' %s ' % plain) for name in names):
             continue        # (whole words: "Up" or "היא" is not a part of another word)
@@ -1333,7 +1388,8 @@ def watch():
         query, names = translated_query(meta)
         if not query:
             return []
-        ids = translated_pick(search_results(youtube_search(query)), names)
+        kind = 'tv' if meta['povil_id'].startswith('tv') else 'movie'
+        ids = translated_pick(search_results(youtube_search(query)), names, kind=kind, year=meta.get('year'))
         log('translated trailer for %s: %s' % (meta['povil_id'], ', '.join(ids) or 'none on YouTube'))
         answer = {'ids': ids, 't': time.time()}
         keep(lambda kept: kept.update({meta['povil_id']: answer, 'v:' + video: answer}))

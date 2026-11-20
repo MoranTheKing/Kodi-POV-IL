@@ -73,6 +73,26 @@ class TranslatedTests(unittest.TestCase):
                                                    ('טריילר מדובב קוקו | COCO', 63, 'DDDDDDDDDD2', 'Disney Israel')], ('קוקו', 'coco')),
                          ['DDDDDDDDDD2'])
         self.assertFalse(trailers.selling('קוקו - טריילר מדובב חדש'))
+        # the other kind (a viewer, via the owner, Nov 2026: the Pokémon series of 1997 played the film's dubbed
+        # trailer): a series takes no film's, a film no series', and no year far from the title's (0.5.30)
+        pokemon = [('פוקימון: הבלש פיקאצ\'ו - הסרט | טריילר מדובב', 150, 'EEEEEEEEEE1', 'Forum Film'),
+                   ('פוקימון: הבלש פיקאצ\'ו | טריילר מתורגם', 140, 'EEEEEEEEEE2', 'x'),
+                   ('פוקימון - הסדרה המצוירת | פתיח מדובב', 90, 'EEEEEEEEEE3', 'x')]
+        self.assertEqual(trailers.translated_pick(pokemon, ('פוקימון', 'pokémon'), kind='tv', year=1997), ['EEEEEEEEEE3'])
+        # the film itself is named by its whole name: its own uploads are taken
+        names = ('פוקימון הבלש פיקאצ ו', 'pokémon detective pikachu')
+        self.assertEqual(trailers.translated_pick(pokemon, names, kind='movie', year=2019), ['EEEEEEEEEE1', 'EEEEEEEEEE2'])
+        self.assertTrue(trailers.another_title('דיונה: חלק שני | טריילר מתורגם', ('דיונה', 'dune')))
+        self.assertFalse(trailers.another_title('דיונה: טריילר רשמי מתורגם', ('דיונה', 'dune')))
+        self.assertFalse(trailers.another_title('טולסה קינג | טריילר מתורגם', ('טולסה קינג',)))
+        # (the reviewer) a word of the title's own name says nothing; a series' own season in words is its own
+        self.assertFalse(trailers.other_kind('זה: פרק שני | טריילר מתורגם', 'movie', 2019, ('זה פרק שני', 'it chapter two')))
+        self.assertFalse(trailers.another_title('דקסטר: העונה השנייה - טריילר מתורגם', ('דקסטר', 'dexter'), 'tv'))
+        self.assertTrue(trailers.another_title('דקסטר: החטא הקדמון - טריילר מתורגם', ('דקסטר', 'dexter'), 'tv'))
+        self.assertTrue(trailers.other_kind('טולסה קינג עונה 3 | טריילר מתורגם', 'movie'))
+        self.assertFalse(trailers.other_kind('טולסה קינג עונה 3 | טריילר מתורגם', 'tv', 2022), 'a later season of a series')
+        self.assertTrue(trailers.other_kind('Dune 1984 טריילר מתורגם', 'movie', 2021))
+        self.assertFalse(trailers.other_kind('Coco | Official Final Trailer', None))
         self.assertFalse(trailers.selling('Coco | Official Final Trailer'))
         self.assertFalse(trailers.selling('דקסטר | טריילר מתורגם | זמין לצפייה ב-yes'), 'available to watch on a service: a trailer')
         self.assertFalse(trailers.selling('מואנה 2 | צפו עכשיו ב-Disney+ | טריילר מדובב'))
