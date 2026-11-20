@@ -9,6 +9,9 @@
 		<value condition="Container.Content(tvshows)">סדרות</value>
 		<value>$INFO[Container.FolderName]</value>
 	</variable>
+	<variable name="POVIL_V_Trailer">
+		<value condition="[Control.IsVisible(51) | Control.IsVisible(55)] + !Container.IsUpdating + String.StartsWith(ListItem.Trailer,plugin://plugin.video.youtube/)">$INFO[ListItem.Trailer]</value>
+	</variable>
 	<variable name="POVIL_V_Fanart">
 		<value condition="!String.IsEmpty(ListItem.Art(fanart)) + !Container.Content(addons) + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]">$INFO[ListItem.Art(fanart)]</value>
 		<value condition="!String.IsEmpty(ListItem.Art(landscape)) + !Container.Content(addons) + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]">$INFO[ListItem.Art(landscape)]</value>
@@ -54,6 +57,10 @@
 			<visible>Control.IsVisible(51)</visible>
 			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture>povil/ambient.jpg</texture></control>
 			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture background="true">$VAR[POVIL_V_Fanart]</texture><aspectratio>scale</aspectratio><fadetime>420</fadetime></control>
+			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture colordiffuse="FF000000">povil/white.png</texture><visible>Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))</visible><animation effect="fade" start="0" end="100" time="400">Visible</animation></control>
+			<control type="videowindow"><left>0</left><top>0</top><width>1920</width><height>1080</height><hitrect x="-10" y="-10" w="1" h="1"/><visible>Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))</visible><animation effect="fade" start="0" end="100" time="600">Visible</animation><animation effect="fade" start="100" end="0" time="250">Hidden</animation></control>
+			<control type="group" description="over the picture">
+			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening)) + Skin.TimerIsRunning(povil_trailer_shown) + [[String.IsEqual(Skin.String(POVILTrailerFull),2) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),2) + System.IdleTime(2)] | [String.IsEqual(Skin.String(POVILTrailerFull),3) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),3) + System.IdleTime(3)] | [[String.IsEqual(Skin.String(POVILTrailerFull),4) | String.IsEmpty(Skin.String(POVILTrailerFull))] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)] | [String.IsEqual(Skin.String(POVILTrailerFull),6) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),6) + System.IdleTime(3)] | [String.IsEqual(Skin.String(POVILTrailerFull),8) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),8) + System.IdleTime(3)] | [String.IsEqual(Skin.String(POVILTrailerFull),12) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),12) + System.IdleTime(3)]]">Conditional</animation>
 			<control type="image"><left>520</left><top>-160</top><width>1400</width><height>1400</height><texture>povil/grad_right.png</texture></control>
 			<control type="image"><left>-320</left><top>330</top><width>2560</width><height>750</height><texture>povil/grad_bottom.png</texture></control>
 			<control type="image"><left>-320</left><top>0</top><width>2560</width><height>240</height><texture>povil/grad_top.png</texture></control>
@@ -120,7 +127,7 @@
 				</control>
 			</control>
 			<control type="label" id="9808"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_V_RatingsTmdb]</label></control>
-			<control type="textbox"><left>970</left><top>440</top><width>860</width><height>152</height><font>povil_plot</font><textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label><animation effect="slide" end="0,-38" time="140" tween="cubic" easing="out" condition="String.IsEmpty(Control.GetLabel(9807))">Conditional</animation></control>
+			<control type="textbox"><left>970</left><top>440</top><width>860</width><height>152</height><font>povil_plot</font><textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label><animation effect="slide" end="0,-38" time="140" tween="cubic" easing="out" condition="String.IsEmpty(Control.GetLabel(9807))">Conditional</animation><animation effect="fade" start="100" end="0" time="400" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))">Conditional</animation></control>
 			<control type="list" id="51">
 				<left>10</left><top>640</top><width>1850</width><height>380</height>
 				<viewtype label="תצוגת יוקרה">wrap</viewtype>
@@ -160,13 +167,19 @@
 				<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture background="true" diffuse="povil/mask_poster.png" colordiffuse="66FFFFFF">$INFO[Container(51).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 				<control type="image"><left>0</left><top>0</top><width>196</width><height>294</height><texture background="true" diffuse="povil/mask_poster.png" colordiffuse="66FFFFFF">$INFO[Container(51).ListItemPosition(-1).Art(poster)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 			</control>
+			</control>
 		</control>
+		<control type="label" id="9809"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_V_Trailer]</label></control>
 	</include>
 	<include name="View_55_POVIL">
 		<control type="group" description="תצוגת פרקים">
 			<visible>Control.IsVisible(55)</visible>
 			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture>povil/ambient.jpg</texture></control>
 			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture background="true">$VAR[POVIL_V_Fanart]</texture><aspectratio>scale</aspectratio><fadetime>420</fadetime></control>
+			<control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture colordiffuse="FF000000">povil/white.png</texture><visible>Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))</visible><animation effect="fade" start="0" end="100" time="400">Visible</animation></control>
+			<control type="videowindow"><left>0</left><top>0</top><width>1920</width><height>1080</height><hitrect x="-10" y="-10" w="1" h="1"/><visible>Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))</visible><animation effect="fade" start="0" end="100" time="600">Visible</animation><animation effect="fade" start="100" end="0" time="250">Hidden</animation></control>
+			<control type="group" description="over the picture">
+			<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening)) + Skin.TimerIsRunning(povil_trailer_shown) + [[String.IsEqual(Skin.String(POVILTrailerFull),2) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),2) + System.IdleTime(2)] | [String.IsEqual(Skin.String(POVILTrailerFull),3) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),3) + System.IdleTime(3)] | [[String.IsEqual(Skin.String(POVILTrailerFull),4) | String.IsEmpty(Skin.String(POVILTrailerFull))] + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),4) + System.IdleTime(3)] | [String.IsEqual(Skin.String(POVILTrailerFull),6) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),6) + System.IdleTime(3)] | [String.IsEqual(Skin.String(POVILTrailerFull),8) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),8) + System.IdleTime(3)] | [String.IsEqual(Skin.String(POVILTrailerFull),12) + Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),12) + System.IdleTime(3)]]">Conditional</animation>
 			<control type="image"><left>520</left><top>-160</top><width>1400</width><height>1400</height><texture>povil/grad_right.png</texture></control>
 			<control type="image"><left>-320</left><top>330</top><width>2560</width><height>750</height><texture>povil/grad_bottom.png</texture></control>
 			<control type="image"><left>-320</left><top>0</top><width>2560</width><height>240</height><texture>povil/grad_top.png</texture></control>
@@ -233,7 +246,7 @@
 				</control>
 			</control>
 			<control type="label" id="9808"><left>-2000</left><top>0</top><width>10</width><height>10</height><label>$VAR[POVIL_V_RatingsTmdb]</label></control>
-			<control type="textbox"><left>970</left><top>440</top><width>860</width><height>152</height><font>povil_plot</font><textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label><animation effect="slide" end="0,-38" time="140" tween="cubic" easing="out" condition="String.IsEmpty(Control.GetLabel(9807))">Conditional</animation></control>
+			<control type="textbox"><left>970</left><top>440</top><width>860</width><height>152</height><font>povil_plot</font><textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label><animation effect="slide" end="0,-38" time="140" tween="cubic" easing="out" condition="String.IsEmpty(Control.GetLabel(9807))">Conditional</animation><animation effect="fade" start="100" end="0" time="400" condition="Player.HasVideo + !String.IsEmpty(Window(home).Property(povil.tr.on)) + String.IsEqual(Window(home).Property(povil.tr.on),Window(home).Property(povil.tr.ask)) + String.IsEmpty(Window(home).Property(povil.tr.opening))">Conditional</animation></control>
 			<control type="list" id="55">
 				<left>290</left><top>640</top><width>1570</width><height>380</height>
 				<viewtype label="תצוגת פרקים">wrap</viewtype>
@@ -254,6 +267,7 @@
 				<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
 				<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(55).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 				<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(55).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+			</control>
 			</control>
 		</control>
 	</include>

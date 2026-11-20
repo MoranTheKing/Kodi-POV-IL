@@ -114,6 +114,10 @@ class Router:
             # the viewer's own rows on the Onyx home (the tile "שורות משלי")
             from resources.libs import custom_rows
             custom_rows.choose()
+        elif mode == 'home_rows':
+            # the order of an Onyx home screen's rows (the tile "סדר השורות")
+            from resources.libs import home_rows
+            home_rows.choose()
         elif mode == 'cloud_sync':
             # the device-to-device sync of POV's and Umbrella's own lists (the tile in Onyx's settings screen)
             from resources.libs.cloud_sync import ui as cloud_sync_ui

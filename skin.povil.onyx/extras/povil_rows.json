@@ -1,0 +1,132 @@
+{
+ "tabs": [
+  {
+   "id": "movies",
+   "name": "סרטים",
+   "rows": [
+    {
+     "title": "פופולריים עכשיו",
+     "custom": null
+    },
+    {
+     "title": "טרנדיים השבוע",
+     "custom": null
+    },
+    {
+     "title": "ממשיכים לצפות",
+     "custom": null
+    },
+    {
+     "title": null,
+     "custom": "movies_1"
+    },
+    {
+     "title": null,
+     "custom": "movies_2"
+    },
+    {
+     "title": null,
+     "custom": "movies_3"
+    }
+   ]
+  },
+  {
+   "id": "tv",
+   "name": "סדרות",
+   "rows": [
+    {
+     "title": "טרנדיות עכשיו",
+     "custom": null
+    },
+    {
+     "title": "פופולריות",
+     "custom": null
+    },
+    {
+     "title": "הפרק הבא",
+     "custom": null
+    },
+    {
+     "title": null,
+     "custom": "tv_1"
+    },
+    {
+     "title": null,
+     "custom": "tv_2"
+    },
+    {
+     "title": null,
+     "custom": "tv_3"
+    }
+   ]
+  },
+  {
+   "id": "kids",
+   "name": "ילדים",
+   "rows": [
+    {
+     "title": "סרטים לכל המשפחה",
+     "custom": null
+    },
+    {
+     "title": "סרטי אנימציה",
+     "custom": null
+    },
+    {
+     "title": "קטנטנים",
+     "custom": null
+    },
+    {
+     "title": null,
+     "custom": "kids_1"
+    },
+    {
+     "title": null,
+     "custom": "kids_2"
+    },
+    {
+     "title": null,
+     "custom": "kids_3"
+    }
+   ]
+  },
+  {
+   "id": "favourites",
+   "name": "מועדפים",
+   "rows": [
+    {
+     "title": "המועדפים שלי",
+     "custom": null
+    },
+    {
+     "title": "סרטים שמורים",
+     "custom": null
+    },
+    {
+     "title": "סדרות שמורות",
+     "custom": null
+    },
+    {
+     "title": "הסרטים שלי (MDBList)",
+     "custom": null
+    },
+    {
+     "title": "הסדרות שלי (MDBList)",
+     "custom": null
+    },
+    {
+     "title": null,
+     "custom": "favourites_1"
+    },
+    {
+     "title": null,
+     "custom": "favourites_2"
+    },
+    {
+     "title": null,
+     "custom": "favourites_3"
+    }
+   ]
+  }
+ ]
+}

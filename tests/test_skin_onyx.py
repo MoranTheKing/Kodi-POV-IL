@@ -172,7 +172,8 @@ class GeneratedXmlTests(unittest.TestCase):
             self.assertNotIn('!!', cond)
         self.assertTrue(any('!Integer.IsGreater(Container(5011).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5011),2)' in c
                             for c in empty), 'the placeholder stays up while it retries')
-        self.assertTrue(any(c.startswith('!String.IsEmpty(') and '+ String.IsEqual(Window(home).Property(povil.retry.5011),2)' in c
+        # (5011 is a slot of the films screen: "nothing here" is for the rows it shows that retry, $EXP[...] first)
+        self.assertTrue(any('!String.IsEmpty(Window(home).Property(povil.tab.movies)) + String.IsEqual(Window(home).Property(povil.retry.5011),2)' in c
                             for c in empty), '"nothing here" only once the retries are spent')
 
     def test_the_player_buttons_reach_each_other(self):
@@ -440,11 +441,12 @@ class GeneratedXmlTests(unittest.TestCase):
         try:
             copy = tmp / 'skin.povil.onyx'
             shutil.copytree(SKIN, copy)
-            for script in ('gen_strings.py', 'patch_onyx.py', 'gen_home.py', 'gen_views.py', 'gen_osd.py', 'gen_info.py', 'gen_dialogs.py',
-                           'gen_settings.py'):
+            for script in ('gen_strings.py', 'patch_onyx.py', 'gen_home.py', 'gen_standalone.py', 'gen_views.py', 'gen_osd.py',
+                           'gen_info.py', 'gen_dialogs.py', 'gen_settings.py'):
                 subprocess.run([sys.executable, str(TOOLS / script), str(copy)], cwd=str(TOOLS), check=True,
                                stdout=subprocess.DEVNULL)
             for rel in ('xml/Home.xml', 'xml/Includes_POVIL_Home.xml', 'xml/View_POVIL.xml', 'xml/VideoOSD.xml',
+                        'xml/Custom_POVILChoice.xml', 'xml/Custom_POVILRows.xml',
                         'xml/DialogVideoInfo.xml', 'xml/Timers.xml', 'xml/DialogKeyboard.xml',
                         'xml/DialogButtonMenu.xml', 'xml/DialogBusy.xml', 'xml/DialogNotification.xml', 'xml/DialogConfirm.xml',
                         'xml/DialogSeekBar.xml', 'xml/VideoFullScreen.xml', 'xml/Settings.xml', 'xml/SettingsCategory.xml',
