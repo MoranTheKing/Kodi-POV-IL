@@ -51,22 +51,34 @@ _HEB = re.compile(u'[א-ת]')
 _LATIN = re.compile(r'[A-Za-z]')
 _LOCK = threading.Lock()
 
+# The words of YouTube's automatic captions, EACH NUMBERED; the model answers which words each subtitle holds and the
+# times are the words' own (by_words): a subtitle comes with its first word and goes a moment after its last. (FORMAT 2,
+# MoranSubs 0.3.103. The owner, Nov 2026, on The Simpsons' trailer: "the subtitles are not quite in sync -- lines come
+# early or late". Before, a time stood before every sixth word and the model named the nearest: a line could start a
+# few words early or late, and end at the next time after a pause -- "green screen", spoken in half a second, stayed
+# seven.)
 ASR_PROMPT = u'''You are writing the Hebrew subtitles of a trailer: {what}.
 
-Below is everything spoken in the trailer, as automatic speech recognition heard it ({lang}). A number in square brackets is the second at which the words after it are spoken.
+Below is everything spoken in the trailer, as automatic speech recognition heard it ({lang}), word by word, each word after its number in square brackets.
 The recognition has no punctuation and mishears words, names above all. First work out what was actually said -- you know this title: its characters, places and terms -- and where each sentence begins and ends; several people speak in turn. Never translate a misheard word literally.
 If the speech is already Hebrew, answer only: NONE
 
 Write the Hebrew a professional Israeli subtitler would: natural spoken Hebrew, not word-for-word; correct grammatical gender; names of people and places in their accepted Hebrew spelling.
-One subtitle per sentence or short exchange: at most about 60 characters and about 6 seconds. A longer sentence is split into two subtitles at a natural pause. Translate everything that is said, to the last word.
+One subtitle per sentence or short exchange: at most about 60 characters and about 6 seconds of speech. A longer sentence is split into two subtitles at a natural pause.
+Every word belongs to exactly one subtitle, in order, and everything said is translated, to the last word: nothing left out, nothing added.
 
 Answer with one subtitle per line, in this exact form and nothing else:
-START-END|Hebrew text
-START is the bracketed second closest before the subtitle's first word, END the bracketed second closest after its last word. In order, never overlapping.
+FIRST-LAST|Hebrew text
+FIRST is the number of the subtitle's first word, LAST the number of its last word; the next subtitle begins at the word after LAST.
 
 Speech:
 {speech}
 '''
+FORMAT = 2                          # a translation's version (f): 2 = timed by its words (by_words); 1 = before
+WORD_S = 0.6                        # how long a word lasts at most (the captions give when each one begins)
+LEAD_S = 0.1                        # a subtitle comes this much before its first word
+GAP_S = 2.5                         # a pause this long inside a subtitle, then a word or two: those are not waited for
+TAIL_WORDS = 2
 
 MANUAL_PROMPT = u'''You are writing the Hebrew subtitles of a trailer: {what}.
 
@@ -291,6 +303,49 @@ def marked(words, every=6, gap=0.7):
     return ' '.join(out)
 
 
+def indexed(words):
+    """[(second, word)] as one line: every word after its number in square brackets."""
+    return ' '.join('[%d]%s' % (n, word) for n, (_at, word) in enumerate(words, 1))
+
+
+def by_words(text, words, info=None):
+    """FIRST-LAST|text lines (word numbers) as [(start, end, text)] in seconds, timed by the words themselves: from just
+    before the first word, to a moment after the last -- long enough to be read, never into the next subtitle. Lines out
+    of order, overlapping or naming words that are not there are left out. info['covered']: how many words they hold."""
+    rows = []
+    for line in (text or '').splitlines():
+        m = re.match(r'\s*\[?(\d+)\]?\s*-\s*\[?(\d+)\]?\s*\|(.*)$', line)
+        if not m or not m.group(3).strip():
+            continue
+        first, last = int(m.group(1)), int(m.group(2))
+        if not (1 <= first <= last <= len(words)) or (rows and first <= rows[-1][1]):
+            continue
+        rows.append((first, last, m.group(3).strip()))
+    if info is not None:
+        info['covered'] = sum(last - first + 1 for first, last, _t in rows)
+        info['words'] = len(words)
+    out = []
+    for n, (first, last, text_) in enumerate(rows):
+        start = float(words[first - 1][0])
+        said = float(words[last - 1][0])
+        after = float(words[last][0]) if last < len(words) else said + 1.2
+        # the captions sometimes hear the last word or two of a sentence long after the rest ("...a car accident last
+        # [8 s] night", QA): the subtitle goes after the words before that pause -- it holds their meaning already
+        times = [float(words[i][0]) for i in range(first - 1, last)]
+        for i in range(len(times) - 1, max(len(times) - 1 - TAIL_WORDS, 0), -1):
+            if times[i] - times[i - 1] > GAP_S:
+                said, after = times[i - 1], times[i]
+                break
+        spoken_end = min(after, said + WORD_S)
+        reading = min(6.0, 0.8 + len(text_) / 17.0)
+        end = min(max(spoken_end + 0.4, start + reading), start + 7.0)
+        if n + 1 < len(rows):
+            end = min(end, float(words[rows[n + 1][0] - 1][0]) - LEAD_S - 0.05)
+        start = max(start - LEAD_S, out[-1][1] if out else 0.0)
+        out.append((round(start, 2), round(max(end, start + 0.3), 2), text_))
+    return out
+
+
 def timed(text, end_of_speech):
     """START-END|text lines as [(start, end, text)] in seconds: each kept in order, at least 1.2 s and at most 7 s
     long, ending before the next begins."""
@@ -332,8 +387,13 @@ def request_parts(job):
     lang = job.get('lang') or 'en'
     if job.get('src') == 'asr' and job.get('words'):
         words = [(float(a), str(w)) for a, w in job['words']]
-        prompt = ASR_PROMPT.format(what=what, lang=lang, speech=marked(words))
-        return [{'text': prompt}], lambda text: timed(text, words[-1][0])
+        prompt = ASR_PROMPT.format(what=what, lang=lang, speech=indexed(words))
+        info = {}
+
+        def read(text):
+            return by_words(text, words, info)
+        read.info = info
+        return [{'text': prompt}], read
     if job.get('src') == 'manual' and job.get('cues'):
         english = [(float(a), float(b), str(t)) for a, b, t in job['cues']]
         prompt = MANUAL_PROMPT.format(what=what, lang=lang, lines='\n'.join('%d|%s' % (n, t) for n, (_a, _b, t) in enumerate(english, 1)))
@@ -436,7 +496,10 @@ def handle(job, key=None, post=None, write=None, now=None):
         log('%s: no usable subtitles in the reply' % video)
         _failed(video, now)
         return None
-    log('%s: %d subtitles (%s, %.1f s, request %d today)' % (video, len(cues), job.get('src') or 'listen', time.time() - began, used))
+    info = getattr(read, 'info', None) or {}
+    held = (', %d of %d words' % (info['covered'], info['words'])) if info.get('words') else ''
+    log('%s: %d subtitles (%s%s, %.1f s, request %d today)' % (video, len(cues), job.get('src') or 'listen', held,
+                                                                  time.time() - began, used))
     (write or _write)(video, cues)
     return cues
 
@@ -455,7 +518,8 @@ def _write(video, cues):
     with open(path, 'w', encoding='utf-8') as f:
         f.write(to_srt(cues))
     with open(os.path.join(_folder(), video + '.he.json'), 'w', encoding='utf-8') as f:
-        json.dump([[int(a * 1000), int(b * 1000), t] for a, b, t in cues], f, ensure_ascii=False)
+        # (the version with the lines: the Wizard keeps it, and a newer one replaces an older one -- 0.3.103)
+        json.dump({'c': [[int(a * 1000), int(b * 1000), t] for a, b, t in cues], 'f': FORMAT}, f, ensure_ascii=False)
     xbmcgui.Window(10000).setProperty(READY, video)
     xbmc.executebuiltin('NotifyAll(%s,ready)' % SENDER)
 
@@ -470,6 +534,8 @@ def share(job, cues):
                 'n': job.get('title') or job.get('original') or '', 'y': job.get('year') or '',
                 # a film or a series, and a series' trailer's season (the Wizard 0.5.34): the channel's post says it
                 'k': job.get('kind') or '', 'e': job.get('season') or '',
+                # the translation's version: a newer one replaces an older one of the same trailer everywhere
+                'f': FORMAT,
                 'c': [[int(a * 1000), int(b * 1000), t] for a, b, t in cues]}
         status, answer = pool.share_trailer(body)
         if status == 429 and (answer or {}).get('closed'):
