@@ -81,6 +81,12 @@ class SkinPackageTests(unittest.TestCase):
         self.assertIn('id="9010"', keyboard)
 
 
+def tab_include(tab_id):
+    """The text of the include that draws a tab's button (gen_home.py tab_button_include)."""
+    includes = (XML / 'Includes_POVIL_Home.xml').read_text(encoding='utf-8')
+    return includes.split('<include name="POVIL_Tab_%s">' % tab_id)[1].split('</include>')[0]
+
+
 class GeneratedXmlTests(unittest.TestCase):
     """The generated files are what the generators write (nobody edited them by hand)."""
 
@@ -94,7 +100,8 @@ class GeneratedXmlTests(unittest.TestCase):
         self.assertEqual([t for _c, t in downs], ['5064', '5065', '5066', '5067', '5068'])
         self.assertIn('!Integer.IsGreater(Container(5064).NumItems,0)', downs[1][0])
         ups = [(n.get('condition'), n.text) for n in lists['5065'].findall('onup')]
-        self.assertEqual([t for _c, t in ups], ['5064', '5063', '5062', '5061', '9172'])
+        # (the screen's first chip on the screen, wherever the viewer's chips stand -- Onyx 1.0.28)
+        self.assertEqual([t for _c, t in ups], ['5064', '5063', '5062', '5061', 'SetFocus($VAR[POVIL_FirstChip_favourites])'])
 
     def test_the_touch_keymap_swipes_between_home_rows(self):
         import ast
@@ -122,9 +129,11 @@ class GeneratedXmlTests(unittest.TestCase):
     def test_a_touch_outside_the_rows_leaves_them_where_they_were(self):
         home = ET.parse(XML / 'Home.xml').getroot()
         controls = {c.get('id'): c for c in home.iter('control') if c.get('id')}
-        for cid in ('9010', '5031', '5032', '9112'):
+        for cid in ('5031', '5032', '9112'):
             with self.subTest(cid):
                 self.assertIn('SetProperty(povil.focus,%s,home)' % cid, [n.text for n in controls[cid].findall('onfocus')])
+        # a tab's button: an include for any place on the bar (Onyx 1.0.28), its own id by $PARAM
+        self.assertIn('<onfocus>SetProperty(povil.focus,$PARAM[id],home)</onfocus>', tab_include('movies'))
         text = (XML / 'Home.xml').read_text(encoding='utf-8')
         self.assertIn('[Control.HasFocus(5032) | [String.IsEmpty(System.CurrentControlId) + '
                       'String.IsEqual(Window(home).Property(povil.focus),5032)]]', text)
@@ -161,7 +170,7 @@ class GeneratedXmlTests(unittest.TestCase):
 
     def test_rows_retry_and_say_empty_only_when_the_retries_are_spent(self):
         home = ET.parse(XML / 'Home.xml').getroot()
-        movies_btn = next(c for c in home.iter('control') if c.get('id') == '9010')
+        movies_btn = ET.fromstring(tab_include('movies').split('<definition>')[1].split('</definition>')[0])
         resets = [n for n in movies_btn.findall('onfocus') if 'povil.retry.5011' in (n.text or '')]
         self.assertEqual(len(resets), 1, 'choosing the tab again asks again')
         self.assertIn('String.IsEqual(Window(home).Property(povil.retry.5011),2)', resets[0].get('condition'))
@@ -379,7 +388,7 @@ class GeneratedXmlTests(unittest.TestCase):
         buttons = {c.findtext('label'): c for c in home.iter('control') if c.get('type') == 'button'}
         chip = buttons['IPTV שלי']
         self.assertEqual(chip.findtext('onclick'), 'ActivateWindow(TVChannels)')
-        self.assertIn('+ [PVR.HasTVChannels | System.HasAddon(pvr.iptvsimple)]', chip.findtext('visible'))
+        self.assertIn('+ [PVR.HasTVChannels | System.HasPVRAddon | System.HasAddon(pvr.iptvsimple)]', chip.findtext('visible'))
         self.assertEqual(buttons['מדריך שידורים'].findtext('onclick'), 'ActivateWindow(TVGuide)')
         includes = (XML / 'Includes_POVIL_Home.xml').read_text(encoding='utf-8')
         # asked again once Kodi has its channels (IPTV Simple loads them after the start)
