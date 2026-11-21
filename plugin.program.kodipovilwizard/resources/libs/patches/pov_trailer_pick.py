@@ -18,7 +18,9 @@ before: include_video_language), and the choice is:
 ("Season 2", "עונה 3", "העונה השנייה", "Final Season"); when the name says nothing, the season it
 was published for -- the first one that began no more than six weeks before the trailer came out.
 A trailer published more than a year after the last season began says nothing that way (an old
-series whose trailers were uploaded later): it counts as the series' own.
+series whose trailers were uploaded later): it counts as the series' own. So does one published
+more than a year before the season that came next (0.5.40: Law & Order's 2016 trailer, between
+the original's last season and the revival's first, was taken for season 21's).
 
 THE ALTERNATIVES (0.5.11). The owner, a day into the home's trailers: "the trailers are really
 short -- surely a film has several; play the regular or the long ones, not a ten-second clip. How
@@ -43,6 +45,10 @@ import re
 KINDS = ('Trailer', 'Teaser')
 EARLY_DAYS = 45         # a season's trailer may come out this long after the season began
 STALE_DAYS = 365        # ... and one published this long after the LAST season began tells nothing by its date
+# ... nor one published more than this long BEFORE the season that came next (Wizard 0.5.40). The owner, Nov 2026, on Law &
+# Order (1990): its only trailer on TMDb, "Law and Order Trailer", came out in 2016 -- between season 20 (2009) and the
+# revival's season 21 (2022) -- and the post said "season 21's trailer" for the series' own poster.
+LEAD_DAYS = 365
 LAST = 99               # "final season", "last season": a later season, whichever its number
 _NUMBER = re.compile(r'(?:\bseasons?|\bseries|\bstaffel|\bsaison|עונה|עונת)\s*#?\s*(\d{1,2})\b', re.I)
 _SHORT = re.compile(r'\bS(\d{1,2})\b')
@@ -100,7 +106,8 @@ def dated_season(published, seasons):
         return None
     for number, day in began:
         if out <= day + EARLY_DAYS:
-            return number
+            # (out between two seasons, long before the next: no season's -- the series' own)
+            return number if day - out <= LEAD_DAYS else None
     return began[-1][0]
 
 
