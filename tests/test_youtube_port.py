@@ -171,7 +171,7 @@ class DeskTests(unittest.TestCase):
         self.assertIn("_start_watch('POVILYouTubePort', _youtube_port)", startup)
         source = (LIBS / 'trailers.py').read_text(encoding='utf-8')
         self.assertIn('youtube_port.run(log)', source)
-        self.assertIn('repair=repair, subs=subs)', source)
+        self.assertIn('repair=repair, subs=subs,', source)
 
 
 if __name__ == '__main__':

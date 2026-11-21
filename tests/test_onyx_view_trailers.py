@@ -82,12 +82,12 @@ class SkinTests(unittest.TestCase):
                 self.assertIn('<control type="list" id="%d">' % vid, after.split('description="over the picture"')[1])
                 self.assertIn('Skin.TimerElapsedSecs(povil_trailer_shown)', after)
 
-    def test_the_plot_steps_aside_while_the_trailer_plays(self):
+    def test_the_plot_stays_while_the_trailer_plays(self):
+        # (Onyx 1.0.34: it stays, and rises to a card at the top when the trailer has the screen -- test_trailer_plot_card)
         views = (XML / 'View_POVIL.xml').read_text(encoding='utf-8')
         for box in re.findall(r'<control type="textbox">.*?</control>', views, re.S):
             if 'POVIL_V_Plot' in box:
-                self.assertIn('effect="fade" start="100" end="0"', box)
-                self.assertIn('povil.tr.on', box)
+                self.assertNotIn('povil.tr.on', box)
                 break
         else:
             self.fail('no plot box')

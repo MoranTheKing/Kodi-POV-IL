@@ -121,6 +121,30 @@ TRAILER_ALONE = '%s + Skin.TimerIsRunning(povil_trailer_shown) + %s' % (TRAILER_
     TRAILER_FULL, TRAILER_ALONE_AFTER_S, TRAILER_FULLS,
     lambda seconds: 'Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),%d) + System.IdleTime(%d)'
                     % (seconds, min(seconds, TRAILER_STILL_S))))
+# THE PLOT GOES WITH THE TRAILER (Onyx 1.0.34). A viewer, Nov 2026: "can the series' text stay longer on the screen
+# before the trailer starts? It feels like a race to read it before the trailer plays"; the owner: "a film's too ...
+# that it shows but does not get in the trailer's way" -- and not a second later to the full screen ("a few more
+# seconds without the trailer full screen -- that's a pity"). The plot used to step aside at the trailer's first
+# picture, a second or two after the title was reached. Now:
+#  * it stays in the hero while the trailer plays behind it (as the title and its details always did);
+#  * when the trailer has the screen to itself -- just when it always did -- the plot does not go: it rises to the top
+#    of the screen (PLOT_CARD: the same width, font and lines, a soft shade in the corner; a film's trailer mostly has
+#    its black bar there, and the trailer's own subtitles are at the bottom), and stays there until it could be read;
+#  * how long that is: the Wizard's trailer desk measures the plot shown (the hidden label PLOT_LABEL) when the title
+#    asks for its trailer, and writes the seconds from the trailer's first picture, one of TRAILER_READ_STEPS, to
+#    TRAILER_READ (trailers.py reading_seconds). A short plot has been read by then, and no card comes at all;
+#  * a plot longer than the card's three lines scrolls on in it, the whole plot (the hero shows its first lines only):
+#    PLOT_CARD_HOLD_S on its first lines, then a line every PLOT_CARD_LINE_S -- counted from the card's own appearance
+#    (the autoscroll's condition is the card's: it starts again from its first line each time it shows), which the desk
+#    measures with the same numbers (trailers.py reading_seconds).
+# Any key brings the home back, as before -- the plot in its place.
+TRAILER_READ = 'Window(home).Property(povil.tr.read)'
+TRAILER_READ_STEPS = tuple(range(5, 31))        # (4: read before the screen is the trailer's; the desk writes it too)
+PLOT_LABEL = 9811
+PLOT_CARD_LINES, PLOT_CARD_HEIGHT, PLOT_CARD_HOLD_S, PLOT_CARD_LINE_S = 3, 128, 4, 3       # (the owner: "not slow, but not too fast")
+PLOT_CARD = '%s + !String.IsEmpty(Control.GetLabel(%d)) + [%s]' % (TRAILER_ALONE, PLOT_LABEL, ' | '.join(
+    '[String.IsEqual(%s,%d) + !Integer.IsGreaterOrEqual(Skin.TimerElapsedSecs(povil_trailer_shown),%d)]'
+    % (TRAILER_READ, s, s) for s in TRAILER_READ_STEPS))
 TRAILER_FADE = ('<animation effect="fade" start="100" end="0" time="900" tween="sine" easing="inout" condition="%s">Conditional</animation>'
                 % TRAILER_ALONE)
 # The trailer's Hebrew subtitles, DRAWN BY THE SKIN (Onyx 1.0.30): the Wizard (trailer_subs.py, 0.5.33) writes the line
@@ -1872,6 +1896,9 @@ def backdrop(x, d):
     trailer_lines(x, d)
     x(d, '<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
          '<label>$VAR[POVIL_HeroTrailer]</label></control>' % TRAILER_KEY)
+    # the plot shown, for the trailer desk to measure (TRAILER_READ)
+    x(d, '<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
+         '<label>$VAR[POVIL_HeroPlot]</label></control>' % PLOT_LABEL)
     # a shade only 8 pixels across fades out over its last half pixel at both ends
     # (120 screen pixels when stretched over the screen): each is drawn past the screen's edges
     for desc, l, t, w, h, tex in (('hero shade', 520, -160, 1400, 1400, 'povil/grad_right.png'),
@@ -1883,6 +1910,8 @@ def backdrop(x, d):
         x(d + 1, '<texture>%s</texture>' % tex)
         x(d + 1, TRAILER_FADE)          # the trailer to itself: no shade over it
         x(d, '</control>')
+    # (the hero's plot is at 408, 114 high: three lines)
+    plot_card(x, d, '$VAR[POVIL_HeroTitle]', '$VAR[POVIL_HeroPlot]', 304)
 
 
 def trailer_lines(x, d):
@@ -1902,6 +1931,52 @@ def trailer_lines(x, d):
     x(d + 1, '<align>center</align><aligny>bottom</aligny><wrapmultiline>true</wrapmultiline>')
     x(d + 1, '<label>$INFO[%s]</label>' % TRAILER_LINE)
     x(d + 1, '<visible>%s</visible>' % shown)
+    x(d, '</control>')
+
+
+def plot_card(x, d, title, plot, rise):
+    """PLOT_CARD: the plot at the top of the trailer's screen until it could be read -- risen from its place in the
+    hero (rise: how far up), the same width and font, the title over it, three lines that scroll on through a longer
+    plot; a soft shade in the corner (grad_corner.png). Under it nothing of the home's: everything over the picture
+    has faded by then."""
+    right = 1920 - MARGIN
+    # Each part shows and hides by ITSELF, in a group that is always there: Kodi runs a control's Visible animation
+    # when its own visibility changes, and puts a textbox's scrolling back to its first line only while the box itself
+    # is hidden (CGUITextBox::DoProcess, Kodi 21) -- in a hidden group it is not looked at at all, and kept the time
+    # it was last seen: the card came up already scrolling (QA).
+    risen = ('<animation type="Visible"><effect type="fade" start="0" end="100" time="500" delay="150"/>'
+             '<effect type="slide" start="0,%d" end="0,0" time="900" tween="cubic" easing="out"/></animation>' % rise)
+    # (a short fade: a key brings the home's top back at once, and the two do not stand over each other -- the reviewer)
+    gone = '<animation effect="fade" start="100" end="0" time="400" tween="sine" easing="inout">Hidden</animation>'
+    x(d, '<control type="group" description="plot card">')
+    x(d + 1, '<control type="image" description="plot card corner">')
+    x(d + 2, '<left>300</left><top>-20</top><width>1660</width><height>460</height>')
+    x(d + 2, '<texture>povil/grad_corner.png</texture>')
+    x(d + 2, '<visible>%s</visible>' % PLOT_CARD)
+    x(d + 2, '<animation effect="fade" start="0" end="100" time="700">Visible</animation>')
+    x(d + 2, gone)
+    x(d + 1, '</control>')
+    x(d + 1, '<control type="label" description="plot card title">')
+    x(d + 2, '<left>%d</left><top>44</top><width>860</width><height>46</height>' % (right - 860))
+    x(d + 2, '<font>povil_hero_meta_bold</font><textcolor>povil_white</textcolor><shadowcolor>FF000000</shadowcolor>')
+    x(d + 2, '<align>right</align><aligny>center</aligny>')
+    x(d + 2, '<label>%s</label>' % title)
+    x(d + 2, '<visible>%s</visible>' % PLOT_CARD)
+    x(d + 2, risen)
+    x(d + 2, gone)
+    x(d + 1, '</control>')
+    x(d + 1, '<control type="textbox" description="plot card text">')
+    # (Kodi scrolls a textbox by the lines that fit in it WHOLE: povil_plot's line is ~41.3 px -- 120 held two, and the
+    # scroll went on until the last line stood alone at the top)
+    x(d + 2, '<left>%d</left><top>104</top><width>860</width><height>%d</height>' % (right - 860, PLOT_CARD_HEIGHT))
+    x(d + 2, '<font>povil_plot</font><textcolor>F2FFFFFF</textcolor><shadowcolor>FF000000</shadowcolor><align>right</align>')
+    x(d + 2, '<autoscroll delay="%d" time="%d" repeat="600000">%s</autoscroll>'
+             % (PLOT_CARD_HOLD_S * 1000, PLOT_CARD_LINE_S * 1000, PLOT_CARD))
+    x(d + 2, '<label>%s</label>' % plot)
+    x(d + 2, '<visible>%s</visible>' % PLOT_CARD)
+    x(d + 2, risen)
+    x(d + 2, gone)
+    x(d + 1, '</control>')
     x(d, '</control>')
 
 
@@ -2150,9 +2225,8 @@ def hero(x, d):
     x(d + 2, '<animation effect="slide" end="0,-40" time="140" tween="cubic" easing="out" '
              'condition="String.IsEmpty(Control.GetLabel(%d))">Conditional</animation>' % RATINGS_KEY)
     x(d + 2, '<font>povil_plot</font><textcolor>povil_dim</textcolor><shadowcolor>%s</shadowcolor><align>right</align>' % HERO_SHADOW)
-    # while the title's trailer plays the plot steps aside: moving pictures behind three lines of text
-    # read as neither (the title, its details and its ratings stay)
-    x(d + 2, '<animation effect="fade" start="100" end="0" time="400" condition="%s">Conditional</animation>' % TRAILER_SHOWN)
+    # (it stays while the title's trailer plays, with everything over the picture, and rises to the top of the
+    # screen when the trailer has it to itself: PLOT_CARD. Onyx 1.0.33 and before hid it at the trailer's first picture.)
     x(d + 2, '<label>$VAR[POVIL_HeroPlot]</label>')
     x(d + 1, '</control>')
     x(d, '</control>')
