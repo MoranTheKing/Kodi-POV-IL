@@ -266,24 +266,114 @@ class MoranSubsTests(unittest.TestCase):
         cues = self.ms.by_words('1-1|אני\n2-4|אוהב את המקום הזה מאוד מאוד מאוד', words, info)
         self.assertLessEqual(cues[0][1], cues[1][0])
 
-    def test_gemini_busy_is_asked_once_more_and_then_again_soon(self):
-        answers = []
-
+    def busy_post(self, answers):
         def post(url, json=None, headers=None, timeout=None):
             code = answers.pop(0)
             return types.SimpleNamespace(status_code=code, json=lambda: {'text': '1-2|שלום לכם חברים יקרים מאוד, מה שלומכם היום הזה?'})
-        job = {'v': 'busy0000001', 'src': 'asr', 'words': [[1.0, 'hello'], [2.0, 'there']], 'lang': 'en'}
-        with mock.patch.object(self.ms, 'BUSY_RETRY_S', 0), mock.patch.object(self.ms, '_write', lambda v, c: None):
-            answers[:] = [503, 200]
-            self.assertTrue(self.ms.handle(dict(job), key='k', post=post, now=1000.0), 'busy, then answered at once')
-            answers[:] = [503, 503]
-            self.assertIsNone(self.ms.handle(dict(job, v='busy0000002'), key='k', post=post, now=1000.0))
-            self.assertTrue(self.ms._recently_failed('busy0000002', now=1000.0 + 60))
-            self.assertFalse(self.ms._recently_failed('busy0000002', now=1000.0 + self.ms.BUSY_S + 1), 'again in 30 minutes')
+        return post
+
+    BUSY_JOB = {'v': 'busy0000001', 'src': 'asr', 'words': [[1.0, 'hello'], [2.0, 'there']], 'lang': 'en'}
+
+    def test_gemini_busy_is_asked_again_while_the_trailer_plays(self):
+        """0.3.106: a viewer's log, 21 Nov 2026 -- Law & Order's trailer got 503 twice in two seconds and stayed bare;
+        3.1 Flash Lite's "high demand" passed within minutes. The same model, asked again after 3, 8 and 20 s."""
+        answers, waited = [], []
+        post, job = self.busy_post(answers), self.BUSY_JOB
+        pause = lambda seconds: waited.append(seconds) or False
+        with mock.patch.object(self.ms, '_write', lambda v, c: None):
+            answers[:] = [503, 503, 200]
+            self.assertTrue(self.ms.handle(dict(job), key='k', post=post, now=1000.0, pause=pause), 'answered on the third')
+            self.assertEqual(waited, [3, 8])
+            self.assertEqual(self.ms._LATER, {})
+            answers[:], waited[:] = [503] * 4, []
+            self.assertIsNone(self.ms.handle(dict(job, v='busy0000002'), key='k', post=post, now=1000.0, pause=pause))
+            self.assertEqual((answers, waited), ([], list(self.ms.BUSY_RETRIES_S)))
+            self.assertTrue(self.ms._recently_failed('busy0000002', now=1000.0 + 60), 'the Wizard asking again is not two requests')
+            self.assertEqual(self.ms._LATER['busy0000002']['at'], 1000.0 + self.ms.LATER_S, 'kept for the background')
             answers[:] = [400]
-            self.assertIsNone(self.ms.handle(dict(job, v='badreq00003'), key='k', post=post, now=1000.0))
+            self.assertIsNone(self.ms.handle(dict(job, v='badreq00003'), key='k', post=post, now=1000.0, pause=pause))
             self.assertEqual(answers, [], 'a request\'s own fault: not asked twice')
             self.assertTrue(self.ms._recently_failed('badreq00003', now=1000.0 + self.ms.BUSY_S + 1), 'a day')
+            self.assertNotIn('badreq00003', self.ms._LATER)
+
+    def test_any_answer_takes_a_trailer_out_of_the_background(self):
+        # (the reviewer: a "NONE" kept it there, asked every LATER_S for good -- ~144 requests a day on a TV left on)
+        for reply_code, text in ((200, 'NONE'), (400, '')):
+            self.ms._LATER.clear()
+            self.ms.keep_for_later(dict(self.BUSY_JOB), now=1000.0)
+            job = self.ms.due_later(now=1000.0 + self.ms.LATER_S)
+
+            def post(url, json=None, headers=None, timeout=None, code=reply_code, body=text):
+                return types.SimpleNamespace(status_code=code, json=lambda: {'text': body})
+            with mock.patch.object(self.ms, '_write', lambda v, c: None):
+                self.assertIsNone(self.ms.handle(job, key='k', post=post, now=2000.0, background=True))
+            self.assertEqual(self.ms._LATER, {}, reply_code)
+            self.assertIsNone(self.ms.due_later(now=1e9))
+        # and a hard limit, whatever happened in between
+        self.ms.keep_for_later(dict(self.BUSY_JOB), now=1000.0)
+        self.ms._LATER['busy0000001']['tries'] = self.ms.LATER_TRIES
+        self.assertIsNone(self.ms.due_later(now=1e9))
+        self.assertEqual(self.ms._LATER, {})
+
+    def test_a_kept_trailer_s_viewer_back_on_it_is_asked_and_a_translated_one_answered_at_once(self):
+        answers = [503] * 4
+        with mock.patch.object(self.ms, '_write', lambda v, c: None):
+            self.ms.handle(dict(self.BUSY_JOB), key='k', post=self.busy_post(answers), now=1000.0, pause=lambda s: False)
+            self.assertTrue(self.ms._recently_failed('busy0000001', now=1060.0))
+            # back on it a minute later, before the background's turn: asked, not refused
+            answers[:] = [200]
+            self.assertTrue(self.ms.handle(dict(self.BUSY_JOB), key='k', post=self.busy_post(answers), now=1060.0,
+                                           pause=lambda s: False))
+            self.assertEqual(answers, [])
+            self.assertNotIn('busy0000001', self.ms._LATER)
+        # answered again without a request (the service writes it at once)
+        self.assertTrue(self.ms.answered('busy0000001'))
+        self.assertIsNone(self.ms.answered('other000001'))
+        source = (ROOT / 'service.subtitles.kodipovilai/resources/lib/trailer_subs.py').read_text(encoding='utf-8')
+        self.assertIn("done = answered(str(job.get('v') or ''))", source)
+        # the background waits for a quiet spell; the same trailer asked again does not stop its own asking
+        self.assertIn('later = due_later() if quiet >= LATER_QUIET_S else None', source)
+        self.assertIn("if pending['job'] is not None and pending['job'].get('v') != video:", source)
+
+    def test_the_viewer_on_another_title_stops_the_asking_and_it_goes_on_in_the_background(self):
+        answers = [503]
+        with mock.patch.object(self.ms, '_write', lambda v, c: None):
+            self.assertIsNone(self.ms.handle(dict(self.BUSY_JOB), key='k', post=self.busy_post(answers), now=1000.0,
+                                             pause=lambda seconds: True))
+        self.assertEqual(answers, [], 'one request: the next title\'s job is not held up')
+        self.assertIn('busy0000001', self.ms._LATER)
+
+    def test_the_background_asks_a_kept_trailer_again_shares_it_and_gives_up_after_its_tries(self):
+        written = []
+        with mock.patch.object(self.ms, '_write', lambda v, c: written.append(v)):
+            self.ms.keep_for_later(dict(self.BUSY_JOB), now=1000.0)
+            self.assertIsNone(self.ms.due_later(now=1000.0 + self.ms.LATER_S - 1), 'not before its time')
+            job = self.ms.due_later(now=1000.0 + self.ms.LATER_S)
+            self.assertEqual(job['v'], 'busy0000001')
+            self.assertIsNone(self.ms.due_later(now=1000.0 + self.ms.LATER_S), 'taken once')
+            # still busy: one request, kept again
+            answers = [503]
+            self.assertIsNone(self.ms.handle(job, key='k', post=self.busy_post(answers), now=2000.0, background=True))
+            self.assertEqual(answers, [])
+            self.assertEqual(self.ms._LATER['busy0000001']['tries'], 1)
+            # answered: written, out of the background, and the viewer back on it is not refused
+            answers = [200]
+            self.assertTrue(self.ms.handle(job, key='k', post=self.busy_post(answers), now=3000.0, background=True))
+            self.assertEqual(written, ['busy0000001'])
+            self.assertNotIn('busy0000001', self.ms._LATER)
+            self.assertFalse(self.ms._recently_failed('busy0000001', now=3001.0))
+        # its tries spent: given up
+        self.ms.keep_for_later(dict(self.BUSY_JOB, v='busy0000004'), now=1000.0)
+        for n in range(self.ms.LATER_TRIES):
+            self.assertIsNotNone(self.ms.due_later(now=1e9 + n * self.ms.LATER_S))
+            self.assertEqual(self.ms.keep_for_later(dict(self.BUSY_JOB, v='busy0000004'), now=1e9 + n * self.ms.LATER_S),
+                             n + 1 < self.ms.LATER_TRIES)
+        self.assertNotIn('busy0000004', self.ms._LATER)
+        source = (ROOT / 'service.subtitles.kodipovilai/resources/lib/trailer_subs.py').read_text(encoding='utf-8')
+        self.assertIn("cues = handle(job, pause=pause_for(job.get('v')))", source)
+        self.assertIn("cues = handle(later, background=True)", source)
+        self.assertIn("threading.Thread(target=share, args=(later, cues), name='MoranSubsTrailerShare').start()", source)
+        self.assertNotIn('gemini-3.5-flash-lite', source.split('MODEL = ')[1].split('\n')[0], 'the trailers\' own model')
 
     def test_a_trailer_playing_when_the_service_starts_gets_no_search(self):
         """0.3.101: the owner, Nov 2026 -- at Kodi's first start the home's first trailer began before the service,

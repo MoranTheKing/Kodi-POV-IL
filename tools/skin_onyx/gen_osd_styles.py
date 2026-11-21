@@ -28,11 +28,13 @@ SOURCE_SHOWN = '[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + 
 SUBS_SHOWN = '!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles'
 # The channels while a channel plays (Onyx 1.0.33; the owner, Nov 2026: "add a channel list button to Onyx's players --
 # I think the other skins have it"): live TV's own list (Kodi's channels dialog), or Idan Plus's channels and radio
-# stations (gen_osd.py channels_window) -- in every player style. Only while live TV or Idan Plus plays: the rows are full
-# while a film or an episode of another add-on plays.
+# stations (gen_osd.py channels_window) -- in every player style. Onyx 1.0.35: in films and series too (the owner, with a
+# photo of a film's controls: "and there's no channels button ... it should be in films and series too, of course"): from a
+# film the Israeli channels' panel opens, and a channel picked there plays instead. Whenever Idan Plus is installed (the
+# build has it), or live TV plays; Onyx's own player has the room in its left group (gen_osd.py LEFT_BUTTONS).
 CHANNELS_ID = 1164
 CHANNELS_KIND = 'Window(home).Property(povil.ch.kind)'
-CHANNELS_SHOWN = 'VideoPlayer.Content(LiveTV) | String.Contains(Player.FolderPath,plugin.video.idanplus)'
+CHANNELS_SHOWN = 'VideoPlayer.Content(LiveTV) | System.HasAddon(plugin.video.idanplus)'
 CHANNELS = ['Dialog.Close(VideoOSD,true)', ('VideoPlayer.Content(LiveTV)', 'ActivateWindow(PVROSDChannels)'),
             ('!VideoPlayer.Content(LiveTV)', 'ActivateWindow(%d)' % CHANNELS_ID)]
 SEEK_SHOWN = 'Player.SeekEnabled + !VideoPlayer.Content(livetv)'
