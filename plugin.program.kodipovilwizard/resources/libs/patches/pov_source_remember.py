@@ -131,10 +131,17 @@ _PROVIDER_NAMES = {
 }
 
 
+# A debrid service's own cloud, as Umbrella names the provider of a source found there
+_CLOUD_NAMES = {'rd_cloud': 'Real-Debrid', 'pm_cloud': 'Premiumize', 'ad_cloud': 'AllDebrid', 'tb_cloud': 'TorBox',
+                'oc_cloud': 'Offcloud'}
+
+
 def provider_label(item):
     """The debrid service a source plays from, as its users write it; '' when the source names none."""
     try:
         raw = str(item.get('debrid') or item.get('cache_provider') or '').strip()
+        if not raw:
+            raw = _CLOUD_NAMES.get(str(item.get('provider') or '').strip().lower(), '')
     except Exception:
         return ''
     if raw.lower().startswith('uncached'):
@@ -167,6 +174,19 @@ def size_label(item):
     return (text[:-2] if text.endswith('.0') else text) + ' GB'
 
 
+def publish_pills(win, item, name):
+    """The player's pills for the source that plays (Onyx): where the stream comes from, and the file's size.
+    Tied to this source's name: another add-on's pick replaces the name and the skin then shows no provider rather
+    than a stale one. POV's pick (run_capture) and Umbrella's (umbrella_capture, umbrella_published) both say it."""
+    provider = provider_label(item)
+    win.setProperty('povil_osd_provider', provider)
+    win.setProperty('povil_osd_provider_for', name if provider else '')
+    # ... and the file's size, a pill beside it (a viewer, Nov 2026: "the file size among the chips")
+    size = size_label(item)
+    win.setProperty('povil_osd_size', size)
+    win.setProperty('povil_osd_size_for', name if size else '')
+
+
 def run_capture(sources_self, item, link):
     """
     Hook 1: Stashes window properties for external modules and saves the selected source.
@@ -178,16 +198,8 @@ def run_capture(sources_self, item, link):
         win.setProperty('subs.player_filename', name)
         win.setProperty('pov_picked_source_name', name)
         win.setProperty('pov_picked_source_url', link or '')
-        # Where the stream comes from, for the player's details line (Onyx).
-        # Tied to this source's name: another add-on's pick replaces the name
-        # and the skin then shows no provider rather than a stale one.
-        provider = provider_label(item)
-        win.setProperty('povil_osd_provider', provider)
-        win.setProperty('povil_osd_provider_for', name if provider else '')
-        # ... and the file's size, a pill beside it (a viewer, Nov 2026: "the file size among the chips")
-        size = size_label(item)
-        win.setProperty('povil_osd_size', size)
-        win.setProperty('povil_osd_size_for', name if size else '')
+        # Where the stream comes from and the file's size, for the player's pills (Onyx)
+        publish_pills(win, item, name)
     except Exception as e:
         _log('Failed setting Window properties: ' + str(e), xbmc.LOGWARNING)
 
@@ -316,7 +328,15 @@ def _umbrella_cached(item):
 
 
 def umbrella_capture(ids, item):
-    """Umbrella's playItem(), when the picked source resolved: remember it for this title."""
+    """Umbrella's playItem(), when the picked source resolved: the player's pills for it, then remember it for
+    this title. (A viewer, Nov 2026: "the file size and TorBox are not in Umbrella, only in POV" -- this hook named
+    the source for the subtitles and remembered it, but never told the pills.)"""
+    try:
+        name = (item or {}).get('name') or ''
+        if name:
+            publish_pills(xbmcgui.Window(10000), item, name)
+    except Exception as e:
+        _log('Umbrella pills: ' + str(e), xbmc.LOGWARNING)
     try:
         if not _enabled() or not _umbrella_cached(item):
             return False
@@ -368,7 +388,8 @@ def umbrella_pick(ids, items):
 
 
 def umbrella_published(item, url):
-    """The remembered source started without Umbrella's list: say what plays, as its list path does."""
+    """A source Umbrella started without its list -- the remembered one, or its own autoplay (the Wizard's patch
+    umbrella_autoplay_source): say what plays, as its list path does, the player's pills too."""
     try:
         name = (item or {}).get('name') or ''
         if name:
@@ -376,5 +397,21 @@ def umbrella_published(item, url):
             win.setProperty('subs.player_filename', name)
             win.setProperty('pov_picked_source_name', name)
             win.setProperty('pov_picked_source_url', url or '')
+            publish_pills(win, item, name)
     except Exception:
         pass
+
+
+def umbrella_checking(message, names):
+    """Umbrella's search window while it asks the debrid services which sources they hold: their names, as POV's
+    search says "Remaining: TORBOX" -- Umbrella says "Checking Providers" (a viewer, Nov 2026: "in Umbrella's search
+    TorBox is not named either"). `names`: Umbrella's debrid resolvers' names, the services the viewer connected."""
+    shown = []
+    for name in names or ():
+        name = str(name or '').strip()
+        label = _PROVIDER_NAMES.get(name.lower(), name)
+        if label and len(label) <= 24 and label not in shown:
+            shown.append(label)
+    if not shown or 'Checking Providers' not in (message or ''):
+        return message
+    return message.replace('Checking Providers', 'Checking ' + ', '.join(shown))
