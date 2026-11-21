@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-11-21T12:23:56Z",
+  "generated": "2026-11-21T13:35:38Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -145,13 +145,13 @@
     "service.subtitles.kodipovilai": {
       "id": "service.subtitles.kodipovilai",
       "name": "MoranSubs",
-      "version": "0.3.105",
+      "version": "0.3.106",
       "type": "subtitle",
-      "filename": "service.subtitles.kodipovilai-0.3.105.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.105.zip",
-      "size": 3935417,
-      "sha256": "79f0b599d7042ba21c3118d62933db60342af937581177d0ea06a362d5d442f4",
-      "updated": "2026-11-20T21:59:04Z"
+      "filename": "service.subtitles.kodipovilai-0.3.106.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.106.zip",
+      "size": 3937423,
+      "sha256": "c0c415b371e27cea97f99ed227586498c07c943eb470f8608e03b85767269c6b",
+      "updated": "2026-11-21T13:35:38Z"
     },
     "skin.estuary": {
       "id": "skin.estuary",
@@ -178,13 +178,13 @@
     "skin.povil.onyx": {
       "id": "skin.povil.onyx",
       "name": "Kodi POV IL - Onyx",
-      "version": "1.0.34",
+      "version": "1.0.35",
       "type": "skin",
-      "filename": "skin.povil.onyx-1.0.34.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.onyx-1.0.34.zip",
-      "size": 3198517,
-      "sha256": "d36ea03f946311c783d002fd03e6f386dc2d37798c1d89cdeabaacd8dba93b37",
-      "updated": "2026-11-21T12:23:56Z"
+      "filename": "skin.povil.onyx-1.0.35.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.onyx-1.0.35.zip",
+      "size": 3199775,
+      "sha256": "e4edaab4466520b532dcfe1faf1d14120ecfeac887ccb2f08fd20d9c560664c0",
+      "updated": "2026-11-21T13:35:38Z"
     }
   }
 }
