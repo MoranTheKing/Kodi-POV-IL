@@ -584,6 +584,16 @@ def autosub_on_play():
         _have_key = bool((kodi_utils.get_setting('api_key', '') or '').strip())
         _mode = (kodi_utils.get_setting('translation_mode', 'ai') or 'ai')
         _ai_ok = _mode != 'none'
+        # 0.3.108: a translation needs a Gemini key only in the AI mode -- Google
+        # Translate needs none (a viewer on "Google Translate" with no key, Nov
+        # 2026: the video's own English track failed to extract, and the
+        # translation of the provider's English subtitle -- OpenSubtitles -- was
+        # never tried, because it asked for a key; picked by hand it translated).
+        _can_translate = _ai_ok and (_have_key or _mode == 'google')
+        # what the overlay names: a viewer who chose Google is not told "AI"
+        _by = 'Google Translate' if _mode == 'google' else 'AI'
+        _hint = ('תרגום Google זמין ברשימת הכתוביות' if _mode == 'google'
+                 else 'תרגום AI זמין ברשימת הכתוביות')
         _when = ai_when_no_hebrew(kodi_utils)
         _ai_offered = False      # an AI translation the user can pick instead
         _ai_answer = []          # the user's answer, once asked
@@ -598,7 +608,7 @@ def autosub_on_play():
         def _ai_allowed():
             if _when == 'auto':
                 return True
-            if _when == 'manual' or not (_have_key and _ai_ok):
+            if _when == 'manual' or not _can_translate:
                 return False
             if not _ai_answer:
                 if _eng_general is not None:
@@ -612,7 +622,7 @@ def autosub_on_play():
                         and _autosub_owns_player()):
                     try:
                         _eng_general.show_msg = (
-                            '[COLOR lightblue]מתרגם ב-AI[/COLOR]')
+                            '[COLOR lightblue]מתרגם ב-' + _by + '[/COLOR]')
                     except Exception:
                         pass
             return _ai_answer[0]
@@ -722,13 +732,13 @@ def autosub_on_play():
         # foreign sub (the highest-match English, which list_candidates already
         # orders first) to Hebrew on play, exactly like DarkSubs's auto_translate.
         # Gated so we NEVER spend quota when a ready Hebrew sub exists:
-        #   * a Gemini API key must be connected (nothing to translate with
-        #     otherwise), and
+        #   * something to translate with: a Gemini API key in the AI mode,
+        #     nothing in the Google mode (0.3.108, _can_translate), and
         #   * the user hasn't opted out of AI (translation_mode != 'none').
         # (The legacy engine_force_translate toggle still forces it if set.)
         # 0.3.74: outside 'auto' the user's answer decides (asked once)
         if _when == 'auto':
-            _auto_ai = (_have_key and _ai_ok) or kodi_utils.get_bool(
+            _auto_ai = _can_translate or kodi_utils.get_bool(
                 'engine_force_translate', False)
         else:
             _auto_ai = False
@@ -759,7 +769,7 @@ def autosub_on_play():
                     if _eng_general is not None:
                         try:
                             _eng_general.show_msg = (
-                                '[COLOR lightblue]אין עברית — מתרגם ב-AI[/COLOR]')
+                                '[COLOR lightblue]אין עברית — מתרגם ב-' + _by + '[/COLOR]')
                         except Exception:
                             pass
                     try:
@@ -812,11 +822,11 @@ def autosub_on_play():
                                '[COLOR lightblue]' + _EMBEDDED_MISS_LINES.get(
                                    _miss, _EMBEDDED_MISS_LINES['']) + '[/COLOR]',
                                hold=7.0)
-            elif (_ai_offered and _when != 'auto' and _have_key and _ai_ok
+            elif (_ai_offered and _when != 'auto' and _can_translate
                     and _ai_answer[:1] != [True]):
                 # left to the user: say where the translation is
                 _final_overlay('[COLOR red]לא נמצאה כתובית עברית[/COLOR]\n'
-                               '[COLOR lightblue]תרגום AI זמין ברשימת הכתוביות[/COLOR]',
+                               '[COLOR lightblue]' + _hint + '[/COLOR]',
                                hold=5.0)
             else:
                 _final_overlay('[COLOR red]לא נמצאה כתובית עברית[/COLOR]', hold=4.0)
