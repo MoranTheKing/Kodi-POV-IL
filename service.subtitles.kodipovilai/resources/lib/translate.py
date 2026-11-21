@@ -63,6 +63,20 @@ _GOOGLE_FALLBACK_WHY = {
     'error': 'שגיאת AI',
     'crash': 'שגיאת AI',
 }
+# What the viewer is told when Google Translate gives no Hebrew, by
+# google_translate.last_failure()'s kind (0.3.107; it was one "failed -- try
+# again" for every cause, and the log had no cause at all). The toast's title
+# says it failed; its one line, why -- short enough for Onyx's one-line toast
+# (a 73-character line was cut at both ends in QA).
+# Each line starts with a Hebrew word: Kodi takes a line's direction from its
+# first strong letter, and a line opening with "Google" may read out of order.
+_GOOGLE_FAIL_TITLE = 'התרגום של Google נכשל'
+_GOOGLE_FAIL_SAY = {
+    'blocked': 'החיבור ל-Google חסום כרגע — נסה שוב מאוחר יותר',
+    'tls': 'החיבור המאובטח נחסם — בדוק שעון, סינון או אנטי-וירוס',
+    'network': 'אין חיבור ל-Google — בדוק אינטרנט, VPN או סינון',
+    '': 'נסה שוב בעוד רגע',
+}
 from . import kodi_utils
 from . import local_subs
 from . import prompt
@@ -1998,6 +2012,9 @@ def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
                 heb = google_translate.translate_srt(
                     srt.strip_leaked_speaker_prefix('\n\n'.join(missing_blocks)),
                     source_lang)
+                if not heb:
+                    kodi_utils.log('google fill failed: {0}'.format(
+                        google_translate.last_failure()), level='WARNING')
             except Exception as e:
                 kodi_utils.log('google fill failed: {0}'.format(e), level='WARNING')
             filled = srt.parse_blocks(heb or '')
@@ -2090,6 +2107,7 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
     never pooled, applies the RTL punctuation fix, and returns the path (or
     None on failure)."""
     heb = None
+    why = None
     try:
         from . import google_translate
         # Google Translate has no cast/gender mechanism, so the 'MABEL:' speaker
@@ -2098,11 +2116,20 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
         # cache path (keyed by the prefix-kept source hash) still lines up.
         src_text = srt.strip_leaked_speaker_prefix(src_text)
         heb = google_translate.translate_srt(src_text, source_lang)
+        if not heb or not heb.strip():
+            why = google_translate.last_failure()
+        elif google_translate.route() not in (None, 'gtx'):
+            kodi_utils.log('google translate: answered by its second address ({0}) -- '
+                           'the first refuses this device'.format(google_translate.route()),
+                           level='INFO')
     except Exception as e:
-        kodi_utils.log('google translate failed: {0}'.format(e),
-                       level='WARNING')
+        why = ('', '{0}: {1}'.format(type(e).__name__, e))
     if not heb or not heb.strip():
-        kodi_utils.notify('Google Translate נכשל — נסה שוב', time_ms=4000)
+        kodi_utils.log('google translate failed: {0}'.format(
+            '{0} ({1})'.format(why[0] or 'error', why[1]) if why else 'no answer'),
+            level='WARNING')
+        kodi_utils.notify(_GOOGLE_FAIL_SAY.get((why or ('',))[0], _GOOGLE_FAIL_SAY['']),
+                          title=_GOOGLE_FAIL_TITLE, time_ms=6000)
         return None
     heb = srt.mend_line_breaks(heb)
     try:
