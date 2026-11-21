@@ -1,3 +1,6 @@
+[B]Kodi POV IL - Onyx 1.0.36[/B]
+- The Wizard's trailer choice inside the skin (for Onyx without the Wizard) brought level with Wizard 0.5.40: a series' trailer that came out long before its next season counts as the series' own.
+
 [B]Kodi POV IL - Onyx 1.0.35[/B]
 - The shade behind the plot over a full-screen trailer is lighter and only around the text (the owner, with a phone's frame: "doesn't the rectangle block a bit of light and hide the trailer?"). It was darker and reached a third of the way down and half across the screen.
 - The channels button is in the player in films and series too, in every player style (the owner, with a photo of a film's controls: "there's no channels button ... it should be in films and series too, of course"). From a film it opens the Israeli channels and radio (Idan Plus); a channel picked there plays instead -- the film is stopped first and its add-on keeps its place (no wrong resume point, nothing marked watched), and the channel follows a few seconds later. In Onyx's own player it moved to the left group, beside the player switch: the right one is full while an episode plays.
