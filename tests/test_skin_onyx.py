@@ -204,8 +204,9 @@ class GeneratedXmlTests(unittest.TestCase):
                 self.assertIsNone(group.findall(tag)[-1].get('condition'), 'the last one always applies')
                 self.assertNotIn(gid, targets)
         # (7013: the other players, gen_osd_styles.py -- the farthest from the middle)
-        self.assertEqual(ids, {'7006': ['7013', '7010', '7011', '7012'], '7000': ['7002', '7003', '7004'],
-                               '7007': ['7024', '7027', '7020', '7021', '7022', '7023', '7025', '7026']})   # (7027: channels, 1.0.33)
+        # (7027: channels -- 1.0.33 beside the subtitles while a channel played; 1.0.35 in the left group, films too)
+        self.assertEqual(ids, {'7006': ['7013', '7027', '7010', '7011', '7012'], '7000': ['7002', '7003', '7004'],
+                               '7007': ['7024', '7020', '7021', '7022', '7023', '7025', '7026']})
         # the owner: "the subtitles button closer": two presses from the main button
         self.assertEqual((ids['7000'].index('7004') - ids['7000'].index('7003')) + 1 + ids['7007'].index('7024'), 2)
         # the main button is in the middle of the screen
@@ -216,8 +217,8 @@ class GeneratedXmlTests(unittest.TestCase):
         self.assertEqual([n.text for n in groups['7006'].findall('onleft')], ['noop'])
         self.assertEqual([n.text for n in groups['7007'].findall('onright')], ['noop'])
         self.assertEqual([n.text for n in middle.findall('onleft')], ['7012'])
-        self.assertEqual([n.text for n in middle.findall('onright')], ['7024', '7027', '7020', '7021', '7022'])
-        self.assertEqual([n.text for n in groups['7006'].findall('onright')], ['7002', '7003', '7004', '7024', '7027', '7020', '7021', '7022'])
+        self.assertEqual([n.text for n in middle.findall('onright')], ['7024', '7020', '7021', '7022'])
+        self.assertEqual([n.text for n in groups['7006'].findall('onright')], ['7002', '7003', '7004', '7024', '7020', '7021', '7022'])
         self.assertEqual([n.text for n in groups['7007'].findall('onleft')], ['7004', '7003', '7002', '7012'])
         for tag, gid in (('onright', '7006'), ('onright', '7000'), ('onleft', '7007')):
             for node in groups[gid].findall(tag)[:-1]:

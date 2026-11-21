@@ -54,6 +54,8 @@ PROVIDER_PILL = 'POVIL_OSD_Provider'
 LEFT_BUTTONS = [
     # the other players (gen_osd_styles.py; the Wizard asks which): the farthest from the middle, the least wanted
     (7013, 'layout', 'החלפת נגן', [S.SWITCH], ''),
+    # (Onyx 1.0.35: here, in films and series too -- the right group is full while an episode plays)
+    (7027, 'channels', 'רשימת ערוצים', S.CHANNELS, S.CHANNELS_SHOWN),
     (7010, 'stop', 'עצירה', ['PlayerControl(Stop)'], ''),
     # the controls close at once: Kodi drops an action sent while a dialog's closing animation runs
     (7011, 'info', 'מידע', ['Dialog.Close(VideoOSD,true)', 'Action(Info)'], ''),
@@ -66,15 +68,65 @@ MAIN_BUTTONS = [
 ]
 # The channels while a channel plays (the owner, Nov 2026: "add a channel list button to Onyx's players -- I think the
 # other skins have it"): live TV's own list (Kodi's channels dialog), or Idan Plus's channels and radio stations
-# (CHANNELS_ID). Only then -- the row is full while a film or an episode plays.
+# (CHANNELS_ID). Onyx 1.0.35: in films and series too, in the left group (LEFT_BUTTONS).
 CHANNELS_ID, CHANNELS_KIND, CHANNELS_SHOWN = S.CHANNELS_ID, S.CHANNELS_KIND, S.CHANNELS_SHOWN    # (every player style's)
+# A channel picked over a film or an episode (the reviewer, Onyx 1.0.35): PlayMedia would open it inside the running player
+# -- Kodi's player never stops in between -- and POV, which watches its film while "a video plays" (player.py: while
+# isPlayingVideo(), once a second), would read the channel's times as the film's: a resume point at the channel's time, or
+# the film marked watched (on Trakt too). CHANNEL_SCRIPT stops the film first (Kodi's own stop: POV keeps where it was),
+# waits until nothing plays and two seconds more -- POV looks once a second -- and only then plays the channel.
+OVER_A_FILM = 'Player.HasVideo + !VideoPlayer.Content(LiveTV) + !String.Contains(Player.FolderPath,plugin.video.idanplus)'
+CHANNEL_SCRIPT = 'special://skin/scripts/povil_play_channel.py'
+CHANNEL_SCRIPT_TEXT = '''# -*- coding: utf-8 -*-
+"""A channel picked in the player's channels panel (Onyx 1.0.35) while a film or an episode plays: the film is stopped
+first, its add-on sees the stop (POV looks once a second), and the channel plays after. Written by
+tools/skin_onyx/gen_osd.py -- never edited here.
+
+    RunScript(special://skin/scripts/povil_play_channel.py,<the channel's address>)
+"""
+import sys
+import time
+
+import xbmc
+import xbmcgui
+
+STOPPED_S, AFTER_S, POV_S = 15, 2.0, 8
+# POV clears it once its playback monitor has seen the stop and kept the film's point (player.py, its last line)
+POV_PLAYING = 'script.trakt.ids'
+ACTION = 'povil.pov.action'
+
+
+def main(address):
+    if not address:
+        return
+    monitor, player, home = xbmc.Monitor(), xbmc.Player(), xbmcgui.Window(10000)
+    if player.isPlaying():
+        # (the screen under the film -- the home, a list -- starts no trailer meanwhile: the trailer desk rests this long
+        # after an action of POV's, trailers.py ACTION_REST_S -- the reviewer)
+        home.setProperty(ACTION, str(time.time()))
+        xbmc.executebuiltin('PlayerControl(Stop)')
+        began = time.time()
+        while player.isPlaying() and time.time() - began < STOPPED_S:
+            if monitor.waitForAbort(0.2):
+                return
+        if player.isPlaying() or monitor.waitForAbort(AFTER_S):
+            return
+        began = time.time()
+        while home.getProperty(POV_PLAYING) and time.time() - began < POV_S:
+            if monitor.waitForAbort(0.2):
+                return
+    xbmc.executebuiltin('PlayMedia("%s")' % address.replace('\\\\', '\\\\\\\\').replace('"', '\\\\"'))
+
+
+if __name__ == '__main__':
+    main(sys.argv[1] if len(sys.argv) > 1 else '')
+'''
 # Outward from the middle by how often a button is wanted (the owner, Nov 2026: "the subtitles button
 # closer -- it is an important one, and it took too many presses to reach"): subtitles are two presses
 # from the main button, the next episode three.
 RIGHT_BUTTONS = [
     (7024, 'subtitles', 'כתוביות', ['RunScript(service.subtitles.kodipovilai,action=choose_subs)'],
      '!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles'),
-    (7027, 'channels', 'רשימת ערוצים', S.CHANNELS, CHANNELS_SHOWN),
     (7020, 'episodes', 'הפרק הבא', ['RunPlugin(%s?mode=player_episodes)' % WIZARD],
      'VideoPlayer.Content(episodes) + !VideoPlayer.Content(LiveTV)'),
     (7021, 'source', 'החלפת מקור', ['RunPlugin(%s?mode=player_change_source)' % WIZARD],
@@ -632,8 +684,11 @@ def channels_window():
     x(3, '<ondown>noop</ondown><onleft>noop</onleft><onright>noop</onright>')
     # (one address, from a variable: Kodi does not read the list again when a <content> condition changes -- QA Kodi)
     x(3, '<content target="videos">$VAR[POVIL_ChannelsPath]</content>')
-    # a press plays the channel (an entry that is a folder opens it) and the list closes
-    x(3, '<onclick condition="!ListItem.IsFolder">PlayMedia($ESCINFO[ListItem.FileNameAndPath])</onclick>')
+    # a press plays the channel (an entry that is a folder opens it) and the list closes. Over a channel at once; over a
+    # film or an episode through CHANNEL_SCRIPT, which stops it first and lets its add-on see the stop (see there)
+    x(3, '<onclick condition="!ListItem.IsFolder + ![%s]">PlayMedia($ESCINFO[ListItem.FileNameAndPath])</onclick>' % OVER_A_FILM)
+    x(3, '<onclick condition="!ListItem.IsFolder + %s">RunScript(%s,$ESCINFO[ListItem.FileNameAndPath])</onclick>'
+         % (OVER_A_FILM, CHANNEL_SCRIPT))
     x(3, '<onclick condition="ListItem.IsFolder">ActivateWindow(Videos,$ESCINFO[ListItem.FolderPath],return)</onclick>')
     x(3, '<onclick>Dialog.Close(%d)</onclick>' % CHANNELS_ID)
     for layout, focused in (('itemlayout', False), ('focusedlayout', True)):
@@ -682,6 +737,8 @@ def main():
     with open(path, 'w', encoding='utf-8', newline=NL) as f:
         f.write(text)
     replace_block(os.path.join(folder, 'Timers.xml'), '<!-- POVIL OSD BEGIN', '<!-- POVIL OSD END -->', timers(), '</timers>')
+    with open(os.path.join(sys.argv[1], 'scripts', 'povil_play_channel.py'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(CHANNEL_SCRIPT_TEXT)
     print('osd generated:', len(BUTTONS), 'buttons, seek bar, info panel')
 
 
