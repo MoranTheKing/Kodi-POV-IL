@@ -1,3 +1,6 @@
+0.5.45
+- Subtitles on HDR video are white again, not grey (a viewer, Nov 2026, a photo of his TV: "why are the subtitles such an ugly colour and not bright white -- it wasn't like this before"). While the TV is in HDR mode, Kodi draws menus and subtitles at "GUI peak luminance in HDR PQ mode", 40 % by default -- on Android 58 % of white, under a picture brighter than them. The box the build drew behind the subtitles until 15 Nov hid it; the outline alone does not. Kodi's own 40 % now goes to 100 % -- a subtitle as white as on an ordinary video -- once per profile, and only where the TV can show HDR; a value someone chose stays.
+
 0.5.44
 - The player's "change source" goes back to the add-on that plays: Umbrella's list when Umbrella played, POV's when POV did (a viewer, Nov 2026, playing through Umbrella: "with change source it goes back to POV and not to Umbrella"). The button followed the search setting -- POV unless chosen otherwise. Now the source hooks name the add-on that picked the source, beside its name; a video neither picked (a library file, another add-on's) still goes by the setting. In Onyx's players and every skin whose button calls the Wizard.
 

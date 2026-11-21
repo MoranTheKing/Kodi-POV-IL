@@ -124,3 +124,56 @@ def migrate():
     except Exception as err:
         logging.log('[Subtitle style] skipped: {0}'.format(err), level=xbmc.LOGWARNING)
         return False
+
+
+# Subtitles on HDR video. A viewer (21 Nov 2026, a photo of his TV): "why are
+# the subtitles such an ugly colour and not bright white -- it wasn't like
+# this before". While the display is in HDR (PQ) mode, Kodi draws everything
+# that is SDR in origin -- menus, OSD and subtitles -- at "GUI peak luminance
+# in HDR PQ mode" (Settings > System > Display, advanced level), default 40 %.
+# On Android that is (0.7 x 40 + 30) % = 58 % of white (Kodi 21,
+# CWinSystemAndroid::GetGuiSdrPeakLuminance): grey letters, under a picture
+# whose highlights are brighter than they are. The box the build drew behind
+# them until 15 Nov hid it; the outline alone does not. 100 % is the white of
+# a subtitle on an ordinary (SDR) video. Kodi's own value only, once per
+# profile: a value someone chose is kept. Kodi answers for this setting only
+# on a display that can show HDR; elsewhere nothing happens and nothing is
+# marked, so a TV that can show HDR, connected later, still gets it. (Windows
+# follows its own HDR/SDR brightness balance unless that is switched off in
+# Kodi; the value set here is used then.)
+HDR_MARK = 'hdr_subtitles_white_v1'
+HDR_KEY = 'videoscreen.guipeakluminance'
+HDR_KODI_DEFAULT = 40
+HDR_WHITE = 100
+
+
+def brighten_hdr():
+    """At start-up, until it has been done once in this profile. Returns
+    True when the value was changed now."""
+    try:
+        if (CONFIG.get_setting(HDR_MARK) or '') in ('applied', 'kept'):
+            return False
+        now = _get(HDR_KEY)
+        if now is None:
+            return False                    # no HDR display, or Kodi is not answering: next start
+        if _same(now, HDR_WHITE):
+            CONFIG.set_setting(HDR_MARK, 'applied')
+            return False
+        if not _same(now, HDR_KODI_DEFAULT):
+            CONFIG.set_setting(HDR_MARK, 'kept')    # someone's choice
+            return False
+        if _rpc('Settings.SetSettingValue', {'setting': HDR_KEY, 'value': HDR_WHITE}) is not True:
+            logging.log('[Subtitle style] Kodi did not take {0}'.format(HDR_KEY), level=xbmc.LOGWARNING)
+            return False
+        from resources.libs import build_skin
+        saved = build_skin.persist_live_settings()
+        if not _same(_get(HDR_KEY), HDR_WHITE):
+            return False
+        if saved:
+            CONFIG.set_setting(HDR_MARK, 'applied')
+        logging.log('[Subtitle style] subtitles on HDR video at full white: GUI peak luminance {0} -> {1} '
+                    '(saved: {2})'.format(now, HDR_WHITE, saved), level=xbmc.LOGINFO)
+        return True
+    except Exception as err:
+        logging.log('[Subtitle style] HDR white skipped: {0}'.format(err), level=xbmc.LOGWARNING)
+        return False
