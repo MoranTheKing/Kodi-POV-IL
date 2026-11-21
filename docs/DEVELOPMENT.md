@@ -50,7 +50,6 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.179.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
@@ -65,29 +64,9 @@
 - רישום `skin.fentastic` ו־`script.fentastic.helper` כמופעלים ב־`userdata/Database/Addons33.db`
 
 בוצעה התאמה של הפניות פנימיות מ־`plugin.video.twilight` ל־`plugin.video.pov`.
-## Easy install via Wizard
+## Installing the build
 
-For phone testing, install this Kodi add-on zip first:
-
-`dist/plugin.program.kodipovilwizard-latest.zip`
-
-After installing it in Kodi, open:
-
-`Add-ons -> Program add-ons -> Kodi POV IL Wizard -> Builds -> Kodi POV IL - FENtastic`
-
-The wizard reads build metadata from:
-
-`wizard/assets/build.txt`
-
-## Kodi File Source
-
-After GitHub Pages deploys, add this source in Kodi:
-
-`https://morantheking.github.io/Kodi-POV-IL/wizard/`
-
-Then open:
-
-`Settings -> File manager -> Add source -> Install from zip file -> Kodi POV IL -> plugin.program.kodipovilwizard-X.X.X.zip`
+The install guide is `install.html` on Pages (https://morantheking.github.io/Kodi-POV-IL/install.html); the Wizard's Kodi file source is `https://morantheking.github.io/Kodi-POV-IL/wizard-new/`.
 
 ## Updates
 
@@ -909,9 +888,6 @@ Everything under `tools/` is runnable with no arguments.
 - `tools/test_*.py` -- 51 test files. Each is standalone; run one directly or
   loop the glob. Several carry deliberate sabotage cases, so a test that stops
   being able to fail is itself a failure.
-- `tools/test_patcher_upgrade_path.py --pins` -- re-measures every patcher's
-  upgrade behaviour and prints a fresh pin table. Any patcher carrying a
-  versioned marker must be pinned, so a new one fails the suite until measured.
 - `tools/skin_customisation_inventory.py` -- what this build does to each skin:
   which files carry our work, how much of it is Hebrew, which patchers bind to
   it, and how many `plugin://` references would need repointing if the video

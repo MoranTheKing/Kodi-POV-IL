@@ -111,7 +111,7 @@ class ChoiceTests(unittest.TestCase):
         self.assertEqual(choice.builtin(''), 'Skin.Reset(POVILPlayer)')
         self.assertEqual(choice.current(lambda label: 'pretty'), 'pretty')
         self.assertEqual(choice.current(lambda label: ''), '')
-        self.assertEqual(choice.current(lambda label: 'old'), '', 'an unknown value is Onyx\'s own, as the skin shows it')
+        self.assertEqual(choice.current(lambda label: 'retired'), '', 'an unknown value is Onyx\'s own, as the skin shows it')
 
     def test_asked_from_the_settings_tile_and_from_every_player(self):
         home = (SKIN / 'xml/Home.xml').read_text(encoding='utf-8')

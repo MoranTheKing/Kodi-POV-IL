@@ -98,12 +98,8 @@ Never write a hyphenated POV label into `appinfo.json`.
   input differs from those reviewed release constants.
 - Ensure `.github/workflows/build-apk.yml` points at the Wizard ZIP that is
   already published on `main`.
-- Build the Wizard with `tools/build_wizard_package.py --previous <old.zip>
-  --manifest wizard/release_manifests/<release>.json --version <version>`.
-  The release manifest must explicitly list every replaced/added member and
-  lock the previous/output SHA-256. Confirm the versioned and `latest` ZIPs
-  under both `dist/` and `wizard/` are byte-identical and every Wizard index
-  link resolves before publishing the channel manifest.
+- The Wizard the installers carry is the one the manifest publishes
+  (`.github/scripts/fetch_platform_wizard.py`).
 - Run `build-apk.yml`. Same keystore, same `org.xbmc.povi` package id, so
   Kodi POV IL installs update in place while official Kodi remains separate.
 - Verify the final signed APK artwork/marker/signature, Windows installer,
