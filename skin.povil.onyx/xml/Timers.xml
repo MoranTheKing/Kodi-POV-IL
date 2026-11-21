@@ -364,6 +364,8 @@
 	<timer>
 		<name>povil_ratings</name>
 		<start reset="true">[Window.IsActive(home) | Window.IsActive(videos) | Window.IsActive(movieinformation)] + !String.IsEmpty(Control.GetLabel(9807)) + !String.IsEqual(Control.GetLabel(9807),Window(home).Property(povil.rt.ask))</start>
+		<onstart>SetProperty(povil.rt.list,$ESCINFO[Control.GetLabel(9808)],home)</onstart>
+		<onstart>SetProperty(povil.avg.skin,1,home)</onstart>
 		<onstart>SetProperty(povil.rt.ask,$ESCINFO[Control.GetLabel(9807)],home)</onstart>
 		<onstart>NotifyAll(povil.ratings,home)</onstart>
 		<stop>true</stop>
@@ -371,6 +373,8 @@
 	<timer>
 		<name>povil_ratings_player</name>
 		<start reset="true">[Window.IsActive(fullscreenvideo) | Window.IsActive(videoosd)] + Player.HasVideo + !String.IsEmpty(Control.GetLabel(7920)) + !String.IsEqual(Control.GetLabel(7920),Window(home).Property(povil.rtp.ask))</start>
+		<onstart>SetProperty(povil.rtp.list,$ESCINFO[Control.GetLabel(7921)],home)</onstart>
+		<onstart>SetProperty(povil.avg.skin,1,home)</onstart>
 		<onstart>SetProperty(povil.rtp.ask,$ESCINFO[Control.GetLabel(7920)],home)</onstart>
 		<onstart>NotifyAll(povil.ratings,player)</onstart>
 		<stop>true</stop>

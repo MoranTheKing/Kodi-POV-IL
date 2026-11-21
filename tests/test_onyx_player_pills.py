@@ -35,7 +35,8 @@ class PlayerPillsTests(unittest.TestCase):
             root = ET.parse(XML / name).getroot()
             pills = [c for c in root.iter('control')
                      if c.get('type') == 'button' and (c.findtext('label') or '').startswith('$VAR[POVIL_OSD_')]
-            self.assertEqual(sorted(c.findtext('label')[5:-1] for c in pills), sorted(list(PILLS + ('POVIL_OSD_Provider',)) * times), name)
+            self.assertEqual(sorted(c.findtext('label')[5:-1] for c in pills),
+                             sorted(list(PILLS + ('POVIL_OSD_Provider', 'POVIL_OSD_Size')) * times), name)
             for pill in pills:
                 self.assertEqual(pill.findtext('enable'), 'false', 'a pill is not a stop for the remote')
                 self.assertEqual(pill.findtext('width'), 'auto')
@@ -88,6 +89,53 @@ class PlayerPillsTests(unittest.TestCase):
             self.assertIsNotNone(pill, name)
             self.assertIn('<textcolor>povil_gold</textcolor>', pill.group(0))
             self.assertLess(pill.start(), text.index('<label>$VAR[POVIL_OSD_Codec]</label>'), 'leftmost: read last')
+
+    def test_the_files_size_is_a_pill_beside_the_provider(self):
+        """A viewer, Nov 2026: "the file size among the chips" (Wizard 0.5.41, Onyx 1.0.37)."""
+        text = (XML / 'Includes_POVIL_Home.xml').read_text('utf-8')
+        block = text[text.index('<variable name="POVIL_OSD_Size">'):]
+        block = block[:block.index('</variable>')]
+        # named by the source hook, shown only for the source it was named for -- as the provider is
+        self.assertIn('!String.IsEmpty(Window(Home).Property(povil_osd_size))', block)
+        self.assertIn('String.IsEqual(Window(Home).Property(povil_osd_size_for),Window(Home).Property(pov_picked_source_name))', block)
+        self.assertIn('!VideoPlayer.Content(LiveTV)', block)
+        self.assertIn('[String.StartsWith(Player.Folderpath,http) | String.Contains(Player.Folderpath,plugin.video.pov)]', block)
+        self.assertIn('$INFO[Window(Home).Property(povil_osd_size)]', block)
+        for name, bases in (('VideoOSD.xml', (7910, 7930)), ('VideoFullScreen.xml', (7910,))):
+            text = (XML / name).read_text('utf-8')
+            pill = re.search(r'<control type="button"[^>]*>(?:(?!</control>).)*<label>\$VAR\[POVIL_OSD_Size\]</label>', text)
+            self.assertIsNotNone(pill, name)
+            self.assertIn('<textcolor>povil_white</textcolor>', pill.group(0), 'one of the plain pills: the provider alone is gold')
+            # read after the codec and before the provider: between them in a row laid out left to right
+            self.assertLess(text.index('<label>$VAR[POVIL_OSD_Provider]</label>'), pill.start(), name)
+            self.assertLess(pill.start(), text.index('<label>$VAR[POVIL_OSD_Codec]</label>'), name)
+            for base in bases:
+                # the older pills keep the ids of their hidden labels; the size's is the next one
+                self.assertIn('<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
+                              '<label>$VAR[POVIL_OSD_Size]</label>' % (base + 6), text, name)
+                self.assertIn('<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
+                              '<label>$VAR[POVIL_OSD_Provider]</label>' % base, text, name)
+                self.assertIn('<label>$VAR[POVIL_OSD_Size]</label><enable>false</enable>'
+                              '<visible>!String.IsEmpty(Control.GetLabel(%d))</visible>' % (base + 6), text, name)
+
+    def test_the_source_hook_says_the_size_the_way_people_do(self):
+        label = remember().size_label
+        self.assertEqual(label({'size': 12.4}), '12.4 GB')
+        self.assertEqual(label({'size': 12.44, 'size_label': '12.44 GB'}), '12.4 GB')
+        self.assertEqual(label({'size': 8.0}), '8 GB')
+        self.assertEqual(label({'size': 0.83}), '850 MB')
+        self.assertEqual(label({'size': 0.9996}), '1 GB')
+        self.assertEqual(label({'size': '2.5'}), '2.5 GB')
+        # a source with only POV's words for it
+        self.assertEqual(label({'size_label': '3.20 GB'}), '3.2 GB')
+        self.assertEqual(label({'size': 0, 'size_label': '700 MB'}), '700 MB')
+        # nothing known, or not a size: no pill
+        for item in ({}, {'size': 0}, {'size': None, 'size_label': None}, {'size': 'big'}, {'size_label': 'N/A'},
+                     {'size': -1}, {'size': 5000}):
+            self.assertEqual(label(item), '', item)
+        source = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/patches/pov_source_remember.py').read_text('utf-8')
+        self.assertIn("win.setProperty('povil_osd_size', size)", source)
+        self.assertIn("win.setProperty('povil_osd_size_for', name if size else '')", source)
 
     def test_the_pills_sit_over_the_controls_not_under_the_title(self):
         # the owner, Nov 2026: "the source's pills at the bottom, a little above the player's bottom edge"

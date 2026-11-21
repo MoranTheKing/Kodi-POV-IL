@@ -26,11 +26,36 @@ for itself.
 A title is asked again after three days (a new release's numbers move), a title
 with no answer or a failed request after an hour, and after Trakt says "too many
 requests" nothing is asked for five minutes (an hour when the key itself is refused).
+
+THE NUMBER ON A PICTURE'S CORNER (Wizard 0.5.41; patches/pov_rating.py has the sums) is
+the average of these sites, each out of ten. It is answered with the fields (<slot>avg).
+The pictures get theirs where POV's lists are built, in another process, so every
+title's sum is also kept in ONE small file (average.idx), written a moment after the
+answers. Kodi works a picture's number out when its row is loaded and not again (seen
+on the QA Kodi's screen), so a row built before a title was asked about keeps the
+number known then until it is loaded again. The rows are therefore asked again:
+  * AT ONCE when the picture of the title the screen is on shows another number than
+    the row beside it was just answered with -- the one place where the viewer sees
+    both numbers (not more often than every few seconds, never twice for a title).
+    On the home that is the rows; in an open list (the Videos window) the list;
+  * and once the titles asked ahead are in, for what was learned of the pictures
+    beside it -- only while nothing plays: the titles the viewer is not on can wait
+    for the trailer to end.
+Never while a title is starting, a dialog is open or a film plays, and with no scan
+dialog: Kodi's would stop a trailer over the home (the reviewer, Nov 2026).
 """
 import json
 import os
+import sys
 import threading
 import time
+
+# patches/pov_rating.py: the average's sums and its one file, shared with POV's lists (which import it by
+# that folder too -- the Wizard's patches put it on POV's path)
+_PATCHES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'patches')
+if _PATCHES not in sys.path:
+    sys.path.append(_PATCHES)
+import pov_rating  # noqa: E402
 
 SENDER = 'povil.ratings'
 # slot name (the announcement's data) -> the property prefix it reads and writes
@@ -52,6 +77,38 @@ ROW_HEAD = 8             # ... and this many of each other row on the screen
 ROWS_EVERY = 20          # seconds between two looks at the other rows while the focus stays in one row
 HOME_ROWS = (5011, 5199) # Onyx's home rows: 5<tab><row>; the rows of one tab share the tens
 QUEUE = 90               # jobs waiting, at most
+AVERAGE = 'avg'          # <slot>avg: the average, answered with the fields
+LIST = 'list'            # <slot>list: the list's own figure for the title asked (TMDb's, from POV), set by the skin
+SKIN_SHOWS = 'povil.avg.skin'   # set by a skin that shows the average: an older one gets no refresh for nothing
+ITEM_AVERAGE, ITEM_SOURCE = 'Property(povil_avg)', 'Property(povil_avg_src)'    # pov_rating.PROPERTY / SOURCE on an item
+INDEX_EVERY = 2          # seconds between two writes of the averages' file while titles are being asked
+REFRESH_EVERY = 30       # seconds between two refreshes of the home's rows for the pictures beside the title
+REFRESH_SOON = 5         # ... and for the picture of the title on screen
+REFRESH_WAIT = 2         # how often a refresh that is owed is looked at again
+TRIED = 300              # titles remembered as refreshed for (never twice: a picture that stays wrong is not chased)
+# The refresh's moment: the home with nothing over it, no title about to play (a trailer being opened), no library
+# scan of the viewer's own (the refresh is a scan of nothing: it would end a real one) ...
+_REFRESH_BASE = ('Window.IsActive(home) + !System.HasActiveModalDialog + '
+                 'String.IsEmpty(Window(home).Property(povil.tr.opening)) + !Library.IsScanningVideo')
+# ... for the pictures beside the title: nothing playing at all; for the picture of the title on screen: nothing
+# but a trailer over the home (povil.tr.on -- the trailer desk's mark; a film or an episode is never loaded under)
+REFRESH_WHEN = _REFRESH_BASE + ' + !Player.HasMedia'
+# (and the viewer at rest for a moment: a row loaded again under keys being pressed may stutter on a weak box -- the
+# reviewer)
+REFRESH_NOW = (_REFRESH_BASE + ' + [!Player.HasMedia | !String.IsEmpty(Window(home).Property(povil.tr.on))] + '
+               'System.IdleTime(1)')
+# An open list (the Videos window, Onyx's views): its own refresh, and only while nothing plays -- loading a list
+# again there may bring Kodi's busy dialog, which stops a trailer
+VIEW_LISTS = (51, 55)
+REFRESH_VIEW = ('Window.IsActive(videos) + !System.HasActiveModalDialog + !Player.HasMedia + '
+                'String.IsEmpty(Window(home).Property(povil.tr.opening)) + System.IdleTime(1)')
+VIEW_BUILTIN = 'Container.Refresh'
+STALE_S = 20             # a refresh wanted for the picture on screen that found no moment for this long is dropped
+# (the third word: no dialog -- Kodi's scan progress over the home stops a trailer there)
+REFRESH_BUILTIN = 'UpdateLibrary(video,special://skin/foo,false)'
+ROWS_REFRESHED = 'povil.rows.refreshed'    # pov_list_snapshot.REFRESHED_PROPERTY: one refresh covers every row
+PLAY_STARTED = 'povil.play.started'        # pov_play_guard.PROPERTY: a title was picked and looks for its sources
+PLAY_WINDOW_S = 60
 
 
 def parse(key):
@@ -139,6 +196,12 @@ class Store(object):
         self.guard = threading.Lock()
         self.blocked_until = 0
         self.pruned = 0
+        # every title's sum for the average (pov_rating.py), and its one file
+        self.sums = None
+        self.sums_dirty = False
+        self.sums_written = 0
+        self.writing = threading.Lock()  # one writer of the file at a time
+        self.learned = 0                # titles whose number changed since the home's rows were last asked again
 
     def _file(self, name):
         return os.path.join(self.folder, name + '.json')
@@ -173,6 +236,71 @@ class Store(object):
                 for old in sorted(self.memory, key=lambda k: self.memory[k]['at'])[:MEMORY // 4]:
                     del self.memory[old]
             self.memory[name] = kept
+
+    def _sums(self):
+        """Every title's sum; read from the one file, or -- the first time, and whenever that file is gone --
+        gathered from the titles' own files. The reading is done outside the lock (a store of thousands of
+        files takes a while once, and the answers do not wait for it)."""
+        sums = self.sums
+        if sums is not None:
+            return sums
+        path = os.path.join(self.folder, pov_rating.INDEX)
+        gathered = pov_rating.read_index(path) if os.path.isfile(path) else None
+        dirty = False
+        if gathered is None:
+            gathered = {}
+            try:
+                names = [entry[:-5] for entry in os.listdir(self.folder) if entry.endswith('.json')]
+            except OSError:
+                names = []
+            for name in names:
+                kept = self._read(name)
+                entry = pov_rating.entry_of(kept['ratings']) if kept else None
+                if entry:
+                    gathered[name] = entry
+            dirty = bool(gathered)
+        with self.guard:
+            if self.sums is None:
+                self.sums, self.sums_dirty = gathered, dirty
+            return self.sums
+
+    def _note(self, name, ratings):
+        """A title was answered: its sum, kept when it changed. It counts as news for the pictures only when
+        the number a picture shows changes -- a first answer that averages to the one figure the picture
+        already had (TMDb's) changes nothing on the screen."""
+        entry = pov_rating.entry_of(ratings)
+        sums = self._sums()
+        with self.guard:
+            old = sums.get(name)
+            if entry == old:
+                return
+            before = pov_rating.average(old) if old else pov_rating.shown((ratings or {}).get('tmdb'))
+            sums.pop(name, None)            # (the newest last: the oldest fall off a file that grew too long)
+            if entry is not None:
+                sums[name] = entry
+            self.sums_dirty = True
+            if pov_rating.average(entry) != before:
+                self.learned += 1
+
+    def flush(self, force=False):
+        """Write the averages' file when a sum changed -- a moment after it did, not once per title.
+        True when the file holds every sum now."""
+        sums = self._sums()
+        with self.writing:
+            with self.guard:
+                if not self.sums_dirty:
+                    return True
+                if not force and 0 <= self.clock() - self.sums_written < INDEX_EVERY:
+                    return False
+                titles = dict(sums)
+                self.sums_dirty = False
+                self.sums_written = self.clock()
+            if not pov_rating.write_index(os.path.join(self.folder, pov_rating.INDEX), titles):
+                # (POV's process may hold the file open for a moment on Windows: written at the next answer)
+                with self.guard:
+                    self.sums_dirty = True
+                return False
+            return True
 
     def known(self, key):
         """(ratings, fresh) from memory or the title's file, never the network. ratings is None when
@@ -218,6 +346,8 @@ class Store(object):
         else:
             fresh = {'at': self.clock(), 'ok': False, 'ratings': {}}
         self._remember(name, fresh)
+        # (noted before its file is written: the first note gathers the sums from the files that were there)
+        self._note(name, fresh['ratings'])
         self._write(name, fresh)
         self.prune()
         return fresh['ratings']
@@ -233,6 +363,11 @@ class Store(object):
                 path = os.path.join(self.folder, entry)
                 if entry.endswith(('.json', '.new')) and now - os.path.getmtime(path) > PRUNE:
                     os.remove(path)
+                    if entry.endswith('.json'):
+                        sums = self._sums()
+                        with self.guard:
+                            if sums.pop(entry[:-5], None) is not None:
+                                self.sums_dirty = True
         except OSError:
             pass
 
@@ -331,6 +466,10 @@ def publish(home, prefix, key, ratings):
             return False           # the skin moved on: its newer question answers for itself
         for field in FIELDS:
             home.setProperty(prefix + field, ratings.get(field, ''))
+        # the average of what the row shows (TMDb's from the list when Trakt gave none for it: the row shows
+        # that one then)
+        home.setProperty(prefix + AVERAGE,
+                         pov_rating.average(pov_rating.entry_of(ratings), home.getProperty(prefix + LIST)))
         home.setProperty(prefix + 'for', key)
         return True
 
@@ -397,8 +536,13 @@ class Desk(object):
     """
     URGENT, AHEAD = 0, 1
 
-    def __init__(self, home, store, read=None, log=None):
+    def __init__(self, home, store, read=None, log=None, refresh=None):
         self.home, self.store, self.read, self.log = home, store, read, log
+        self.refresh = refresh          # refresh(soon) asks the home's rows again; False when this is not the moment
+        self.refreshed = 0
+        # the picture of the title on screen shows another number than its row: (where -- 'home' or 'view' --, since when)
+        self.stale = None
+        self.tried = []                 # the titles a refresh was already wanted for
         self.jobs = []                  # (rank, order, key, slot) -- taken smallest first
         self.count = 0
         self.busy = set()
@@ -457,6 +601,7 @@ class Desk(object):
                     return True         # another worker is asking this very title: it answers when it is done
                 self.busy.add(key)
         if key is None:
+            self.look()
             # The other rows are looked at when the focus came to another row, and now and then while
             # it stays (a row loads late, a tab changes): reading a screenful of labels is not free.
             focused, now = (self.read('System.CurrentControlID') or '').strip(), self.store.clock()
@@ -484,7 +629,89 @@ class Desk(object):
         for name, prefix in SLOTS.items():
             # whichever slot asks for this title now gets it (a title asked ahead that the focus reached)
             if self.home.getProperty(prefix + 'ask') == key and self.home.getProperty(prefix + 'for') != key:
-                publish(self.home, prefix, key, ratings)
+                if publish(self.home, prefix, key, ratings) and name == 'home':
+                    self.look()
+        flush = getattr(self.store, 'flush', None)
+        if flush is not None:
+            flush(force=not waiting)
+        return True
+
+    def look(self):
+        """The title the home's row was just answered for: does its picture, in the row the focus is in, show the
+        row's number? A picture keeps the number its row was loaded with (Kodi works a list item's label out once),
+        so one built before the title was asked about does not -- and here the viewer sees both. Then the rows are
+        owed a refresh soon. Only a picture POV's lists gave a number (ITEM_SOURCE): without the Wizard's patch in
+        POV no refresh would ever change it."""
+        if self.read is None or self.refresh is None:
+            return False
+        prefix = SLOTS['home']
+        key, number = self.home.getProperty(prefix + 'for'), self.home.getProperty(prefix + AVERAGE)
+        if not key or not number or self.home.getProperty(prefix + 'ask') != key or key in self.tried:
+            return False
+        control = (self.read('System.CurrentControlID') or '').strip()
+        if not control.isdigit():
+            return False
+        if HOME_ROWS[0] <= int(control) <= HOME_ROWS[1]:
+            where = 'home'
+        elif int(control) in VIEW_LISTS:
+            where = 'view'
+        else:
+            return False
+        item = 'Container(%s).ListItem.' % control
+        if (self.read(item + 'UniqueID(imdb)') or '').strip() != key.split('|')[0]:
+            return False
+        if not (self.read(item + ITEM_SOURCE) or '').strip() or (self.read(item + ITEM_AVERAGE) or '').strip() == number:
+            return False
+        self.tried.append(key)
+        del self.tried[:-TRIED]
+        self.stale = (where, self.store.clock(), key)
+        with self.lock:
+            self.lock.notify_all()          # the worker that sees to the rows need not sleep on
+        return True
+
+    def owed(self):
+        """A refresh of the home's rows is wanted: for the picture of the title on screen, or because an
+        average changed since the rows were last asked again. Never on a skin that shows no averages (it says
+        so: SKIN_SHOWS) -- there a refresh would change nothing, and the worker need not look every few seconds."""
+        if self.refresh is None or not self.home.getProperty(SKIN_SHOWS):
+            return False
+        return self.stale is not None or bool(getattr(self.store, 'learned', 0))
+
+    def settle(self):
+        """The pictures on the home carry the average known when their row was loaded. What was learned since
+        reaches them by a refresh of the rows: soon, for the picture of the title on screen; for the pictures
+        beside it once nothing more is being asked -- not one refresh per title. self.refresh says whether this
+        is the moment (never while a dialog is open or a title is starting). True when the rows were asked again."""
+        if not self.owed():
+            return False
+        now = self.store.clock()
+        if self.stale is not None and (not 0 <= now - self.stale[1] < STALE_S
+                                       or self.home.getProperty(SLOTS['home'] + 'for') != self.stale[2]):
+            # the viewer went elsewhere meanwhile (another title, another window): the next load of the rows puts
+            # that picture right
+            self.stale = None
+            if not self.owed():
+                return False
+        soon = self.stale[0] if self.stale is not None else None
+        with self.lock:
+            if self.closing or (not soon and (self.busy or any(job[2] is not None for job in self.jobs))):
+                return False
+        if 0 <= now - self.refreshed < (REFRESH_SOON if soon else REFRESH_EVERY):
+            return False
+        if not self.store.flush(force=True):
+            return False                # the file could not be written: the rows would read the old one
+        learned = self.store.learned
+        if not self.refresh(soon):
+            return False
+        self.refreshed = now
+        self.stale = None
+        if soon != 'view':              # (an open list loaded again says nothing of the home's rows)
+            with self.store.guard:
+                self.store.learned -= learned
+        if self.log is not None:
+            self.log('%s: %s' % ('the open list is loaded again' if soon == 'view' else 'the rows are asked again',
+                                 'the picture on screen showed another number than its row' if soon
+                                 else 'the averages of %d titles changed' % learned))
         return True
 
     def close(self):
@@ -498,8 +725,46 @@ def watch():
     import xbmc
     import xbmcgui
     import xbmcvfs
-    desk = Desk(xbmcgui.Window(10000), Store(xbmcvfs.translatePath(STORE), trakt_fetch), xbmc.getInfoLabel,
-                log=lambda text: xbmc.log('[POV IL ratings] ' + text, xbmc.LOGINFO))
+    home = xbmcgui.Window(10000)
+
+    def refresh_rows(soon):
+        if not home.getProperty(SKIN_SHOWS):
+            return False
+        if soon == 'view':
+            if not xbmc.getCondVisibility(REFRESH_VIEW):
+                return False
+            xbmc.executebuiltin(VIEW_BUILTIN)
+            return True
+        if not xbmc.getCondVisibility(REFRESH_NOW if soon else REFRESH_WHEN):
+            return False
+        try:
+            if 0 <= time.time() - float(home.getProperty(PLAY_STARTED) or 0) < PLAY_WINDOW_S:
+                return False
+        except ValueError:
+            pass
+        # (POV's own widget refresh, as pov_list_snapshot asks it: every row is asked again, each from its saved copy)
+        home.setProperty(ROWS_REFRESHED, repr(time.time()))
+        xbmc.executebuiltin(REFRESH_BUILTIN)
+        return True
+
+    desk = Desk(home, Store(xbmcvfs.translatePath(STORE), trakt_fetch), xbmc.getInfoLabel,
+                log=lambda text: xbmc.log('[POV IL ratings] ' + text, xbmc.LOGINFO), refresh=refresh_rows)
+
+    def patched():
+        target, mark = pov_rating.PATCHED
+        with open(os.path.join(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/'), *target.split('/')),
+                  encoding='utf-8') as source:
+            return mark in source.read()
+
+    def first_things():
+        # The averages' file for POV's lists (gathered from the store's own files the first time), and -- once per
+        # device, when POV's lists are first found giving their items the average -- the lists saved before are
+        # let go, and the rows on the screen, built before, are owed a refresh.
+        desk.store.flush(force=True)
+        if pov_rating.lists_once(xbmcvfs.translatePath('special://profile/addon_data/plugin.video.pov/'), patched):
+            with desk.store.guard:
+                desk.store.learned += 1
+            xbmc.log('[POV IL ratings] POV\'s lists carry the average now: the saved lists are built again', xbmc.LOGINFO)
 
     class Listener(xbmc.Monitor):
         def onNotification(self, sender, method, data):
@@ -512,9 +777,19 @@ def watch():
                     xbmc.log('[POV IL ratings] %s: %r' % (slot, exc), xbmc.LOGWARNING)
 
     def work(urgent_only):
+        if not urgent_only:
+            try:
+                first_things()
+            except Exception as exc:
+                xbmc.log('[POV IL ratings] first things: %r' % (exc,), xbmc.LOGWARNING)
         while not desk.closing:
             try:
-                desk.step(wait=60, urgent_only=urgent_only)
+                # Every worker sleeps until there is a job. The one that asks ahead also sees to the rows: only
+                # while a refresh is owed does it look again, every few seconds, whether this is the moment.
+                owed = not urgent_only and desk.owed()
+                desk.step(wait=REFRESH_WAIT if owed else 60, urgent_only=urgent_only)
+                if not urgent_only:
+                    desk.settle()
             except Exception as exc:
                 xbmc.log('[POV IL ratings] %r' % (exc,), xbmc.LOGWARNING)
 

@@ -305,7 +305,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(self.env.sent, [])                                # nothing shown twice
         self.assertEqual(self.env.built, 2)
         self.assertNotIn(9, self.m.EARLY)
-        self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo)'])  # it changed
+        self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo,false)'])  # it changed
 
     def _age_day(self, day):
         path = next((self.env.profile / 'povil_snapshots').glob('*.snap'))
@@ -521,7 +521,7 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(self.m._refresh_widgets(self.env.xbmc, saved), 'widgets')
             self.assertEqual(self.m._refresh_widgets(self.env.xbmc, saved), 'joined')
             self.assertEqual(self.m._refresh_widgets(self.env.xbmc, time.time() + 5), 'widgets')
-        self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo)'] * 2)
+        self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo,false)'] * 2)
 
     def test_a_damaged_record_is_dropped_and_the_list_built_as_usual(self):
         self.open()
@@ -874,7 +874,7 @@ class SnapshotTests(unittest.TestCase):
         self.env.sent = []
         self.routing(types.SimpleNamespace(argv=argv))
         self.assertEqual(list((self.env.profile / 'povil_snapshots').glob('*.snap')), [])
-        self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo)'], 'the home rows are asked again')
+        self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo,false)'], 'the home rows are asked again')
 
 
 class IdanPlusTests(unittest.TestCase):
@@ -958,7 +958,7 @@ class IdanPlusTests(unittest.TestCase):
         self.assertTrue(self.call(self.VOD))
         self.assertEqual(self.rows()[0][1], 'Channel 0')                   # shown at once
         self.assertEqual(self.built, 2)
-        self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo)'])
+        self.assertEqual(self.env.builtins, ['UpdateLibrary(video,special://skin/foo,false)'])
         self.call(self.VOD)
         self.assertEqual(self.rows()[0][1], 'New 0')
         self.assertEqual(self.built, 2)

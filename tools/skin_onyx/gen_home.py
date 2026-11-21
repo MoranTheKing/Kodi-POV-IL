@@ -1467,6 +1467,7 @@ def gen_includes():
               % (_tab, _n, _tab, _n))
             x(2, '<value>השורה שלי</value>')
             x(1, '</variable>')
+    RR.item_average_variable(x, 'POVIL_ItemAverage')
     x(1, '<variable name="POVIL_WatchedColour">')
     for setting, _name, colour, _sid in WATCHED_COLOURS[1:]:
         x(2, '<value condition="Skin.HasSetting(%s)">%s</value>' % (setting, colour))
@@ -1633,7 +1634,7 @@ VIEW_COND['square'] = '![%s | %s]' % (VIEW_COND['poster'], VIEW_COND['landscape'
 # The rating on a picture's corner: its plate (gen_ratings.py badge) and when an item has one to show --
 # a title with a rating above zero; never POV's "more" item or Kodi's ".."
 BADGE_W, BADGE_H = 78, 34
-ITEM_RATED = ('Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + '
+ITEM_RATED = ('[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(%s)] + !ListItem.IsParentFolder + ' % RR.ITEM_AVERAGE +
               '![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]')
 
 
@@ -1768,13 +1769,14 @@ def item_layout(x, name, kind, cond=None, title='POVIL_ItemTitle', subtitle='POV
             if kind != 'square':
                 # The title's rating on the picture's top right corner (the owner, Nov 2026: "a general
                 # rating on the poster itself, top right, as there once was -- something luxurious"):
-                # the list's own figure, so it is there with the picture; the sites' full row is the hero's.
+                # there with the picture. Since 1.0.37 it is the AVERAGE of the sites the hero's row names
+                # (POVIL_ItemAverage, ratings_row.py): the owner, "the average on the poster is not the average".
                 x(5, '<control type="group" description="rating on the picture">')
                 x(6, '<left>%d</left><top>%d</top><visible>%s</visible>' % (w - BADGE_W - 10, top + 10, ITEM_RATED))
                 x(6, '<control type="image"><left>0</left><top>0</top><width>%d</width><height>%d</height>'
                      '<texture>povil/ratings/badge.png</texture></control>' % (BADGE_W, BADGE_H))
                 x(6, '<control type="label"><left>33</left><top>0</top><width>%d</width><height>%d</height><font>povil_badge</font>'
-                     '<textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>'
+                     '<textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>'
                      % (BADGE_W - 33 - 9, BADGE_H))
                 x(5, '</control>')
             if kind in ('landscape', 'square'):

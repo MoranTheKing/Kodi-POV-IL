@@ -48,7 +48,7 @@ NO_PAUSE = {'simple': 7115, 'advanced': 7152, 'netflix': 7193, 'pretty': 7250}
 # the empty ends of the rows (Kodi links a grouplist's items by their ids: one without an id ends the chain)
 GAP_IDS = {'simple': range(7130, 7140), 'advanced': range(7170, 7180), 'netflix': range(7230, 7240)}
 GAPS = {}
-PILLS_BASE = 7930           # the large style's pills (Onyx's own use 7910-7915, its ratings row 7920-7921)
+PILLS_BASE = 7930           # the large style's pills (Onyx's own use 7910-7916, its ratings row 7920-7921)
 # Netflix-style forward and back: a row of jumps (FENtastic's own steps)
 STEPS = (('', 'הרצה'), ('60', 'דקה'), ('300', '5 דקות'), ('600', '10 דקות'), ('1200', '20 דקות'), ('2400', '40 דקות'),
          ('3600', '60 דקות'), ('4800', '80 דקות'))
