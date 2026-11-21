@@ -100,6 +100,24 @@ FOUND_MAX = 8                   # (the ones read ahead and not asked for: the la
 OPENING = 'povil.tr.opening'    # set from the moment the player is told to play until the first picture (or the viewer moving on)
 OFF_SWITCH = 'POVILNoTrailers'  # the skin's setting: set = the viewer switched the trailers off
 HERO_LABEL = 9809               # the home's hidden label that holds the trailer address of the title in the hero (gen_home.py)
+# THE PLOT GOES WITH THE TRAILER (Onyx 1.0.34; gen_home.py PLOT_CARD). A viewer, Nov 2026: "it feels like a race to
+# read the text before the trailer plays". Onyx keeps the plot on the screen while the trailer plays behind the hero,
+# and when the trailer has the screen to itself (as soon as it always did) the plot rises to the top of the screen and
+# stays there READ's seconds from the trailer's first picture: how long the plot shown takes to read, measured here when
+# the title asks for its trailer (PLOT_LABEL: the skin's hidden label holding it). A plot of the card's three lines
+# or fewer: its letters at READ_CHARS_S a second, an ordinary reading pace (the owner: "not slow, but not too fast"),
+# from the moment the title is on the screen (BEFORE_PICTURE_S before the trailer's first picture). A longer one
+# scrolls on in the card (the skin's PLOT_CARD_HOLD_S / PLOT_CARD_LINE_S -- a line of ~58 letters every 3 s, the same
+# pace -- from the card's appearance, which is the "full screen after" of the tile "תזמון טריילרים"): the card goes once
+# its last line has been on it a line's time, and the trailer is clean again (the owner). READ_STEPS[-1] at the most.
+READ = 'povil.tr.read'
+PLOT_LABEL = 9811
+READ_STEPS = tuple(range(4, 31))        # the skin knows these (4: read before the trailer has the screen -- no card)
+READ_CHARS_S = 18
+LINE_LETTERS = 58                       # letters on a line of the plot's box (860 px of the skin's povil_plot)
+CARD_LINES, CARD_HOLD_S, CARD_LINE_S = 3, 4, 3
+CARD_MIN_S = 3                          # a card that comes stays at least this long
+BEFORE_PICTURE_S = 2
 YOUTUBE = 'plugin.video.youtube'
 # None in the first seconds of this thread. It was a minute -- and this thread is started only after the
 # Wizard has seen the home's rows settle and has checked for updates, so a viewer waited well over a minute
@@ -438,6 +456,31 @@ _BASE = re.compile(r'<BaseURL>(.*?)</BaseURL>', re.S)
 
 class Asleep(Exception):
     """The YouTube add-on's server did not wake: no trailer this time (nothing is wrong with the code)."""
+
+
+_KODI_TAGS = re.compile(r'\[/?(?:B|I|COLOR|UPPERCASE|LOWERCASE|CAPITALIZE|LIGHT|TABS|CR)\b[^\]]*\]', re.I)
+
+
+def reading_seconds(plot, alone_after=4):
+    """How long after the trailer's first picture the plot shown over its title has been read: one of READ_STEPS
+    (the longest for a longer one). alone_after: when the trailer has the screen to itself (the card shows)."""
+    # (each paragraph starts a line of its own: TMDb's plots have some -- the reviewer)
+    paragraphs = [' '.join(_KODI_TAGS.sub(' ', p).split())
+                  for p in re.split(r'\n|\[CR\]', plot or '', flags=re.I)]
+    paragraphs = [p for p in paragraphs if p]
+    letters = sum(len(p) for p in paragraphs)
+    lines = sum(-(-len(p) // LINE_LETTERS) for p in paragraphs)
+    if lines <= CARD_LINES:
+        need = letters / float(READ_CHARS_S) - BEFORE_PICTURE_S
+    else:
+        need = alone_after + CARD_HOLD_S + (lines - CARD_LINES) * CARD_LINE_S + CARD_LINE_S
+    if need <= alone_after:
+        return READ_STEPS[0]        # read before the trailer has the screen: no card
+    need = max(need, alone_after + CARD_MIN_S)      # (a card that comes is not a flash)
+    for seconds in READ_STEPS:
+        if need <= seconds:
+            return seconds
+    return READ_STEPS[-1]
 
 
 def video_id(address):
@@ -853,9 +896,12 @@ class Desk(object):
 
     def __init__(self, home, player, resolve, make_item, enabled, log=lambda text: None, clock=None,
                  ready=lambda stream: stream, halt=None, wanted_now=lambda key: False, look=lambda key: '', settle=0.0,
-                 acting=lambda: False, no_picture=None, translated=lambda key: [], repair=lambda: None, subs=None):
+                 acting=lambda: False, no_picture=None, translated=lambda key: [], repair=lambda: None, subs=None,
+                 plot=None, alone_after=lambda: 4):
         import time
         self.home, self.player, self.resolve, self.make_item = home, player, resolve, make_item
+        self.plot = plot            # the plot the screen shows over the title (READ); None: not measured
+        self.alone_after = alone_after  # ... and when the trailer has the screen to itself (the viewer's choice)
         self.enabled, self.log, self.ready = enabled, log, ready
         # how the player is told to stop: in Kodi a built-in that returns at once, never the player's own stop
         # (see the module's text); without Kodi, the test's own player
@@ -935,6 +981,12 @@ class Desk(object):
     def asked(self):
         """The skin asked for the trailer in povil.tr.ask. Returns the job to run off this thread, or None."""
         key = self.home.getProperty(ASK)
+        if self.plot is not None:
+            # (before the trailer is handed to the player: the skin counts from its first picture)
+            try:
+                self.home.setProperty(READ, str(reading_seconds(self.plot(), self.alone_after())))
+            except Exception:
+                self.home.setProperty(READ, str(READ_STEPS[0]))
         video = video_id(key)
         if not video or not self.enabled() or self._busy_with_another():
             return None
@@ -1549,6 +1601,11 @@ def watch(data=None, stay=None):
         except Exception:
             return False
 
+    def alone_after():
+        # the tile "תזמון טריילרים": when the trailer has the screen to itself (0: never)
+        from resources.libs import trailer_timing
+        return trailer_timing.current(xbmc.getInfoLabel, trailer_timing.FULL, trailer_timing.FULLS)
+
     player = Events()
     def repair():
         from resources.libs import youtube_port
@@ -1622,7 +1679,8 @@ def watch(data=None, stay=None):
     desk = Desk(home, player, resolve, make_item, enabled, log, ready=ready, acting=acting,
                 halt=lambda: xbmc.executebuiltin('PlayerControl(Stop)'),
                 wanted_now=wanted_now, look=look, settle=SETTLE_S, no_picture=no_picture, translated=translated,
-                repair=repair, subs=subs)
+                repair=repair, subs=subs, plot=lambda: xbmc.getInfoLabel('Control.GetLabel(%d)' % PLOT_LABEL),
+                alone_after=alone_after)
     subs.waiting = desk.waiting
 
     def run(job):

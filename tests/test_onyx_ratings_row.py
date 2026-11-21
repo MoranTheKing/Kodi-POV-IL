@@ -116,7 +116,9 @@ class LayoutTests(unittest.TestCase):
                                  ('DialogVideoInfo.xml', '$INFO[ListItem.Plot]'), ('VideoFullScreen.xml', '$INFO[VideoPlayer.Plot]')):
             root = ET.parse(XML / name).getroot()
             row = rows(name)[0]
-            plots = [c for c in root.iter('control') if c.get('type') == 'textbox' and c.findtext('label') == plot_label]
+            # (not the plot card: it is at the top of a trailer that has the screen to itself, the row gone -- Onyx 1.0.34)
+            plots = [c for c in root.iter('control') if c.get('type') == 'textbox' and c.findtext('label') == plot_label
+                     and c.get('description') != 'plot card text']
             self.assertTrue(plots, name)
             for plot in plots:
                 self.assertGreaterEqual(self.top(plot), self.top(row) + int(row.findtext('height')), name)
