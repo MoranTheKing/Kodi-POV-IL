@@ -936,7 +936,8 @@ class SkinTests(unittest.TestCase):
         for shade in ('hero shade', 'rows shade', 'top shade'):
             self.assertLess(order.index('trailer'), order.index(shade), 'under every shade: the text stays clear')
         plot = next(c for c in controls if c.get('description') == 'plot')
-        self.assertTrue(any(a.get('condition') == shown for a in plot.findall('animation')), 'the plot steps aside meanwhile')
+        # (Onyx 1.0.34: the plot stays while the trailer plays, and rises to a card at the top -- test_trailer_plot_card)
+        self.assertFalse(any(a.get('condition') == shown for a in plot.findall('animation')), 'the plot stays meanwhile')
         # only a POV title's YouTube trailer is ever asked for
         variables = {v.get('name'): v for v in ET.parse(XML / 'Includes_POVIL_Home.xml').getroot().findall('variable')}
         values = [v for v in variables['POVIL_HeroTrailer'].findall('value') if v.text]

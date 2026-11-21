@@ -112,6 +112,23 @@ save(gradient(1024, 8, [(0, 0), (0.30, 30), (0.60, 150), (0.84, 182), (1, 115)],
 save(gradient(8, 1024, [(0, 0), (0.38, 60), (0.70, 195), (1, 205)], 'y'), 'grad_bottom.png')   # was 250 at the edge
 save(gradient(8, 512, [(0, 150), (0.55, 50), (1, 0)], 'y'), 'grad_top.png')                     # was 200 at the edge
 save(gradient(8, 512, [(0, 0), (1, 255)], 'y'), 'grad_simple.png')
+
+
+def corner(w, h, top, sx, sy):
+    """Dark in the top right corner, fading left (sx: from, to) and down (sy: from, to), smoothstep both ways."""
+    def step(a, b, p):
+        t = min(1.0, max(0.0, (p - a) / (b - a)))
+        return t * t * (3 - 2 * t)
+    img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    px = img.load()
+    for yy in range(h):
+        for xx in range(w):
+            px[xx, yy] = (0, 0, 0, int(round(top * step(sx[0], sx[1], xx / (w - 1)) * (1 - step(sy[0], sy[1], yy / (h - 1))))))
+    return img
+
+
+# the plot over a trailer that has the screen to itself (gen_home.py PLOT_CARD, Onyx 1.0.34)
+save(corner(256, 128, 215, (0.10, 0.45), (0.50, 1.0)), 'grad_corner.png')
 save(vignette(480, 270), 'vignette.png')
 w = Image.new('RGBA', (8, 8), (255, 255, 255, 255)); save(w, 'white.png')
 # Underline with soft ends

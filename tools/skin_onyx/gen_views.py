@@ -104,6 +104,8 @@ def view(x, vid, label, layout):
          '<animation effect="fade" start="100" end="0" time="250">Hidden</animation></control>' % H.TRAILER_SHOWN)
     # its Hebrew subtitles, drawn by the skin (gen_home.py trailer_lines)
     H.trailer_lines(x, 3)
+    # ... and the plot, risen to the top until it could be read (gen_home.py PLOT_CARD; the view's plot is at 440)
+    H.plot_card(x, 3, '$VAR[POVIL_V_Title]', '$VAR[POVIL_V_Plot]', 336)
     # everything over the picture is one group: it fades away while a trailer has the screen to itself
     x(3, '<control type="group" description="over the picture">')
     x(3, H.TRAILER_FADE)
@@ -149,10 +151,10 @@ def view(x, vid, label, layout):
     x(3, '<control type="textbox"><left>%d</left><top>440</top><width>860</width><height>152</height><font>povil_plot</font>'
          '<textcolor>povil_dim</textcolor><align>right</align><label>$VAR[POVIL_V_Plot]</label>'
          '<animation effect="slide" end="0,-38" time="140" tween="cubic" easing="out" '
-         'condition="String.IsEmpty(Control.GetLabel(%d))">Conditional</animation>'
-         # while the title's trailer plays the plot steps aside, as on the home (the title, details and ratings stay)
-         '<animation effect="fade" start="100" end="0" time="400" condition="%s">Conditional</animation></control>'
-         % (right - 860, H.RATINGS_KEY, H.TRAILER_SHOWN))
+         'condition="String.IsEmpty(Control.GetLabel(%d))">Conditional</animation></control>'
+         # (it stays while the title's trailer plays, and rises to the top when the trailer has the screen to itself,
+         # as on the home: gen_home.py PLOT_CARD)
+         % (right - 860, H.RATINGS_KEY))
     # The row: right to left (reversed by the add-on), whole slots flush with the right margin
     g = H.GEOM['landscape' if layout == 'episodes' else 'poster']
     left, width, _peek = H.rtl_slots(g)
@@ -196,6 +198,9 @@ def view(x, vid, label, layout):
         # views' groups -- two controls of one id, one of them in a hidden group, are not read reliably
         x(2, '<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
              '<label>$VAR[POVIL_V_Trailer]</label></control>' % H.TRAILER_KEY)
+        # ... and the plot shown, for the trailer desk to measure (gen_home.py TRAILER_READ)
+        x(2, '<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
+             '<label>$VAR[POVIL_V_Plot]</label></control>' % H.PLOT_LABEL)
         # ... and the button Back gives the focus to while the trailer has the screen to itself: off the screen, it
         # gives the focus straight back to the view. (Its "focus" animation, of no time, has Kodi run onfocus a frame
         # later: run at once, inside the move that focused it, the view and the button would both hold the focus.)
