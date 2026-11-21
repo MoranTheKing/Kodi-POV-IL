@@ -4240,6 +4240,8 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
             return path, {'status': _STATUS_ALTERNATE_APPLIED,
                           'cut_signature': cut_signature,
                           'cache_key': final_key}
+        if early_job and early_job.get('_kept_by_alternate'):
+            return path, _kept_verdict(early_job, cut_signature, final_key)
 
         fixed_text = None
         transient_oracle_search = False
@@ -4356,6 +4358,9 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                     return path, {'status': _STATUS_ALTERNATE_APPLIED,
                                   'cut_signature': cut_signature,
                                   'cache_key': final_key}
+                if early_job and early_job.get('_kept_by_alternate'):
+                    return path, _kept_verdict(
+                        early_job, cut_signature, final_key)
 
         # Shared exact-cut learning, last: only when neither the playing file
         # nor a provider oracle could decide. A CONFIRMED record proves nothing
@@ -4831,6 +4836,42 @@ def _tournament_candidate_text(info, link, cache_only=False):
     return '', payload
 
 
+def _agrees_with_proven(current_text, alt_text, verdict):
+    """The on-screen subtitle's timing against an alternate the file (or an
+    oracle) has just proven: CONFIRMED when, with the alternate's proven map
+    applied, the two run on one timeline -- which proves the on-screen one too.
+
+    Field log, 21 Nov 2026 (Friends S07E08 2160p remux): the exact-release
+    Ktuvit copy from the pool was in sync, but its lines are cut differently
+    from the file's tracks (vote 58%, offset +275 ms), so it stayed unproven,
+    and the tournament replaced it by a Wizdom 49% row proven at +1282 ms --
+    which, once shifted, ran 0.23-0.30 s from the exact copy (vote 86%). The
+    viewer saw his 100% subtitle swapped for a 49% one and picked it again."""
+    if not (current_text or '').strip() or not (alt_text or '').strip():
+        return None
+    try:
+        proven = alt_text
+        if verdict.get('status') == sync_align.STATUS_FIXABLE:
+            proven = sync_align.apply_verdict(alt_text, verdict)
+        agree = sync_align.verify(proven, current_text)
+    except Exception:
+        return None
+    if agree.get('status') == sync_align.STATUS_CONFIRMED:
+        return agree
+    return None
+
+
+def _kept_verdict(job, cut_signature, cache_key):
+    """The deep verify's answer for a row kept by _agrees_with_proven: in
+    sync as it is.  Neither stored nor shared: the proof is another row's."""
+    kept = job.get('_kept_by_alternate') or {}
+    return {'status': sync_align.STATUS_CONFIRMED, 'scale': 1.0,
+            'offset_ms': 0.0, 'kept_by_alternate': True,
+            'diag': 'agrees with %r (%s)' % (kept.get('proven_by') or '?',
+                                             kept.get('diag') or ''),
+            'cut_signature': cut_signature, 'cache_key': cache_key}
+
+
 def _apply_verified_human_fallback(job, cache_only=False, reference=None):
     """Find and apply the first alternate human row proven for this cut.
 
@@ -4845,6 +4886,10 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
     timeline -- for files that carry no subtitle track (most small MP4/AVI/
     HDTV encodes). A rescued (low-onset) shift is not enough there: it would
     need a second independent reference, so such rows are skipped.
+
+    A human subtitle on screen whose timing agrees with the first proven row
+    is proven by it and stays (_agrees_with_proven): the function then returns
+    False and sets job['_kept_by_alternate'] to that agreement.
     """
     links = [str(link) for link in (job.get('fallback_links') or []) if link]
     if (not links or not _job_matches_current(job)
@@ -4867,6 +4912,14 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
             cut_signature = ''
     playing = job.get('playing') or ''
     old_link = kodi_utils.get_current_subtitle() or ''
+    current_text = ''
+    if _is_human_hebrew_candidate(_decode_link(old_link) or {}):
+        try:
+            with open(job.get('path') or '', 'r', encoding='utf-8',
+                      errors='replace') as f:
+                current_text = f.read()
+        except Exception:
+            current_text = ''
     attempted = 0
     seen_text = set()
     rejected_timing = job.setdefault('_rejected_timing', set())
@@ -4934,6 +4987,12 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
         # repeats against the already-cached media profile.
         if cut_signature:
             _store_verdict(_cache_key(text, playing, cut_signature), verdict)
+        kept = _agrees_with_proven(current_text, text, verdict)
+        if kept:
+            _log('autosub tournament: the subtitle on screen agrees with %r, '
+                 'proven vs %s (%s): kept' % (rel, label, kept.get('diag')))
+            job['_kept_by_alternate'] = dict(kept, proven_by=rel)
+            return False
         fallback_selection = {}
         try:
             # Candidate retrieval/analysis can take seconds.  Re-check the old
@@ -5382,6 +5441,10 @@ def run_deep_job(job):
                 else:
                     if _apply_verified_human_fallback(job):
                         return
+                    if job.get('_kept_by_alternate'):
+                        _publish_selection_status(
+                            'confirmed', 'local', selection=job_selection)
+                        return
                     if _apply_proven_pool_fallback(job):
                         return
                     _publish_selection_status(
@@ -5429,7 +5492,8 @@ def run_deep_job(job):
             if (verdict.get('status') in (
                     sync_align.STATUS_UNKNOWN, _STATUS_NO_ORACLE)
                     and (_apply_verified_human_fallback(job)
-                         or _apply_proven_pool_fallback(job))):
+                         or (not job.get('_kept_by_alternate')
+                             and _apply_proven_pool_fallback(job)))):
                     return
             # The original subtitle is still on screen.  Refresh only its exact
             # cut identity (not an unapplied proposed shift), so any later manual
@@ -5440,8 +5504,9 @@ def run_deep_job(job):
                              cut_signature=(
                                  verdict.get('cut_signature') or ''),
                              selection=job_selection)
-            final_state = ('confirmed' if verdict.get('status')
-                           == sync_align.STATUS_CONFIRMED else 'unverified')
+            final_state = ('confirmed' if (
+                verdict.get('status') == sync_align.STATUS_CONFIRMED
+                or job.get('_kept_by_alternate')) else 'unverified')
             if _publish_selection_status(
                     final_state, 'local', selection=job_selection):
                 _log('status for current subtitle: {0} (local)'.format(
