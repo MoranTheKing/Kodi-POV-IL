@@ -88,8 +88,10 @@ WATCH_TABLES = ('watched_status', 'progress', 'dropped', 'favorites')
 # (povil_favorites_order: the viewer's order for POV's own favourites, pov_favorites_order.py)
 # (povil_trailer_pick_v2: written once the series POV had cached were let go for the new choice of trailers,
 # pov_trailer_pick.purge_once -- the saved lists then build again behind their first showing)
+# (povil_rating_v1: written once POV's lists give their items the average of the sites' ratings, pov_rating.lists_once
+# -- the lists saved before were built by the POV of before)
 HASHED_FILES = ('settings.xml', 'povil_dropped_trakt.json', 'povil_dropped_mdblist.json', 'povil_favorites_order',
-                'povil_trailer_pick_v2')
+                'povil_trailer_pick_v2', 'povil_rating_v1')
 # Sizes and times of every file above (and POV's list cache): unchanged files
 # mean unchanged dependencies, without opening a database.
 STAT_FILES = HASHED_FILES + (ACCTMGR_SETTINGS,) + tuple(
@@ -122,6 +124,8 @@ LISTS_TOKEN = '$INFO[Window(home).Property(povil.lists.t)]'
 # film or episode ended, gen_home.py PLAY_TOKEN; empty at start, like the lists' token)
 PLAY_TOKEN = '$INFO[Window(home).Property(povil.play.t)]'
 _LISTITEM_RECORDED = ('set', 'add', 'select')
+RATING_SOURCE = 'povil_avg_src'     # pov_rating.SOURCE (a test keeps them equal): what an item's average is worked out from
+RATING_AVERAGE = 'povil_avg'        # pov_rating.PROPERTY: the average itself
 
 
 class Unsupported(Exception):
@@ -223,14 +227,25 @@ def _build(item_ops, xbmc, xbmcgui):
     else:
         li = xbmcgui.ListItem(offscreen=True)
     tag = None
+    rated = None
     for kind, name, args, kwargs in item_ops:
         args, kwargs = _live(args, xbmc), _live(kwargs, xbmc)
         if kind == 'L' and name == 'getVideoInfoTag':
             tag = li.getVideoInfoTag(*args, **kwargs)
         elif kind == 'L':
             getattr(li, name)(*args, **kwargs)
+            if name == 'setProperty' and len(args) == 2 and args[0] == RATING_SOURCE:
+                rated = args[1]
         elif tag is not None:
             getattr(tag, name)(*args, **kwargs)
+    if rated:
+        # The number on the picture's corner is the average of the sites' ratings (pov_rating.py), and the
+        # Wizard learns more of them while a saved list waits: worked out again from what is known now.
+        try:
+            import pov_rating
+            li.setProperty(pov_rating.PROPERTY, pov_rating.replayed(rated))
+        except Exception:
+            pass
     return li
 
 
@@ -1012,8 +1027,17 @@ def _stale(snap, age, personal):
     return age >= (PERSONAL_TTL_S if personal else GENERAL_TTL_S) or snap.get('day') != _today()
 
 
+def _unrated(items):
+    """The items without their corner's average: a copy shows the average of the moment whatever it recorded
+    (_build), so two records that differ only there show the same list."""
+    return [[op for op in ops if not (op[0] == 'L' and op[1] == 'setProperty' and op[2][:1] == [RATING_AVERAGE])]
+            for ops in items]
+
+
 def _same(a, b):
-    return a['items'] == b['items'] and a['calls'] == b['calls']
+    if a['calls'] != b['calls']:
+        return False
+    return a['items'] == b['items'] or _unrated(a['items']) == _unrated(b['items'])
 
 
 REFRESHED_PROPERTY = 'povil.rows.refreshed'
@@ -1037,7 +1061,10 @@ def _refresh_widgets(xbmc, saved_at):
         except ValueError:
             pass
         win.setProperty(REFRESHED_PROPERTY, repr(time.time()))
-    xbmc.executebuiltin('UpdateLibrary(video,special://skin/foo)')
+    # (the third word: no dialog. Kodi's scan progress showed over the home for a moment -- and stopped a trailer
+    # there, the skin's povil_trailer_stop: the reviewer, Wizard 0.5.41, where a list built again after the update
+    # refreshes the rows on every device)
+    xbmc.executebuiltin('UpdateLibrary(video,special://skin/foo,false)')
     return 'widgets'
 
 
@@ -1151,7 +1178,8 @@ def _note_mark(xbmc, win, params, now=None):
     if 'pov' in xbmc.getInfoLabel('Container.PluginName'):
         xbmc.executebuiltin('Container.Refresh')
     else:
-        xbmc.executebuiltin('UpdateLibrary(video,special://skin/foo)')
+        # (no scan dialog: it would stop a trailer over the home -- Wizard 0.5.41)
+        xbmc.executebuiltin('UpdateLibrary(video,special://skin/foo,false)')
     return True
 
 

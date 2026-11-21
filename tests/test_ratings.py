@@ -195,7 +195,8 @@ class AnswerTests(unittest.TestCase):
         self.assertEqual(home.properties['povil.rt.imdb'], '8.8')
         self.assertEqual(home.properties['povil.rt.for'], 'tt1375666|movie||')
         self.assertEqual(home.writes[-1], 'povil.rt.for', 'the skin pairs a field with a title only by this')
-        self.assertEqual(sorted(home.writes[:-1]), sorted('povil.rt.' + f for f in ratings.FIELDS))
+        # the sites' fields and their average (Wizard 0.5.41: tests/test_poster_average.py)
+        self.assertEqual(sorted(home.writes[:-1]), sorted('povil.rt.' + f for f in ratings.FIELDS + (ratings.AVERAGE,)))
 
     def test_a_field_the_title_lacks_is_emptied(self):
         home = Home(**{'povil.rt.ask': 'tt1|episode|1|1', 'povil.rt.tomato': '87%', 'povil.rt.for': 'tt1375666|movie||'})
@@ -519,7 +520,10 @@ class WiringTests(unittest.TestCase):
         watch = source[source.index('def watch():'):]
         self.assertIn('def onNotification(self, sender, method, data):', watch)
         self.assertIn('desk.asked(slot)', watch, 'answered where the question arrives')
-        self.assertIn('desk.step(wait=60, urgent_only=urgent_only)', watch, 'the workers sleep until there is a job: nothing polls')
+        # the workers sleep until there is a job: nothing polls. (Only while a refresh of the rows is owed does the
+        # worker that asks ahead look again every few seconds -- Wizard 0.5.41.)
+        self.assertIn('desk.step(wait=REFRESH_WAIT if owed else 60, urgent_only=urgent_only)', watch)
+        self.assertIn('owed = not urgent_only and desk.owed()', watch)
         self.assertNotIn('sleep(', source)
         # the screen is read only when the skin asked: for the titles beside the focused one
         self.assertEqual(source.count('getInfoLabel'), 1)

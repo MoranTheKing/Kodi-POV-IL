@@ -1,3 +1,7 @@
+[B]Kodi POV IL - Onyx 1.0.37[/B]
+- The number on a poster is the average of the sites' ratings, and the row of sites beside the title ends with it: "ממוצע", a gold star and the same number (the owner, with a photo: "the average on the poster is not the average ... where was this 6.6 made up from"). It was TMDb's figure alone. A new film that only Trakt has rated now has its number too. Needs Wizard 0.5.41; without the Wizard a poster shows the list's own rating as before.
+- The player's pills say the file's size too, beside the provider (a viewer, Nov 2026: "the file size among the chips"): "151.5 GB", only when the source named it (Wizard 0.5.41), in Onyx's player and in the large one.
+
 [B]Kodi POV IL - Onyx 1.0.36[/B]
 - The Wizard's trailer choice inside the skin (for Onyx without the Wizard) brought level with Wizard 0.5.40: a series' trailer that came out long before its next season counts as the series' own.
 

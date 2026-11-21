@@ -93,7 +93,7 @@ def gen():
     # The ratings row (ratings_row.py), then the plot under it; with no row both the plot and the cast
     # start where they always did (402 and 396)
     RR.key_label(x, 3, H.RATINGS_KEY, '$VAR[POVIL_I_RatingsKey]')
-    RR.row(x, 3, RIGHT, 392, H.RATINGS_KEY, H.RATINGS_SLOT, 'POVIL_I_RatingsTmdb', width=COL)
+    RR.row(x, 3, RIGHT, 392, H.RATINGS_KEY, H.RATINGS_SLOT, 'POVIL_I_RatingsTmdb', width=COL + 140)   # (every site and their average: 1120)
     lift = ('<animation effect="slide" end="0,-38" time="140" tween="cubic" easing="out" condition="%s">Conditional</animation>' % NO_ROW)
     x(3, '<control type="textbox" id="4"><left>%d</left><top>440</top><width>%d</width><height>228</height><font>povil_plot</font>'
          '<textcolor>povil_white</textcolor><align>right</align><autoscroll delay="7000" time="3000" repeat="10000">true</autoscroll>'

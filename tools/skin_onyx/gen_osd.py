@@ -46,10 +46,14 @@ NO_EPISODE = -38                # a film has no episode line: what is under it m
 TAP_CLOSE, TAP_TOP, TAP_BOTTOM = 7005, 320, 772
 # What is playing, as pills, read right to left: the picture's size, its frame rate, its dynamic
 # range, the sound, the video codec (the owner, with a photo of another player: "like this"), then
-# where the stream comes from, in gold. A pill with nothing to say is not drawn. Listed left to
-# right, so the first one here is the last read.
+# the file's size (Onyx 1.0.37 -- a viewer: "the file size among the chips") and where the stream
+# comes from, in gold. A pill with nothing to say is not drawn. Listed left to right, so the first
+# one here is the last read.
 PILLS = ('POVIL_OSD_Codec', 'POVIL_OSD_Audio', 'POVIL_OSD_Hdr', 'POVIL_OSD_Fps', 'POVIL_OSD_Res')
 PROVIDER_PILL = 'POVIL_OSD_Provider'
+SIZE_PILL = 'POVIL_OSD_Size'
+# (the hidden labels that say whether a pill has anything to show keep their ids: the size's is the last)
+PILL_IDS = (PROVIDER_PILL,) + PILLS + (SIZE_PILL,)
 # (id, icon, Hebrew name, onclick list, visible), each group left to right
 LEFT_BUTTONS = [
     # the other players (gen_osd_styles.py; the Wizard asks which): the farthest from the middle, the least wanted
@@ -205,7 +209,7 @@ def pills_row(x, depth, top, base=7910):
     """What is playing, as pills on the right of the line over the controls. `base`: the ids of the hidden
     labels that say whether a pill has anything to show (another player draws the row with ids of its own)."""
     right = 1920 - H.MARGIN
-    names = (PROVIDER_PILL,) + PILLS
+    names = (PROVIDER_PILL, SIZE_PILL) + PILLS
     x(depth, '<control type="grouplist" description="what is playing"><left>%d</left><top>%d</top><width>1200</width><height>42</height>'
              '<orientation>horizontal</orientation><align>right</align><itemgap>10</itemgap>' % (right - 1200, top))
     for name in names:
@@ -216,12 +220,12 @@ def pills_row(x, depth, top, base=7910):
                      '<textoffsetx>18</textoffsetx><texturenofocus border="24" colordiffuse="%s">povil/pill48.png</texturenofocus>'
                      '<texturefocus border="24" colordiffuse="%s">povil/pill48.png</texturefocus>'
                      '<label>$VAR[%s]</label><enable>false</enable><visible>!String.IsEmpty(Control.GetLabel(%d))</visible></control>'
-                     % (ink, ink, fill, fill, name, base + names.index(name)))
+                     % (ink, ink, fill, fill, name, base + PILL_IDS.index(name)))
     x(depth, '</control>')
-    for name in names:
+    for name in PILL_IDS:
         # a variable cannot be tested for being empty; a label off the screen can
         x(depth, '<control type="label" id="%d"><left>-2000</left><top>0</top><width>10</width><height>10</height>'
-                 '<label>$VAR[%s]</label></control>' % (base + names.index(name), name))
+                 '<label>$VAR[%s]</label></control>' % (base + PILL_IDS.index(name), name))
 
 
 def timeline(x, depth, focusable):
@@ -572,13 +576,15 @@ def variables():
     # over live TV or another add-on's video. A POV play's folder is the stream's own web address (seen in
     # the QA Kodi), so a library file, or an item another add-on resolved (its folder is plugin://...),
     # shows no provider even when POV's last pick is still remembered.
-    x(1, '<variable name="POVIL_OSD_Provider">')
-    x(2, '<value condition="!String.IsEmpty(Window(Home).Property(povil_osd_provider)) + '
-         'String.IsEqual(Window(Home).Property(povil_osd_provider_for),Window(Home).Property(pov_picked_source_name)) + '
-         '[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + '
-         '[String.StartsWith(Player.Folderpath,http) | String.Contains(Player.Folderpath,plugin.video.pov)] + %s">'
-         '$INFO[Window(Home).Property(povil_osd_provider)]</value>' % NOT_LIVE_SOURCE)
-    x(1, '</variable>')
+    # The file's size (Onyx 1.0.37) is named by the same hook, and shown under the same conditions.
+    for name, prop in (('POVIL_OSD_Provider', 'povil_osd_provider'), ('POVIL_OSD_Size', 'povil_osd_size')):
+        x(1, '<variable name="%s">' % name)
+        x(2, '<value condition="!String.IsEmpty(Window(Home).Property(%s)) + '
+             'String.IsEqual(Window(Home).Property(%s_for),Window(Home).Property(pov_picked_source_name)) + '
+             '[VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + '
+             '[String.StartsWith(Player.Folderpath,http) | String.Contains(Player.Folderpath,plugin.video.pov)] + %s">'
+             '$INFO[Window(Home).Property(%s)]</value>' % (prop, prop, NOT_LIVE_SOURCE, prop))
+        x(1, '</variable>')
     # The time on the timeline's left: while a seek is being chosen, where it will land and by how much
     x(1, '<variable name="POVIL_OSD_Time">')
     x(2, '<value condition="Player.Seeking + !String.IsEmpty(Player.SeekStepSize)">$INFO[Player.SeekTime]   [COLOR povil_gold]$INFO[Player.SeekStepSize][/COLOR]</value>')

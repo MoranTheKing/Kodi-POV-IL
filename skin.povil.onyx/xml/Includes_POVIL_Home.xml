@@ -2217,6 +2217,10 @@
 		<value condition="!String.IsEmpty(Skin.String(POVILRow_favourites_3_name))">$INFO[Skin.String(POVILRow_favourites_3_name)]</value>
 		<value>השורה שלי</value>
 	</variable>
+	<variable name="POVIL_ItemAverage">
+		<value condition="!String.IsEmpty(ListItem.Property(povil_avg))">$INFO[ListItem.Property(povil_avg)]</value>
+		<value>$INFO[ListItem.Rating]</value>
+	</variable>
 	<variable name="POVIL_WatchedColour">
 		<value condition="Skin.HasSetting(POVILWatchedGreen)">FF34C759</value>
 		<value condition="Skin.HasSetting(POVILWatchedWhite)">FFFFFFFF</value>
@@ -3710,9 +3714,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>108</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>108</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 				</control>
 			</itemlayout>
@@ -3780,9 +3784,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>108</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>108</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 				</control>
 			</focusedlayout>
@@ -3844,9 +3848,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
 						<left>0</left><top>232</top><width>352</width><height>34</height>
@@ -3924,9 +3928,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
 						<left>0</left><top>232</top><width>352</width><height>34</height>
@@ -4092,9 +4096,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>108</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>108</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 				</control>
 			</itemlayout>
@@ -4168,9 +4172,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>108</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>108</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 				</control>
 			</focusedlayout>
@@ -4232,9 +4236,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>108</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>108</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 				</control>
 			</itemlayout>
@@ -4302,9 +4306,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>108</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>108</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 				</control>
 			</focusedlayout>
@@ -4366,9 +4370,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
 						<left>0</left><top>232</top><width>352</width><height>34</height>
@@ -4446,9 +4450,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
 						<left>0</left><top>232</top><width>352</width><height>34</height>
@@ -4608,9 +4612,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
 						<left>0</left><top>232</top><width>352</width><height>34</height>
@@ -4688,9 +4692,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
 						<left>0</left><top>232</top><width>352</width><height>34</height>
@@ -4763,9 +4767,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>108</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>108</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 				</control>
 			</itemlayout>
@@ -4833,9 +4837,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>108</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>108</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 				</control>
 			</focusedlayout>
@@ -4898,9 +4902,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
 						<left>0</left><top>232</top><width>352</width><height>34</height>
@@ -4978,9 +4982,9 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>Integer.IsGreater(ListItem.Rating,0) + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
-						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$INFO[ListItem.Rating]</label></control>
+						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
 						<left>0</left><top>232</top><width>352</width><height>34</height>
@@ -6515,6 +6519,9 @@
 	</variable>
 	<variable name="POVIL_OSD_Provider">
 		<value condition="!String.IsEmpty(Window(Home).Property(povil_osd_provider)) + String.IsEqual(Window(Home).Property(povil_osd_provider_for),Window(Home).Property(pov_picked_source_name)) + [VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + [String.StartsWith(Player.Folderpath,http) | String.Contains(Player.Folderpath,plugin.video.pov)] + !String.Contains(Player.Folderpath,plugin.video.idanplus) + !String.Contains(Player.Folderpath,plugin.video.supertv) + !String.Contains(Player.Folderpath,plugin.video.flashstream)">$INFO[Window(Home).Property(povil_osd_provider)]</value>
+	</variable>
+	<variable name="POVIL_OSD_Size">
+		<value condition="!String.IsEmpty(Window(Home).Property(povil_osd_size)) + String.IsEqual(Window(Home).Property(povil_osd_size_for),Window(Home).Property(pov_picked_source_name)) + [VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)] + !VideoPlayer.Content(LiveTV) + [String.StartsWith(Player.Folderpath,http) | String.Contains(Player.Folderpath,plugin.video.pov)] + !String.Contains(Player.Folderpath,plugin.video.idanplus) + !String.Contains(Player.Folderpath,plugin.video.supertv) + !String.Contains(Player.Folderpath,plugin.video.flashstream)">$INFO[Window(Home).Property(povil_osd_size)]</value>
 	</variable>
 	<variable name="POVIL_OSD_Time">
 		<value condition="Player.Seeking + !String.IsEmpty(Player.SeekStepSize)">$INFO[Player.SeekTime]   [COLOR povil_gold]$INFO[Player.SeekStepSize][/COLOR]</value>

@@ -102,7 +102,7 @@ class NotingTests(unittest.TestCase):
         self.assertEqual(self.m._pending_marks(self.win, 1001.0), [('movie', '27205', '', '', True, 1000.0)])
         self.screen['Container.PluginName'] = ''
         self.m._note_mark(self.xbmc, self.win, dict(params, tmdb_id='5'), now=1002.0)
-        self.assertEqual(self.builtins[-1], 'UpdateLibrary(video,special://skin/foo)', 'the home rows')
+        self.assertEqual(self.builtins[-1], 'UpdateLibrary(video,special://skin/foo,false)', 'the home rows')
         self.assertFalse(self.m._note_mark(self.xbmc, self.win, {'mode': 'build_movie_list'}))
         self.assertEqual(len(self.builtins), 2)
 

@@ -144,6 +144,29 @@ def provider_label(item):
     return _PROVIDER_NAMES.get(raw.lower(), raw)
 
 
+def size_label(item):
+    """The size of the file a source plays, as the player's pill says it: '12.4 GB', '8 GB', '850 MB'; '' when the
+    source names none. POV keeps a source's size in gigabytes -- for a pack, its share for one episode, the figure
+    its own list of sources shows -- and some sources carry only the words POV wrote of it ('12.40 GB')."""
+    size = 0.0
+    try:
+        size = float(item.get('size') or 0)
+    except Exception:
+        size = 0.0
+    if not size > 0:
+        try:
+            words = str(item.get('size_label') or '').replace(',', '.').split()
+            size = float(words[0]) / (1024.0 if len(words) > 1 and words[1].upper().startswith('M') else 1.0)
+        except Exception:
+            size = 0.0
+    if not 0.001 <= size < 2000:
+        return ''
+    if size < 0.9995:
+        return '%d MB' % int(size * 1024 + 0.5)
+    text = '%.1f' % size
+    return (text[:-2] if text.endswith('.0') else text) + ' GB'
+
+
 def run_capture(sources_self, item, link):
     """
     Hook 1: Stashes window properties for external modules and saves the selected source.
@@ -161,6 +184,10 @@ def run_capture(sources_self, item, link):
         provider = provider_label(item)
         win.setProperty('povil_osd_provider', provider)
         win.setProperty('povil_osd_provider_for', name if provider else '')
+        # ... and the file's size, a pill beside it (a viewer, Nov 2026: "the file size among the chips")
+        size = size_label(item)
+        win.setProperty('povil_osd_size', size)
+        win.setProperty('povil_osd_size_for', name if size else '')
     except Exception as e:
         _log('Failed setting Window properties: ' + str(e), xbmc.LOGWARNING)
 

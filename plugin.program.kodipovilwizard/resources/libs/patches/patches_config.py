@@ -72,6 +72,30 @@ PATCH_CONFIG = [
      'target_file': 'resources/lib/menus/seasons.py', 'marker': '# WIZARD_POV_TRAILER_SEASON_v1',
      'anchor': 'infotag.setCast(make_cast_list(show.cast))', 'action': 'append_after',
      'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_trailer_pick\n\t_povil_trailer = pov_trailer_pick.for_season(show.meta, season_number)\n\tif _povil_trailer: infotag.setTrailer(_povil_trailer)\nexcept Exception:\n\tpass\n"},
+    # The number on a picture's corner is the average of the sites' ratings (Wizard 0.5.41; patches/pov_rating.py):
+    # POV's lists give each film, series and episode the average of what the Wizard knows of it (ListItem.Property(
+    # povil_avg)) -- the owner, Nov 2026: "the average on the poster is not the average ... where was this 6.6 made
+    # up from". ListItem.Rating stays POV's own figure, TMDb's. Optional: a POV that changed these lines keeps its lists.
+    {'id': 'pov_rating_movie', 'name': "A film's corner: the average of the sites' ratings",
+     'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
+     'target_file': 'resources/lib/menus/movies.py', 'marker': '# WIZARD_POV_RATING_MOVIE_v1',
+     'anchor': 'listitem.setLabel(display)', 'action': 'append_after',
+     'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_rating\n\tpov_rating.stamp(listitem, imdb_id, 'movie', meta_get('rating'))\nexcept Exception:\n\tpass\n"},
+    {'id': 'pov_rating_tvshow', 'name': "A series' corner: the average of the sites' ratings",
+     'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
+     'target_file': 'resources/lib/menus/tvshows.py', 'marker': '# WIZARD_POV_RATING_TVSHOW_v1',
+     'anchor': 'listitem.setLabel(display)', 'action': 'append_after',
+     'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_rating\n\tpov_rating.stamp(listitem, imdb_id, 'tvshow', meta_get('rating'))\nexcept Exception:\n\tpass\n"},
+    {'id': 'pov_rating_episode', 'name': "An episode's corner in the episode rows: the average of the sites' ratings",
+     'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
+     'target_file': 'resources/lib/menus/episodes.py', 'marker': '# WIZARD_POV_RATING_EPISODE_v1',
+     'anchor': 'listitem.setLabel(display)', 'action': 'append_after',
+     'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_rating\n\tpov_rating.stamp(listitem, imdb_id, 'episode', item_get('rating'), season, episode)\nexcept Exception:\n\tpass\n"},
+    {'id': 'pov_rating_season_episode', 'name': "An episode's corner in its season: the average of the sites' ratings",
+     'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
+     'target_file': 'resources/lib/menus/seasons.py', 'marker': '# WIZARD_POV_RATING_SEASON_EPISODE_v1',
+     'anchor': 'infotag = info_tagger(listitem, episode_infodict(show.meta, **item))', 'action': 'append_after',
+     'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_rating\n\tpov_rating.stamp(listitem, show.imdb_id, 'episode', item_get('rating'), season, episode)\nexcept Exception:\n\tpass\n"},
     # YouTube refuses every read past about a minute of a stream it handed to the add-on's 'android_vr' client
     # (403; add-on 7.4.4, its issues 1481/1483, open since Aug 2026), and that client's addresses are the ones
     # the add-on plays: a video stood still some fifteen seconds in. The client stays in the request (the

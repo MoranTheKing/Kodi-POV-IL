@@ -27,7 +27,8 @@ class RowTests(unittest.TestCase):
             for row in found:
                 units = [g.get('description') for g in row.findall('control')]
                 # written last to first: the row is laid out from the right, where reading starts
-                self.assertEqual(units, SITES[::-1], name)
+                # ... and their average first of all, so it stands last: after the sites it is the average of
+                self.assertEqual(units, ['average'] + SITES[::-1], name)
                 self.assertEqual(row.findtext('visible'), '!String.IsEmpty(Control.GetLabel(%d))' % key)
                 self.assertEqual(row.findtext('align'), 'right')
 
@@ -36,6 +37,8 @@ class RowTests(unittest.TestCase):
             for row in rows(name):
                 for unit in row.findall('control'):
                     site, shown = unit.get('description'), unit.findtext('visible')
+                    if site == 'average':
+                        site = 'avg'
                     if site == 'tmdb':
                         # there from the start, from the list's own rating
                         self.assertEqual(shown, '!String.IsEmpty(Control.GetLabel(%d))' % (key + 1), name)
@@ -98,8 +101,11 @@ class AskingTests(unittest.TestCase):
             self.assertIn('!String.IsEmpty(Control.GetLabel(%d))' % key, start)
             self.assertIn('!String.IsEqual(Control.GetLabel(%d),Window(home).Property(%sask))' % (key, prefix), start)
             self.assertEqual([a.text for a in timer.findall('onstart')],
-                             ['SetProperty(%sask,$ESCINFO[Control.GetLabel(%d)],home)' % (prefix, key),
-                              'NotifyAll(povil.ratings,%s)' % slot])
+                             ['SetProperty(%slist,$ESCINFO[Control.GetLabel(%d)],home)' % (prefix, key + 1),
+                              'SetProperty(povil.avg.skin,1,home)',
+                              'SetProperty(%sask,$ESCINFO[Control.GetLabel(%d)],home)' % (prefix, key),
+                              'NotifyAll(povil.ratings,%s)' % slot],
+                             "the list's own figure first: the answer's average may need it")
             # a skin timer that is running never starts again (QA: only the first title was ever asked)
             self.assertEqual(timer.findtext('stop'), 'true')
         self.assertIn('Window.IsActive(videos)', timers['povil_ratings'].findtext('start'))
@@ -187,7 +193,8 @@ class PosterBadgeTests(unittest.TestCase):
                 self.assertIn('!ListItem.IsParentFolder', shown)
                 self.assertIn('new_page=', shown, 'not on the "more" item of POV')
                 self.assertEqual(badge.find('control').findtext('texture'), 'povil/ratings/badge.png')
-                self.assertIn('$INFO[ListItem.Rating]', [c.findtext('label') for c in badge.iter('control')])
+                # (since 1.0.37 the average of the sites; the list's own rating where there is none)
+                self.assertIn('$VAR[POVIL_ItemAverage]', [c.findtext('label') for c in badge.iter('control')])
         # top right: the plate ends ten pixels inside the picture's right edge; the watched check moved left
         text = (XML / 'Includes_POVIL_Home.xml').read_text('utf-8')
         self.assertNotRegex(text, r'<left>\d{3}</left><top>\d+</top><width>34</width><height>34</height>\s*<texture[^>]*>povil/check\.png')
