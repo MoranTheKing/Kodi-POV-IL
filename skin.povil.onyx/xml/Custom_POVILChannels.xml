@@ -34,7 +34,8 @@
 			<onup condition="!String.IsEqual(Window(home).Property(povil.ch.kind),radio)">9511</onup><onup condition="String.IsEqual(Window(home).Property(povil.ch.kind),radio)">9512</onup>
 			<ondown>noop</ondown><onleft>noop</onleft><onright>noop</onright>
 			<content target="videos">$VAR[POVIL_ChannelsPath]</content>
-			<onclick condition="!ListItem.IsFolder">PlayMedia($ESCINFO[ListItem.FileNameAndPath])</onclick>
+			<onclick condition="!ListItem.IsFolder + ![Player.HasVideo + !VideoPlayer.Content(LiveTV) + !String.Contains(Player.FolderPath,plugin.video.idanplus)]">PlayMedia($ESCINFO[ListItem.FileNameAndPath])</onclick>
+			<onclick condition="!ListItem.IsFolder + Player.HasVideo + !VideoPlayer.Content(LiveTV) + !String.Contains(Player.FolderPath,plugin.video.idanplus)">RunScript(special://skin/scripts/povil_play_channel.py,$ESCINFO[ListItem.FileNameAndPath])</onclick>
 			<onclick condition="ListItem.IsFolder">ActivateWindow(Videos,$ESCINFO[ListItem.FolderPath],return)</onclick>
 			<onclick>Dialog.Close(1164)</onclick>
 			<itemlayout width="725" height="116">

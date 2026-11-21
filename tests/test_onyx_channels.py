@@ -14,7 +14,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKIN = ROOT / 'skin.povil.onyx'
 XML = SKIN / 'xml'
-SHOWN = 'VideoPlayer.Content(LiveTV) | String.Contains(Player.FolderPath,plugin.video.idanplus)'
+# (Onyx 1.0.35: in films and series too -- the owner, with a photo of a film's controls: "it should be in films and
+# series too, of course"; from a film the Israeli channels' panel opens)
+SHOWN = 'VideoPlayer.Content(LiveTV) | System.HasAddon(plugin.video.idanplus)'
 
 
 class TheButton(unittest.TestCase):
@@ -26,7 +28,7 @@ class TheButton(unittest.TestCase):
 
     def test_it_shows_while_a_channel_plays_and_opens_the_right_list(self):
         b = self.button(7027)
-        self.assertEqual(b.findtext('visible'), SHOWN, 'only then: the row is full while a film or an episode plays')
+        self.assertEqual(b.findtext('visible'), SHOWN, 'whenever Idan Plus is there, or live TV plays')
         self.assertEqual([(c.get('condition'), c.text) for c in b.findall('onclick')],
                          [(None, 'Dialog.Close(VideoOSD,true)'),
                           ('VideoPlayer.Content(LiveTV)', 'ActivateWindow(PVROSDChannels)'),
@@ -51,13 +53,51 @@ class TheButton(unittest.TestCase):
                 ups = [(n.get('condition'), n.text) for n in self.button(row).findall('onright')]
                 self.assertEqual(ups[0], ('Control.IsVisible(%s)' % target, target))
 
-    def test_it_sits_beside_the_subtitles_button(self):
-        row = [c.get('id') for c in self.osd.iter('control') if c.get('id') in ('7024', '7027', '7020', '7021')]
-        self.assertEqual(row[:2], ['7024', '7027'])
+    def test_it_sits_in_the_left_group_where_there_is_room(self):
+        # (the right group is full while an episode plays: subtitles, next episode, source, sound, sync, up, down)
+        groups = {g.get('id'): [c.get('id') for c in g.findall('control') if c.get('type') in ('button', 'togglebutton')]
+                  for g in self.osd.iter('control') if g.get('type') == 'grouplist'}
+        holder = [gid for gid, ids in groups.items() if '7027' in ids]
+        self.assertEqual(len(holder), 1)
+        self.assertEqual(groups[holder[0]][:3], ['7013', '7027', '7010'], 'after the player switch, before stop')
+        self.assertNotIn('7027', [i for gid, ids in groups.items() if '7024' in ids for i in ids])
 
     def test_the_bar_gives_way_to_the_channels_window(self):
         source = (ROOT / 'tools/skin_onyx/gen_osd.py').read_text(encoding='utf-8')
         self.assertIn("'Window.IsActive(subtitlesearch) | Window.IsActive(%d)' % CHANNELS_ID", source)
+
+
+class OverAFilm(unittest.TestCase):
+    """Onyx 1.0.35 (the reviewer): a channel picked while a POV film plays. PlayMedia opens it inside the running player,
+    and POV -- watching its film while "a video plays", once a second -- would take the channel's times for the film's (a
+    wrong resume point, or the film marked watched on Trakt). The film is stopped first, POV sees the stop, then the
+    channel. QA Kodi 21: the video stopped at 0.3 s, nothing played, the channel at 2.8 s; with POV's property still set
+    (as while it saves), the channel waited for it to be cleared (5.3 s) and played at 6.1 s."""
+
+    def test_a_film_is_stopped_first_and_its_add_on_sees_the_stop(self):
+        win = ET.parse(XML / 'Custom_POVILChannels.xml').getroot()
+        lst = next(c for c in win.iter('control') if c.get('id') == '9520')
+        clicks = [(c.get('condition') or '', c.text) for c in lst.findall('onclick')]
+        film = 'Player.HasVideo + !VideoPlayer.Content(LiveTV) + !String.Contains(Player.FolderPath,plugin.video.idanplus)'
+        self.assertIn(('!ListItem.IsFolder + ![%s]' % film, 'PlayMedia($ESCINFO[ListItem.FileNameAndPath])'), clicks,
+                      'over a channel: at once, as before')
+        self.assertIn(('!ListItem.IsFolder + %s' % film,
+                       'RunScript(special://skin/scripts/povil_play_channel.py,$ESCINFO[ListItem.FileNameAndPath])'), clicks)
+        script = (SKIN / 'scripts/povil_play_channel.py').read_text(encoding='utf-8')
+        body = script.split('def main(address):')[1]
+        for step in ("xbmc.executebuiltin('PlayerControl(Stop)')", 'while player.isPlaying()', 'monitor.waitForAbort(AFTER_S)',
+                     'while home.getProperty(POV_PLAYING)', 'PlayMedia('):
+            self.assertIn(step, body)
+        self.assertLess(body.index('PlayerControl(Stop)'), body.index('PlayMedia('))
+        self.assertIn("POV_PLAYING = 'script.trakt.ids'", script)
+        # no trailer starts on the screen under the film meanwhile (the trailer desk's own rest after an action)
+        trailers = (ROOT / 'plugin.program.kodipovilwizard/resources/libs/trailers.py').read_text(encoding='utf-8')
+        self.assertIn("ACTION = 'povil.pov.action'", trailers)
+        self.assertIn("ACTION = 'povil.pov.action'", script)
+        self.assertLess(body.index('home.setProperty(ACTION'), body.index('PlayerControl(Stop)'))
+        # Kodi's own escaping: the backslashes, then the quotes
+        self.assertIn("address.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"')", body)
+        self.assertGreaterEqual(float(script.split('AFTER_S, POV_S = ')[1].split(',')[1]), 2.0, 'POV looks once a second')
 
 
 class TheWindow(unittest.TestCase):
@@ -78,8 +118,12 @@ class TheWindow(unittest.TestCase):
 
     def test_a_press_plays_the_channel_and_closes(self):
         lst = next(c for c in self.win.iter('control') if c.get('id') == '9520')
+        # (a channel over a channel at once, over a film through the script: OverAFilm)
+        film = 'Player.HasVideo + !VideoPlayer.Content(LiveTV) + !String.Contains(Player.FolderPath,plugin.video.idanplus)'
         self.assertEqual([(c.get('condition'), c.text) for c in lst.findall('onclick')],
-                         [('!ListItem.IsFolder', 'PlayMedia($ESCINFO[ListItem.FileNameAndPath])'),
+                         [('!ListItem.IsFolder + ![%s]' % film, 'PlayMedia($ESCINFO[ListItem.FileNameAndPath])'),
+                          ('!ListItem.IsFolder + %s' % film,
+                           'RunScript(special://skin/scripts/povil_play_channel.py,$ESCINFO[ListItem.FileNameAndPath])'),
                           ('ListItem.IsFolder', 'ActivateWindow(Videos,$ESCINFO[ListItem.FolderPath],return)'),
                           (None, 'Dialog.Close(1164)')])
         self.assertEqual([(c.get('condition'), c.text) for c in lst.findall('onup')],

@@ -1950,7 +1950,8 @@ def plot_card(x, d, title, plot, rise):
     gone = '<animation effect="fade" start="100" end="0" time="400" tween="sine" easing="inout">Hidden</animation>'
     x(d, '<control type="group" description="plot card">')
     x(d + 1, '<control type="image" description="plot card corner">')
-    x(d + 2, '<left>300</left><top>-20</top><width>1660</width><height>460</height>')
+    # (only around the text, which ends at 232 and starts at 970 at its longest; its own shadow does the rest)
+    x(d + 2, '<left>640</left><top>-20</top><width>1320</width><height>340</height>')
     x(d + 2, '<texture>povil/grad_corner.png</texture>')
     x(d + 2, '<visible>%s</visible>' % PLOT_CARD)
     x(d + 2, '<animation effect="fade" start="0" end="100" time="700">Visible</animation>')

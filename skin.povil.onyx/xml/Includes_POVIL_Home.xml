@@ -6535,6 +6535,7 @@
 	<variable name="POVIL_OSD_Focused">
 		<value condition="Control.HasFocus(7001)">ימינה ושמאלה מדלגים · לחיצות רצופות מדלגות רחוק יותר · אישור משהה</value>
 		<value condition="Control.HasFocus(7013)">החלפת נגן</value>
+		<value condition="Control.HasFocus(7027)">רשימת ערוצים</value>
 		<value condition="Control.HasFocus(7010)">עצירה</value>
 		<value condition="Control.HasFocus(7011)">מידע</value>
 		<value condition="Control.HasFocus(7012)">הגדרות וידאו</value>
@@ -6542,7 +6543,6 @@
 		<value condition="Control.HasFocus(7003)">ניגון / השהיה</value>
 		<value condition="Control.HasFocus(7004)">30 שניות קדימה</value>
 		<value condition="Control.HasFocus(7024)">כתוביות</value>
-		<value condition="Control.HasFocus(7027)">רשימת ערוצים</value>
 		<value condition="Control.HasFocus(7020)">הפרק הבא</value>
 		<value condition="Control.HasFocus(7021)">החלפת מקור</value>
 		<value condition="Control.HasFocus(7022)">שמע</value>
