@@ -108,6 +108,19 @@ SPLIT_WORDS = 45                    # a subtitle holds at most this many words (
 SPLIT_BAND = 60                     # ... and ends at most this many words from where the reply ended it
 PAUSE_PULL = 0.15
 END_PULL = 0.2
+# A reply that numbered the words too LOW (FBI's trailer, the owner, Nov 2026: "the timing is not good at all"): its last
+# subtitle named word 375 of 520 and every subtitle before it held words too early -- its Hebrew, the whole trailer's, sat
+# in the first 175 s of 247, up to 70 s before its words, and the last 72 s of speech had none. Its own split was sound
+# (drift 0.046): it held fewer words, evenly. The lengths tell again: a sound reply's Hebrew runs 0.73-0.81 the length of
+# the English it holds (QA, 21 Nov 2026: 9 replies of 7 trailers, all to the last word), that one 1.09. Speech left after
+# the last subtitle while the Hebrew is too long for what it holds: asked once more (three more replies of FBI's trailer
+# all reached the last word); should that one fall short too, its subtitles are placed by length over ALL the words.
+# (A reply that leaves the end out for good reason -- a song -- keeps the usual ratio for what it holds.)
+SHORT_TAIL_S = 8.0                  # speech after the last subtitle: at least this long ...
+SHORT_TAIL_SHARE = 0.1              # ... and this share of the words
+SHORT_RATIO = 0.95                  # ... while the Hebrew is longer than this times the English the reply holds
+SHORT_LATIN = 0.8                   # (the ratio is measured on Latin letters: speech in another script -- Korean, Russian
+                                    # -- counts a letter a word, and every reply would look too long; the reviewer)
 
 MANUAL_PROMPT = u'''You are writing the Hebrew subtitles of a trailer: {what}.
 
@@ -455,6 +468,38 @@ def _held(rows, words):
     return [words[i] for i in places], spans, places
 
 
+def _english_length(word):
+    return len(re.sub(r'[^a-z0-9]', '', str(word).lower())) + 1
+
+
+def short(rows, words):
+    """Whether the reply numbered the words too low (SHORT_*): speech after its last subtitle, and its Hebrew too long
+    for the English it holds."""
+    if len(rows) < DRIFT_LINES or not words:
+        return False
+    last = rows[-1][1]
+    if (len(words) - last < SHORT_TAIL_SHARE * len(words)
+            or float(words[-1][0]) - float(words[last - 1][0]) < SHORT_TAIL_S):
+        return False
+    held_words = [words[i][1] for first, last_, _t in rows for i in range(first - 1, last_)]
+    if sum(1 for w in held_words if _LATIN.search(str(w))) < SHORT_LATIN * len(held_words):
+        return False
+    hebrew = sum(_hebrew_length(t) for _f, _l, t in rows)
+    return hebrew > SHORT_RATIO * sum(_english_length(w) for w in held_words)
+
+
+def respan_all(rows, words):
+    """The rows placed by length over ALL the words (a reply that numbered them too low), each pulled to where its own
+    end lies once the reply's numbering is stretched to the last word."""
+    lengths = [_hebrew_length(t) for _f, _l, t in rows]
+    W, last = len(words), rows[-1][1]
+    near = [min(W, max(1, int(round(l * W / float(last))))) for _f, l, _t in rows]
+    new, _cost = split_by_length(words, lengths, near)
+    if not new:
+        return rows
+    return [(f, l, t) for (f, l), (_f, _l, t) in zip(new, rows)]
+
+
 def drift(rows, words):
     """How much more a subtitle the reply's own split of the words it holds costs than their best split by length
     (0 for a short reply)."""
@@ -501,9 +546,16 @@ def by_words(text, words, info=None, fix=False):
             score = drift(rows, words)
         except Exception:
             score = 0.0
+        try:
+            low = short(rows, words)
+        except Exception:
+            low = False
         if info is not None:
             info['drift'] = round(score, 3)
-        if fix and score > DRIFT:
+            info['short'] = low
+        if fix and low:
+            rows = respan_all(rows, words)
+        elif fix and score > DRIFT:
             rows = respan(rows, words)
     if info is not None:
         info['covered'] = sum(last - first + 1 for first, last, _t in rows)
@@ -700,21 +752,21 @@ def handle(job, key=None, post=None, write=None, now=None, pause=None, backgroun
         return None
     cues = read(text)
     info = getattr(read, 'info', None) or {}
-    if cues and info.get('drift', 0) > DRIFT:
-        # the reply counted the words wrong (DRIFT): asked once more; should that drift too, the better of the two is
-        # placed by the lengths
-        first = (info['drift'], text)
-        log('%s: the reply counted the words wrong (%.2f a subtitle): asked once more' % (video, info['drift']))
+    if cues and _miscounted(info):
+        # the reply counted the words wrong (DRIFT, or SHORT: numbered them too low): asked once more; should that one
+        # miscount too, the better of the two is placed by the lengths
+        first = (_badness(info), text)
+        log('%s: the reply counted the words wrong (%s): asked once more' % (video, _why(info)))
         try:
             used = _count_request()
             again = ask(key, parts, post=post)
             cues_again = read(again)
             usable = bool(cues_again) and hebrew_enough(cues_again)
-            if usable and info.get('drift', 0) <= DRIFT:
+            if usable and not _miscounted(info):
                 text, cues = again, cues_again
             else:
                 # (the one that miscounted less -- a second reply that is not Hebrew enough is not a choice: the reviewer)
-                text = again if usable and info.get('drift', 0) < first[0] else first[1]
+                text = again if usable and _badness(info) < first[0] else first[1]
                 cues = read(text, fix=True)
                 log('%s: placed by the lengths' % video)
         except Exception as exc:
@@ -745,6 +797,21 @@ def handle(job, key=None, post=None, write=None, now=None, pause=None, backgroun
             _DONE.pop(old, None)
     (write or _write)(video, cues)
     return cues
+
+
+def _miscounted(info):
+    return info.get('drift', 0) > DRIFT or bool(info.get('short'))
+
+
+def _badness(info):
+    """(short or not, drift): falling short is the worse miscount."""
+    return (1 if info.get('short') else 0, info.get('drift', 0))
+
+
+def _why(info):
+    return ('numbered too low' if info.get('short') else '') + (
+        '%s%.2f a subtitle' % (', ' if info.get('short') else '', info.get('drift', 0))
+        if info.get('drift', 0) > DRIFT or not info.get('short') else '')
 
 
 def answered(video):
