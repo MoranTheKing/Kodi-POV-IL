@@ -14,6 +14,21 @@ PATCH_CONFIG = [
      'marker': '# WIZARD_IDANPLUS_RTL_ROWS_v1',
      'anchor': 'from sys import argv', 'action': 'append_after',
      'hook': "import sys, xbmcvfs\n_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\nif _povil_p not in sys.path: sys.path.append(_povil_p)\ntry:\n\timport povil_rtl\n\tpovil_rtl.install()\nexcept Exception:\n\tpass\n"},
+    # Umbrella and the player's pills, and its search (Wizard 0.5.43; patches/pov_source_remember.py). A viewer, Nov 2026:
+    # "the file size and TorBox are not in Umbrella, only in POV; in Umbrella's search TorBox is not named either".
+    # Its list path tells the Wizard what plays already (MoranSubs' umbrella_setup_patcher -> umbrella_capture); its own
+    # autoplay names nothing: told here, right after a source resolved (not the next episode's pre-resolve, which runs
+    # while this one plays). Its search says "Checking Providers" while it asks the debrid services: their names here.
+    {'id': 'umbrella_autoplay_source', 'name': "Umbrella's autoplay names the source it plays (the player's pills)",
+     'addon_id': 'plugin.video.umbrella', 'enabled': True, 'optional': True,
+     'target_file': 'resources/lib/modules/sources.py', 'marker': '# WIZARD_UMBRELLA_AUTOPLAY_SOURCE_v1',
+     'anchor': 'url = self.sourcesResolve(items[i])', 'action': 'append_after',
+     'hook': "try:\n\tif url:\n\t\timport sys, xbmcvfs\n\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\t\timport pov_source_remember\n\t\tpov_source_remember.umbrella_published(items[i], self.url or url)\nexcept Exception:\n\tpass\n"},
+    {'id': 'umbrella_checking_names', 'name': "Umbrella's search names the debrid services it checks",
+     'addon_id': 'plugin.video.umbrella', 'enabled': True, 'optional': True,
+     'target_file': 'resources/lib/modules/sources.py', 'marker': '# WIZARD_UMBRELLA_CHECKING_NAMES_v1',
+     'anchor': 'progressDialog.update(100, debrid_message)', 'action': 'prepend_before',
+     'hook': "try:\n\timport sys, xbmcvfs\n\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\timport pov_source_remember\n\tdebrid_message = pov_source_remember.umbrella_checking(debrid_message, [d.name for d in self.debrid_resolvers])\nexcept Exception:\n\tpass\n"},
     {'id': 'umbrella_rtl_rows', 'name': 'Right-to-left Umbrella lists for the Onyx skin',
      'addon_id': 'plugin.video.umbrella', 'enabled': True, 'optional': True, 'target_file': 'umbrella.py',
      'marker': '# WIZARD_UMBRELLA_RTL_ROWS_v1',
