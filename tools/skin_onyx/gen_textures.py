@@ -128,7 +128,9 @@ def corner(w, h, top, sx, sy):
 
 
 # the plot over a trailer that has the screen to itself (gen_home.py PLOT_CARD, Onyx 1.0.34)
-save(corner(256, 128, 215, (0.10, 0.45), (0.50, 1.0)), 'grad_corner.png')
+# (Onyx 1.0.35: lighter, and only around the text -- the owner, with a phone's frame: "doesn't the rectangle block a bit
+# of light and hide the trailer?"; it was 215 at its core and reached a third of the way down and half across)
+save(corner(256, 128, 170, (0.05, 0.40), (0.50, 1.0)), 'grad_corner.png')
 save(vignette(480, 270), 'vignette.png')
 w = Image.new('RGBA', (8, 8), (255, 255, 255, 255)); save(w, 'white.png')
 # Underline with soft ends

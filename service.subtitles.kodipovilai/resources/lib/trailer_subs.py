@@ -44,7 +44,22 @@ FOLDER = 'special://temp/povil_tsub/'
 STATE_FILE = 'trailer_subs.json'
 FAILED_S = 86400                    # a trailer that could not be translated is not tried again for this long
 BUSY_S = 1800                       # ... one Gemini was busy for (or the network failed), twice in a row: this long
-BUSY_RETRY_S = 2.0                  # the one retry at once, while the trailer still plays
+# GEMINI BUSY (0.3.106). A viewer's log, 21 Nov 2026: Law & Order's trailer got "HTTP 503" twice, two seconds apart, and
+# stayed without subtitles -- 3.1 Flash Lite's "high demand", which comes and goes within minutes (QA probes the same
+# hour: 503, then 200 a few minutes later). The owner: "can't it be made to work anyway? It's a pity for the viewer".
+# Still the same model (it is the trailers' own: the films' and series' subtitles have theirs -- never touched here):
+#  * while the trailer plays, asked again after each of BUSY_RETRIES_S (the Wizard waits 120 s for the answer) -- unless
+#    the viewer has moved on to another title;
+#  * then kept (LATER) and asked again in the background every LATER_S, LATER_TRIES times, one trailer at a time and
+#    only while no trailer waits: the translation is shared once it comes, so the next viewer of it has it from Pages.
+BUSY_RETRIES_S = (3, 8, 20)
+LATER_S = 600
+LATER_TRIES = 3
+LATER_MAX = 30
+_LATER = {}                         # video -> {'job': the job, 'at': when it is asked again, 'tries': how many so far}
+LATER_QUIET_S = 60                  # ... only once no trailer has been asked for this long (a new one never waits on it)
+_DONE = {}                          # video -> its cues, translated in this session (answered again without a request)
+DONE_MAX = 50
 REQUEST_TIMEOUT = 90
 _VIDEO = re.compile(r'^[A-Za-z0-9_-]{11}$')
 _HEB = re.compile(u'[א-ת]')
@@ -299,8 +314,52 @@ def _recently_failed(video, now=None):
     return now < ((_load().get('failed') or {}).get(video) or 0)
 
 
+def _unfail(video):
+    with _LOCK:
+        data = _load()
+        if video in (data.get('failed') or {}):
+            data['failed'].pop(video, None)
+            _save(data)
+
+
+def keep_for_later(job, now=None):
+    """A trailer Gemini was too busy for: asked again in the background (LATER). False when it has had its tries."""
+    now = now or time.time()
+    video = str(job.get('v') or '')
+    with _LOCK:
+        entry = _LATER.get(video) or {'job': dict(job), 'tries': 0}
+        if entry['tries'] >= LATER_TRIES:
+            _LATER.pop(video, None)
+            return False
+        entry['at'] = now + LATER_S
+        _LATER[video] = entry
+        for old in sorted(_LATER, key=lambda v: _LATER[v]['at'])[:-LATER_MAX]:
+            _LATER.pop(old, None)
+    return True
+
+
+def due_later(now=None):
+    """The kept trailer whose turn it is (its try counted), or None."""
+    now = now or time.time()
+    with _LOCK:
+        for spent in [v for v, entry in _LATER.items() if entry['tries'] >= LATER_TRIES]:
+            _LATER.pop(spent, None)         # (a hard limit, whatever answered: the reviewer)
+        due = [v for v, entry in _LATER.items() if entry['at'] <= now]
+        if not due:
+            return None
+        video = min(due, key=lambda v: _LATER[v]['at'])
+        _LATER[video]['tries'] += 1
+        _LATER[video]['at'] = now + LATER_S       # (until its answer: not taken twice)
+        return dict(_LATER[video]['job'])
+
+
+def _sleep(seconds):
+    time.sleep(seconds)
+    return False
+
+
 class Busy(Exception):
-    """Gemini busy (5xx) or the network failing: a passing trouble, tried again soon (BUSY_RETRY_S, BUSY_S)."""
+    """Gemini busy (5xx) or the network failing: a passing trouble, tried again soon (BUSY_RETRIES_S, then LATER)."""
 
 
 # ---------------------------------------------------------------- the request
@@ -582,28 +641,40 @@ def to_srt(cues):
 
 
 # ---------------------------------------------------------------- a job
-def handle(job, key=None, post=None, write=None, now=None):
-    """Translates the job's trailer. Returns the cues, or None (and why, in the log)."""
+def handle(job, key=None, post=None, write=None, now=None, pause=None, background=False):
+    """Translates the job's trailer. Returns the cues, or None (and why, in the log).
+    pause(seconds): waits before asking again a busy Gemini; True = stop (the viewer is on another title, or Kodi
+    closes). background: a trailer kept for later (LATER) -- asked once, whatever its failure memory says."""
     video = str(job.get('v') or '')
     if not _VIDEO.match(video):
         return None
-    if _recently_failed(video, now):
+    # (a trailer kept for the background, its viewer back on it: asked now, not refused -- the reviewer)
+    if not background and _recently_failed(video, now) and video not in _LATER:
         return None
     key = key or _key()
     parts, read = request_parts(job)
     used = _count_request()
     began = time.time()
     try:
-        try:
-            text = ask(key, parts, post=post)
-        except Exception as exc:
-            if not _passing(exc):
-                raise
-            # (the owner's log, Nov 2026: a trailer QA translated at once failed on his device in a second -- and was
-            # not asked again for a day. A passing trouble is asked once more at once, then in BUSY_S)
-            time.sleep(BUSY_RETRY_S)
-            used = _count_request()
-            text = ask(key, parts, post=post)
+        # (the owner's log, Nov 2026: a trailer QA translated at once failed on his device in a second -- and was
+        # not asked again for a day. A passing trouble is asked again while the trailer plays: BUSY_RETRIES_S)
+        waits = () if background else BUSY_RETRIES_S
+        tried = 0
+        while True:
+            try:
+                text = ask(key, parts, post=post)
+                break
+            except Exception as exc:
+                if not _passing(exc) or tried >= len(waits):
+                    raise
+                log('%s: Gemini busy (%s): asked again in %d s' % (video, str(exc)[:40], waits[tried]))
+                if (pause or _sleep)(waits[tried]):
+                    raise
+                tried += 1
+                used = _count_request()
+        # an answer, whatever it is: out of the background (the reviewer: a "NONE" kept it there, asked every LATER_S)
+        with _LOCK:
+            _LATER.pop(video, None)
     except Exception as exc:
         try:
             from resources.lib import gemini
@@ -614,8 +685,13 @@ def handle(job, key=None, post=None, write=None, now=None):
         except Exception:
             pass
         passing = _passing(exc)
-        log('%s: not translated (%s %s; again in %s)' % (video, type(exc).__name__, str(exc)[:80],
-                                                         '30 minutes' if passing else 'a day'))
+        later = passing and keep_for_later(job, now)
+        if not passing:
+            with _LOCK:
+                _LATER.pop(video, None)
+        log('%s: not translated (%s %s; again %s)' % (video, type(exc).__name__, str(exc)[:80],
+                                                      'in the background in %d minutes' % (LATER_S // 60) if later else
+                                                      'in 30 minutes' if passing else 'in a day'))
         _failed(video, now, BUSY_S if passing else FAILED_S)
         return None
     if (text or '').strip().upper().startswith('NONE'):
@@ -656,10 +732,25 @@ def handle(job, key=None, post=None, write=None, now=None):
         _failed(video, now)
         return None
     held = (', %d of %d words' % (info['covered'], info['words'])) if info.get('words') else ''
-    log('%s: %d subtitles (%s%s, %.1f s, request %d today)' % (video, len(cues), job.get('src') or 'listen', held,
-                                                                  time.time() - began, used))
+    log('%s: %d subtitles (%s%s, %.1f s, request %d today%s)' % (video, len(cues), job.get('src') or 'listen', held,
+                                                                    time.time() - began, used,
+                                                                    ', in the background' if background else ''))
+    if background:
+        _unfail(video)
+    with _LOCK:
+        # (this session's translations, answered again at once: a trailer translated in the background, its viewer back
+        # on it before Pages has it -- the Wizard reads an answer only while it waits; the reviewer)
+        _DONE[video] = cues
+        for old in list(_DONE)[:-DONE_MAX]:
+            _DONE.pop(old, None)
     (write or _write)(video, cues)
     return cues
+
+
+def answered(video):
+    """This session's translation of the video (_DONE), or None."""
+    with _LOCK:
+        return _DONE.get(video)
 
 
 def _folder():
@@ -777,25 +868,53 @@ def start(monitor):
         able, why = refresh()
         log('trailer subtitles: %s' % ('this device translates' if able else 'no (%s)' % why))
         threading.Thread(target=say_seen, name='MoranSubsSeen').start()
-        idle = 0.0
+
+        def pause_for(video):
+            # (a busy Gemini is asked again while the trailer plays -- not once the viewer is on ANOTHER title, whose
+            # job waits meanwhile, nor while Kodi closes; the same trailer asked again waits for this answer)
+            def pause(seconds):
+                end = time.time() + seconds
+                while time.time() < end:
+                    if listener.waitForAbort(0.5):
+                        return True
+                    if pending['job'] is not None and pending['job'].get('v') != video:
+                        return True
+                return False
+            return pause
+        idle = quiet = 0.0
         while not listener.abortRequested():
             if listener.waitForAbort(0.5):
                 break
             job, pending['job'] = pending['job'], None
             if not job:
                 idle += 0.5
+                quiet += 0.5
                 if idle >= 600:
                     idle = 0.0
                     refresh()
                     threading.Thread(target=say_seen, name='MoranSubsSeen').start()      # (a new UTC day)
+                # a trailer Gemini was too busy for, its turn (LATER_S) -- only after a quiet spell: the request
+                # cannot be cut short, and a new trailer's job would wait on it (the reviewer)
+                later = due_later() if quiet >= LATER_QUIET_S else None
+                if later is not None and refresh()[0]:
+                    log('%s: translating again in the background (Gemini was busy)' % later.get('v'))
+                    cues = handle(later, background=True)
+                    if cues:
+                        threading.Thread(target=share, args=(later, cues), name='MoranSubsTrailerShare').start()
                 continue
-            idle = 0.0
+            idle = quiet = 0.0
+            done = answered(str(job.get('v') or ''))
+            if done:
+                # translated in this session (in the background, or just now for the same trailer): at once
+                log('%s: translated already in this session' % job.get('v'))
+                _write(job['v'], done)
+                continue
             able, why = refresh()
             if not able:
                 log('%s: not translated (%s)' % (job.get('v'), why))
                 continue
             log('%s: translating (%s)' % (job.get('v'), job.get('src') or 'listen'))
-            cues = handle(job)
+            cues = handle(job, pause=pause_for(job.get('v')))
             if cues:
                 threading.Thread(target=share, args=(job, cues), name='MoranSubsTrailerShare').start()
             refresh()
