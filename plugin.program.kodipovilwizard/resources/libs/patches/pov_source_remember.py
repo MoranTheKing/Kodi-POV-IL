@@ -174,10 +174,19 @@ def size_label(item):
     return (text[:-2] if text.endswith('.0') else text) + ' GB'
 
 
-def publish_pills(win, item, name):
+# The add-on that picked the source that plays, for the player's "change source" (player_styles.change_source):
+# its own list again, not the one the search setting names (a viewer, Nov 2026, playing through Umbrella: "with change
+# source it goes back to POV and not to Umbrella"). Tied to the source's name, as the pills are.
+SOURCE_ADDON, SOURCE_ADDON_FOR = 'povil_source_addon', 'povil_source_addon_for'
+
+
+def publish_pills(win, item, name, addon='pov'):
     """The player's pills for the source that plays (Onyx): where the stream comes from, and the file's size.
     Tied to this source's name: another add-on's pick replaces the name and the skin then shows no provider rather
-    than a stale one. POV's pick (run_capture) and Umbrella's (umbrella_capture, umbrella_published) both say it."""
+    than a stale one. POV's pick (run_capture) and Umbrella's (umbrella_capture, umbrella_published) both say it --
+    and which of the two picked it (`addon`), for the player's "change source"."""
+    win.setProperty(SOURCE_ADDON, addon)
+    win.setProperty(SOURCE_ADDON_FOR, name)
     provider = provider_label(item)
     win.setProperty('povil_osd_provider', provider)
     win.setProperty('povil_osd_provider_for', name if provider else '')
@@ -334,7 +343,7 @@ def umbrella_capture(ids, item):
     try:
         name = (item or {}).get('name') or ''
         if name:
-            publish_pills(xbmcgui.Window(10000), item, name)
+            publish_pills(xbmcgui.Window(10000), item, name, 'umbrella')
     except Exception as e:
         _log('Umbrella pills: ' + str(e), xbmc.LOGWARNING)
     try:
@@ -397,7 +406,7 @@ def umbrella_published(item, url):
             win.setProperty('subs.player_filename', name)
             win.setProperty('pov_picked_source_name', name)
             win.setProperty('pov_picked_source_url', url or '')
-            publish_pills(win, item, name)
+            publish_pills(win, item, name, 'umbrella')
     except Exception:
         pass
 
