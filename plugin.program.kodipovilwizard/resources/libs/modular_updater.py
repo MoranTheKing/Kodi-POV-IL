@@ -278,6 +278,16 @@ class ModularUpdater:
                 logging.log("[ModularUpdater] {0}: {1} -> {2}".format(addon_id, local_ver, remote_ver),
                             level=xbmc.LOGINFO)
                 update_queue.append(mod)
+            elif (addon_id == 'service.subtitles.kodipovilai'
+                  and not getattr(self, 'fresh', False)
+                  and self._version_tuple(local_ver) == self._version_tuple(remote_ver)
+                  and self._standalone_service_on_disk()):
+                # the same version number, the other edition (see
+                # _standalone_service_on_disk): the build's own replaces it
+                logging.log("[ModularUpdater] {0}: {1} without the handoff bridge (the standalone "
+                            "edition, or a build tree before 0.3.15) -> the build's {2}".format(
+                                addon_id, local_ver, remote_ver), level=xbmc.LOGINFO)
+                update_queue.append(mod)
 
         # On a pre-modular build the old MoranSubs service still owns the
         # self-healing edits inside POV. PatchEngine intentionally refuses to
@@ -296,7 +306,13 @@ class ModularUpdater:
                     for mod in update_queue)):
             service_mod = next(mod for mod in update_queue if
                                mod.get('id') == 'service.subtitles.kodipovilai')
-            if self._runtime_addon_enabled('service.subtitles.kodipovilai'):
+            if (self._standalone_service_on_disk()
+                    and self._runtime_addon_enabled('service.subtitles.kodipovilai')):
+                # no handoff bridge to ask: replaced now, between two videos
+                self._replace_standalone_service(service_mod)
+                update_queue = [mod for mod in update_queue
+                                if mod.get('id') != 'service.subtitles.kodipovilai']
+            elif self._runtime_addon_enabled('service.subtitles.kodipovilai'):
                 # A modular MoranSubs already took over from the legacy repair
                 # service; a newer modular package changes no POV ownership, so
                 # it never waits for the legacy clean-host migration.  Holding
@@ -485,6 +501,115 @@ class ModularUpdater:
         except Exception:
             pass
         return bool(self._service_handoff_ready())
+
+    @staticmethod
+    def _standalone_service_on_disk():
+        """Whether the MoranSubs on disk is the STANDALONE edition -- the one
+        published for a Kodi without this build (tools/build_standalone_moransubs.py):
+        a 0.3+ tree without the restart handoff bridge (modular_service_handoff.py)
+        and without the build's subtitle chooser (subs_chooser.py).
+
+        A viewer's log, 21 Nov 2026: the build's MoranSubs 0.3.105 was replaced
+        by the standalone 0.3.106 (none of the device's repositories offers
+        MoranSubs: most likely a zip installed by hand). Its service ran the
+        build's steps without their modules -- "cannot import name 'subs_chooser'"
+        on every press of the subtitles button -- and this updater never replaced
+        it: the version matched the manifest's, and a newer one would have
+        waited for a handoff bridge the standalone does not have. The legacy
+        0.2.x tree also has no bridge, but it owns POV's repairs: it is never
+        taken for the standalone. A build tree 0.3.0-0.3.14 matches too (the
+        bridge and the chooser came together, in 0.3.15) -- just as stuck
+        without the bridge, and replaced the same way."""
+        try:
+            base = os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai')
+            lib = os.path.join(base, 'resources', 'lib')
+            if not (os.path.isfile(os.path.join(base, 'addon.xml'))
+                    and os.path.isfile(os.path.join(lib, 'translate.py'))):
+                return False
+            if (os.path.isfile(os.path.join(lib, 'modular_service_handoff.py'))
+                    or os.path.isfile(os.path.join(lib, 'subs_chooser.py'))):
+                return False
+            import xml.etree.ElementTree as ET
+            version = ET.parse(os.path.join(base, 'addon.xml')).getroot().get('version') or ''
+            numbers = [int(''.join(ch for ch in part if ch.isdigit()) or 0)
+                       for part in version.split('.')[:2]]
+            return len(numbers) == 2 and tuple(numbers) >= (0, 3)
+        except Exception:
+            return False
+
+    def _replace_standalone_service(self, mod):
+        """The build's MoranSubs in place of a standalone one that is running.
+
+        The standalone has no handoff bridge to acknowledge a restart handoff,
+        and no POV repairs to hand over, so it is replaced the way Kodi's own
+        add-on updater replaces a service: the verified package is prepared
+        first, then the add-on is disabled (Kodi stops its service), swapped and
+        enabled again. Never while something plays: the next start asks again."""
+        from resources.libs import staged_addon_install
+        addon_id = 'service.subtitles.kodipovilai'
+        version = str(mod.get('version') or '')
+        sha256 = str(mod.get('sha256') or '').lower()
+        if not version or len(sha256) != 64:
+            logging.log('[ModularUpdater] MoranSubs replacement lacks version/SHA',
+                        level=xbmc.LOGERROR)
+            return False
+        if xbmc.getCondVisibility('Player.HasMedia'):
+            logging.log('[ModularUpdater] standalone MoranSubs kept while something '
+                        'plays; replaced at a later start', level=xbmc.LOGINFO)
+            return False
+        try:
+            if not staged_addon_install.prepared_matches(
+                    CONFIG.ADDONS, addon_id, version, sha256):
+                ota_dir = os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID,
+                                       'ota-packages')
+                os.makedirs(ota_dir, exist_ok=True)
+                zip_path = os.path.join(ota_dir, addon_id + '_update.zip')
+                self._download_background_zip(mod.get('zip'), zip_path, mod)
+                staged_addon_install.install(
+                    zip_path, CONFIG.ADDONS, addon_id, version, sha256,
+                    defer_swap=True)
+                tools.remove_file(zip_path)
+        except Exception as exc:
+            logging.log('[ModularUpdater] standalone MoranSubs: preparing the '
+                        "build's failed: {0}".format(exc), level=xbmc.LOGERROR)
+            self._note_storage_failure(exc)
+            return False
+        if xbmc.getCondVisibility('Player.HasMedia'):
+            return False
+        try:
+            self._mark_service_disabled(True)
+            response = json.loads(xbmc.executeJSONRPC(json.dumps({
+                'jsonrpc': '2.0', 'id': 1, 'method': 'Addons.SetAddonEnabled',
+                'params': {'addonid': addon_id, 'enabled': False}})))
+            if ('error' in response or response.get('result') not in ('OK', True)
+                    or self._runtime_addon_enabled(addon_id)):
+                raise RuntimeError('the standalone subtitle service did not disable')
+            count = staged_addon_install.activate_prepared(
+                CONFIG.ADDONS, addon_id, version, sha256)
+            from resources.libs import db
+            db.addon_database([addon_id], 1, True)
+            xbmc.executebuiltin('UpdateLocalAddons')
+            if not self._enable_addon(addon_id):
+                xbmcgui.Dialog().notification(
+                    CONFIG.ADDONTITLE,
+                    'עדכון הכתוביות הותקן, אך השירות לא התחיל. יש לפתוח את Kodi מחדש.',
+                    time=8000)
+                raise RuntimeError('the build subtitle service could not enable')
+            self._mark_service_disabled(False)
+            logging.log("[ModularUpdater] MoranSubs without the handoff bridge replaced by "
+                        "the build's {0}: {1} files".format(version, count), level=xbmc.LOGINFO)
+            xbmcgui.Dialog().notification(
+                CONFIG.ADDONTITLE, 'עדכון הכתוביות הושלם.', time=5000)
+            return True
+        except Exception as exc:
+            # never leave the service disabled: whichever tree is on disk now,
+            # enabled is better than no subtitles
+            state = self._addon_enabled_state(addon_id)
+            if state is True or (state is False and self._enable_addon(addon_id)):
+                self._mark_service_disabled(False)
+            logging.log('[ModularUpdater] standalone MoranSubs replacement failed: '
+                        '{0}'.format(exc), level=xbmc.LOGERROR)
+            return False
 
     def _prepare_service_handoff(self, mod):
         """Stage MoranSubs while the currently running service remains intact."""

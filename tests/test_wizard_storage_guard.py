@@ -160,8 +160,8 @@ class StorageGuardTests(unittest.TestCase):
         self.assertLess(text.index('storage_guard.run_at_startup()'),
                         text.index('_mu.run_update_check()'))
         updater = (ROOT / 'resources/libs/modular_updater.py').read_text(encoding='utf-8')
-        # download, MoranSubs staging, unpacking
-        self.assertEqual(updater.count('self._note_storage_failure('), 3)
+        # download, MoranSubs staging, unpacking, a standalone MoranSubs's replacement (Wizard 0.5.42)
+        self.assertEqual(updater.count('self._note_storage_failure('), 4)
         settings = (ROOT / 'resources/settings.xml').read_text(encoding='utf-8')
         self.assertIn('id="storage_low_warned"', settings)
 
