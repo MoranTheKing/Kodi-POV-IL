@@ -1,3 +1,6 @@
+0.5.40
+- A series' trailer that came out long before its next season is the series' own, not that season's (the owner, Nov 2026: Law & Order's channel post said "season 21's trailer" for the series' own poster). Its only trailer on TMDb, "Law and Order Trailer", came out in 2016, between the original's last season and the revival's first (2022), and a trailer whose name says no season was taken for the next season to begin. Now that holds only within a year before it. The same trailer plays; the post names the series, and season 21's poster no longer counts it as its own.
+
 0.5.39
 - The trailer desk measures the plot the screen shows over a title (Onyx 1.0.34) and tells the skin how long the card that carries it over the full-screen trailer stays: until its last line has been read at a reading pace, with the viewer's own "full screen after" (a viewer, Nov 2026: "it feels like a race to read the text before the trailer plays").
 

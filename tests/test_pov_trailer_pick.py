@@ -55,8 +55,9 @@ class SeasonOfATrailer(unittest.TestCase):
             self.assertEqual(tp.named_season(name), season, name)
 
     def test_or_the_season_it_was_published_for(self):
-        for published, season in (('2019-05-20', 1), ('2019-07-30', 1), ('2021-04-01', 2), ('2021-07-01', 2), ('2021-09-01', 3),
-                                  ('2023-04-01', 3), ('2023-09-01', 3)):
+        # (0.5.40: '2021-09-01' -- three months into season 2, twenty before season 3 -- is no season's: it was 3's)
+        for published, season in (('2019-05-20', 1), ('2019-07-30', 1), ('2021-04-01', 2), ('2021-07-01', 2), ('2021-09-01', None),
+                                  ('2022-06-01', 3), ('2023-04-01', 3), ('2023-09-01', 3)):
             self.assertEqual(tp.dated_season(published + 'T10:00:00.000Z', SEASONS), season, published)
         # published more than a year after the last season began (an old series, uploaded later): the date tells nothing
         self.assertIsNone(tp.dated_season('2025-01-01', SEASONS))
@@ -66,6 +67,20 @@ class SeasonOfATrailer(unittest.TestCase):
         self.assertEqual(tp.season_of(video('a', 'en', 'Official Trailer', '2030-01-01'), [{'season_number': 1, 'air_date': '2019-01-01'}]), 1)
         # the name wins over the date
         self.assertEqual(tp.season_of(video('a', 'he', 'עונה 3', '2019-06-01'), SEASONS), 3)
+
+    def test_a_trailer_out_long_before_the_next_season_is_the_series_own(self):
+        # Law & Order (1990), the owner, Nov 2026: its one trailer on TMDb came out in 2016, between season 20 (2009) and
+        # the revival's season 21 (2022) -- the channel's post called it "season 21's trailer" on the series' own poster
+        seasons = [{'season_number': n, 'air_date': '%d-09-20' % (1989 + n)} for n in range(1, 21)]
+        seasons += [{'season_number': 21, 'air_date': '2022-02-24'}, {'season_number': 22, 'air_date': '2022-09-22'},
+                    {'season_number': 25, 'air_date': '2025-09-25'}, {'season_number': 26, 'air_date': '2026-10-08'}]
+        trailer = video('RzN8cPlcMTU', 'en', 'Law and Order Trailer', '2016-06-22T00:00:00.000Z')
+        self.assertIsNone(tp.season_of(trailer, seasons))
+        self.assertEqual(first([trailer], {'seasons': seasons}, 'he', 'tvshow'), 'RzN8cPlcMTU')
+        # season 21's poster has no trailer of its own: the series' stands (for_season None)
+        self.assertIsNone(tp.for_season({'all_trailers': [trailer], 'season_data': seasons, 'tmdb_id': 549}, 21))
+        # a season's own trailer, a few months before it, is still that season's
+        self.assertEqual(tp.season_of(video('b', 'en', 'Law & Order | Official Trailer', '2021-12-01T00:00:00.000Z'), seasons), 21)
 
 
 class TheChoice(unittest.TestCase):
