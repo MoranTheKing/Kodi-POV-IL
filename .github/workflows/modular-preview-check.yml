@@ -4,15 +4,11 @@ on:
   pull_request:
     paths:
       - "addons/service.subtitles.kodipovilai/**"
-      - "wizard/source/plugin.program.kodipovilwizard/**"
       - "tools/build_modular_preview.py"
       - "tools/test_local_addon_imports.py"
       - "tools/test_modular_route_parity.py"
       - "tools/test_modular_service_entrypoints.py"
       - "tools/test_build_config_migration.py"
-      - "tools/test_build_favourites_migration.py"
-      - "tools/test_modular_host_migration.py"
-      - "tools/audit_modular_host_migration.py"
       - ".github/workflows/modular-preview-check.yml"
   workflow_dispatch: {}
 
@@ -45,8 +41,6 @@ jobs:
           python tools/test_modular_route_parity.py
           python tools/test_modular_service_entrypoints.py
           python tools/test_build_config_migration.py
-          python tools/test_build_favourites_migration.py
-          python tools/test_modular_host_migration.py
           python tools/test_no_duplicate_definitions.py
           python tools/test_patcher_health.py
       - name: Build and inspect local-only modular preview

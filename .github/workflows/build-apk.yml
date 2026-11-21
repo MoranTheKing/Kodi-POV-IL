@@ -38,7 +38,9 @@ env:
   APP_NAME: 'Kodi POV IL'
   # The historic archive supplies only six portable Python dependencies.
   # Current Wizard code creates a minimal seed; the manifest provisions the build.
-  DEPENDENCY_SOURCE_ZIP: 'Kodi-POV-IL-FENtastic-test-0.1.179.zip'
+  # the six pure-Python modules of the platform bootstrap (build_platform_bootstrap.py), byte for byte
+  # as the old build carried them; the old build itself left GitHub on 21 Nov 2026
+  DEPENDENCY_SOURCE_ZIP: 'Kodi-POV-IL-platform-deps.zip'
   BUILD_ZIP: 'platform-bootstrap.zip'
   EXPECTED_RELEASE: '21.3-povil.57'
   EXPECTED_VERSION_CODE: '2103057'

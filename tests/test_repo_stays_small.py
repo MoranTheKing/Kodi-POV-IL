@@ -17,15 +17,10 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = r'\d+(?:\.\d+)*'
 # Every package the repository may hold, and why it is here and not only in a release.
 PACKAGES = (
-    # what build.txt and the platform packages still fetch by this exact path
-    r'dist/Kodi-POV-IL-FENtastic-test-0\.1\.179\.zip',
-    r'dist/Kodi-POV-IL-FENtastic-quickfix-0\.1\.627\.zip',      # CI takes the pool file from it by hash
+    # what the platform packages and the Wizard fetch by this exact path
     r'dist/Kodi-POV-IL-(?:AF3-deps|AF3-fonts|AF3-skin|AF3-studios|AcctMgr|Umbrella)-pack\.zip',
-    r'dist/plugin\.program\.kodipovilwizard-0\.1\.49\.zip',
-    r'dist/plugin\.program\.kodipovilwizard-latest\.zip',
-    r'wizard/plugin\.program\.kodipovilwizard-(?:0\.1\.49|latest|RESCUE)\.zip',
+    r'dist/Kodi-POV-IL-platform-deps\.zip',      # the app's bootstrap modules (build-apk.yml)
     r'wizard-new/plugin\.program\.kodipovilwizard-latest\.zip',  # the Pages fallback
-    r'addons/service\.subtitles\.kodipovilai/resources/staged_wizard\.zip',
     r'plugin\.program\.kodipovilwizard/resources/bootstrap/config\.zip',
     # the standalone MoranSubs channel: the repository add-on, and ONE packaged version (+ its "latest" copy)
     r'repo/repository\.kodipovilai-1\.0\.0\.zip',
@@ -75,9 +70,20 @@ class RepositoryStaysSmallTests(unittest.TestCase):
             r'repo/zips/service\.subtitles\.kodipovilai/service\.subtitles\.kodipovilai-(%s)\.zip' % VERSION, f)]
         self.assertEqual([os.path.basename(f) for f in dist], [os.path.basename(f) for f in repo])
 
-    def test_only_the_last_two_update_notes_keep_a_pointer_file(self):
-        pointers = [f for f in self.files if f.startswith('wizard/assets/build_versions/')]
-        self.assertLessEqual(len(pointers), 2, pointers)
+    def test_the_old_wizard_and_its_build_are_gone_for_good(self):
+        """The owner, 21 Nov 2026: the old Wizard (0.1.x) carried a skin removed from the build, and nobody is
+        to have it. Its packages, its source, its Kodi source page and the old build it installed left GitHub;
+        build.txt, which a device still on it reads, offers nothing to download, only a note."""
+        old = [f for f in self.files if f.startswith(('wizard/source/', 'wizard/release_manifests/',
+                                                     'wizard/assets/build_versions/'))
+               or f in ('wizard/index.html', 'addons/service.subtitles.kodipovilai/resources/staged_wizard.zip')
+               or re.fullmatch(r'(?:dist|wizard)/plugin\.program\.kodipovilwizard-.*\.zip', f)
+               or re.fullmatch(r'dist/Kodi-POV-IL-FENtastic-.*\.zip', f)]
+        self.assertEqual(old, [])
+        build = (ROOT / 'wizard/assets/build.txt').read_text(encoding='utf-8')
+        self.assertNotIn('plugin.program.kodipovilwizard', build)
+        for field in ('url', 'minor', 'gui', 'zip'):
+            self.assertNotRegex(build, r'(?m)^%s="https://(?!.*/build_menu_screenshots/)' % field)
 
     def test_the_whole_tree_stays_within_its_size(self):
         sizes = {f: (ROOT / f).stat().st_size for f in self.files if (ROOT / f).is_file()}

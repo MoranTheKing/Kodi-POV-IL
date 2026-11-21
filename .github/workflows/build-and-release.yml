@@ -66,19 +66,25 @@ jobs:
           fi
           gh auth setup-git
 
-      - name: Carry verified community-pool credential from last public quickfix
+      - name: Carry verified community-pool credential from the shipped MoranSubs
         run: |
           python - <<'PY'
           from pathlib import Path
-          import hashlib, os, zipfile
-          archive = Path('dist/Kodi-POV-IL-FENtastic-quickfix-0.1.627.zip')
-          expected = '4a45f3f2a2e98232565f2222923f6c13fcf7a90456bf937628a4276b8ddd1794'
-          if not archive.is_file() or hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
-              raise SystemExit('last public quickfix is missing or changed')
+          import hashlib, os, re, zipfile
+          # The standalone MoranSubs the repository keeps carries the key block every release has shipped
+          # (it came from the old build's last quickfix, removed from GitHub on 21 Nov 2026). The block
+          # itself is pinned, so the carrier may change with every standalone release.
+          archive = Path('dist/service.subtitles.kodipovilai-latest.zip')
+          expected = 'f7ab7e44ef909edd2abb5106f35b5249918ea4093ccada9c21b3e9f0ac2157dc'
+          if not archive.is_file():
+              raise SystemExit('the shipped MoranSubs package is missing')
           with zipfile.ZipFile(archive) as package:
               if package.testzip():
-                  raise SystemExit('last public quickfix failed CRC')
-              payload = package.read('addons/service.subtitles.kodipovilai/resources/lib/pool.py')
+                  raise SystemExit('the shipped MoranSubs package failed CRC')
+              payload = package.read('service.subtitles.kodipovilai/resources/lib/pool.py')
+          blocks = re.findall(rb'__POOL_KEY_BEGIN__.*?__POOL_KEY_END__', payload, re.S)
+          if len(blocks) != 1 or hashlib.sha256(blocks[0]).hexdigest() != expected:
+              raise SystemExit('the shipped pool credential is missing or changed')
           target = Path(os.environ['RUNNER_TEMP']) / 'povil-pool-credential.py'
           target.write_bytes(payload)
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
