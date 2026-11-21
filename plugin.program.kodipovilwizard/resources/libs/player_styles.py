@@ -13,14 +13,32 @@ def settings():
     xbmc.executebuiltin('ActivateWindow(1101)')
 
 
+# The add-on that picked the source that plays, named by the Wizard's source hooks (patches/pov_source_remember.py
+# publish_pills) next to the source's name; a test keeps the names equal.
+SOURCE_ADDON, SOURCE_ADDON_FOR, PICKED = 'povil_source_addon', 'povil_source_addon_for', 'pov_picked_source_name'
+
+
+def playing_addon(win=None):
+    """'pov' or 'umbrella' when that add-on picked the source on screen; '' when it is not known (a library file,
+    another add-on's video, a build from before Wizard 0.5.44)."""
+    win = win if win is not None else xbmcgui.Window(10000)
+    picked = win.getProperty(PICKED)
+    addon = win.getProperty(SOURCE_ADDON)
+    if picked and addon in ('pov', 'umbrella') and win.getProperty(SOURCE_ADDON_FOR) == picked:
+        return addon
+    return ''
+
+
 def change_source():
-    """Route through the selected provider with current playing-item IDs."""
+    """Route through the add-on that plays (else the selected search provider) with current playing-item IDs. A
+    viewer, Nov 2026, playing through Umbrella: "with change source it goes back to POV and not to Umbrella" --
+    the button followed the search setting (POV unless chosen otherwise), not the add-on that played."""
     episode = xbmc.getCondVisibility('VideoPlayer.Content(episodes)')
     tmdb = xbmc.getInfoLabel('VideoPlayer.UniqueID(tmdb)')
     if not re.fullmatch(r'[1-9][0-9]*', tmdb):
         xbmcgui.Dialog().notification('החלפת מקור', 'אין מזהה תוכן מתאים להחלפת מקור')
         return
-    provider = xbmcaddon.Addon('service.subtitles.kodipovilai').getSetting('search_provider')
+    provider = playing_addon() or xbmcaddon.Addon('service.subtitles.kodipovilai').getSetting('search_provider')
     provider = 'umbrella' if provider == 'umbrella' and xbmc.getCondVisibility(
         'System.HasAddon(plugin.video.umbrella)') else 'pov'
     if provider == 'pov':

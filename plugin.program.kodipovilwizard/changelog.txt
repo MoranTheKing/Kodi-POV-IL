@@ -1,3 +1,6 @@
+0.5.44
+- The player's "change source" goes back to the add-on that plays: Umbrella's list when Umbrella played, POV's when POV did (a viewer, Nov 2026, playing through Umbrella: "with change source it goes back to POV and not to Umbrella"). The button followed the search setting -- POV unless chosen otherwise. Now the source hooks name the add-on that picked the source, beside its name; a video neither picked (a library file, another add-on's) still goes by the setting. In Onyx's players and every skin whose button calls the Wizard.
+
 0.5.43
 - Umbrella fills the player's pills too: where the stream comes from (TorBox...) and the file's size (a viewer, Nov 2026: "the file size and TorBox are not in Umbrella, only in POV"). Umbrella's play hook named the source for the subtitles and remembered it, but never told the pills; its own autoplay named nothing at all -- a patch now names the source it resolved (not the next episode's pre-resolve, which runs while this one plays). A source in a debrid service's own cloud names that service.
 - Umbrella's search names the debrid services it asks, as POV's does (the same viewer: "in Umbrella's search TorBox is not named either"): "Checking TorBox" where it said "Checking Providers".
