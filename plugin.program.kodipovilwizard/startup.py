@@ -1103,6 +1103,8 @@ try:
     if CONFIG.get_setting('buildname'):
         from resources.libs import subtitle_style
         subtitle_style.migrate()
+        # ... and on HDR video at full white, not Kodi's 58 % grey.
+        subtitle_style.brighten_hdr()
 except Exception as _subtitle_style_err:
     logging.log('[Subtitle style] skipped: {0}'.format(_subtitle_style_err), level=xbmc.LOGWARNING)
 
