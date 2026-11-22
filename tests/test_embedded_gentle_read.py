@@ -449,7 +449,9 @@ class Gentle(unittest.TestCase):
             got = ee.extract_srt(URL, lang='en', allow_http=True, stats=stats,
                                  abort_cb=lambda: calls.append(1) or len(calls) > 1)
         self.assertIsNone(got)
-        self.assertIsNone(stats.get('why'))
+        # not 'no_index' (the file has one): since 0.3.111 it is said so -- 'index_unread', read once more by
+        # the automatic subtitle, a matching external subtitle translated instead when there is one
+        self.assertEqual(stats.get('why'), 'index_unread')
 
     def test_each_cluster_is_read_at_its_own_prefix(self):
         # South Park S04 MULTI WEB 2160p (owner's log, 14 Nov 2026): the clusters' size VINT is 3 bytes in

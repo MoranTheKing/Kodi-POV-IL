@@ -899,6 +899,34 @@ PATCH_CONFIG = [
             "\t__import__('xbmcgui').Window(10000).setProperty('povil.lists.t', str(__import__('time').time()))\n"
         )
     },
+    # POV's question on its own favourites, in Hebrew (a viewer's screen, via the owner, Nov 2026: "Add To POV
+    # מועדפים?" with Cancel / OK -- the build had only the word "favourites" in Hebrew, inside an English sentence).
+    # The sentence is POV's '%s POV %s?' with its words in English order; in Hebrew it is one phrase of its own.
+    # The buttons are POV's strings 32839 / 32840 (pov_ui_labels.py).
+    {
+        "id": "pov_fav_question_he_add",
+        "name": "POV favourites question in Hebrew (add)",
+        "description": "Asks 'להוסיף למועדפים של POV?' instead of 'Add To POV מועדפים?'.",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/modules/dialogs.py",
+        "marker": "# WIZARD_POV_FAV_QUESTION_HE_ADD_v1",
+        "anchor": "text = '%s[CR][CR]%s POV %s?' % (title, ls(32602), ls(32453))",
+        "action": "append_after",
+        "hook": "text = '%s[CR][CR]להוסיף למועדפים של POV?' % title\n"
+    },
+    {
+        "id": "pov_fav_question_he_remove",
+        "name": "POV favourites question in Hebrew (remove)",
+        "description": "Asks 'להסיר מהמועדפים של POV?' instead of 'Remove From POV מועדפים?'.",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/modules/dialogs.py",
+        "marker": "# WIZARD_POV_FAV_QUESTION_HE_REMOVE_v1",
+        "anchor": "text = '%s[CR][CR]%s POV %s?' % (title, ls(32603), ls(32453))",
+        "action": "append_after",
+        "hook": "text = '%s[CR][CR]להסיר מהמועדפים של POV?' % title\n"
+    },
     {
         "id": "pov_ad_unbound_guard",
         "name": "POV AllDebrid Unbound Guard",

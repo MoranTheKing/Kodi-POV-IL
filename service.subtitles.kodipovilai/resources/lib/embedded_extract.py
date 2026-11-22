@@ -769,6 +769,11 @@ class _Source(object):
         self._pref = _PartStore()     # offset -> bytes fetched ahead (prefetch)
         self._multi_hold = 0.0        # no batched request before this (busy)
         self.total = 0
+        # What the last HTTP read was answered ("HTTP 206", "HTTP 200 for a range",
+        # "ConnectionError", "stood aside for the player"): said in the log when a
+        # read of the index came back empty, which used to leave no trace at all
+        # (0.3.111, a viewer's log on Real-Debrid: given up 2.5 s in, silently).
+        self.last_answer = ''
         # Every counter above is now touched by several fetch threads, and the
         # pace gate below decides ONE schedule for all of them, so both live
         # under this lock. It is held only around arithmetic -- never across a
@@ -1591,6 +1596,7 @@ class _Source(object):
             # the same rate as when this was serial. What concurrency removes is
             # only the round trip we used to pay AFTER the gap, in series.
             if self._gate_wait(_pace):
+                self.last_answer = 'stood aside for the player'
                 self.tripped = True
                 return b''
         sess = self._take_session()
@@ -1604,6 +1610,7 @@ class _Source(object):
             if getattr(self, '_abort_cb', None) is not None:
                 try:
                     if self._abort_cb():
+                        self.last_answer = 'stood aside for the player'
                         self.tripped = True
                         return b''
                 except Exception:
@@ -1616,6 +1623,7 @@ class _Source(object):
                     'Range': 'bytes={0}-{1}'.format(offset, offset + size - 1),
                     'User-Agent': _UA}, timeout=_HTTP_TIMEOUT, stream=True)
                 code = r.status_code
+                self.last_answer = 'HTTP %s' % code
                 if code == 429 or code >= 500:
                     saw_429 = True
                     ra = r.headers.get('Retry-After')
@@ -1722,6 +1730,7 @@ class _Source(object):
                         return b''
                     continue
                 if code == 200 and offset > 0:
+                    self.last_answer = 'HTTP 200 for a range (the whole file)'
                     return b''
                 # Full-body fill-loop: a single r.raw.read(size) short-reads on a
                 # urllib3 stream (returned 2 cues/1568 in the field); read until
@@ -1784,7 +1793,8 @@ class _Source(object):
                     except Exception:
                         pass
                 return data
-            except Exception:
+            except Exception as exc:
+                self.last_answer = type(exc).__name__
                 return b''
             finally:
                 if r is not None:
@@ -2226,6 +2236,9 @@ def _cues_pos(src, seeks, seg_start, log=None):
             raw = src.read(nxt, 4096)
             if not raw:
                 _mark_cues_unsure(src)
+                if log is not None:
+                    log('cues: the SeekHead the head points to did not answer (%s)'
+                        % _answer(src))
                 break
             b = _Buf(raw, nxt)
             eid, _l = _read_vint(b, True)
@@ -2237,6 +2250,8 @@ def _cues_pos(src, seeks, seg_start, log=None):
                 raw += src.read(nxt + len(raw), b.p + size - len(raw)) or b''
                 if b.p + size > len(raw):
                     _mark_cues_unsure(src)
+                    if log is not None:
+                        log('cues: a further SeekHead came back cut (%s)' % _answer(src))
                     break
             nxt = None
             for sid, spos in _seekhead_entries(raw[b.p:b.p + size], seg_start):
@@ -2262,6 +2277,11 @@ def _mark_cues_unsure(src):
         pass
 
 
+def _answer(src):
+    """The last HTTP read's answer, for the log ('no answer' when none was kept)."""
+    return getattr(src, 'last_answer', '') or 'no answer'
+
+
 def _read_cues(src, seeks, seg_start, want_track, log):
     """Absolute cluster positions from the Cues index, as (positions, is_sub).
     Each position is (cluster_pos, relative_pos_or_None, cue_time_or_None) --
@@ -2278,11 +2298,19 @@ def _read_cues(src, seeks, seg_start, want_track, log):
         return [], False
     raw = src.read(pos, 64 * 1024)
     if not raw:
+        # The index is there and did not answer: not a file without one
+        # (0.3.111; it used to end here without a word).
+        _mark_cues_unsure(src)
+        log('cues: the index did not answer (%s)' % _answer(src))
         return [], False
     b = _Buf(raw, pos)
     eid, _l = _read_vint(b, True)
     size, slen = _read_vint(b, False)
     if eid != _CUES or slen == 0 or size is None:
+        if getattr(src, 'is_http', False) and not _answer(src).startswith('HTTP 206'):
+            # an error page where the index should be, not the file's own bytes
+            _mark_cues_unsure(src)
+        log('cues: no index where the SeekHead points (%s)' % _answer(src))
         return [], False
     need = b.p + size
     if need > _CUES_CAP:
@@ -2305,6 +2333,7 @@ def _read_cues(src, seeks, seg_start, want_track, log):
         # An empty return makes the caller defer.
         log('cues element truncated (%d of %d bytes, no 429) -- deferring '
             'rather than indexing half the file' % (len(raw), need))
+        _mark_cues_unsure(src)          # a cut answer, not the file's fault
         return [], False
     b = _Buf(raw, pos)
     _read_vint(b, True)
@@ -3743,6 +3772,23 @@ def _extract_cues(src, seeks, seg_start, want, entries,
                 and not getattr(src, '_cues_unsure', False)
                 and (positions or not seeks.get(_CUES))):
             src._stats['why'] = 'no_index'
+        elif (src.is_http and src._stats is not None and not positions
+              and not src._stats.get('why')
+              # only a read that did not answer, or was cut: an index too large
+              # to read, or something else where it should be in a whole answer,
+              # is the file's and would be the same on every read (review)
+              and (src.tripped or getattr(src, '_cues_unsure', False))):
+            # ...and an index that did not answer THIS time is said so too
+            # (0.3.111): with no reason the caller had nothing to go on -- no
+            # other subtitle was tried and the viewer was told nothing useful (a
+            # viewer on Real-Debrid, Nov 2026: given up 2.5 s after the start,
+            # while the player was still filling its buffer; the same file reads
+            # whole in the QA Kodi). The caller translates a matching external
+            # subtitle instead, and the automatic pick tries the reading once
+            # more when the film plays steadily.
+            src._stats['why'] = 'index_unread'
+            log('the subtitle index could not be read this time (%s%s)'
+                % (_answer(src), ', stood aside' if src.tripped else ''))
         return False
     if not src.is_http:
         # positions can now list a cluster more than once (one entry per relpos);
