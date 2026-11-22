@@ -106,6 +106,25 @@ class FavouritesRowTests(unittest.TestCase):
         self.mod.row(1)
         self.assertEqual(self.calls, [('end',)])
 
+    def test_a_tile_carries_kodis_own_address_so_remove_removes(self):
+        """Wizard 0.5.46. Kodi 21 finds the favourite "remove" / "rename" / "move" act on by comparing addresses as
+        strings (favourites/ContextMenus.cpp), and writes them favourites:// + CURL::Encode(command): -_.!() and
+        letters and digits as they are, every other byte %xx in lower case, nothing after (FavouritesURL.cpp). The
+        tiles had %3A, %2F (Python's quote): a viewer, Nov 2026, "I press remove and it doesn't remove"; QA Kodi, 36
+        of 42 favourites; after it, removed on the screen."""
+        items = self.row()
+        self.assertEqual(items[-1][0], 'favourites://ActivateWindow(10025%2c%22plugin%3a%2f%2fplugin.video.pov%2f%22%2creturn)')
+        self.assertEqual(items[0][0], 'favourites://ActivateWindow(Settings)')
+        url = self.mod.kodi_url
+        self.assertEqual(url('PlayMedia("plugin://plugin.video.pov/?mode=play_media&mediatype=movie&tmdb_id=157336")'),
+                         'favourites://PlayMedia(%22plugin%3a%2f%2fplugin.video.pov%2f%3fmode%3dplay_media%26mediatype%3dmovie'
+                         '%26tmdb_id%3d157336%22)')
+        self.assertEqual(url('a b~%-_.!()'), 'favourites://a%20b%7e%25-_.!()')
+        self.assertEqual(url('\u05d1'), 'favourites://%d7%91', 'every byte of a UTF-8 letter')
+        for _url, _item, _folder in items:
+            self.assertFalse(_url.endswith('/'), 'nothing after the command: a "/" is only how Kodi shows it')
+            self.assertNotRegex(_url, '%[0-9a-f]?[A-F]')
+
 
 if __name__ == '__main__':
     unittest.main()
