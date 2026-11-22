@@ -86,8 +86,41 @@ class StandalonePackage(unittest.TestCase):
                          # loaded by path from embedded_extract (0.3.83 shipped without it at first)
                          'resources/lib/embedded_mp4.py',
                          # the proofread's "ask again later" queue: left out from 0.3.75 to 0.3.85
-                         'resources/lib/gp_later.py'):
+                         'resources/lib/gp_later.py',
+                         # the phone's pairing through the relay and the QR drawn here (0.3.112; the reviewer
+                         # found both left out before the release)
+                         'resources/lib/pair_relay.py', 'resources/lib/segno/__init__.py',
+                         'resources/lib/segno/encoder.py', 'resources/lib/segno/LICENSE'):
             self.assertIn(required, names)
+
+    # Left out of the standalone on purpose, each with its reason.
+    LEFT_OUT = {
+        # the MDBList connect's write into POV's own settings (the watched provider among them): shipped, a viewer of
+        # the standalone who keeps POV's watched status in Trakt would have it moved to MDBList unasked -- without it
+        # the write fails and POV is untouched. How the standalone's MDBList connect should behave is decided apart
+        # (the reviewer, 0.3.112).
+        'resources/lib/addon_settings_safe.py',
+    }
+
+    def test_a_module_default_py_imports_is_shipped(self):
+        # default.py imports its modules inside a try, so a left-out one fails nobody -- the feature just quietly
+        # does less (0.3.112: the relay pairing and its QR were left out until the reviewer read the build). A
+        # module of resources/lib that the standalone's default.py imports is shipped, unless it is the build's.
+        names = {r.as_posix() for r in shipped()}
+        tree = ast.parse(bsm.slim_default((SRC / 'default.py').read_text(encoding='utf-8')))
+        missing = set()
+        for node in ast.walk(tree):
+            for target in import_targets(node, ''):
+                name = target.split('.')[-1]
+                if (SRC / 'resources' / 'lib' / (name + '.py')).is_file():
+                    rel = 'resources/lib/%s.py' % name
+                elif (SRC / 'resources' / 'lib' / name / '__init__.py').is_file():
+                    rel = 'resources/lib/%s/__init__.py' % name
+                else:
+                    continue
+                if rel not in names and not BUILDISH.search(name + '.py') and rel not in self.LEFT_OUT:
+                    missing.add(rel)
+        self.assertEqual(sorted(missing), [])
 
     def test_a_module_the_translation_code_imports_is_shipped(self):
         # "Reached only inside a try" is right for the build's patchers that service.py starts, and wrong for

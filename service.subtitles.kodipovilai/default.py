@@ -1624,10 +1624,10 @@ def _gemini_menu_existing(kodi_utils, gemini, gemini_pair, current_key):
     """User clicked Gemini in My Services and already has a key
     set. Offer Test / Usage / Replace / Remove."""
     options = [
-        '🔍 בדוק חיבור (Test connection)',
-        '📊 ניצול היום (Daily usage)',
-        '🔄 החלף key (Replace)',
-        '❌ מחק key (Remove)',
+        'בדיקת החיבור',
+        'הניצול היום',
+        'החלפת המפתח',
+        'מחיקת המפתח',
     ]
     try:
         choice = xbmcgui.Dialog().select(
@@ -1703,8 +1703,8 @@ def _handle_show_gemini_usage(_params):
 def _gemini_menu_new(kodi_utils, gemini, gemini_pair):
     """No key set yet. Let the user pick onboarding method."""
     options = [
-        '📱 התאמה מטלפון / מכשיר אחר (QR + URL)',
-        '⌨️ הזנת ה-key ידנית כאן',
+        'חיבור מהטלפון (סריקת QR)',
+        'הזנת המפתח ידנית',
     ]
     try:
         choice = xbmcgui.Dialog().select(
@@ -1740,20 +1740,22 @@ class _PairWindow(xbmcgui.WindowDialog):
         self._countdown_lbl = None
 
     def setup(self, qr_url, url_lines, instructions_header,
-              title_text='Gemini AI - התאמה מטלפון'):
+              title_text='Gemini AI - התאמה מטלפון', via_relay=False, code=''):
         # WindowDialog coordinate space is 1280x720 by default.
-        # Layout:
+        # Layout (0.3.112: the parts apart, the dim over the whole screen --
+        # it was a square in the middle, and the text ran over the posters on
+        # both sides of it; the owner: "the text goes out of the lines"):
         #   y=0-720    full-screen semi-opaque dark background
-        #   y=30-90    title
-        #   y=120-500  QR image (380x380, centered)
-        #   y=520-650  instruction text + URL fallback
-        #   y=670-700  countdown + cancel hint
+        #   y=24-74    title
+        #   y=84-434   QR image (350x350, centered)
+        #   y=448-652  instruction text + URL fallback
+        #   y=664-694  countdown + cancel hint
 
         # Dim background so QR is readable and Kodi behind is muted.
         bg_path = ('special://home/addons/service.subtitles.kodipovilai/'
                    'resources/lib/icons/dark_bg.png')
         bg = xbmcgui.ControlImage(0, 0, 1280, 720, bg_path,
-                                  colorDiffuse='EE000000', aspectRatio=2)
+                                  colorDiffuse='F2000000', aspectRatio=0)
         self.addControl(bg)
 
         # Title bar. Passed in, because this window is shared by the Gemini and
@@ -1761,18 +1763,31 @@ class _PairWindow(xbmcgui.WindowDialog):
         # connecting MDBList scanned a QR headed Gemini, opened a page headed
         # MDBList, and reasonably concluded one of the two was wrong.
         title = xbmcgui.ControlLabel(
-            340, 30, 600, 60,
+            240, 24, 800, 50,
             '[B][COLOR=FFFFD166]' + title_text + '[/COLOR][/B]',
             alignment=2 | 4, font='font30')
         self.addControl(title)
 
         # QR image (large, centered) -- this is the real fix. Kodi
         # fetches the URL on first display and caches the PNG.
-        qr_size = 380
+        qr_size = 350
         qr_x = (1280 - qr_size) // 2
-        qr = xbmcgui.ControlImage(qr_x, 110, qr_size, qr_size, qr_url,
+        qr = xbmcgui.ControlImage(qr_x, 84, qr_size, qr_size, qr_url,
                                   aspectRatio=2)
         self.addControl(qr)
+
+        # The relay's code, beside the QR on the right (Hebrew reads from
+        # there): the phone's page asks for it before it sends anything, so a
+        # link to the page that someone else made and posted is refused there
+        # (0.3.112, pair_relay.pairing_code).
+        if code:
+            for y, h, text, font in (
+                    (176, 36, '[B]קוד אימות[/B]', 'font13'),
+                    (214, 60, '[B][COLOR=FFFFD166]{0} {1}[/COLOR][/B]'.format(code[:3], code[3:]), 'font30'),
+                    (280, 30, 'הקלידו אותו בדף שייפתח בטלפון', 'font12')):
+                self.addControl(xbmcgui.ControlLabel(
+                    qr_x + qr_size + 20, y, 1235 - (qr_x + qr_size + 20), h, text,
+                    font=font, alignment=2 | 4))
 
         # Instructions + URL fallback. Bigger font (font14 vs font13)
         # because some users read this from across the room before
@@ -1786,29 +1801,33 @@ class _PairWindow(xbmcgui.WindowDialog):
         # IPs -- failure is silent for the user, browser just
         # spins or shows an error page. iOS doesn't do this so
         # iPhone users typically don't hit it.
-        instr = xbmcgui.ControlTextBox(120, 480, 1040, 210, font='font13')
-        self.addControl(instr)
-        text = '[B]סרוק את ה-QR עם המצלמה של הטלפון[/B] '
-        text += '(אפליקציית מצלמה רגילה — לא צריך אפליקציה מיוחדת).\n\n'
+        if via_relay:
+            # 0.3.112: the QR goes through the encrypted relay, so it works from any network -- the phone on
+            # mobile data too (pair_relay.py); the home-network address below is the other way
+            text = ('[B]סרקו את ה-QR עם המצלמה של הטלפון[/B] (עובד מכל רשת, גם מהסלולר).\n'
+                    'המפתח נשלח מוצפן, ורק המכשיר הזה יכול לפתוח אותו.\n\n')
+        else:
+            text = '[B]סרוק את ה-QR עם המצלמה של הטלפון[/B] '
+            text += '(אפליקציית מצלמה רגילה — לא צריך אפליקציה מיוחדת).\n\n'
         text += ('[B][COLOR=FFBF7F7F]' + instructions_header
                  + ':[/COLOR][/B]\n')
         for line in url_lines:
             text += '   • ' + line + '\n'
-        text += ('\n[B][COLOR=FFFFD166]ה-Chrome של אנדרואיד '
-                 'לא נפתח?[/COLOR][/B] כבה ב-Chrome: '
-                 'Settings → Privacy → "Always use secure '
-                 'connections", או נסה דפדפן אחר (Firefox/Brave/'
-                 'Samsung Internet). או חזור ל-Kodi ובחר "הזנה '
-                 'ידנית".\n')
-        text += ('[B][COLOR=FFFFD166]באייפון קיבלת 400?[/COLOR][/B] '
-                 'הסתכל ב-fingerprint בעמוד "ה-key נשלח" וודא '
-                 'שתואם בדיוק למפתח שהעתקת מ-AI Studio. אם תואם '
-                 'אבל עדיין נדחה — המפתח עצמו לא תקין; צור חדש.')
-        instr.setText(text)
+        text += ('\n[B][COLOR=FFFFD166]לא מצליח?[/COLOR][/B] '
+                 'חזרו ל-Kodi ובחרו "הזנה ידנית".')
+        # One right-aligned label a line (0.3.112): a ControlTextBox has no
+        # alignment, and Hebrew stood at the left of the screen in it.
+        lines = text.split('\n')
+        step = min(26, 204 // max(1, len(lines)))
+        for i, line in enumerate(lines):
+            if line.strip():
+                self.addControl(xbmcgui.ControlLabel(
+                    140, 448 + i * step, 1000, step, line,
+                    font='font13', alignment=1 | 4))
 
         # Countdown / cancel hint
         self._countdown_lbl = xbmcgui.ControlLabel(
-            340, 668, 600, 30, '',
+            240, 664, 800, 30, '',
             alignment=2 | 4, font='font12')
         self.addControl(self._countdown_lbl)
 
@@ -1834,21 +1853,122 @@ class _PairWindow(xbmcgui.WindowDialog):
             self.close()
 
 
-def _run_pair_qr(ps, title_text='Gemini AI - התאמה מטלפון'):
+def _pair_relay(service):
+    """The encrypted relay for this pairing (pair_relay.py, 0.3.112), polling already; None when it cannot start."""
+    try:
+        from resources.lib import pair_relay
+        return pair_relay.PairRelay(service, log=_safe_log).start()
+    except Exception as e:
+        _safe_log('pair: the relay could not start ({0}) -- the home network only'.format(type(e).__name__),
+                  level='WARNING')
+        return None
+
+
+def _qr_png(matrix, path, scale=10, border=2):
+    """A QR matrix (rows of 0 / 1) as an 8-bit greyscale PNG. segno's own PNG is 1-bit, and Kodi drew it as nothing
+    (QA Kodi 21, 0.3.112: the file whole, no error in the log, an empty place on the screen)."""
+    import struct
+    import zlib
+    size = len(matrix) + 2 * border
+    light, dark = b'\xff' * scale, b'\x00' * scale
+    rows = []
+    for y in range(size):
+        r = y - border
+        modules = matrix[r] if 0 <= r < len(matrix) else ()
+        line = b''.join(dark if 0 <= x - border < len(modules) and modules[x - border] else light
+                        for x in range(size))
+        rows.extend([b'\x00' + line] * scale)
+
+    def chunk(kind, body):
+        return (struct.pack('>I', len(body)) + kind + body
+                + struct.pack('>I', zlib.crc32(kind + body) & 0xffffffff))
+    side = size * scale
+    png = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', side, side, 8, 0, 0, 0, 0))
+           + chunk(b'IDAT', zlib.compress(b''.join(rows), 9)) + chunk(b'IEND', b''))
+    with open(path, 'wb') as f:
+        f.write(png)
+
+
+def _pair_qr_image(data):
+    """The QR drawn here (the bundled segno), a PNG in this add-on's own data folder -- not by a web service that
+    would see the pairing's address (0.3.112). Not Kodi's temp folder: QA Kodi 21 drew an image from there as nothing,
+    the same file from the add-on's folder whole. (path, remove) ; ('', None) when it cannot be drawn."""
+    try:
+        import tempfile
+        import xbmcvfs
+        from resources.lib import segno
+        folder = xbmcvfs.translatePath('special://profile/addon_data/{0}/'.format(ADDON_ID))
+        os.makedirs(folder, exist_ok=True)
+        fd, path = tempfile.mkstemp(prefix='povil_pair_', suffix='.png', dir=folder)
+        os.close(fd)
+        _qr_png(segno.make_qr(data, error='m').matrix, path)
+
+        def remove():
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        return path, remove
+    except Exception as e:
+        _safe_log('pair: the QR could not be drawn here ({0})'.format(type(e).__name__), level='WARNING')
+        return '', None
+
+
+def _key_fingerprint(key):
+    head = key[:8] if len(key) >= 8 else key
+    tail = key[-8:] if len(key) >= 16 else ''
+    return '{0}{1}   ({2} תווים)'.format(head, ('…' + tail) if tail else '', len(key))
+
+
+def _approve_received_key(key, title_text):
+    """The key that came, shown by its first and last letters and saved only on a yes: anyone who saw the QR could
+    send a key of their own (0.3.112)."""
+    # A list, 'No' first and focused: a key is saved only on a deliberate yes. Not a yes/no dialog -- Onyx's puts the
+    # focus on 'yes' as it opens, whatever the caller asked (QA Kodi, 0.3.112).
+    # (short enough for the list's column: the letters as the phone's page shows them, first 8 and last 8)
+    letters = (key[:8] + '…' + key[-8:]) if len(key) >= 16 else key
+    options = ['לא, לבטל', 'כן, לשמור: ' + letters]
+    try:
+        choice = xbmcgui.Dialog().select('התקבל מפתח מהטלפון. לשמור?', options, preselect=0)
+    except Exception:
+        return False
+    return choice == 1
+
+
+def _run_pair_qr(ps, title_text='Gemini AI - התאמה מטלפון', service='gemini'):
     """Show a scannable QR + URL fallback for an ALREADY-CREATED PairServer,
     poll for the submitted key until it arrives / the user cancels / a 5-min
     deadline, then shut the server down. Returns the submitted key (or '').
-    Shared verbatim by the Gemini and MDBList pair flows."""
+    Shared verbatim by the Gemini and MDBList pair flows.
+
+    0.3.112: the QR leads to the encrypted relay (pair_relay.py), which works whatever stands between the phone and
+    this device -- a VPN, a router that keeps the wired side from the wireless one, a firewall (the owner, Nov 2026:
+    "people on a LAN cable, the phone on the same Wi-Fi -- it does not let them open the link"). The home-network
+    address stays as the other way; either one delivers, and the key is approved by its letters before it is
+    saved."""
     import time as _time
 
+    relay = _pair_relay(service)
     # Primary URL: prefer LAN IP (works for other devices on the
     # same WiFi AND on the same device's browser via localhost
     # because the pair server binds 0.0.0.0). Fall back to
     # localhost-only when LAN detection failed (e.g. cellular).
     primary = ps.url_lan or ps.url_local
-    qr_url = ('https://api.qrserver.com/v1/create-qr-code/'
-              '?size=380x380&qzone=1&data=' +
-              _url_quote(primary))
+    qr_data = relay.url if relay else primary
+    qr_url, qr_remove = _pair_qr_image(qr_data)
+    if not qr_url:
+        if relay:
+            # The relay's address (its topic, this pairing's public key) goes
+            # to no QR web service: without the bundled segno the QR leads to
+            # the home network, as before 0.3.112.
+            relay.shutdown()
+            relay = None
+        qr_url = ('https://api.qrserver.com/v1/create-qr-code/'
+                  '?size=380x380&qzone=1&data=' +
+                  _url_quote(primary))
+    _safe_log('pair ({0}): the QR {1}, drawn {2}; the home network: {3} address(es)'.format(
+        service, 'through the encrypted relay' if relay else 'to the home network',
+        'here' if qr_remove else 'by the web service', len(ps.url_lans or [])))
 
     # The QR encodes the full URL with port -- we've verified this
     # with a real QR decoder. The text fallback below the QR is what
@@ -1877,7 +1997,10 @@ def _run_pair_qr(ps, title_text='Gemini AI - התאמה מטלפון'):
     # reach it, fails with "address not found", and the user assumes
     # the addon is broken. Listing all candidates lets them try each.
     lan_urls = ps.url_lans or []
-    if lan_urls:
+    if relay and lan_urls:
+        url_lines = ['באותה רשת: ' + _highlight_port(u) for u in lan_urls]
+        instructions_header = 'או פתחו בדפדפן של הטלפון (כולל החלק הצהוב)'
+    elif lan_urls:
         url_lines = []
         if len(lan_urls) == 1:
             url_lines.append('מטלפון אחר ב-WiFi:  '
@@ -1892,6 +2015,9 @@ def _run_pair_qr(ps, title_text='Gemini AI - התאמה מטלפון'):
         instructions_header = (
             'או פתח את אחת מהכתובות בדפדפן (חובה כולל החלק הצהוב — '
             'הפורט)')
+    elif relay:
+        url_lines = ('מהדפדפן של המכשיר הזה:  ' + _highlight_port(ps.url_local),)
+        instructions_header = 'או'
     else:
         url_lines = (
             'פתח בדפדפן:  ' + _highlight_port(ps.url_local),
@@ -1905,13 +2031,14 @@ def _run_pair_qr(ps, title_text='Gemini AI - התאמה מטלפון'):
     window = None
     try:
         window = _PairWindow()
-        window.setup(qr_url, url_lines, instructions_header, title_text)
+        window.setup(qr_url, url_lines, instructions_header, title_text, via_relay=bool(relay),
+                     code=relay.code if relay else '')
         window.show()
 
         while _time.time() < deadline:
             if window.cancelled:
                 break
-            key = ps.received_key()
+            key = ps.received_key() or (relay.received_key() if relay else '')
             if key:
                 break
             window.update_countdown(deadline - _time.time())
@@ -1924,8 +2051,20 @@ def _run_pair_qr(ps, title_text='Gemini AI - התאמה מטלפון'):
         except Exception:
             pass
         ps.shutdown()
+        if relay:
+            relay.shutdown()
+        if qr_remove:
+            qr_remove()
 
-    return ps.received_key()
+    key = ps.received_key() or (relay.received_key() if relay else '')
+    if not key:
+        return ''
+    _safe_log('pair ({0}): a key came {1}'.format(
+        service, 'over the home network' if ps.received_key() else 'through the encrypted relay'))
+    if not _approve_received_key(key, title_text):
+        _safe_log('pair ({0}): the viewer did not approve the key that came'.format(service))
+        return ''
+    return key
 
 
 def _gemini_pair_flow(kodi_utils, gemini, gemini_pair):
@@ -3813,9 +3952,9 @@ def _handle_connect_mdblist(_params):
 
 def _mdblist_menu_existing(kodi_utils, gemini_pair, mdblist_pair):
     options = [
-        '🔍 בדוק חיבור (Test connection)',
-        '🔄 החלף key (Replace)',
-        '❌ נתק (Remove)',
+        'בדיקת החיבור',
+        'החלפת המפתח',
+        'ניתוק',
     ]
     try:
         choice = xbmcgui.Dialog().select('MDBList - מה לעשות?', options)
@@ -3864,8 +4003,8 @@ def _mdblist_test_show(mdblist_pair):
 
 def _mdblist_menu_new(kodi_utils, gemini_pair, mdblist_pair):
     options = [
-        '📱 התאמה מטלפון / מכשיר אחר (QR + URL)',
-        '⌨️ הזנת ה-key ידנית כאן',
+        'חיבור מהטלפון (סריקת QR)',
+        'הזנת המפתח ידנית',
     ]
     try:
         choice = xbmcgui.Dialog().select('MDBList - איך להתחבר?', options)
@@ -3892,7 +4031,7 @@ def _mdblist_pair_flow(kodi_utils, gemini_pair, mdblist_pair):
             'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'
             .format(str(e)[:80]))
         return
-    key = _run_pair_qr(ps, 'MDBList - התאמה מטלפון')
+    key = _run_pair_qr(ps, 'MDBList - התאמה מטלפון', service='mdblist')
     if not key:
         return
     _test_save_mdblist(kodi_utils, mdblist_pair, key)
