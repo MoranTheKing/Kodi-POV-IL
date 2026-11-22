@@ -1,0 +1,21 @@
+body { font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; margin: 0; padding: 16px;
+       background: #101820; color: #f6f1df; }
+.card { max-width: 540px; margin: 24px auto; padding: 24px; background: #172635; border: 1px solid #34495e;
+        border-radius: 16px; }
+h1 { margin: 0 0 8px 0; color: #ffd166; font-size: 1.4rem; }
+p { line-height: 1.6; color: #b7c4cf; font-size: 0.95rem; }
+a { color: #ffd166; }
+label { display: block; margin-top: 16px; font-weight: bold; }
+input[type=password] { width: 100%; box-sizing: border-box; margin-top: 8px; padding: 14px; font-size: 1.1rem;
+                       direction: ltr; background: #0a0f15; color: #f6f1df; border: 1px solid #34495e;
+                       border-radius: 8px; }
+button { width: 100%; margin-top: 20px; padding: 14px; font-size: 1.1rem; font-weight: bold; color: #101820;
+         background: #ffd166; border: none; border-radius: 8px; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+#fp { direction: ltr; text-align: center; margin-top: 10px; color: #f6f1df; }
+#msg { margin-top: 14px; padding: 12px; border-radius: 8px; font-size: 0.95rem; line-height: 1.5; display: none; }
+.ok { background: #16351f; color: #a7e0b0; display: block !important; }
+.err { background: #351a1a; color: #e6a6a6; display: block !important; }
+.info { background: #14202c; color: #b7c4cf; display: block !important; }
+.small { font-size: 0.85rem; color: #b7c4cf; margin-top: 12px; }
+code { background: #0a0f15; padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; direction: ltr; }
