@@ -532,7 +532,7 @@
 					<ondown>5011</ondown>
 					<visible>String.IsEqual(Window(home).Property(povil.tab),movies) + [!String.IsEmpty(Skin.String(POVILChip_movies_1_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_1_at),end)]</visible>
 				</control>
-				<control type="button" id="9124">
+				<control type="button" id="9430">
 					<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
 					<font>povil_chip_home</font><align>center</align><aligny>center</aligny>
 					<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>
@@ -541,7 +541,7 @@
 					<label>Umbrella</label>
 					<onclick>ActivateWindow(Videos,"plugin://plugin.video.umbrella/?action=movieNavigator",return)</onclick>
 					<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
-					<onfocus>SetProperty(povil.focus,9124,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,9430,home)</onfocus>
 					<onup>SetFocus($VAR[POVIL_TabButton_movies])</onup>
 					<ondown>5011</ondown>
 					<visible>String.IsEqual(Window(home).Property(povil.tab),movies) + System.HasAddon(plugin.video.umbrella) + !Skin.HasSetting(POVILHideChip_movies_12)</visible>
@@ -1016,7 +1016,7 @@
 					<ondown>5021</ondown>
 					<visible>String.IsEqual(Window(home).Property(povil.tab),tv) + [!String.IsEmpty(Skin.String(POVILChip_tv_1_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_1_at),end)]</visible>
 				</control>
-				<control type="button" id="9136">
+				<control type="button" id="9436">
 					<width>auto</width><height>48</height><textoffsetx>28</textoffsetx>
 					<font>povil_chip_home</font><align>center</align><aligny>center</aligny>
 					<textcolor>povil_white</textcolor><focusedcolor>povil_ink</focusedcolor>
@@ -1025,7 +1025,7 @@
 					<label>Umbrella</label>
 					<onclick>ActivateWindow(Videos,"plugin://plugin.video.umbrella/?action=tvNavigator",return)</onclick>
 					<onfocus>SetProperty(povil.tab,tv,home)</onfocus>
-					<onfocus>SetProperty(povil.focus,9136,home)</onfocus>
+					<onfocus>SetProperty(povil.focus,9436,home)</onfocus>
 					<onup>SetFocus($VAR[POVIL_TabButton_tv])</onup>
 					<ondown>5021</ondown>
 					<visible>String.IsEqual(Window(home).Property(povil.tab),tv) + System.HasAddon(plugin.video.umbrella) + !Skin.HasSetting(POVILHideChip_tv_12)</visible>
@@ -2465,13 +2465,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5011_1] + [Container(5011).IsUpdating | [!Container(5011).IsUpdating + Integer.IsGreater(Container(5011).NumItems,1) + [[Integer.IsEqual(Container(5011).CurrentItem,1) + String.IsEqual(Container(5011).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5011).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5011))] | [$EXP[POVIL_Library_5011] + [!String.IsEqual(Container(5011).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5011)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5011).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5011),2)]]] | [$EXP[POVIL_Shows_5011_2] + [Container(5011).IsUpdating | [!Container(5011).IsUpdating + Integer.IsGreater(Container(5011).NumItems,1) + [[Integer.IsEqual(Container(5011).CurrentItem,1) + String.IsEqual(Container(5011).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5011).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5011))] | [$EXP[POVIL_Library_5011] + [!String.IsEqual(Container(5011).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5011)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5011_1]] + !String.IsEmpty(Window(home).Property(povil.tab.movies)) + String.IsEqual(Window(home).Property(povil.retry.5011),2) + !Container(5011).IsUpdating + !Integer.IsGreater(Container(5011).NumItems,0)</visible>
@@ -2498,10 +2499,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5011_poster]] + Integer.IsEqual(Container(5011).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5011_poster]] + Integer.IsEqual(Container(5011).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5011_poster]] + Integer.IsEqual(Container(5011).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5011_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5011_landscape]] + Integer.IsEqual(Container(5011).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5011_landscape]] + Integer.IsEqual(Container(5011).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5011_landscape]] + Integer.IsEqual(Container(5011).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5011_landscape]] + Integer.IsEqual(Container(5011).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5011_landscape]] + Integer.IsEqual(Container(5011).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5011_landscape]] + Integer.IsEqual(Container(5011).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5011_landscape]] + Integer.IsEqual(Container(5011).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5011" /><param name="when" value="$EXP[POVIL_SlotKind_5011_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5011" /><param name="when" value="$EXP[POVIL_SlotKind_5011_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5011]" sortorder="$VAR[POVIL_SortOrder_5011]">$VAR[POVIL_Path_5011]</content>
@@ -2517,11 +2518,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5011_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5011).ListItemPosition(-1).Label) + !Container(5011).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5011).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5011).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5011).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5011).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -2556,13 +2557,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5012_1] + [Container(5012).IsUpdating | [!Container(5012).IsUpdating + Integer.IsGreater(Container(5012).NumItems,1) + [[Integer.IsEqual(Container(5012).CurrentItem,1) + String.IsEqual(Container(5012).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5012).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5012))] | [$EXP[POVIL_Library_5012] + [!String.IsEqual(Container(5012).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5012)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5012).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5012),2)]]] | [$EXP[POVIL_Shows_5012_2] + [Container(5012).IsUpdating | [!Container(5012).IsUpdating + Integer.IsGreater(Container(5012).NumItems,1) + [[Integer.IsEqual(Container(5012).CurrentItem,1) + String.IsEqual(Container(5012).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5012).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5012))] | [$EXP[POVIL_Library_5012] + [!String.IsEqual(Container(5012).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5012)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5012_1]] + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + String.IsEqual(Window(home).Property(povil.retry.5012),2) + !Container(5012).IsUpdating + !Integer.IsGreater(Container(5012).NumItems,0)</visible>
@@ -2589,10 +2591,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5012_poster]] + Integer.IsEqual(Container(5012).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5012_poster]] + Integer.IsEqual(Container(5012).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5012_poster]] + Integer.IsEqual(Container(5012).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5012_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5012_landscape]] + Integer.IsEqual(Container(5012).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5012_landscape]] + Integer.IsEqual(Container(5012).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5012_landscape]] + Integer.IsEqual(Container(5012).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5012_landscape]] + Integer.IsEqual(Container(5012).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5012_landscape]] + Integer.IsEqual(Container(5012).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5012_landscape]] + Integer.IsEqual(Container(5012).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5012_landscape]] + Integer.IsEqual(Container(5012).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5012" /><param name="when" value="$EXP[POVIL_SlotKind_5012_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5012" /><param name="when" value="$EXP[POVIL_SlotKind_5012_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5012]" sortorder="$VAR[POVIL_SortOrder_5012]">$VAR[POVIL_Path_5012]</content>
@@ -2608,11 +2610,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5012_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5012).ListItemPosition(-1).Label) + !Container(5012).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5012).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5012).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5012).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5012).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -2647,13 +2649,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5013_1] + [Container(5013).IsUpdating | [!Container(5013).IsUpdating + Integer.IsGreater(Container(5013).NumItems,1) + [[Integer.IsEqual(Container(5013).CurrentItem,1) + String.IsEqual(Container(5013).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5013).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5013))] | [$EXP[POVIL_Library_5013] + [!String.IsEqual(Container(5013).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5013)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5013).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5013),2)]]] | [$EXP[POVIL_Shows_5013_2] + [Container(5013).IsUpdating | [!Container(5013).IsUpdating + Integer.IsGreater(Container(5013).NumItems,1) + [[Integer.IsEqual(Container(5013).CurrentItem,1) + String.IsEqual(Container(5013).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5013).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5013))] | [$EXP[POVIL_Library_5013] + [!String.IsEqual(Container(5013).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5013)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5013_1]] + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + String.IsEqual(Window(home).Property(povil.retry.5013),2) + !Container(5013).IsUpdating + !Integer.IsGreater(Container(5013).NumItems,0)</visible>
@@ -2680,10 +2683,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5013_poster]] + Integer.IsEqual(Container(5013).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5013_poster]] + Integer.IsEqual(Container(5013).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5013_poster]] + Integer.IsEqual(Container(5013).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5013_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5013_landscape]] + Integer.IsEqual(Container(5013).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5013_landscape]] + Integer.IsEqual(Container(5013).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5013_landscape]] + Integer.IsEqual(Container(5013).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5013_landscape]] + Integer.IsEqual(Container(5013).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5013_landscape]] + Integer.IsEqual(Container(5013).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5013_landscape]] + Integer.IsEqual(Container(5013).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5013_landscape]] + Integer.IsEqual(Container(5013).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5013" /><param name="when" value="$EXP[POVIL_SlotKind_5013_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5013" /><param name="when" value="$EXP[POVIL_SlotKind_5013_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5013]" sortorder="$VAR[POVIL_SortOrder_5013]">$VAR[POVIL_Path_5013]</content>
@@ -2699,11 +2702,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5013_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5013).ListItemPosition(-1).Label) + !Container(5013).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5013).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5013).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5013).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5013).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -2738,13 +2741,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5014_1] + [Container(5014).IsUpdating | [!Container(5014).IsUpdating + Integer.IsGreater(Container(5014).NumItems,1) + [[Integer.IsEqual(Container(5014).CurrentItem,1) + String.IsEqual(Container(5014).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5014).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5014))] | [$EXP[POVIL_Library_5014] + [!String.IsEqual(Container(5014).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5014)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5014).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5014),2)]]] | [$EXP[POVIL_Shows_5014_2] + [Container(5014).IsUpdating | [!Container(5014).IsUpdating + Integer.IsGreater(Container(5014).NumItems,1) + [[Integer.IsEqual(Container(5014).CurrentItem,1) + String.IsEqual(Container(5014).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5014).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5014))] | [$EXP[POVIL_Library_5014] + [!String.IsEqual(Container(5014).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5014)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5014_1]] + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + String.IsEqual(Window(home).Property(povil.retry.5014),2) + !Container(5014).IsUpdating + !Integer.IsGreater(Container(5014).NumItems,0)</visible>
@@ -2771,10 +2775,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5014_poster]] + Integer.IsEqual(Container(5014).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5014_poster]] + Integer.IsEqual(Container(5014).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5014_poster]] + Integer.IsEqual(Container(5014).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5014_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5014_landscape]] + Integer.IsEqual(Container(5014).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5014_landscape]] + Integer.IsEqual(Container(5014).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5014_landscape]] + Integer.IsEqual(Container(5014).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5014_landscape]] + Integer.IsEqual(Container(5014).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5014_landscape]] + Integer.IsEqual(Container(5014).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5014_landscape]] + Integer.IsEqual(Container(5014).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5014_landscape]] + Integer.IsEqual(Container(5014).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5014" /><param name="when" value="$EXP[POVIL_SlotKind_5014_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5014" /><param name="when" value="$EXP[POVIL_SlotKind_5014_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5014]" sortorder="$VAR[POVIL_SortOrder_5014]">$VAR[POVIL_Path_5014]</content>
@@ -2790,11 +2794,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5014_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5014).ListItemPosition(-1).Label) + !Container(5014).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5014).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5014).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5014).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5014).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -2829,13 +2833,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5015_1] + [Container(5015).IsUpdating | [!Container(5015).IsUpdating + Integer.IsGreater(Container(5015).NumItems,1) + [[Integer.IsEqual(Container(5015).CurrentItem,1) + String.IsEqual(Container(5015).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5015).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5015))] | [$EXP[POVIL_Library_5015] + [!String.IsEqual(Container(5015).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5015)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5015).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5015),2)]]] | [$EXP[POVIL_Shows_5015_2] + [Container(5015).IsUpdating | [!Container(5015).IsUpdating + Integer.IsGreater(Container(5015).NumItems,1) + [[Integer.IsEqual(Container(5015).CurrentItem,1) + String.IsEqual(Container(5015).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5015).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5015))] | [$EXP[POVIL_Library_5015] + [!String.IsEqual(Container(5015).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5015)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5015_1]] + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + String.IsEqual(Window(home).Property(povil.retry.5015),2) + !Container(5015).IsUpdating + !Integer.IsGreater(Container(5015).NumItems,0)</visible>
@@ -2862,10 +2867,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5015_poster]] + Integer.IsEqual(Container(5015).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5015_poster]] + Integer.IsEqual(Container(5015).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5015_poster]] + Integer.IsEqual(Container(5015).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5015_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5015_landscape]] + Integer.IsEqual(Container(5015).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5015_landscape]] + Integer.IsEqual(Container(5015).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5015_landscape]] + Integer.IsEqual(Container(5015).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5015_landscape]] + Integer.IsEqual(Container(5015).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5015_landscape]] + Integer.IsEqual(Container(5015).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5015_landscape]] + Integer.IsEqual(Container(5015).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5015_landscape]] + Integer.IsEqual(Container(5015).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5015" /><param name="when" value="$EXP[POVIL_SlotKind_5015_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5015" /><param name="when" value="$EXP[POVIL_SlotKind_5015_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5015]" sortorder="$VAR[POVIL_SortOrder_5015]">$VAR[POVIL_Path_5015]</content>
@@ -2881,11 +2886,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5015_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5015).ListItemPosition(-1).Label) + !Container(5015).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5015).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5015).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5015).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5015).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -2919,13 +2924,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5016_1] + [Container(5016).IsUpdating | [!Container(5016).IsUpdating + Integer.IsGreater(Container(5016).NumItems,1) + [[Integer.IsEqual(Container(5016).CurrentItem,1) + String.IsEqual(Container(5016).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5016).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5016))] | [$EXP[POVIL_Library_5016] + [!String.IsEqual(Container(5016).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5016)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5016).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5016),2)]]] | [$EXP[POVIL_Shows_5016_2] + [Container(5016).IsUpdating | [!Container(5016).IsUpdating + Integer.IsGreater(Container(5016).NumItems,1) + [[Integer.IsEqual(Container(5016).CurrentItem,1) + String.IsEqual(Container(5016).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5016).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5016))] | [$EXP[POVIL_Library_5016] + [!String.IsEqual(Container(5016).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5016)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5016_1]] + !String.IsEmpty(Window(home).Property(povil.deep.movies)) + String.IsEqual(Window(home).Property(povil.retry.5016),2) + !Container(5016).IsUpdating + !Integer.IsGreater(Container(5016).NumItems,0)</visible>
@@ -2952,10 +2958,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5016_poster]] + Integer.IsEqual(Container(5016).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5016_poster]] + Integer.IsEqual(Container(5016).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5016_poster]] + Integer.IsEqual(Container(5016).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5016_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5016_landscape]] + Integer.IsEqual(Container(5016).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5016_landscape]] + Integer.IsEqual(Container(5016).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5016_landscape]] + Integer.IsEqual(Container(5016).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5016_landscape]] + Integer.IsEqual(Container(5016).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5016_landscape]] + Integer.IsEqual(Container(5016).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5016_landscape]] + Integer.IsEqual(Container(5016).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5016_landscape]] + Integer.IsEqual(Container(5016).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5016" /><param name="when" value="$EXP[POVIL_SlotKind_5016_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5016" /><param name="when" value="$EXP[POVIL_SlotKind_5016_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5016]" sortorder="$VAR[POVIL_SortOrder_5016]">$VAR[POVIL_Path_5016]</content>
@@ -2971,11 +2977,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5016_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5016).ListItemPosition(-1).Label) + !Container(5016).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5016).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5016).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5016).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5016).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -3019,13 +3025,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5021_1] + [Container(5021).IsUpdating | [!Container(5021).IsUpdating + Integer.IsGreater(Container(5021).NumItems,1) + [[Integer.IsEqual(Container(5021).CurrentItem,1) + String.IsEqual(Container(5021).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021))] | [$EXP[POVIL_Library_5021] + [!String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5021).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5021),2)]]] | [$EXP[POVIL_Shows_5021_2] + [Container(5021).IsUpdating | [!Container(5021).IsUpdating + Integer.IsGreater(Container(5021).NumItems,1) + [[Integer.IsEqual(Container(5021).CurrentItem,1) + String.IsEqual(Container(5021).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021))] | [$EXP[POVIL_Library_5021] + [!String.IsEqual(Container(5021).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5021)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5021_1]] + !String.IsEmpty(Window(home).Property(povil.tab.tv)) + String.IsEqual(Window(home).Property(povil.retry.5021),2) + !Container(5021).IsUpdating + !Integer.IsGreater(Container(5021).NumItems,0)</visible>
@@ -3052,10 +3059,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5021_poster]] + Integer.IsEqual(Container(5021).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5021_poster]] + Integer.IsEqual(Container(5021).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5021_poster]] + Integer.IsEqual(Container(5021).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5021_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5021_landscape]] + Integer.IsEqual(Container(5021).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5021_landscape]] + Integer.IsEqual(Container(5021).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5021_landscape]] + Integer.IsEqual(Container(5021).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5021_landscape]] + Integer.IsEqual(Container(5021).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5021_landscape]] + Integer.IsEqual(Container(5021).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5021_landscape]] + Integer.IsEqual(Container(5021).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5021_landscape]] + Integer.IsEqual(Container(5021).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5021" /><param name="when" value="$EXP[POVIL_SlotKind_5021_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5021" /><param name="when" value="$EXP[POVIL_SlotKind_5021_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5021]" sortorder="$VAR[POVIL_SortOrder_5021]">$VAR[POVIL_Path_5021]</content>
@@ -3071,11 +3078,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5021_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5021).ListItemPosition(-1).Label) + !Container(5021).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5021).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5021).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5021).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5021).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -3110,13 +3117,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5022_1] + [Container(5022).IsUpdating | [!Container(5022).IsUpdating + Integer.IsGreater(Container(5022).NumItems,1) + [[Integer.IsEqual(Container(5022).CurrentItem,1) + String.IsEqual(Container(5022).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5022).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5022))] | [$EXP[POVIL_Library_5022] + [!String.IsEqual(Container(5022).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5022)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5022).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5022),2)]]] | [$EXP[POVIL_Shows_5022_2] + [Container(5022).IsUpdating | [!Container(5022).IsUpdating + Integer.IsGreater(Container(5022).NumItems,1) + [[Integer.IsEqual(Container(5022).CurrentItem,1) + String.IsEqual(Container(5022).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5022).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5022))] | [$EXP[POVIL_Library_5022] + [!String.IsEqual(Container(5022).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5022)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5022_1]] + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + String.IsEqual(Window(home).Property(povil.retry.5022),2) + !Container(5022).IsUpdating + !Integer.IsGreater(Container(5022).NumItems,0)</visible>
@@ -3143,10 +3151,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5022_poster]] + Integer.IsEqual(Container(5022).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5022_poster]] + Integer.IsEqual(Container(5022).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5022_poster]] + Integer.IsEqual(Container(5022).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5022_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5022_landscape]] + Integer.IsEqual(Container(5022).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5022_landscape]] + Integer.IsEqual(Container(5022).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5022_landscape]] + Integer.IsEqual(Container(5022).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5022_landscape]] + Integer.IsEqual(Container(5022).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5022_landscape]] + Integer.IsEqual(Container(5022).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5022_landscape]] + Integer.IsEqual(Container(5022).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5022_landscape]] + Integer.IsEqual(Container(5022).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5022" /><param name="when" value="$EXP[POVIL_SlotKind_5022_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5022" /><param name="when" value="$EXP[POVIL_SlotKind_5022_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5022]" sortorder="$VAR[POVIL_SortOrder_5022]">$VAR[POVIL_Path_5022]</content>
@@ -3162,11 +3170,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5022_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5022).ListItemPosition(-1).Label) + !Container(5022).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5022).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5022).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5022).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5022).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -3201,13 +3209,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5023_1] + [Container(5023).IsUpdating | [!Container(5023).IsUpdating + Integer.IsGreater(Container(5023).NumItems,1) + [[Integer.IsEqual(Container(5023).CurrentItem,1) + String.IsEqual(Container(5023).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023))] | [$EXP[POVIL_Library_5023] + [!String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5023).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5023),2)]]] | [$EXP[POVIL_Shows_5023_2] + [Container(5023).IsUpdating | [!Container(5023).IsUpdating + Integer.IsGreater(Container(5023).NumItems,1) + [[Integer.IsEqual(Container(5023).CurrentItem,1) + String.IsEqual(Container(5023).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023))] | [$EXP[POVIL_Library_5023] + [!String.IsEqual(Container(5023).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5023)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5023_1]] + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + String.IsEqual(Window(home).Property(povil.retry.5023),2) + !Container(5023).IsUpdating + !Integer.IsGreater(Container(5023).NumItems,0)</visible>
@@ -3234,10 +3243,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5023_poster]] + Integer.IsEqual(Container(5023).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5023_poster]] + Integer.IsEqual(Container(5023).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5023_poster]] + Integer.IsEqual(Container(5023).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5023_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5023_landscape]] + Integer.IsEqual(Container(5023).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5023_landscape]] + Integer.IsEqual(Container(5023).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5023_landscape]] + Integer.IsEqual(Container(5023).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5023_landscape]] + Integer.IsEqual(Container(5023).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5023_landscape]] + Integer.IsEqual(Container(5023).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5023_landscape]] + Integer.IsEqual(Container(5023).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5023_landscape]] + Integer.IsEqual(Container(5023).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5023" /><param name="when" value="$EXP[POVIL_SlotKind_5023_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5023" /><param name="when" value="$EXP[POVIL_SlotKind_5023_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5023]" sortorder="$VAR[POVIL_SortOrder_5023]">$VAR[POVIL_Path_5023]</content>
@@ -3253,11 +3262,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5023_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5023).ListItemPosition(-1).Label) + !Container(5023).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5023).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5023).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5023).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5023).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -3292,13 +3301,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5024_1] + [Container(5024).IsUpdating | [!Container(5024).IsUpdating + Integer.IsGreater(Container(5024).NumItems,1) + [[Integer.IsEqual(Container(5024).CurrentItem,1) + String.IsEqual(Container(5024).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5024).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5024))] | [$EXP[POVIL_Library_5024] + [!String.IsEqual(Container(5024).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5024)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5024).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5024),2)]]] | [$EXP[POVIL_Shows_5024_2] + [Container(5024).IsUpdating | [!Container(5024).IsUpdating + Integer.IsGreater(Container(5024).NumItems,1) + [[Integer.IsEqual(Container(5024).CurrentItem,1) + String.IsEqual(Container(5024).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5024).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5024))] | [$EXP[POVIL_Library_5024] + [!String.IsEqual(Container(5024).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5024)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5024_1]] + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + String.IsEqual(Window(home).Property(povil.retry.5024),2) + !Container(5024).IsUpdating + !Integer.IsGreater(Container(5024).NumItems,0)</visible>
@@ -3325,10 +3335,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5024_poster]] + Integer.IsEqual(Container(5024).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5024_poster]] + Integer.IsEqual(Container(5024).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5024_poster]] + Integer.IsEqual(Container(5024).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5024_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5024_landscape]] + Integer.IsEqual(Container(5024).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5024_landscape]] + Integer.IsEqual(Container(5024).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5024_landscape]] + Integer.IsEqual(Container(5024).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5024_landscape]] + Integer.IsEqual(Container(5024).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5024_landscape]] + Integer.IsEqual(Container(5024).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5024_landscape]] + Integer.IsEqual(Container(5024).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5024_landscape]] + Integer.IsEqual(Container(5024).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5024" /><param name="when" value="$EXP[POVIL_SlotKind_5024_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5024" /><param name="when" value="$EXP[POVIL_SlotKind_5024_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5024]" sortorder="$VAR[POVIL_SortOrder_5024]">$VAR[POVIL_Path_5024]</content>
@@ -3344,11 +3354,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5024_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5024).ListItemPosition(-1).Label) + !Container(5024).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5024).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5024).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5024).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5024).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -3383,13 +3393,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5025_1] + [Container(5025).IsUpdating | [!Container(5025).IsUpdating + Integer.IsGreater(Container(5025).NumItems,1) + [[Integer.IsEqual(Container(5025).CurrentItem,1) + String.IsEqual(Container(5025).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5025).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5025))] | [$EXP[POVIL_Library_5025] + [!String.IsEqual(Container(5025).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5025)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5025).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5025),2)]]] | [$EXP[POVIL_Shows_5025_2] + [Container(5025).IsUpdating | [!Container(5025).IsUpdating + Integer.IsGreater(Container(5025).NumItems,1) + [[Integer.IsEqual(Container(5025).CurrentItem,1) + String.IsEqual(Container(5025).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5025).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5025))] | [$EXP[POVIL_Library_5025] + [!String.IsEqual(Container(5025).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5025)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5025_1]] + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + String.IsEqual(Window(home).Property(povil.retry.5025),2) + !Container(5025).IsUpdating + !Integer.IsGreater(Container(5025).NumItems,0)</visible>
@@ -3416,10 +3427,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5025_poster]] + Integer.IsEqual(Container(5025).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5025_poster]] + Integer.IsEqual(Container(5025).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5025_poster]] + Integer.IsEqual(Container(5025).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5025_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5025_landscape]] + Integer.IsEqual(Container(5025).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5025_landscape]] + Integer.IsEqual(Container(5025).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5025_landscape]] + Integer.IsEqual(Container(5025).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5025_landscape]] + Integer.IsEqual(Container(5025).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5025_landscape]] + Integer.IsEqual(Container(5025).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5025_landscape]] + Integer.IsEqual(Container(5025).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5025_landscape]] + Integer.IsEqual(Container(5025).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5025" /><param name="when" value="$EXP[POVIL_SlotKind_5025_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5025" /><param name="when" value="$EXP[POVIL_SlotKind_5025_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5025]" sortorder="$VAR[POVIL_SortOrder_5025]">$VAR[POVIL_Path_5025]</content>
@@ -3435,11 +3446,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5025_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5025).ListItemPosition(-1).Label) + !Container(5025).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5025).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5025).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5025).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5025).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -3473,13 +3484,14 @@
 					<control type="group" description="loading">
 						<visible>[$EXP[POVIL_Shows_5026_1] + [Container(5026).IsUpdating | [!Container(5026).IsUpdating + Integer.IsGreater(Container(5026).NumItems,1) + [[Integer.IsEqual(Container(5026).CurrentItem,1) + String.IsEqual(Container(5026).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5026).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5026))] | [$EXP[POVIL_Library_5026] + [!String.IsEqual(Container(5026).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5026)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5026).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5026),2)]]] | [$EXP[POVIL_Shows_5026_2] + [Container(5026).IsUpdating | [!Container(5026).IsUpdating + Integer.IsGreater(Container(5026).NumItems,1) + [[Integer.IsEqual(Container(5026).CurrentItem,1) + String.IsEqual(Container(5026).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5026).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5026))] | [$EXP[POVIL_Library_5026] + [!String.IsEqual(Container(5026).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5026)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]]]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5026_1]] + !String.IsEmpty(Window(home).Property(povil.deep.tv)) + String.IsEqual(Window(home).Property(povil.retry.5026),2) + !Container(5026).IsUpdating + !Integer.IsGreater(Container(5026).NumItems,0)</visible>
@@ -3506,10 +3518,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5026_poster]] + Integer.IsEqual(Container(5026).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5026_poster]] + Integer.IsEqual(Container(5026).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5026_poster]] + Integer.IsEqual(Container(5026).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5026_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5026_landscape]] + Integer.IsEqual(Container(5026).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5026_landscape]] + Integer.IsEqual(Container(5026).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5026_landscape]] + Integer.IsEqual(Container(5026).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5026_landscape]] + Integer.IsEqual(Container(5026).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5026_landscape]] + Integer.IsEqual(Container(5026).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5026_landscape]] + Integer.IsEqual(Container(5026).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5026_landscape]] + Integer.IsEqual(Container(5026).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5026" /><param name="when" value="$EXP[POVIL_SlotKind_5026_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5026" /><param name="when" value="$EXP[POVIL_SlotKind_5026_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5026]" sortorder="$VAR[POVIL_SortOrder_5026]">$VAR[POVIL_Path_5026]</content>
@@ -3525,11 +3537,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5026_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5026).ListItemPosition(-1).Label) + !Container(5026).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5026).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5026).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5026).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5026).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -3606,20 +3618,21 @@
 					<control type="group" description="loading">
 						<visible>Container(5032).IsUpdating | [!Container(5032).IsUpdating + Integer.IsGreater(Container(5032).NumItems,1) + Integer.IsEqual(Container(5032).CurrentItem,1) + String.IsEqual(Container(5032).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5032).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5032))] | [!Integer.IsGreater(Container(5032).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5032),2)]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>!String.IsEmpty(Window(home).Property(povil.deep.israeli)) + String.IsEqual(Window(home).Property(povil.retry.5032),2) + !Container(5032).IsUpdating + !Integer.IsGreater(Container(5032).NumItems,0)</visible>
 						<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 					</control>
 					<control type="list" id="5032">
-						<left>290</left><top>40</top><width>1570</width><height>300</height>
+						<left>10</left><top>40</top><width>1852</width><height>300</height>
 						<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 						<scrolltime tween="cubic" easing="out">260</scrolltime>
 						<onup condition="Integer.IsGreater(Container(5031).NumItems,0)">5031</onup>
@@ -3629,18 +3642,19 @@
 						<onfocus>SetProperty(povil.focus,5032,home)</onfocus>
 						<ondown condition="Integer.IsGreater(Container(5033).NumItems,0)">5033</ondown>
 						<animation effect="fade" start="100" end="0" time="0" condition="!Container(5032).IsUpdating + Integer.IsGreater(Container(5032).NumItems,1) + Integer.IsEqual(Container(5032).CurrentItem,1) + String.IsEqual(Container(5032).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5032).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5032))">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5032).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5032).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5032).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="Integer.IsEqual(Container(5032).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="Integer.IsEqual(Container(5032).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="Integer.IsEqual(Container(5032).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="Integer.IsEqual(Container(5032).NumItems,4)">Conditional</animation>
 						<include content="POVIL_Item_landscape"><param name="id" value="5032" /></include>
 						<content target="videos">$VAR[POVIL_Path_5032]</content>
 					</control>
 					<control type="group" description="peek">
-						<left>-50</left><top>62</top>
+						<left>-310</left><top>62</top>
 						<visible>!String.IsEmpty(Container(5032).ListItemPosition(-1).Label) + !Container(5032).IsUpdating</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5032).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5032).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5032).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5032).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
 				<control type="group" description="כאן 11">
@@ -3884,13 +3898,14 @@
 					<control type="group" description="loading">
 						<visible>$EXP[POVIL_Shows_5051_2] + [Container(5051).IsUpdating | [!Container(5051).IsUpdating + Integer.IsGreater(Container(5051).NumItems,1) + [[Integer.IsEqual(Container(5051).CurrentItem,1) + String.IsEqual(Container(5051).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5051).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5051))] | [$EXP[POVIL_Library_5051] + [!String.IsEqual(Container(5051).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5051)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5051).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5051),2)]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5051_2]] + !String.IsEmpty(Window(home).Property(povil.tab.kids)) + String.IsEqual(Window(home).Property(povil.retry.5051),2) + !Container(5051).IsUpdating + !Integer.IsGreater(Container(5051).NumItems,0)</visible>
@@ -3917,10 +3932,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5051_poster]] + Integer.IsEqual(Container(5051).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5051_poster]] + Integer.IsEqual(Container(5051).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5051_poster]] + Integer.IsEqual(Container(5051).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5051_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5051_landscape]] + Integer.IsEqual(Container(5051).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5051_landscape]] + Integer.IsEqual(Container(5051).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5051_landscape]] + Integer.IsEqual(Container(5051).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5051_landscape]] + Integer.IsEqual(Container(5051).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5051_landscape]] + Integer.IsEqual(Container(5051).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5051_landscape]] + Integer.IsEqual(Container(5051).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5051_landscape]] + Integer.IsEqual(Container(5051).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5051" /><param name="when" value="$EXP[POVIL_SlotKind_5051_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5051" /><param name="when" value="$EXP[POVIL_SlotKind_5051_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5051]" sortorder="$VAR[POVIL_SortOrder_5051]">$VAR[POVIL_Path_5051]</content>
@@ -3936,11 +3951,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5051_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5051).ListItemPosition(-1).Label) + !Container(5051).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5051).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5051).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5051).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5051).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -3975,13 +3990,14 @@
 					<control type="group" description="loading">
 						<visible>$EXP[POVIL_Shows_5052_2] + [Container(5052).IsUpdating | [!Container(5052).IsUpdating + Integer.IsGreater(Container(5052).NumItems,1) + [[Integer.IsEqual(Container(5052).CurrentItem,1) + String.IsEqual(Container(5052).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5052).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5052))] | [$EXP[POVIL_Library_5052] + [!String.IsEqual(Container(5052).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5052)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5052).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5052),2)]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5052_2]] + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + String.IsEqual(Window(home).Property(povil.retry.5052),2) + !Container(5052).IsUpdating + !Integer.IsGreater(Container(5052).NumItems,0)</visible>
@@ -4008,10 +4024,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5052_poster]] + Integer.IsEqual(Container(5052).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5052_poster]] + Integer.IsEqual(Container(5052).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5052_poster]] + Integer.IsEqual(Container(5052).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5052_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5052_landscape]] + Integer.IsEqual(Container(5052).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5052_landscape]] + Integer.IsEqual(Container(5052).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5052_landscape]] + Integer.IsEqual(Container(5052).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5052_landscape]] + Integer.IsEqual(Container(5052).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5052_landscape]] + Integer.IsEqual(Container(5052).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5052_landscape]] + Integer.IsEqual(Container(5052).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5052_landscape]] + Integer.IsEqual(Container(5052).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5052" /><param name="when" value="$EXP[POVIL_SlotKind_5052_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5052" /><param name="when" value="$EXP[POVIL_SlotKind_5052_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5052]" sortorder="$VAR[POVIL_SortOrder_5052]">$VAR[POVIL_Path_5052]</content>
@@ -4027,11 +4043,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5052_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5052).ListItemPosition(-1).Label) + !Container(5052).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5052).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5052).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5052).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5052).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -4066,13 +4082,14 @@
 					<control type="group" description="loading">
 						<visible>$EXP[POVIL_Shows_5053_2] + [Container(5053).IsUpdating | [!Container(5053).IsUpdating + Integer.IsGreater(Container(5053).NumItems,1) + [[Integer.IsEqual(Container(5053).CurrentItem,1) + String.IsEqual(Container(5053).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5053).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5053))] | [$EXP[POVIL_Library_5053] + [!String.IsEqual(Container(5053).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5053)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5053).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5053),2)]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5053_2]] + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + String.IsEqual(Window(home).Property(povil.retry.5053),2) + !Container(5053).IsUpdating + !Integer.IsGreater(Container(5053).NumItems,0)</visible>
@@ -4099,10 +4116,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5053_poster]] + Integer.IsEqual(Container(5053).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5053_poster]] + Integer.IsEqual(Container(5053).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5053_poster]] + Integer.IsEqual(Container(5053).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5053_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5053_landscape]] + Integer.IsEqual(Container(5053).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5053_landscape]] + Integer.IsEqual(Container(5053).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5053_landscape]] + Integer.IsEqual(Container(5053).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5053_landscape]] + Integer.IsEqual(Container(5053).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5053_landscape]] + Integer.IsEqual(Container(5053).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5053_landscape]] + Integer.IsEqual(Container(5053).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5053_landscape]] + Integer.IsEqual(Container(5053).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5053" /><param name="when" value="$EXP[POVIL_SlotKind_5053_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5053" /><param name="when" value="$EXP[POVIL_SlotKind_5053_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5053]" sortorder="$VAR[POVIL_SortOrder_5053]">$VAR[POVIL_Path_5053]</content>
@@ -4118,11 +4135,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5053_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5053).ListItemPosition(-1).Label) + !Container(5053).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5053).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5053).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5053).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5053).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -4157,13 +4174,14 @@
 					<control type="group" description="loading">
 						<visible>$EXP[POVIL_Shows_5054_2] + [Container(5054).IsUpdating | [!Container(5054).IsUpdating + Integer.IsGreater(Container(5054).NumItems,1) + [[Integer.IsEqual(Container(5054).CurrentItem,1) + String.IsEqual(Container(5054).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5054).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5054))] | [$EXP[POVIL_Library_5054] + [!String.IsEqual(Container(5054).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5054)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5054).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5054),2)]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5054_2]] + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + String.IsEqual(Window(home).Property(povil.retry.5054),2) + !Container(5054).IsUpdating + !Integer.IsGreater(Container(5054).NumItems,0)</visible>
@@ -4190,10 +4208,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5054_poster]] + Integer.IsEqual(Container(5054).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5054_poster]] + Integer.IsEqual(Container(5054).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5054_poster]] + Integer.IsEqual(Container(5054).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5054_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5054_landscape]] + Integer.IsEqual(Container(5054).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5054_landscape]] + Integer.IsEqual(Container(5054).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5054_landscape]] + Integer.IsEqual(Container(5054).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5054_landscape]] + Integer.IsEqual(Container(5054).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5054_landscape]] + Integer.IsEqual(Container(5054).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5054_landscape]] + Integer.IsEqual(Container(5054).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5054_landscape]] + Integer.IsEqual(Container(5054).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5054" /><param name="when" value="$EXP[POVIL_SlotKind_5054_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5054" /><param name="when" value="$EXP[POVIL_SlotKind_5054_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5054]" sortorder="$VAR[POVIL_SortOrder_5054]">$VAR[POVIL_Path_5054]</content>
@@ -4209,11 +4227,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5054_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5054).ListItemPosition(-1).Label) + !Container(5054).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5054).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5054).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5054).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5054).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -4248,13 +4266,14 @@
 					<control type="group" description="loading">
 						<visible>$EXP[POVIL_Shows_5055_2] + [Container(5055).IsUpdating | [!Container(5055).IsUpdating + Integer.IsGreater(Container(5055).NumItems,1) + [[Integer.IsEqual(Container(5055).CurrentItem,1) + String.IsEqual(Container(5055).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5055).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5055))] | [$EXP[POVIL_Library_5055] + [!String.IsEqual(Container(5055).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5055)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5055).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5055),2)]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5055_2]] + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + String.IsEqual(Window(home).Property(povil.retry.5055),2) + !Container(5055).IsUpdating + !Integer.IsGreater(Container(5055).NumItems,0)</visible>
@@ -4281,10 +4300,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5055_poster]] + Integer.IsEqual(Container(5055).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5055_poster]] + Integer.IsEqual(Container(5055).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5055_poster]] + Integer.IsEqual(Container(5055).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5055_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5055_landscape]] + Integer.IsEqual(Container(5055).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5055_landscape]] + Integer.IsEqual(Container(5055).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5055_landscape]] + Integer.IsEqual(Container(5055).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5055_landscape]] + Integer.IsEqual(Container(5055).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5055_landscape]] + Integer.IsEqual(Container(5055).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5055_landscape]] + Integer.IsEqual(Container(5055).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5055_landscape]] + Integer.IsEqual(Container(5055).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5055" /><param name="when" value="$EXP[POVIL_SlotKind_5055_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5055" /><param name="when" value="$EXP[POVIL_SlotKind_5055_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5055]" sortorder="$VAR[POVIL_SortOrder_5055]">$VAR[POVIL_Path_5055]</content>
@@ -4300,11 +4319,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5055_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5055).ListItemPosition(-1).Label) + !Container(5055).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5055).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5055).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5055).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5055).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -4338,13 +4357,14 @@
 					<control type="group" description="loading">
 						<visible>$EXP[POVIL_Shows_5056_2] + [Container(5056).IsUpdating | [!Container(5056).IsUpdating + Integer.IsGreater(Container(5056).NumItems,1) + [[Integer.IsEqual(Container(5056).CurrentItem,1) + String.IsEqual(Container(5056).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5056).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5056))] | [$EXP[POVIL_Library_5056] + [!String.IsEqual(Container(5056).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5056)) | !String.IsEmpty(Window(home).Property(povil.rtl.reset))]]]] | [!Integer.IsGreater(Container(5056).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5056),2)]]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>[$EXP[POVIL_Shows_5056_2]] + !String.IsEmpty(Window(home).Property(povil.deep.kids)) + String.IsEqual(Window(home).Property(povil.retry.5056),2) + !Container(5056).IsUpdating + !Integer.IsGreater(Container(5056).NumItems,0)</visible>
@@ -4371,10 +4391,10 @@
 						<animation effect="slide" end="678,0" time="0" condition="[$EXP[POVIL_SlotKind_5056_poster]] + Integer.IsEqual(Container(5056).NumItems,5)">Conditional</animation>
 						<animation effect="slide" end="452,0" time="0" condition="[$EXP[POVIL_SlotKind_5056_poster]] + Integer.IsEqual(Container(5056).NumItems,6)">Conditional</animation>
 						<animation effect="slide" end="226,0" time="0" condition="[$EXP[POVIL_SlotKind_5056_poster]] + Integer.IsEqual(Container(5056).NumItems,7)">Conditional</animation>
-						<animation effect="slide" end="280,0" time="0" condition="$EXP[POVIL_SlotKind_5056_landscape]">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="[$EXP[POVIL_SlotKind_5056_landscape]] + Integer.IsEqual(Container(5056).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="[$EXP[POVIL_SlotKind_5056_landscape]] + Integer.IsEqual(Container(5056).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="[$EXP[POVIL_SlotKind_5056_landscape]] + Integer.IsEqual(Container(5056).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="[$EXP[POVIL_SlotKind_5056_landscape]] + Integer.IsEqual(Container(5056).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="[$EXP[POVIL_SlotKind_5056_landscape]] + Integer.IsEqual(Container(5056).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="[$EXP[POVIL_SlotKind_5056_landscape]] + Integer.IsEqual(Container(5056).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="[$EXP[POVIL_SlotKind_5056_landscape]] + Integer.IsEqual(Container(5056).NumItems,4)">Conditional</animation>
 						<include content="POVIL_SlotItem_poster"><param name="id" value="5056" /><param name="when" value="$EXP[POVIL_SlotKind_5056_poster]" /></include>
 						<include content="POVIL_SlotItem_landscape"><param name="id" value="5056" /><param name="when" value="$EXP[POVIL_SlotKind_5056_landscape]" /></include>
 						<content target="videos" sortby="$VAR[POVIL_SortBy_5056]" sortorder="$VAR[POVIL_SortOrder_5056]">$VAR[POVIL_Path_5056]</content>
@@ -4390,11 +4410,11 @@
 					</control>
 					<control type="group"><visible>$EXP[POVIL_SlotKind_5056_landscape]</visible>
 						<control type="group" description="peek">
-							<left>-50</left><top>62</top>
+							<left>-310</left><top>62</top>
 							<visible>!String.IsEmpty(Container(5056).ListItemPosition(-1).Label) + !Container(5056).IsUpdating</visible>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5056).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-							<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5056).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5056).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+							<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5056).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 						</control>
 					</control>
 				</control>
@@ -5413,20 +5433,21 @@
 					<control type="group" description="loading">
 						<visible>Container(5092).IsUpdating | [!Container(5092).IsUpdating + Integer.IsGreater(Container(5092).NumItems,1) + Integer.IsEqual(Container(5092).CurrentItem,1) + String.IsEqual(Container(5092).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5092).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5092))] | [!Integer.IsGreater(Container(5092).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5092),2)]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>!String.IsEmpty(Window(home).Property(povil.deep.hub)) + String.IsEqual(Window(home).Property(povil.retry.5092),2) + !Container(5092).IsUpdating + !Integer.IsGreater(Container(5092).NumItems,0)</visible>
 						<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 					</control>
 					<control type="list" id="5092">
-						<left>290</left><top>40</top><width>1570</width><height>300</height>
+						<left>10</left><top>40</top><width>1852</width><height>300</height>
 						<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 						<scrolltime tween="cubic" easing="out">260</scrolltime>
 						<onup condition="Integer.IsGreater(Container(5091).NumItems,0)">5091</onup>
@@ -5443,18 +5464,19 @@
 						<ondown condition="!Integer.IsGreater(Container(5093).NumItems,0) + !Integer.IsGreater(Container(5094).NumItems,0) + !Integer.IsGreater(Container(5095).NumItems,0) + !Integer.IsGreater(Container(5096).NumItems,0) + !Integer.IsGreater(Container(5097).NumItems,0) + Integer.IsGreater(Container(5098).NumItems,0)">5098</ondown>
 						<ondown condition="!Integer.IsGreater(Container(5093).NumItems,0) + !Integer.IsGreater(Container(5094).NumItems,0) + !Integer.IsGreater(Container(5095).NumItems,0) + !Integer.IsGreater(Container(5096).NumItems,0) + !Integer.IsGreater(Container(5097).NumItems,0) + !Integer.IsGreater(Container(5098).NumItems,0) + Integer.IsGreater(Container(5099).NumItems,0)">5099</ondown>
 						<animation effect="fade" start="100" end="0" time="0" condition="!Container(5092).IsUpdating + Integer.IsGreater(Container(5092).NumItems,1) + Integer.IsEqual(Container(5092).CurrentItem,1) + String.IsEqual(Container(5092).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5092).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5092))">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5092).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5092).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5092).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="Integer.IsEqual(Container(5092).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="Integer.IsEqual(Container(5092).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="Integer.IsEqual(Container(5092).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="Integer.IsEqual(Container(5092).NumItems,4)">Conditional</animation>
 						<include content="POVIL_Item_landscape"><param name="id" value="5092" /></include>
 						<content target="videos" sortby="size">$VAR[POVIL_Path_5092]</content>
 					</control>
 					<control type="group" description="peek">
-						<left>-50</left><top>62</top>
+						<left>-310</left><top>62</top>
 						<visible>!String.IsEmpty(Container(5092).ListItemPosition(-1).Label) + !Container(5092).IsUpdating</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5092).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5092).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5092).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5092).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
 				<control type="group" description="$VAR[POVIL_HubTitle_2]">
@@ -5531,20 +5553,21 @@
 					<control type="group" description="loading">
 						<visible>Container(5094).IsUpdating | [!Container(5094).IsUpdating + Integer.IsGreater(Container(5094).NumItems,1) + Integer.IsEqual(Container(5094).CurrentItem,1) + String.IsEqual(Container(5094).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5094).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5094))] | [!Integer.IsGreater(Container(5094).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5094),2)]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.retry.5094),2) + !Container(5094).IsUpdating + !Integer.IsGreater(Container(5094).NumItems,0)</visible>
 						<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 					</control>
 					<control type="list" id="5094">
-						<left>290</left><top>40</top><width>1570</width><height>300</height>
+						<left>10</left><top>40</top><width>1852</width><height>300</height>
 						<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 						<scrolltime tween="cubic" easing="out">260</scrolltime>
 						<onup condition="Integer.IsGreater(Container(5093).NumItems,0)">5093</onup>
@@ -5561,18 +5584,19 @@
 						<ondown condition="!Integer.IsGreater(Container(5095).NumItems,0) + !Integer.IsGreater(Container(5096).NumItems,0) + !Integer.IsGreater(Container(5097).NumItems,0) + Integer.IsGreater(Container(5098).NumItems,0)">5098</ondown>
 						<ondown condition="!Integer.IsGreater(Container(5095).NumItems,0) + !Integer.IsGreater(Container(5096).NumItems,0) + !Integer.IsGreater(Container(5097).NumItems,0) + !Integer.IsGreater(Container(5098).NumItems,0) + Integer.IsGreater(Container(5099).NumItems,0)">5099</ondown>
 						<animation effect="fade" start="100" end="0" time="0" condition="!Container(5094).IsUpdating + Integer.IsGreater(Container(5094).NumItems,1) + Integer.IsEqual(Container(5094).CurrentItem,1) + String.IsEqual(Container(5094).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5094).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5094))">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5094).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5094).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5094).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="Integer.IsEqual(Container(5094).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="Integer.IsEqual(Container(5094).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="Integer.IsEqual(Container(5094).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="Integer.IsEqual(Container(5094).NumItems,4)">Conditional</animation>
 						<include content="POVIL_Item_landscape"><param name="id" value="5094" /></include>
 						<content target="videos" sortby="size">$VAR[POVIL_Path_5094]</content>
 					</control>
 					<control type="group" description="peek">
-						<left>-50</left><top>62</top>
+						<left>-310</left><top>62</top>
 						<visible>!String.IsEmpty(Container(5094).ListItemPosition(-1).Label) + !Container(5094).IsUpdating</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5094).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5094).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5094).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5094).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
 				<control type="group" description="$VAR[POVIL_HubTitle_4]">
@@ -5649,20 +5673,21 @@
 					<control type="group" description="loading">
 						<visible>Container(5096).IsUpdating | [!Container(5096).IsUpdating + Integer.IsGreater(Container(5096).NumItems,1) + Integer.IsEqual(Container(5096).CurrentItem,1) + String.IsEqual(Container(5096).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5096).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5096))] | [!Integer.IsGreater(Container(5096).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5096),2)]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.retry.5096),2) + !Container(5096).IsUpdating + !Integer.IsGreater(Container(5096).NumItems,0)</visible>
 						<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 					</control>
 					<control type="list" id="5096">
-						<left>290</left><top>40</top><width>1570</width><height>300</height>
+						<left>10</left><top>40</top><width>1852</width><height>300</height>
 						<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 						<scrolltime tween="cubic" easing="out">260</scrolltime>
 						<onup condition="Integer.IsGreater(Container(5095).NumItems,0)">5095</onup>
@@ -5679,18 +5704,19 @@
 						<ondown condition="!Integer.IsGreater(Container(5097).NumItems,0) + Integer.IsGreater(Container(5098).NumItems,0)">5098</ondown>
 						<ondown condition="!Integer.IsGreater(Container(5097).NumItems,0) + !Integer.IsGreater(Container(5098).NumItems,0) + Integer.IsGreater(Container(5099).NumItems,0)">5099</ondown>
 						<animation effect="fade" start="100" end="0" time="0" condition="!Container(5096).IsUpdating + Integer.IsGreater(Container(5096).NumItems,1) + Integer.IsEqual(Container(5096).CurrentItem,1) + String.IsEqual(Container(5096).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5096).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5096))">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5096).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5096).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5096).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="Integer.IsEqual(Container(5096).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="Integer.IsEqual(Container(5096).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="Integer.IsEqual(Container(5096).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="Integer.IsEqual(Container(5096).NumItems,4)">Conditional</animation>
 						<include content="POVIL_Item_landscape"><param name="id" value="5096" /></include>
 						<content target="videos" sortby="size">$VAR[POVIL_Path_5096]</content>
 					</control>
 					<control type="group" description="peek">
-						<left>-50</left><top>62</top>
+						<left>-310</left><top>62</top>
 						<visible>!String.IsEmpty(Container(5096).ListItemPosition(-1).Label) + !Container(5096).IsUpdating</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5096).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5096).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5096).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5096).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
 				<control type="group" description="$VAR[POVIL_HubTitle_6]">
@@ -5767,20 +5793,21 @@
 					<control type="group" description="loading">
 						<visible>Container(5098).IsUpdating | [!Container(5098).IsUpdating + Integer.IsGreater(Container(5098).NumItems,1) + Integer.IsEqual(Container(5098).CurrentItem,1) + String.IsEqual(Container(5098).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5098).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5098))] | [!Integer.IsGreater(Container(5098).NumItems,0) + !String.IsEqual(Window(home).Property(povil.retry.5098),2)]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="label" description="nothing here">
-						<left>90</left><top>131</top><width>1740</width><height>60</height>
+						<left>90</left><top>125</top><width>1740</width><height>60</height>
 						<font>povil_meta</font><textcolor>povil_faint</textcolor><align>right</align><aligny>center</aligny>
 						<label>אין כרגע מה להציג כאן</label>
 						<visible>!String.IsEmpty(Window(home).Property(povil.far.hub)) + String.IsEqual(Window(home).Property(povil.retry.5098),2) + !Container(5098).IsUpdating + !Integer.IsGreater(Container(5098).NumItems,0)</visible>
 						<animation effect="fade" start="0" end="100" time="300">Visible</animation>
 					</control>
 					<control type="list" id="5098">
-						<left>290</left><top>40</top><width>1570</width><height>300</height>
+						<left>10</left><top>40</top><width>1852</width><height>300</height>
 						<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 						<scrolltime tween="cubic" easing="out">260</scrolltime>
 						<onup condition="Integer.IsGreater(Container(5097).NumItems,0)">5097</onup>
@@ -5797,18 +5824,19 @@
 						<onfocus>SetProperty(povil.focus,5098,home)</onfocus>
 						<ondown condition="Integer.IsGreater(Container(5099).NumItems,0)">5099</ondown>
 						<animation effect="fade" start="100" end="0" time="0" condition="!Container(5098).IsUpdating + Integer.IsGreater(Container(5098).NumItems,1) + Integer.IsEqual(Container(5098).CurrentItem,1) + String.IsEqual(Container(5098).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5098).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5098))">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5098).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5098).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5098).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="Integer.IsEqual(Container(5098).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="Integer.IsEqual(Container(5098).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="Integer.IsEqual(Container(5098).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="Integer.IsEqual(Container(5098).NumItems,4)">Conditional</animation>
 						<include content="POVIL_Item_landscape"><param name="id" value="5098" /></include>
 						<content target="videos" sortby="size">$VAR[POVIL_Path_5098]</content>
 					</control>
 					<control type="group" description="peek">
-						<left>-50</left><top>62</top>
+						<left>-310</left><top>62</top>
 						<visible>!String.IsEmpty(Container(5098).ListItemPosition(-1).Label) + !Container(5098).IsUpdating</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5098).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5098).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5098).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5098).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
 				<control type="group" description="$VAR[POVIL_HubTitle_8]">
@@ -5891,13 +5919,14 @@
 					<control type="group" description="loading">
 						<visible>Container(5101).IsUpdating | [!Container(5101).IsUpdating + Integer.IsGreater(Container(5101).NumItems,1) + Integer.IsEqual(Container(5101).CurrentItem,1) + String.IsEqual(Container(5101).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5101).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5101))]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="list" id="5101">
-						<left>290</left><top>40</top><width>1570</width><height>300</height>
+						<left>10</left><top>40</top><width>1852</width><height>300</height>
 						<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 						<scrolltime tween="cubic" easing="out">260</scrolltime>
 						<onup condition="true">9220</onup>
@@ -5907,18 +5936,19 @@
 						<ondown condition="Integer.IsGreater(Container(5102).NumItems,0)">5102</ondown>
 						<ondown condition="!Integer.IsGreater(Container(5102).NumItems,0) + Integer.IsGreater(Container(5103).NumItems,0)">5103</ondown>
 						<animation effect="fade" start="100" end="0" time="0" condition="!Container(5101).IsUpdating + Integer.IsGreater(Container(5101).NumItems,1) + Integer.IsEqual(Container(5101).CurrentItem,1) + String.IsEqual(Container(5101).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5101).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5101))">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5101).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5101).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5101).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="Integer.IsEqual(Container(5101).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="Integer.IsEqual(Container(5101).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="Integer.IsEqual(Container(5101).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="Integer.IsEqual(Container(5101).NumItems,4)">Conditional</animation>
 						<include content="POVIL_Item_landscape"><param name="id" value="5101" /></include>
 						<content target="videos">$VAR[POVIL_Path_5101]</content>
 					</control>
 					<control type="group" description="peek">
-						<left>-50</left><top>62</top>
+						<left>-310</left><top>62</top>
 						<visible>!String.IsEmpty(Container(5101).ListItemPosition(-1).Label) + !Container(5101).IsUpdating</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5101).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5101).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5101).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5101).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
 				<control type="group" description="סרטים שהתחלתם">
@@ -5933,13 +5963,14 @@
 					<control type="group" description="loading">
 						<visible>Container(5102).IsUpdating | [!Container(5102).IsUpdating + Integer.IsGreater(Container(5102).NumItems,1) + Integer.IsEqual(Container(5102).CurrentItem,1) + String.IsEqual(Container(5102).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5102).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5102))]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="list" id="5102">
-						<left>290</left><top>40</top><width>1570</width><height>300</height>
+						<left>10</left><top>40</top><width>1852</width><height>300</height>
 						<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 						<scrolltime tween="cubic" easing="out">260</scrolltime>
 						<onup condition="Integer.IsGreater(Container(5101).NumItems,0)">5101</onup>
@@ -5949,18 +5980,19 @@
 						<onfocus>SetProperty(povil.focus,5102,home)</onfocus>
 						<ondown condition="Integer.IsGreater(Container(5103).NumItems,0)">5103</ondown>
 						<animation effect="fade" start="100" end="0" time="0" condition="!Container(5102).IsUpdating + Integer.IsGreater(Container(5102).NumItems,1) + Integer.IsEqual(Container(5102).CurrentItem,1) + String.IsEqual(Container(5102).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5102).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5102))">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5102).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5102).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5102).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="Integer.IsEqual(Container(5102).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="Integer.IsEqual(Container(5102).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="Integer.IsEqual(Container(5102).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="Integer.IsEqual(Container(5102).NumItems,4)">Conditional</animation>
 						<include content="POVIL_Item_landscape"><param name="id" value="5102" /></include>
 						<content target="videos">$VAR[POVIL_Path_5102]</content>
 					</control>
 					<control type="group" description="peek">
-						<left>-50</left><top>62</top>
+						<left>-310</left><top>62</top>
 						<visible>!String.IsEmpty(Container(5102).ListItemPosition(-1).Label) + !Container(5102).IsUpdating</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5102).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5102).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5102).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5102).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
 				<control type="group" description="פרקים שהתחלתם">
@@ -5974,13 +6006,14 @@
 					<control type="group" description="loading">
 						<visible>Container(5103).IsUpdating | [!Container(5103).IsUpdating + Integer.IsGreater(Container(5103).NumItems,1) + Integer.IsEqual(Container(5103).CurrentItem,1) + String.IsEqual(Container(5103).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5103).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5103))]</visible>
 						<animation effect="fade" time="200">Visible</animation><animation effect="fade" time="200">Hidden</animation>
-						<control type="image"><left>332</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>714</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1096</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>1478</left><top>62</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>52</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>414</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>776</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1138</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>1500</left><top>62</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
 					</control>
 					<control type="list" id="5103">
-						<left>290</left><top>40</top><width>1570</width><height>300</height>
+						<left>10</left><top>40</top><width>1852</width><height>300</height>
 						<orientation>horizontal</orientation><preloaditems>2</preloaditems>
 						<scrolltime tween="cubic" easing="out">260</scrolltime>
 						<onup condition="Integer.IsGreater(Container(5102).NumItems,0)">5102</onup>
@@ -5990,18 +6023,19 @@
 						<onfocus>SetProperty(povil.tab,continue,home)</onfocus>
 						<onfocus>SetProperty(povil.focus,5103,home)</onfocus>
 						<animation effect="fade" start="100" end="0" time="0" condition="!Container(5103).IsUpdating + Integer.IsGreater(Container(5103).NumItems,1) + Integer.IsEqual(Container(5103).CurrentItem,1) + String.IsEqual(Container(5103).ListItemAbsolute(0).Property(povil_rtl),1) + !String.IsEqual(Container(5103).ListItemAbsolute(0).Label,Window(home).Property(povil.rtl.5103))">Conditional</animation>
-						<animation effect="slide" end="1146,0" time="0" condition="Integer.IsEqual(Container(5103).NumItems,1)">Conditional</animation>
-						<animation effect="slide" end="764,0" time="0" condition="Integer.IsEqual(Container(5103).NumItems,2)">Conditional</animation>
-						<animation effect="slide" end="382,0" time="0" condition="Integer.IsEqual(Container(5103).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="1448,0" time="0" condition="Integer.IsEqual(Container(5103).NumItems,1)">Conditional</animation>
+						<animation effect="slide" end="1086,0" time="0" condition="Integer.IsEqual(Container(5103).NumItems,2)">Conditional</animation>
+						<animation effect="slide" end="724,0" time="0" condition="Integer.IsEqual(Container(5103).NumItems,3)">Conditional</animation>
+						<animation effect="slide" end="362,0" time="0" condition="Integer.IsEqual(Container(5103).NumItems,4)">Conditional</animation>
 						<include content="POVIL_Item_landscape"><param name="id" value="5103" /></include>
 						<content target="videos">$VAR[POVIL_Path_5103]</content>
 					</control>
 					<control type="group" description="peek">
-						<left>-50</left><top>62</top>
+						<left>-310</left><top>62</top>
 						<visible>!String.IsEmpty(Container(5103).ListItemPosition(-1).Label) + !Container(5103).IsUpdating</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5103).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5103).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5103).ListItemPosition(-1).Art(thumb)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="66FFFFFF">$INFO[Container(5103).ListItemPosition(-1).Art(fanart)]</texture><aspectratio scalediffuse="false">scale</aspectratio></control>
 					</control>
 				</control>
 			</control>

@@ -73,7 +73,7 @@
 							<posy>0</posy>
 							<height>78</height>
 							<width>1800</width>
-							<texture border="3">list/ListNF.png</texture>
+							<texture border="3">img/ListNF.png</texture>
 						</control>
 						<control type="label" description="Timer label">
 							<selectedcolor>$VAR[HighlightColor]</selectedcolor>

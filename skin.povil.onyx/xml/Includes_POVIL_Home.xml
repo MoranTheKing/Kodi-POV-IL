@@ -3795,47 +3795,47 @@
 	<include name="POVIL_Item_landscape">
 		<param name="id" />
 		<definition>
-			<itemlayout width="382" height="300">
+			<itemlayout width="362" height="300">
 				<control type="group">
 					<left>42</left><top>0</top>
 					<control type="image">
-						<left>-30</left><top>0</top><width>412</width><height>258</height>
+						<left>-30</left><top>0</top><width>390</width><height>246</height>
 						<texture border="54">povil/shadow.png</texture>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture>
 					</control>
 					<control type="label">
-						<left>16</left><top>22</top><width>320</width><height>198</height>
+						<left>16</left><top>22</top><width>298</width><height>186</height>
 						<font>povil_small</font><align>center</align><aligny>center</aligny><wrapmultiline>true</wrapmultiline>
 						<textcolor>povil_dim</textcolor><label>$INFO[ListItem.Label]</label>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="4DFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">scale</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="FFFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">keep</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1AD9B77E">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1AD9B77E">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>ListItem.IsParentFolder</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
 					</control>
 					<control type="progress">
-						<left>14</left><top>202</top><width>324</width><height>6</height>
+						<left>14</left><top>190</top><width>302</width><height>6</height>
 						<texturebg border="3" colordiffuse="99000000">povil/progress.png</texturebg>
 						<midtexture border="3" colordiffuse="povil_gold">povil/progress.png</midtexture>
 						<info>ListItem.PercentPlayed</info>
@@ -3848,74 +3848,74 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>242</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
 						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
-						<left>0</left><top>232</top><width>352</width><height>34</height>
+						<left>0</left><top>220</top><width>330</width><height>34</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_dim</textcolor><label>$VAR[POVIL_ItemTitle]</label>
 					</control>
 					<control type="label">
-						<left>0</left><top>266</top><width>352</width><height>28</height>
+						<left>0</left><top>254</top><width>330</width><height>28</height>
 						<font>povil_small</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_faint</textcolor><label>$VAR[POVIL_ItemSubtitle]</label>
 					</control>
 				</control>
 			</itemlayout>
-			<focusedlayout width="382" height="300">
+			<focusedlayout width="362" height="300">
 				<control type="group">
 					<left>42</left><top>0</top>
-					<animation effect="zoom" start="100" end="105" center="218,121" time="240" tween="cubic" easing="out" condition="Control.HasFocus($PARAM[id])">Conditional</animation>
+					<animation effect="zoom" start="100" end="105" center="207,115" time="240" tween="cubic" easing="out" condition="Control.HasFocus($PARAM[id])">Conditional</animation>
 					<control type="image">
-						<left>-30</left><top>0</top><width>412</width><height>258</height>
+						<left>-30</left><top>0</top><width>390</width><height>246</height>
 						<texture border="54">povil/shadow.png</texture>
 					</control>
 					<control type="image">
-						<left>-36</left><top>-14</top><width>424</width><height>270</height>
+						<left>-36</left><top>-14</top><width>402</width><height>258</height>
 						<texture border="60" colordiffuse="99D9B77E">povil/focus_glow.png</texture>
 						<visible>Control.HasFocus($PARAM[id])</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture>
 					</control>
 					<control type="label">
-						<left>16</left><top>22</top><width>320</width><height>198</height>
+						<left>16</left><top>22</top><width>298</width><height>186</height>
 						<font>povil_small</font><align>center</align><aligny>center</aligny><wrapmultiline>true</wrapmultiline>
 						<textcolor>povil_dim</textcolor><label>$INFO[ListItem.Label]</label>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="4DFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">scale</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="FFFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">keep</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="33D9B77E">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="33D9B77E">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>ListItem.IsParentFolder</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="33FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="33FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
 					</control>
 					<control type="image">
-						<left>-6</left><top>16</top><width>364</width><height>210</height>
+						<left>-6</left><top>16</top><width>342</width><height>198</height>
 						<texture border="30" colordiffuse="povil_gold">povil/focus_ring.png</texture>
 						<visible>Control.HasFocus($PARAM[id])</visible>
 					</control>
 					<control type="progress">
-						<left>14</left><top>202</top><width>324</width><height>6</height>
+						<left>14</left><top>190</top><width>302</width><height>6</height>
 						<texturebg border="3" colordiffuse="99000000">povil/progress.png</texturebg>
 						<midtexture border="3" colordiffuse="povil_gold">povil/progress.png</midtexture>
 						<info>ListItem.PercentPlayed</info>
@@ -3928,17 +3928,17 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>242</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
 						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
-						<left>0</left><top>232</top><width>352</width><height>34</height>
+						<left>0</left><top>220</top><width>330</width><height>34</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_white</textcolor><label>$VAR[POVIL_ItemTitle]</label>
 					</control>
 					<control type="label">
-						<left>0</left><top>266</top><width>352</width><height>28</height>
+						<left>0</left><top>254</top><width>330</width><height>28</height>
 						<font>povil_small</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_faint</textcolor><label>$VAR[POVIL_ItemSubtitle]</label>
 					</control>
@@ -4317,47 +4317,47 @@
 	<include name="POVIL_ViewItem_landscape">
 		<param name="id" />
 		<definition>
-			<itemlayout width="382" height="300" condition="Container.Content(episodes) | Container.Content(videos) | Container.Content(musicvideos)">
+			<itemlayout width="362" height="300" condition="Container.Content(episodes) | Container.Content(videos) | Container.Content(musicvideos)">
 				<control type="group">
 					<left>42</left><top>0</top>
 					<control type="image">
-						<left>-30</left><top>0</top><width>412</width><height>258</height>
+						<left>-30</left><top>0</top><width>390</width><height>246</height>
 						<texture border="54">povil/shadow.png</texture>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture>
 					</control>
 					<control type="label">
-						<left>16</left><top>22</top><width>320</width><height>198</height>
+						<left>16</left><top>22</top><width>298</width><height>186</height>
 						<font>povil_small</font><align>center</align><aligny>center</aligny><wrapmultiline>true</wrapmultiline>
 						<textcolor>povil_dim</textcolor><label>$INFO[ListItem.Label]</label>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="4DFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">scale</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="FFFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">keep</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1AD9B77E">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1AD9B77E">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>ListItem.IsParentFolder</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
 					</control>
 					<control type="progress">
-						<left>14</left><top>202</top><width>324</width><height>6</height>
+						<left>14</left><top>190</top><width>302</width><height>6</height>
 						<texturebg border="3" colordiffuse="99000000">povil/progress.png</texturebg>
 						<midtexture border="3" colordiffuse="povil_gold">povil/progress.png</midtexture>
 						<info>ListItem.PercentPlayed</info>
@@ -4370,74 +4370,74 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>242</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
 						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
-						<left>0</left><top>232</top><width>352</width><height>34</height>
+						<left>0</left><top>220</top><width>330</width><height>34</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_dim</textcolor><label>$VAR[POVIL_ItemTitle]</label>
 					</control>
 					<control type="label">
-						<left>0</left><top>266</top><width>352</width><height>28</height>
+						<left>0</left><top>254</top><width>330</width><height>28</height>
 						<font>povil_small</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_faint</textcolor><label>$VAR[POVIL_ItemSubtitle]</label>
 					</control>
 				</control>
 			</itemlayout>
-			<focusedlayout width="382" height="300" condition="Container.Content(episodes) | Container.Content(videos) | Container.Content(musicvideos)">
+			<focusedlayout width="362" height="300" condition="Container.Content(episodes) | Container.Content(videos) | Container.Content(musicvideos)">
 				<control type="group">
 					<left>42</left><top>0</top>
-					<animation effect="zoom" start="100" end="105" center="218,121" time="240" tween="cubic" easing="out" condition="Control.HasFocus($PARAM[id])">Conditional</animation>
+					<animation effect="zoom" start="100" end="105" center="207,115" time="240" tween="cubic" easing="out" condition="Control.HasFocus($PARAM[id])">Conditional</animation>
 					<control type="image">
-						<left>-30</left><top>0</top><width>412</width><height>258</height>
+						<left>-30</left><top>0</top><width>390</width><height>246</height>
 						<texture border="54">povil/shadow.png</texture>
 					</control>
 					<control type="image">
-						<left>-36</left><top>-14</top><width>424</width><height>270</height>
+						<left>-36</left><top>-14</top><width>402</width><height>258</height>
 						<texture border="60" colordiffuse="99D9B77E">povil/focus_glow.png</texture>
 						<visible>Control.HasFocus($PARAM[id])</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture>
 					</control>
 					<control type="label">
-						<left>16</left><top>22</top><width>320</width><height>198</height>
+						<left>16</left><top>22</top><width>298</width><height>186</height>
 						<font>povil_small</font><align>center</align><aligny>center</aligny><wrapmultiline>true</wrapmultiline>
 						<textcolor>povil_dim</textcolor><label>$INFO[ListItem.Label]</label>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="4DFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">scale</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="FFFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">keep</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="33D9B77E">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="33D9B77E">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>ListItem.IsParentFolder</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="33FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="33FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
 					</control>
 					<control type="image">
-						<left>-6</left><top>16</top><width>364</width><height>210</height>
+						<left>-6</left><top>16</top><width>342</width><height>198</height>
 						<texture border="30" colordiffuse="povil_gold">povil/focus_ring.png</texture>
 						<visible>Control.HasFocus($PARAM[id])</visible>
 					</control>
 					<control type="progress">
-						<left>14</left><top>202</top><width>324</width><height>6</height>
+						<left>14</left><top>190</top><width>302</width><height>6</height>
 						<texturebg border="3" colordiffuse="99000000">povil/progress.png</texturebg>
 						<midtexture border="3" colordiffuse="povil_gold">povil/progress.png</midtexture>
 						<info>ListItem.PercentPlayed</info>
@@ -4450,17 +4450,17 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>242</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
 						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
-						<left>0</left><top>232</top><width>352</width><height>34</height>
+						<left>0</left><top>220</top><width>330</width><height>34</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_white</textcolor><label>$VAR[POVIL_ItemTitle]</label>
 					</control>
 					<control type="label">
-						<left>0</left><top>266</top><width>352</width><height>28</height>
+						<left>0</left><top>254</top><width>330</width><height>28</height>
 						<font>povil_small</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_faint</textcolor><label>$VAR[POVIL_ItemSubtitle]</label>
 					</control>
@@ -4559,47 +4559,47 @@
 	<include name="POVIL_ViewItem_episodes">
 		<param name="id" />
 		<definition>
-			<itemlayout width="382" height="300">
+			<itemlayout width="362" height="300">
 				<control type="group">
 					<left>42</left><top>0</top>
 					<control type="image">
-						<left>-30</left><top>0</top><width>412</width><height>258</height>
+						<left>-30</left><top>0</top><width>390</width><height>246</height>
 						<texture border="54">povil/shadow.png</texture>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture>
 					</control>
 					<control type="label">
-						<left>16</left><top>22</top><width>320</width><height>198</height>
+						<left>16</left><top>22</top><width>298</width><height>186</height>
 						<font>povil_small</font><align>center</align><aligny>center</aligny><wrapmultiline>true</wrapmultiline>
 						<textcolor>povil_dim</textcolor><label>$INFO[ListItem.Label]</label>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="4DFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">scale</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="FFFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">keep</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1AD9B77E">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1AD9B77E">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>ListItem.IsParentFolder</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
 					</control>
 					<control type="progress">
-						<left>14</left><top>202</top><width>324</width><height>6</height>
+						<left>14</left><top>190</top><width>302</width><height>6</height>
 						<texturebg border="3" colordiffuse="99000000">povil/progress.png</texturebg>
 						<midtexture border="3" colordiffuse="povil_gold">povil/progress.png</midtexture>
 						<info>ListItem.PercentPlayed</info>
@@ -4612,74 +4612,74 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>242</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
 						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
-						<left>0</left><top>232</top><width>352</width><height>34</height>
+						<left>0</left><top>220</top><width>330</width><height>34</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_dim</textcolor><label>$VAR[POVIL_ItemEpisodeTitle]</label>
 					</control>
 					<control type="label">
-						<left>0</left><top>266</top><width>352</width><height>28</height>
+						<left>0</left><top>254</top><width>330</width><height>28</height>
 						<font>povil_small</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_faint</textcolor><label>$VAR[POVIL_ItemEpisodeNumber]</label>
 					</control>
 				</control>
 			</itemlayout>
-			<focusedlayout width="382" height="300">
+			<focusedlayout width="362" height="300">
 				<control type="group">
 					<left>42</left><top>0</top>
-					<animation effect="zoom" start="100" end="105" center="218,121" time="240" tween="cubic" easing="out" condition="Control.HasFocus($PARAM[id])">Conditional</animation>
+					<animation effect="zoom" start="100" end="105" center="207,115" time="240" tween="cubic" easing="out" condition="Control.HasFocus($PARAM[id])">Conditional</animation>
 					<control type="image">
-						<left>-30</left><top>0</top><width>412</width><height>258</height>
+						<left>-30</left><top>0</top><width>390</width><height>246</height>
 						<texture border="54">povil/shadow.png</texture>
 					</control>
 					<control type="image">
-						<left>-36</left><top>-14</top><width>424</width><height>270</height>
+						<left>-36</left><top>-14</top><width>402</width><height>258</height>
 						<texture border="60" colordiffuse="99D9B77E">povil/focus_glow.png</texture>
 						<visible>Control.HasFocus($PARAM[id])</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture>
 					</control>
 					<control type="label">
-						<left>16</left><top>22</top><width>320</width><height>198</height>
+						<left>16</left><top>22</top><width>298</width><height>186</height>
 						<font>povil_small</font><align>center</align><aligny>center</aligny><wrapmultiline>true</wrapmultiline>
 						<textcolor>povil_dim</textcolor><label>$INFO[ListItem.Label]</label>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="4DFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">scale</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="FFFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">keep</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="33D9B77E">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="33D9B77E">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>ListItem.IsParentFolder</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="33FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="33FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
 					</control>
 					<control type="image">
-						<left>-6</left><top>16</top><width>364</width><height>210</height>
+						<left>-6</left><top>16</top><width>342</width><height>198</height>
 						<texture border="30" colordiffuse="povil_gold">povil/focus_ring.png</texture>
 						<visible>Control.HasFocus($PARAM[id])</visible>
 					</control>
 					<control type="progress">
-						<left>14</left><top>202</top><width>324</width><height>6</height>
+						<left>14</left><top>190</top><width>302</width><height>6</height>
 						<texturebg border="3" colordiffuse="99000000">povil/progress.png</texturebg>
 						<midtexture border="3" colordiffuse="povil_gold">povil/progress.png</midtexture>
 						<info>ListItem.PercentPlayed</info>
@@ -4692,17 +4692,17 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>242</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
 						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
-						<left>0</left><top>232</top><width>352</width><height>34</height>
+						<left>0</left><top>220</top><width>330</width><height>34</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_white</textcolor><label>$VAR[POVIL_ItemEpisodeTitle]</label>
 					</control>
 					<control type="label">
-						<left>0</left><top>266</top><width>352</width><height>28</height>
+						<left>0</left><top>254</top><width>330</width><height>28</height>
 						<font>povil_small</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_faint</textcolor><label>$VAR[POVIL_ItemEpisodeNumber]</label>
 					</control>
@@ -4849,47 +4849,47 @@
 		<param name="id" />
 		<param name="when" />
 		<definition>
-			<itemlayout width="382" height="300" condition="$PARAM[when]">
+			<itemlayout width="362" height="300" condition="$PARAM[when]">
 				<control type="group">
 					<left>42</left><top>0</top>
 					<control type="image">
-						<left>-30</left><top>0</top><width>412</width><height>258</height>
+						<left>-30</left><top>0</top><width>390</width><height>246</height>
 						<texture border="54">povil/shadow.png</texture>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture>
 					</control>
 					<control type="label">
-						<left>16</left><top>22</top><width>320</width><height>198</height>
+						<left>16</left><top>22</top><width>298</width><height>186</height>
 						<font>povil_small</font><align>center</align><aligny>center</aligny><wrapmultiline>true</wrapmultiline>
 						<textcolor>povil_dim</textcolor><label>$INFO[ListItem.Label]</label>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="4DFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">scale</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="FFFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">keep</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="1AD9B77E">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="1AD9B77E">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>ListItem.IsParentFolder</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="14FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
 					</control>
 					<control type="progress">
-						<left>14</left><top>202</top><width>324</width><height>6</height>
+						<left>14</left><top>190</top><width>302</width><height>6</height>
 						<texturebg border="3" colordiffuse="99000000">povil/progress.png</texturebg>
 						<midtexture border="3" colordiffuse="povil_gold">povil/progress.png</midtexture>
 						<info>ListItem.PercentPlayed</info>
@@ -4902,74 +4902,74 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>242</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
 						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
-						<left>0</left><top>232</top><width>352</width><height>34</height>
+						<left>0</left><top>220</top><width>330</width><height>34</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_dim</textcolor><label>$VAR[POVIL_ItemTitle]</label>
 					</control>
 					<control type="label">
-						<left>0</left><top>266</top><width>352</width><height>28</height>
+						<left>0</left><top>254</top><width>330</width><height>28</height>
 						<font>povil_small</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_faint</textcolor><label>$VAR[POVIL_ItemSubtitle]</label>
 					</control>
 				</control>
 			</itemlayout>
-			<focusedlayout width="382" height="300" condition="$PARAM[when]">
+			<focusedlayout width="362" height="300" condition="$PARAM[when]">
 				<control type="group">
 					<left>42</left><top>0</top>
-					<animation effect="zoom" start="100" end="105" center="218,121" time="240" tween="cubic" easing="out" condition="Control.HasFocus($PARAM[id])">Conditional</animation>
+					<animation effect="zoom" start="100" end="105" center="207,115" time="240" tween="cubic" easing="out" condition="Control.HasFocus($PARAM[id])">Conditional</animation>
 					<control type="image">
-						<left>-30</left><top>0</top><width>412</width><height>258</height>
+						<left>-30</left><top>0</top><width>390</width><height>246</height>
 						<texture border="54">povil/shadow.png</texture>
 					</control>
 					<control type="image">
-						<left>-36</left><top>-14</top><width>424</width><height>270</height>
+						<left>-36</left><top>-14</top><width>402</width><height>258</height>
 						<texture border="60" colordiffuse="99D9B77E">povil/focus_glow.png</texture>
 						<visible>Control.HasFocus($PARAM[id])</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture border="30" colordiffuse="1FFFFFFF">povil/rounded_fill.png</texture>
 					</control>
 					<control type="label">
-						<left>16</left><top>22</top><width>320</width><height>198</height>
+						<left>16</left><top>22</top><width>298</width><height>186</height>
 						<font>povil_small</font><align>center</align><aligny>center</aligny><wrapmultiline>true</wrapmultiline>
 						<textcolor>povil_dim</textcolor><label>$INFO[ListItem.Label]</label>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="4DFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">scale</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="image">
-						<left>0</left><top>22</top><width>352</width><height>198</height>
+						<left>0</left><top>22</top><width>330</width><height>186</height>
 						<texture background="true" diffuse="povil/mask_landscape.png" colordiffuse="FFFFFFFF">$VAR[POVIL_ItemLandscape]</texture>
 						<aspectratio scalediffuse="false">keep</aspectratio>
 						<visible>![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)] + !ListItem.IsParentFolder</visible>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>[String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="33D9B77E">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="33D9B77E">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_gold">povil/osd/rewind.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>עוד</label></control>
 					</control>
 					<control type="group"><left>0</left><top>22</top><visible>ListItem.IsParentFolder</visible>
-						<control type="image"><left>0</left><top>0</top><width>352</width><height>198</height><texture border="30" colordiffuse="33FFFFFF">povil/rounded_fill.png</texture></control>
-						<control type="image"><left>144</left><top>43</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
-						<control type="label"><left>0</left><top>113</top><width>352</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
+						<control type="image"><left>0</left><top>0</top><width>330</width><height>186</height><texture border="30" colordiffuse="33FFFFFF">povil/rounded_fill.png</texture></control>
+						<control type="image"><left>133</left><top>37</top><width>64</width><height>64</height><texture colordiffuse="povil_dim">povil/osd/forward.png</texture></control>
+						<control type="label"><left>0</left><top>107</top><width>330</width><height>44</height><font>povil_row</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>חזרה</label></control>
 					</control>
 					<control type="image">
-						<left>-6</left><top>16</top><width>364</width><height>210</height>
+						<left>-6</left><top>16</top><width>342</width><height>198</height>
 						<texture border="30" colordiffuse="povil_gold">povil/focus_ring.png</texture>
 						<visible>Control.HasFocus($PARAM[id])</visible>
 					</control>
 					<control type="progress">
-						<left>14</left><top>202</top><width>324</width><height>6</height>
+						<left>14</left><top>190</top><width>302</width><height>6</height>
 						<texturebg border="3" colordiffuse="99000000">povil/progress.png</texturebg>
 						<midtexture border="3" colordiffuse="povil_gold">povil/progress.png</midtexture>
 						<info>ListItem.PercentPlayed</info>
@@ -4982,17 +4982,17 @@
 						<visible>Integer.IsGreater(ListItem.PlayCount,0)</visible>
 					</control>
 					<control type="group" description="rating on the picture">
-						<left>264</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
+						<left>242</left><top>32</top><visible>[Integer.IsGreater(ListItem.Rating,0) | !String.IsEmpty(ListItem.Property(povil_avg))] + !ListItem.IsParentFolder + ![String.Contains(ListItem.FolderPath,new_page=) | String.Contains(ListItem.FolderPath,Page&amp;url=)]</visible>
 						<control type="image"><left>0</left><top>0</top><width>78</width><height>34</height><texture>povil/ratings/badge.png</texture></control>
 						<control type="label"><left>33</left><top>0</top><width>36</width><height>34</height><font>povil_badge</font><textcolor>povil_white</textcolor><align>center</align><aligny>center</aligny><label>$VAR[POVIL_ItemAverage]</label></control>
 					</control>
 					<control type="label">
-						<left>0</left><top>232</top><width>352</width><height>34</height>
+						<left>0</left><top>220</top><width>330</width><height>34</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_white</textcolor><label>$VAR[POVIL_ItemTitle]</label>
 					</control>
 					<control type="label">
-						<left>0</left><top>266</top><width>352</width><height>28</height>
+						<left>0</left><top>254</top><width>330</width><height>28</height>
 						<font>povil_small</font><align>right</align><aligny>center</aligny>
 						<textcolor>povil_faint</textcolor><label>$VAR[POVIL_ItemSubtitle]</label>
 					</control>
@@ -5815,7 +5815,7 @@
 		<value condition="!Skin.HasSetting(POVILHideChip_movies_9)">9121</value>
 		<value condition="!Skin.HasSetting(POVILHideChip_movies_10)">9122</value>
 		<value condition="!Skin.HasSetting(POVILHideChip_movies_11)">9123</value>
-		<value condition="System.HasAddon(plugin.video.umbrella) + !Skin.HasSetting(POVILHideChip_movies_12)">9124</value>
+		<value condition="System.HasAddon(plugin.video.umbrella) + !Skin.HasSetting(POVILHideChip_movies_12)">9430</value>
 		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_1_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_1_at),end)]">9242</value>
 		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_2_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_2_at),end)]">9245</value>
 		<value condition="[!String.IsEmpty(Skin.String(POVILChip_movies_3_path)) | !String.IsEmpty(Skin.String(POVILChip_movies_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_movies_3_at),end)]">9248</value>
@@ -5849,7 +5849,7 @@
 		<value condition="!Skin.HasSetting(POVILHideChip_tv_9)">9133</value>
 		<value condition="!Skin.HasSetting(POVILHideChip_tv_10)">9134</value>
 		<value condition="!Skin.HasSetting(POVILHideChip_tv_11)">9135</value>
-		<value condition="System.HasAddon(plugin.video.umbrella) + !Skin.HasSetting(POVILHideChip_tv_12)">9136</value>
+		<value condition="System.HasAddon(plugin.video.umbrella) + !Skin.HasSetting(POVILHideChip_tv_12)">9436</value>
 		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_1_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_1_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_1_at),end)]">9260</value>
 		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_2_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_2_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_2_at),end)]">9263</value>
 		<value condition="[!String.IsEmpty(Skin.String(POVILChip_tv_3_path)) | !String.IsEmpty(Skin.String(POVILChip_tv_3_cmd))] + [String.IsEqual(Skin.String(POVILChip_tv_3_at),end)]">9266</value>
