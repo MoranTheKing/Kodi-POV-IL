@@ -10,7 +10,7 @@
 		<control type="image">
 			<description>pattern</description>
 			<include>Dimensions_Fullscreen</include>
-			<texture>dubuggrid1080.png</texture>
+			<texture>debuggrid1080.png</texture>
 		</control>
 		<control type="mover" id="8">
 			<description>top left mover</description>

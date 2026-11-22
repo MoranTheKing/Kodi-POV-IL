@@ -17,6 +17,17 @@ AUTOCOMPLETE = ('plugin://plugin.program.autocompletion?info=autocomplete&amp;&a
                 '$INFO[Control.GetLabel(312).index(1)]&amp;&amp;limit=9&amp;&amp;povil_rtl=1')
 
 EDITS = [
+    # Three of Onyx's textures named as they are not in its Textures.xbt (a findings report on 1.0.33, Nov 2026):
+    # Kodi's screen calibration grid (a misspelt name), a PVR timer's row at rest, the custom fanart's background
+    ('SettingsScreenCalibration.xml', '<texture>dubuggrid1080.png</texture>', '<texture>debuggrid1080.png</texture>'),
+    ('MyPVRTimers.xml',
+     '<itemlayout height="78">' + NL + '\t\t\t\t\t\t<control type="image">' + NL + '\t\t\t\t\t\t\t<posx>0</posx>' + NL +
+     '\t\t\t\t\t\t\t<posy>0</posy>' + NL + '\t\t\t\t\t\t\t<height>78</height>' + NL + '\t\t\t\t\t\t\t<width>1800</width>' + NL +
+     '\t\t\t\t\t\t\t<texture border="3">list/ListNF.png</texture>',
+     '<itemlayout height="78">' + NL + '\t\t\t\t\t\t<control type="image">' + NL + '\t\t\t\t\t\t\t<posx>0</posx>' + NL +
+     '\t\t\t\t\t\t\t<posy>0</posy>' + NL + '\t\t\t\t\t\t\t<height>78</height>' + NL + '\t\t\t\t\t\t\t<width>1800</width>' + NL +
+     '\t\t\t\t\t\t\t<texture border="3">img/ListNF.png</texture>'),
+    ('CustomFanart.xml', '<texture>colors/BlackDot.png</texture>', '<texture>img/BlackDot.png</texture>'),
     # Headings, section titles and descriptions: the build's gold, not Onyx's mint
     ('Includes_Variables.xml',
      '<value condition="!String.IsEmpty(Skin.String(HighlightColor))">$INFO[Skin.String(HighlightColor)]</value>' + NL + '\t\t<value>FF80E0B0</value>',

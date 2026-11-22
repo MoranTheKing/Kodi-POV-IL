@@ -533,7 +533,12 @@ TAB_WIDE = {'continue': 220, 'favourites': 170, 'live': 166, 'tv': 140, 'kids': 
 GEOM = {
     # list height, row block height (title + list), item size, item spacing
     'poster': dict(list_h=340, block=402, w=196, h=294, step=226),
-    'landscape': dict(list_h=300, block=362, w=352, h=198, step=382),
+    # Five wide pictures to the screen's left edge, as the posters' rows go (1.0.38). Four of 352 x 198 (step 382)
+    # left the row starting at x=290, and the picture past its end stood dimmed and still left of it (peek) while
+    # the row slid under it -- a viewer, Nov 2026, with a video of "the next episode": "the episodes still pass
+    # *under* some bar"; a findings report on 1.0.33 the same ("a black bar that hides part of the screen"). 6 %
+    # smaller, the row's height and the rows' places as they were.
+    'landscape': dict(list_h=300, block=362, w=330, h=186, step=362),
     'square': dict(list_h=290, block=352, w=200, h=200, step=230),
     # posters with their place in the list beside them, as large as the poster is tall: a poster's
     # size, a wider step for the numeral (the first row of a service's page)
@@ -885,8 +890,23 @@ def row_id(ti, ri):
     return 5000 + (ti + 1) * 10 + ri + 1
 
 
+# Twelve ids for each screen's chips (9100 + (ti + 1) * 12 + ci): a screen's chips past the twelfth have ids of
+# their own (CHIP_OVERFLOW, six for each screen). The films' and the series' have thirteen since Umbrella's chip, and
+# its id was the next screen's first chip's: Kodi links a grouplist's children by id, so Right on the films' first
+# chip (Netflix) jumped to Umbrella at the far end, and Left on the series' last one to their first (a findings
+# report on Onyx 1.0.33, Nov 2026; seen in the QA Kodi).
+CHIPS_PER_SCREEN, CHIP_OVERFLOW, CHIP_OVERFLOW_EACH = 12, 9430, 6
+
+
 def chip_ids(ti, tab):
-    return [9100 + (ti + 1) * 12 + ci for ci in range(len(tab['chips']))]
+    ids = []
+    for ci in range(len(tab['chips'])):
+        if ci < CHIPS_PER_SCREEN:
+            ids.append(9100 + (ti + 1) * CHIPS_PER_SCREEN + ci)
+        else:
+            assert ci - CHIPS_PER_SCREEN < CHIP_OVERFLOW_EACH, 'too many chips on %s' % tab['id']
+            ids.append(CHIP_OVERFLOW + ti * CHIP_OVERFLOW_EACH + ci - CHIPS_PER_SCREEN)
+    return ids
 
 
 # ---------------------------------------------------------------- RTL rows

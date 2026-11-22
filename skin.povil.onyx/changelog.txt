@@ -1,3 +1,8 @@
+[B]Kodi POV IL - Onyx 1.0.38[/B]
+- The rows of wide pictures reach the screen's left edge, as the rows of posters do (a viewer, Nov 2026, with a video of the home's "next episode": "I installed the latest ... the episodes still pass *under* some bar"; a findings report on 1.0.33 said the same). Four pictures started a sixth of the way in, and left of them the picture past the row's end stood dimmed and still while the row slid under it. Now five, 6 % smaller, from the edge: a season's episodes, the next episode, the films and episodes in progress and every other wide row.
+- The films' and the series' shortcuts stop at their ends (the same report): Right on Netflix jumped to Umbrella at the far end, and Left on the series' last shortcut back to their first. Umbrella's shortcut had the id of the next screen's first; it has its own now, and a hidden Umbrella stays hidden.
+- Three of Onyx's own pictures named as they are (the same report): Kodi's screen calibration grid, a recording timer's row, the custom fanart's background.
+
 [B]Kodi POV IL - Onyx 1.0.37[/B]
 - The number on a poster is the average of the sites' ratings, and the row of sites beside the title ends with it: "ממוצע", a gold star and the same number (the owner, with a photo: "the average on the poster is not the average ... where was this 6.6 made up from"). It was TMDb's figure alone. A new film that only Trakt has rated now has its number too. Needs Wizard 0.5.41; without the Wizard a poster shows the list's own rating as before.
 - The player's pills say the file's size too, beside the provider (a viewer, Nov 2026: "the file size among the chips"): "151.5 GB", only when the source named it (Wizard 0.5.41), in Onyx's player and in the large one.
