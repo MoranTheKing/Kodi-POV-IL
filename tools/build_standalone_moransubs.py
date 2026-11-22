@@ -74,7 +74,10 @@ STANDALONE_LIB_FILES = (
        "gp_later.py",
        # Hebrew subtitles for the Wizard's trailers (0.3.99): service.py starts it inside a try -- absent, the
        # standalone would silently never translate a trailer for a viewer who has the Wizard
-       "trailer_subs.py"}
+       "trailer_subs.py",
+       # the phone's pairing through the encrypted relay (0.3.112): default.py imports it inside a try -- absent,
+       # the standalone would silently keep the home-network QR (the reviewer caught it before the release)
+       "pair_relay.py"}
 )
 
 # default.py actions only the build has, and the helpers only they use.
@@ -94,6 +97,8 @@ def include(rel: Path) -> bool:
     parts = rel.parts
     if len(parts) == 3 and parts[:2] == ("resources", "lib"):
         return parts[2] in STANDALONE_LIB_FILES
+    if len(parts) >= 4 and parts[:3] == ("resources", "lib", "segno"):
+        return True     # the QR drawn on the device (0.3.112), its LICENSE with it
     if len(parts) >= 3 and parts[:2] == ("resources", "lib") and parts[2] not in ("subs_engine", "icons"):
         return False
     saved = legacy.STANDALONE_LIB_FILES
