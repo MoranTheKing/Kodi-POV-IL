@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; connect-src https://ntfy.sh https://generativelanguage.googleapis.com https://api.mdblist.com">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Kodi POV IL - חיבור מהטלפון</title>
+  <link rel="stylesheet" href="pair.css">
+</head>
+<body>
+  <main class="card">
+    <h1 id="title">חיבור מהטלפון</h1>
+    <p id="intro"></p>
+    <form id="f" autocomplete="off">
+      <label for="key" id="label">API Key</label>
+      <input type="password" id="key" name="key" autocomplete="off" autocapitalize="off" autocorrect="off"
+             spellcheck="false" inputmode="verbatim" required>
+      <div id="fp"></div>
+      <button type="submit" id="go">בדוק ושלח ל-Kodi</button>
+    </form>
+    <div id="msg" role="status"></div>
+    <p class="small" id="tip"></p>
+    <p class="small">המפתח נשלח מוצפן, ורק המכשיר שהציג את ה-QR יכול לפתוח אותו. הדף הזה לא שומר אותו.</p>
+  </main>
+  <script src="pair.js"></script>
+</body>
+</html>
