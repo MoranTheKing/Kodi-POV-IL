@@ -2392,7 +2392,8 @@ def _note_embedded_miss(reason):
 
 
 def embedded_miss_since(t0, playing_file=''):
-    """The reason ('no_index', 'no_text', 'not_mkv' or '' when unknown) of an
+    """The reason ('no_index', 'no_text', 'not_mkv', 'index_unread' -- the
+    index did not answer this time, 0.3.111 -- or '' when unknown) of an
     embedded pick that produced nothing at or after t0, for the file playing
     (`playing_file`, when both sides know it: runs for two files can
     overlap); None when there was none."""
@@ -6626,8 +6627,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # failing (field: 'could not extract -- try another subtitle'),
             # translate the external subtitle that best matches the release,
             # as its own "AI translation" row would (owner, 14 Nov 2026: do
-            # not hide the row, fix it).
-            if (_emb_why.get('reason') in ('no_index', 'no_text', 'not_mkv')
+            # not hide the row, fix it). And when its index did not answer this
+            # time (0.3.111, a viewer on Real-Debrid: "if it fails to extract,
+            # it should go on to another subtitle and translate it -- otherwise
+            # I have to pick by hand").
+            if (_emb_why.get('reason') in ('no_index', 'no_text', 'not_mkv',
+                                           'index_unread')
                     and not _proofread_only and not _translation_cancelled()
                     and _still_playing()):
                 _unreadable = _external_for_unreadable_embedded(info, _emb_lang)
@@ -6648,6 +6653,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     if _no_text else
                     '(the file is not Matroska; its embedded subtitles are not '
                     'read yet)' if _reason == 'not_mkv'
+                    else 'from the stream this time (its index did not answer)'
+                    if _reason == 'index_unread'
                     else 'from the stream (its index has no subtitle lines)',
                     _unreadable.get('src_lang'), _unreadable.get('filename') or ''),
                 level='INFO')
@@ -6656,6 +6663,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         _lang_display_he(_emb_lang),
                         _lang_display_he(_unreadable.get('src_lang')))
                     if _no_text else
+                    'AI: את הכתובית המובנית לא הצלחתי לקרוא מהסטרים הפעם — '
+                    'מתרגם במקומה כתובית תואמת לגרסה'
+                    if _reason == 'index_unread' else
                     'AI: את הכתובית המובנית בקובץ הזה אי אפשר לקרוא — '
                     'מתרגם במקומה כתובית תואמת לגרסה', time_ms=6000)
             payload, kind = _unreadable, 'engine_ai'

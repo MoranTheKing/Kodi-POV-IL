@@ -169,7 +169,8 @@ class SeekHeadChainTests(unittest.TestCase):
         self.assertTrue(getattr(src, '_cues_unsure', False))
         ok = self.ee._extract_cues(src, seeks, seg_start, 1, [], 0, 90.0, 0.0, None, lambda m: None)
         self.assertFalse(ok)
-        self.assertNotIn('why', src._stats)
+        # not 'no_index': since 0.3.111 an index that did not answer is said so
+        self.assertEqual(src._stats.get('why'), 'index_unread')
         # a chain that simply ends -- a further SeekHead with no Cues and no
         # SeekHead in it -- is a file with no index, as before
         src2 = FakeSource(b'\x00' * seg + seekhead([(TAGS, 0)]))

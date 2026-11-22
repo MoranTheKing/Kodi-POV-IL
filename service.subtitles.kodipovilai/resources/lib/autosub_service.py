@@ -53,7 +53,51 @@ _EMBEDDED_MISS_LINES = {
                'ואין כתובית אחרת לתרגם',
     '': 'הקריאה של הכתובית המובנית לא הושלמה\n'
         'אפשר לבחור אותה שוב מרשימת הכתוביות',
+    # 0.3.111: read once more on its own already (_played_steadily), and no
+    # other subtitle to translate
+    'index_unread': 'את הכתובית המובנית לא הצלחתי לקרוא מהסטרים\n'
+                    'אפשר לבחור אותה שוב מרשימת הכתוביות',
 }
+# The video's own subtitle whose index did not answer at the start is read once
+# more after the film has played on this long without a pause or a refill...
+_EMBEDDED_RETRY_STEADY_S = 20.0
+# ...waiting for that this long at most.
+_EMBEDDED_RETRY_WAIT_S = 90.0
+
+
+def _played_steadily(still_ours, tick=None, need_s=_EMBEDDED_RETRY_STEADY_S,
+                     limit_s=_EMBEDDED_RETRY_WAIT_S):
+    """True once the film has played on for `need_s` seconds of its own time
+    without a pause or a refill (Player.Paused / Player.Caching), within
+    `limit_s`; False when it stopped, the run is no longer ours, or the time ran
+    out. `tick` is called once a second (the overlay's line)."""
+    monitor = xbmc.Monitor()
+    player = xbmc.Player()
+    end = time.time() + limit_s
+    since = None
+    while time.time() < end:
+        if not still_ours():
+            return False
+        try:
+            if not player.isPlayingVideo():
+                return False
+            held = (xbmc.getCondVisibility('Player.Paused')
+                    or xbmc.getCondVisibility('Player.Caching'))
+            now = player.getTime()
+        except Exception:
+            return False
+        if held or since is None or now < since:
+            since = None if held else now
+        elif now - since >= need_s:
+            return True
+        if tick is not None:
+            try:
+                tick()
+            except Exception:
+                pass
+        if monitor.waitForAbort(1.0):
+            return False
+    return False
 # A status line stays this long (seconds) ...
 _OVERLAY_LINE_SECONDS = 5.0
 # ... and "checking" stays until the check ends, this long at most.  A check
@@ -636,6 +680,7 @@ def autosub_on_play():
         chosen_name = ''
         chosen_from_cache = False
         failed_sources = set()
+        _emb_tried = None        # the video's own subtitle, tried and not applied
         for c in he_list[:12]:
             link2 = c.get('link') or ''
             try:
@@ -686,6 +731,8 @@ def autosub_on_play():
                 path = None
             if not _autosub_owns_player():
                 return
+            if pl.get('type') == 'embedded_ai' and _emb_tried is None:
+                _emb_tried = link2
             if is_embedded:
                 # resolve() switched the embedded stream and returns None -- that
                 # IS success for an embedded pick.
@@ -798,6 +845,57 @@ def autosub_on_play():
                         except Exception:
                             pass
                     break
+
+        # The video's own subtitle was the pick, and its index did not answer
+        # (0.3.111). A viewer on Real-Debrid, Nov 2026: "it says it found no
+        # translation, and there were built-in ones"; his log: the reading gave
+        # up 2.5 s after the start, while the player was still filling its
+        # buffer, with no other subtitle in any language -- and picked by hand
+        # later it read. The same file reads whole in the QA Kodi. So once more,
+        # by itself, when the film has played on steadily for a while.
+        if not applied and _emb_tried and _autosub_owns_player():
+            try:
+                _miss0 = translate.embedded_miss_since(_run_t0, _playback_file)
+            except Exception:
+                _miss0 = None
+            if _miss0 == 'index_unread':
+                _again = ('[COLOR lightblue]הכתובית המובנית עוד לא נקראה — '
+                          'מנסה שוב בעוד רגע[/COLOR]')
+                kodi_utils.log('autosub: the embedded subtitle\'s index did not '
+                               'answer -- reading it once more when the film '
+                               'plays steadily', level='INFO')
+                _overlay_show(_again)
+                if not _played_steadily(_autosub_owns_player,
+                                        tick=lambda: _overlay_keep(_again)):
+                    if not _autosub_owns_player():
+                        return
+                else:
+                    selection = _claim_candidate(_emb_tried)
+                    if not selection:
+                        return
+                    try:
+                        path = translate.resolve(_emb_tried, info,
+                                                 selection=selection)
+                    except Exception:
+                        path = None
+                    if not _autosub_owns_player():
+                        return
+                    if (path and kodi_utils.subtitle_selection_matches(
+                            selection.get('token') or '',
+                            selection.get('link_hash') or '',
+                            selection.get('stream_hash') or '')):
+                        try:
+                            if kodi_utils.apply_subtitle_file(
+                                    path, selection=selection):
+                                applied = True
+                                chosen_link = _emb_tried
+                                chosen_name = ((translate._decode_link(
+                                    _emb_tried) or {}).get('filename') or '').strip()
+                        except Exception:
+                            pass
+                    kodi_utils.log('autosub: the embedded subtitle read the second '
+                                   'time: {0}'.format('yes' if applied else 'no'),
+                                   level='INFO')
 
         if not applied:
             if not _autosub_owns_player():
