@@ -18,7 +18,6 @@ should not pay for the Wizard's menus. Nothing is listed or run in a kids
 profile.
 """
 import xml.etree.ElementTree as ET
-from urllib.parse import quote
 
 import xbmc
 import xbmcgui
@@ -29,6 +28,24 @@ BASE = 'plugin://plugin.program.kodipovilwizard/'
 FAVOURITE = 'favourites://'
 KODI_SAFE = '-_.!()'          # what Kodi's own URL encoding leaves as it is
 FILE = 'special://profile/favourites.xml'
+
+
+def kodi_url(command):
+    """The favourite's address exactly as Kodi writes it: favourites:// + Kodi's URL encoding of the command, and
+    nothing after it (Kodi 21, FavouritesURL.cpp; CURL::Encode leaves letters, digits and -_.!() as they are and
+    writes every other byte as %xx in LOWER case). Kodi finds the favourite that "remove", "rename" and "move" act on
+    by comparing this address as a string (ContextMenus.cpp). Python's quote() writes %3A, %2F: the menu was there,
+    and it did nothing on any favourite whose command has a ':' or a '/' -- a film's or a series' always (a viewer,
+    Nov 2026: "I press remove and it doesn't remove"; QA Kodi: 36 of 42 favourites). (ListItem.FileNameAndPath shows
+    a '/' at the end of every favourites:// address, Kodi's own too: CURL adds it when it shows one -- not in it.)"""
+    out = []
+    for byte in command.encode('utf-8'):
+        char = chr(byte)
+        if (char.isascii() and char.isalnum()) or char in KODI_SAFE:
+            out.append(char)
+        else:
+            out.append('%%%02x' % byte)
+    return FAVOURITE + ''.join(out)
 
 
 def read():
@@ -80,9 +97,7 @@ def row(handle):
             # the favourite's command. As a link to this add-on (mode=favourite_run) the item was a
             # stranger: the menu offered "add to favourites" -- a second, broken copy -- and no way
             # to remove the real one (field report with a video, Nov 2026).
-            # (Kodi escapes '~' too, and Python's quote never does)
-            url = FAVOURITE + quote(command, safe=KODI_SAFE).replace('~', '%7E')
-            items.append((url, item, False))
+            items.append((kodi_url(command), item, False))
     if items:
         xbmcplugin.addDirectoryItems(handle, items, len(items))
     xbmcplugin.endOfDirectory(handle, cacheToDisc=False)

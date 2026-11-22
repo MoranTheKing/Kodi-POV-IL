@@ -1,3 +1,6 @@
+0.5.46
+- "Remove" on a favourite in the Onyx favourites row removes it (a viewer, Nov 2026: "I try to delete a film or a series I put in the favourites and it cannot be deleted ... I press remove and it doesn't remove"). Kodi finds the favourite a menu entry acts on by its address, written exactly its own way; the row wrote it with capital letters in the escapes, so on a film's or a series' favourite -- and on most others -- remove, rename and move did nothing. The tiles now carry Kodi's own address: removed in the QA Kodi, from the row and from Kodi's list.
+
 0.5.45
 - Subtitles on HDR video are white again, not grey (a viewer, Nov 2026, a photo of his TV: "why are the subtitles such an ugly colour and not bright white -- it wasn't like this before"). While the TV is in HDR mode, Kodi draws menus and subtitles at "GUI peak luminance in HDR PQ mode", 40 % by default -- on Android 58 % of white, under a picture brighter than them. The box the build drew behind the subtitles until 15 Nov hid it; the outline alone does not. Kodi's own 40 % now goes to 100 % -- a subtitle as white as on an ordinary video -- once per profile, and only where the TV can show HDR; a value someone chose stays.
 
