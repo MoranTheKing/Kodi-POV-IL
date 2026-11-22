@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-11-21T22:00:44Z",
+  "generated": "2026-11-22T19:25:26Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -178,13 +178,13 @@
     "skin.povil.onyx": {
       "id": "skin.povil.onyx",
       "name": "Kodi POV IL - Onyx",
-      "version": "1.0.37",
+      "version": "1.0.38",
       "type": "skin",
-      "filename": "skin.povil.onyx-1.0.37.zip",
-      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.onyx-1.0.37.zip",
-      "size": 3201113,
-      "sha256": "34b56d52ac6b34c0122418c22809586270c4359c0caa47cacddf082441151266",
-      "updated": "2026-11-21T17:21:36Z"
+      "filename": "skin.povil.onyx-1.0.38.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/skin.povil.onyx-1.0.38.zip",
+      "size": 3201611,
+      "sha256": "8aae4c7290a095be772796ec1596f42e63a8f80afa974e220da1099094f97bd2",
+      "updated": "2026-11-22T19:25:26Z"
     }
   }
 }
