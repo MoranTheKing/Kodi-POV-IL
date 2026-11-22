@@ -14,7 +14,10 @@
   <main class="card">
     <h1 id="title">חיבור מהטלפון</h1>
     <p id="intro"></p>
+    <p class="warn">השתמשו רק ב-QR שמופיע עכשיו על המסך שלכם. קישור או קוד שקיבלתם ממישהו אחר ישלחו לו את המפתח.</p>
     <form id="f" autocomplete="off">
+      <label for="code">קוד האימות שמופיע על המסך של ה-Kodi, ליד ה-QR</label>
+      <input type="text" id="code" name="code" inputmode="numeric" autocomplete="off" maxlength="9" required>
       <label for="key" id="label">API Key</label>
       <input type="password" id="key" name="key" autocomplete="off" autocapitalize="off" autocorrect="off"
              spellcheck="false" inputmode="verbatim" required>

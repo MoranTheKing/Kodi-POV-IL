@@ -4,6 +4,9 @@
 // (WebCrypto), HKDF-SHA256 -> an encryption key and a MAC key, HMAC-SHA256 in counter mode under a random nonce,
 // and an HMAC-SHA256 tag (encrypt-then-MAC). Only the device's private key, which never leaves it, opens it.
 // Byte for byte what service.subtitles.kodipovilai/resources/lib/pair_relay.py opens (tests/test_pair_relay.py).
+// A link to this page is no secret: anyone could make one with THEIR public key and post it. So nothing is sealed
+// until the viewer types the 6-digit code their own Kodi shows beside the QR -- a code made from the link's public
+// key (pairingCode, as pair_relay.pairing_code); the code of a link someone else made is on no screen of theirs.
 'use strict';
 
 var RELAY = 'https://ntfy.sh/';
@@ -121,6 +124,16 @@ function seal(devicePub, text) {
     });
 }
 
+// Six digits from the device's public key: SHA-256, its first 4 bytes as a number, the last 6 digits of it.
+function pairingCode(pub) {
+  return subtle().digest('SHA-256', pub).then(function (d) {
+    var b = new Uint8Array(d);
+    var n = (b[0] * 16777216 + b[1] * 65536 + b[2] * 256 + b[3]) % 1000000;
+    return ('00000' + n).slice(-6);
+  });
+}
+function digits(raw) { return (raw || '').normalize('NFKC').replace(/[^0-9]/g, ''); }
+
 function readLink(hash) {
   var q = new URLSearchParams((hash || '').replace(/^#/, ''));
   var s = q.get('s'), t = q.get('t'), p = q.get('p');
@@ -161,7 +174,8 @@ function validate(service, key) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {seal: seal, sanitize: sanitize, readLink: readLink, b64u: b64u, unb64u: unb64u};
+  module.exports = {seal: seal, sanitize: sanitize, readLink: readLink, b64u: b64u, unb64u: unb64u,
+                    pairingCode: pairingCode, digits: digits};
 } else {
   // public code, no secrets: for checking the page in a browser's console
   globalThis.povilPair = {seal: seal, readLink: readLink};
@@ -171,7 +185,7 @@ if (typeof document !== 'undefined') {
   (function () {
     var link = readLink(location.hash);
     var el = function (id) { return document.getElementById(id); };
-    var elKey = el('key'), elFp = el('fp'), elMsg = el('msg'), form = el('f'), btn = el('go');
+    var elKey = el('key'), elCode = el('code'), elFp = el('fp'), elMsg = el('msg'), form = el('f'), btn = el('go');
     function msg(t, c) { elMsg.textContent = t; elMsg.className = c; }
     if (!link || !globalThis.crypto || !globalThis.crypto.subtle) {
       form.hidden = true;
@@ -205,24 +219,37 @@ if (typeof document !== 'undefined') {
       var key = sanitize(elKey.value || '');
       elKey.value = key;
       elFp.textContent = key ? fingerprint(key) : '';
+      var typed = digits(elCode.value);
+      if (typed.length !== 6) { msg('הקלידו את 6 הספרות של קוד האימות שמופיע על המסך של ה-Kodi, ליד ה-QR.', 'err'); return; }
       if (!key) { msg('הזינו API key.', 'err'); return; }
+      function unlock() { btn.disabled = false; elKey.readOnly = false; elCode.readOnly = false; }
       btn.disabled = true;
       elKey.readOnly = true;
-      msg('בודק את המפתח מול ' + svc.check + '…', 'info');
-      validate(link.service, key).then(function (ok) {
-        if (ok === false) {
-          msg(svc.check + ' דחה את המפתח הזה. העתיקו אותו שוב במלואו (בלי רווח או תו חסר) ונסו שוב.', 'err');
-          btn.disabled = false; elKey.readOnly = false;
+      elCode.readOnly = true;
+      // the code first: nothing leaves this page -- not even the check with the key's service -- for a link whose
+      // code is not the one on the viewer's own screen
+      pairingCode(link.pub).then(function (code) {
+        if (typed !== code) {
+          msg('הקוד לא תואם, ולא נשלח דבר. סרקו את ה-QR שמופיע עכשיו על המסך שלכם, והקלידו את הקוד שלידו.', 'err');
+          unlock();
           return null;
         }
-        msg((ok ? 'המפתח תקין. ' : 'לא הצלחנו לבדוק מול ' + svc.check + ' (בעיית רשת?), שולחים בכל זאת. ')
-            + 'שולח ל-Kodi מוצפן…', 'info');
-        return send(link, key).then(function () {
-          elKey.value = '';
-          msg('המפתח נשלח ל-Kodi: ' + fingerprint(key) + '. בטלוויזיה יופיעו אותן אותיות. אשרו שם, ואפשר לסגור את הדף.', 'ok');
+        msg('בודק את המפתח מול ' + svc.check + '…', 'info');
+        return validate(link.service, key).then(function (ok) {
+          if (ok === false) {
+            msg(svc.check + ' דחה את המפתח הזה. העתיקו אותו שוב במלואו (בלי רווח או תו חסר) ונסו שוב.', 'err');
+            unlock();
+            return null;
+          }
+          msg((ok ? 'המפתח תקין. ' : 'לא הצלחנו לבדוק מול ' + svc.check + ' (בעיית רשת?), שולחים בכל זאת. ')
+              + 'שולח ל-Kodi מוצפן…', 'info');
+          return send(link, key).then(function () {
+            elKey.value = '';
+            msg('המפתח נשלח ל-Kodi: ' + fingerprint(key) + '. בטלוויזיה יופיעו אותן אותיות. אשרו שם, ואפשר לסגור את הדף.', 'ok');
+          });
         });
       }).catch(function () {
-        btn.disabled = false; elKey.readOnly = false;
+        unlock();
         msg('השליחה לא הצליחה (אין חיבור לאינטרנט?). נסו שוב, או בחרו ב-Kodi "הזנה ידנית".', 'err');
       });
     });
