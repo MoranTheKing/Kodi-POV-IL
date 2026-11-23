@@ -39,7 +39,8 @@ D = 0x7d7dc5f71eb29ddaf80d6214632eeae03d9058af1fb6d22ed80badb62bc1a534
 OX = 0xead218590119e8876b29146ff89ca61770c4edbbf97d38ce385ed281d8a6b230
 OY = 0x28af61281fd35e2fa7002523acc85a429cb06ee6648325389f59edfce1405141
 Z = 0x46fc62106420ff012e54a434fbdd2d25ccc5852060561e68040dd7778997bd7b
-KEY = 'AIzaSyDUMMY-not-a-real-key_0123456789AB'
+# A made-up key that looks like no real one (GitHub's secret scanning flagged a dummy in a Google key's shape).
+KEY = 'TEST-not-a-real-key_0123456789AB'
 
 
 class Crypto(unittest.TestCase):
