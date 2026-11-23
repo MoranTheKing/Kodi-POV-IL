@@ -1312,74 +1312,91 @@ def build_switch_skin():
 ##########################################
 # KODI-RD-IL - UPDATE CHECK
 
-def parse_version(ver_str):
-    """Converts '21.0-Omega' or '21.0.1' into a tuple of integers like (21, 0)."""
-    import re
-    match = re.search(r'^(\d+(?:\.\d+)+)', ver_str)
-    if match:
-        return tuple(map(int, match.group(1).split('.')))
-    return (0, 0)
-
-def get_current_kodi_version():
-    """Extracts the numeric float version (e.g., 21.0) from the running Kodi instance."""
-    import re
-    import xbmc
-    build_version = xbmc.getInfoLabel('System.BuildVersion')
-    return parse_version(build_version)
-
-def get_latest_official_kodi_version():
-    """Fetches the latest official Kodi release version from the Kodi GitHub API."""
+def _kodi_releases():
+    """xbmc/xbmc's recent releases on GitHub (a list), or None when they could not be read."""
     import json
     import urllib.request as urllib_req
-
     try:
-        url = "https://api.github.com/repos/xbmc/xbmc/releases/latest"
-        req = urllib_req.Request(url, headers={'User-Agent': 'Kodi-POV-IL-Wizard'})
+        req = urllib_req.Request('https://api.github.com/repos/xbmc/xbmc/releases?per_page=30',
+                                 headers={'User-Agent': 'Kodi-POV-IL-Wizard', 'Accept': 'application/vnd.github+json'})
         with urllib_req.urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode('utf-8'))
-            tag_name = data.get('tag_name', '')
-            return parse_version(tag_name)
+        return data if isinstance(data, list) else None
     except Exception as e:
-        from resources.libs.common import logging
-        logging.log(f"DEBUG | get_latest_official_kodi_version | Failed: {str(e)}")
-
+        logging.log('[Kodi version] releases not read: {0}'.format(e))
     return None
 
+
 def kodi_version_update_check(kodi_version_update_check_manual="false"):
-    kodi_version_update_check_manual = True if kodi_version_update_check_manual == "true" else False
-    os_type_label = tools.platform().capitalize()
-    dialog = xbmcgui.Dialog()
-
+    """Start-up (once a day, a version told once) and the menu's "check the Kodi version". What it checks and why:
+    resources/libs/kodi_update.py (0.5.48). Nothing here may stop the start-up that calls it."""
+    manual = kodi_version_update_check_manual == "true"
     try:
-        current_version = get_current_kodi_version()
-        latest_version = get_latest_official_kodi_version()
-        current_str = ".".join(map(str, current_version))
-        latest_str = ".".join(map(str, latest_version))
+        import json
+        import struct
+        import time
+        import xbmcvfs
+        from resources.libs import kodi_update as ku
+        from resources.libs.gui.window import show_text_box
 
-        if not latest_version:
-            if kodi_version_update_check_manual:
-                dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})",
-                          "[COLOR yellow][B]לא הצלחנו לבדוק את הגרסה העדכנית.[/B][/COLOR]\nנסה שוב מאוחר יותר.")
+        platform_name = tools.platform() or ''
+        title = '{0} ({1})'.format(CONFIG.ADDONTITLE, platform_name.capitalize())
+        dialog = xbmcgui.Dialog()
+
+        def show(text):
+            # the Wizard's own text window: Kodi's yes/no dialog shows about four lines on Onyx, and the steps that
+            # matter came after them (seen on the QA screen; the viewer's photo had its first lines cut off too)
+            show_text_box(title, text.replace('\n', '[CR]'))
+
+        state_path = os.path.join(CONFIG.PLUGIN_DATA, 'kodi_update.json')
+        try:
+            with open(state_path, encoding='utf-8') as f:
+                state = json.load(f)
+            if not isinstance(state, dict):
+                state = {}
+        except Exception:
+            state = {}
+        kind = ku.install_kind(platform_name, xbmcvfs.translatePath('special://xbmc/'),
+                               xbmcvfs.translatePath('special://home/'))
+        current = ku.parse_version(xbmc.getInfoLabel('System.BuildVersion'))
+        bits = struct.calcsize('P') * 8
+        if kind == 'ours':
+            # our Kodi POV IL app / installer brings its Kodi with its own new version: a start never asks
+            if manual and current:
+                show(ku.message(platform_name, kind, current, None, bits))
             return
-
-        if latest_version > current_version:
-            dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})",
-                      f'[COLOR yellow][B]קיים עדכון רשמי ל-Kodi![/B][/COLOR]\n\n'
-                      f'גרסה נוכחית: [B][COLOR red]{current_str}[/COLOR][/B]\n'
-                      f'גרסה מעודכנת: [B][COLOR limegreen]{latest_str}[/COLOR][/B]\n\n'
-                      f'הבילד שלנו מותאם לרוץ על Kodi נקי והעדכני ביותר.\n'
-                      f'אנא עדכן את קודי דרך החנות הרשמית במכשירך או אתר Kodi.tv.')
-
-        elif kodi_version_update_check_manual:
-            dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})",
-                      f'[COLOR limegreen][B]קודי (Kodi) מעודכן לגרסה האחרונה![/B][/COLOR]\n\n'
-                      f'גרסה נוכחית: [B]{current_str}[/B]')
-
+        now = time.time()
+        if not ku.should_check(state, now, manual):
+            return
+        releases = _kodi_releases()
+        latest = ku.latest_same_major(releases, current)
+        if releases is None:
+            state['failed'] = now           # GitHub did not answer: try again in a few hours, not on every start
+        else:
+            state['checked'] = now
+            state.pop('failed', None)
+        if not latest or not current:
+            if manual:
+                dialog.ok(title, '[COLOR yellow][B]לא הצלחנו לבדוק את הגרסה העדכנית.[/B][/COLOR]\nנסו שוב מאוחר יותר.')
+        elif latest > current:
+            if ku.should_show(state, latest, now, manual):
+                show(ku.message(platform_name, kind, current, latest, bits))
+                state['shown'] = ku.vstr(latest)
+        elif manual:
+            dialog.ok(title, ku.up_to_date_message(current))
+        try:
+            os.makedirs(CONFIG.PLUGIN_DATA, exist_ok=True)
+            with open(state_path, 'w', encoding='utf-8') as f:
+                json.dump(state, f)
+        except Exception as e:
+            logging.log('[Kodi version] state not saved: {0}'.format(e))
     except Exception as e:
-        from resources.libs.common import logging
-        logging.log(f'[kodi_version_update_check] Exception: {str(e)}')
-        if kodi_version_update_check_manual:
-            dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})", f'התרחשה שגיאה:\n{str(e)}')
+        logging.log('[kodi_version_update_check] Exception: {0}'.format(e))
+        if manual:
+            try:
+                xbmcgui.Dialog().ok(CONFIG.ADDONTITLE, 'התרחשה שגיאה:\n{0}'.format(e))
+            except Exception:
+                pass
 
 # KODI-RD-IL - ANDROID
 # Required helper for the real_debrid_speedtest android browsers check
