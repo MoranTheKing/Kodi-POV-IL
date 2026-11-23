@@ -977,8 +977,12 @@ except Exception as _widget_repair_error:
                 level=xbmc.LOGWARNING)
 
 if tools.platform() in ['android', 'windows'] and CONFIG.get_setting('buildname'):
-    from resources.libs.wizard import kodi_version_update_check
-    kodi_version_update_check()
+    try:
+        from resources.libs.wizard import kodi_version_update_check
+        kodi_version_update_check()
+    except Exception as _kodi_version_error:
+        logging.log('[Kodi version] start-up check failed: {}'.format(_kodi_version_error),
+                    level=xbmc.LOGWARNING)
 ######################################
 
 # INSTALLED BUILD CHECK

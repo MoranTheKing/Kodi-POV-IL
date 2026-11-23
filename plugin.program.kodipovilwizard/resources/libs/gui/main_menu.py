@@ -84,8 +84,8 @@ class MainMenu:
         ##############################################################################################
         # KODI-RD-IL
         if tools.platform() in ['android', 'windows'] or CONFIG.DEVELOPER == 'true':
-            directory.add_separator('עדכון גרסת קודי')
-            directory.add_file('עדכון גרסת קודי', {'mode': 'install', 'action': 'kodi_version_update_check', 'kodi_version_update_check_manual': 'true'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
+            directory.add_separator('בדיקת גרסת קודי')
+            directory.add_file('בדיקת גרסת קודי', {'mode': 'install', 'action': 'kodi_version_update_check', 'kodi_version_update_check_manual': 'true'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
         ##############################################################################################
         # if (tools.platform() == 'android' or CONFIG.DEVELOPER == 'true'):
             # directory.add_dir('APK Installer', {'mode': 'apk'}, icon=CONFIG.ICONAPK, themeit=CONFIG.THEME1)

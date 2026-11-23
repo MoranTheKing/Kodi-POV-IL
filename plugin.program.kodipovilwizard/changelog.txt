@@ -1,3 +1,6 @@
+0.5.48
+- The Kodi version check tells the truth and tells it once (a viewer, Nov 2026, a photo of his TV: "Kodi 21.2, I want 21.3, I try through the Wizard and it does not update"). Google Play still offers 21.2 and the Wizard cannot install Kodi by itself, yet the message said "update through your store" -- and it came back on every start. Now only a newer release of the SAME major version counts (Kodi 22, a new major version the build is not made for, is never offered), the start-up check asks GitHub at most once a day and shows a version once, and the text says what works: on Android, kodi.tv's package for this device (ARMV8A 64-bit / ARMV7A 32-bit, from the running Kodi) installed over the existing one, never uninstalling first (that erases the settings); on Windows, kodi.tv's installer over it. Our own Kodi POV IL app and installer bring their Kodi with their own new version: a start never asks there, and the menu item points at our downloads page. The menu item is "בדיקת גרסת קודי" (it was "update the Kodi version", which nothing could do).
+
 0.5.47
 - POV's question on its own favourites in Hebrew (the owner, Nov 2026, a screen: "Add To POV מועדפים?" with "Cancel" / "OK"): "להוסיף למועדפים של POV?" / "להסיר מהמועדפים של POV?", and every yes/no question of POV says "אישור" / "ביטול".
 
