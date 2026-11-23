@@ -14,6 +14,13 @@ was cancelled goes through as before. The Wizard's profile service clears
 the mark as soon as a video plays (POV's request stays alive for the whole
 playback, and a tap right after stopping a bad source is a new choice).
 
+A request is over when POV's route returns (router.py, after Router()()), not
+when its interpreter exits: that one can stay alive for a while afterwards,
+waiting on POV's scraper threads. Until 0.5.49 the mark waited for the exit,
+so a title picked right after closing another one's source list was dropped
+as a queued tap -- and the toast spoke of an "episode" on a movie (a viewer,
+Nov 2026, a video: two movies in a row, nothing played).
+
 When Kodi is busy (the first seconds after it starts, on a slow box several
 seconds), nothing showed between the tap and POV's sources window, so people
 tapped again. A notice says the episode is being looked up as soon as the
@@ -65,9 +72,12 @@ def duplicate(argv):
         except ValueError:
             started = 0.0
         if 0 <= now - started < WINDOW_S and not xbmc.Player().isPlaying():
-            xbmc.log('[POV IL] play request dropped: another episode is still starting', xbmc.LOGINFO)
+            xbmc.log('[POV IL] play request dropped: the previous pick is still looking for sources',
+                     xbmc.LOGINFO)
             try:
-                xbmcgui.Dialog().notification('POV IL', 'פרק אחר כבר מתחיל להתנגן...', time=2500, sound=False)
+                # a movie or an episode: the words fit both
+                xbmcgui.Dialog().notification('POV IL', 'הבחירה הקודמת עדיין מחפשת מקורות...', time=2500,
+                                              sound=False)
             except Exception:
                 pass
             return True
@@ -126,9 +136,12 @@ def _watch_notice(started):
 
 
 def request_over():
-    """POV's route returned (no results, cancelled, or playback over)."""
+    """POV's route returned (no results, cancelled, or playback over): the
+    notice timer stops, and the next tap is a new choice now -- the
+    interpreter may still wait on POV's threads before atexit runs."""
     if _LAST[0] is not None:
         _OVER.add(_LAST[0])
+        _finished(_LAST[0])
 
 
 def _finished(started):
