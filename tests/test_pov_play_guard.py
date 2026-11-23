@@ -64,7 +64,23 @@ class GuardTests(unittest.TestCase):
 
     def test_a_dropped_tap_says_so(self):
         self.tap(); self.tap()
-        self.assertIn('פרק אחר', self.toasts[-1][1])
+        self.assertIn('הבחירה הקודמת', self.toasts[-1][1])
+        self.assertNotIn('פרק', self.toasts[-1][1])   # a movie too (a viewer, Nov 2026)
+
+    def test_a_returned_route_frees_the_next_tap_before_the_interpreter_exits(self):
+        # a viewer, Nov 2026: the source list closed, POV's route returned, its interpreter waited on scraper
+        # threads -- and the next movie he picked was dropped as a queued tap
+        self.assertFalse(self.tap())
+        self.m.request_over()                       # router.py, after Router()(); atexit has not run
+        self.assertFalse(self.tap())                # a new choice, in a new interpreter
+        self.assertTrue(self.tap())                 # ... and taps queued behind it are still dropped
+
+    def test_a_returned_route_leaves_a_newer_mark_alone(self):
+        self.assertFalse(self.tap())
+        first = self.m._LAST[0]
+        self.props[self.m.PROPERTY] = repr(first + 0.5)   # another interpreter's newer request
+        self.m.request_over()
+        self.assertEqual(self.props[self.m.PROPERTY], repr(first + 0.5))
 
     def test_a_stale_mark_does_not_block(self):
         self.props[self.m.PROPERTY] = repr(1.0)     # left by a killed request long ago
