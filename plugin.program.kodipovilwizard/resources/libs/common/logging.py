@@ -246,12 +246,7 @@ def upload_log():
                     name = '{0} + {1}'.format(name, os.path.basename(previous))
             succes, result = post_log(content, name)
             if succes:
-                # "The log was sent ({name}). Send this address, or a photo of the code, with what went wrong:"
-                msg = ("\u05d4\u05dc\u05d5\u05d2 \u05e0\u05e9\u05dc\u05d7 ([COLOR {0}]{1}[/COLOR]). "
-                       "\u05e9\u05dc\u05d7\u05d5 \u05d0\u05ea \u05d4\u05e7\u05d9\u05e9\u05d5\u05e8 "
-                       "\u05d0\u05d5 \u05e6\u05dc\u05de\u05d5 \u05d0\u05ea \u05d4\u05e7\u05d5\u05d3, "
-                       "\u05e2\u05dd \u05ea\u05d9\u05d0\u05d5\u05e8 \u05d4\u05d1\u05e2\u05d9\u05d4:"
-                       "[CR][COLOR {2}]{3}[/COLOR]").format(CONFIG.COLOR1, name, CONFIG.COLOR1, result)
+                msg = sent_message(name, result)
 
                 # if len(self.email) > 5:
                 # em_result, em_msg = self.email_Log(self.email, result, name)
@@ -349,6 +344,23 @@ def clean_log(content):
     for pattern, repl in REPLACES:
         content = re.sub(pattern, repl, content)
     return content
+
+
+# The window that shows a sent log is photographed by the viewer, link and all. The Wizard's own blue (COLOR1)
+# is a dark blue on that dark window and came out badly (the owner, Nov 2026): the link is white and bold, the
+# log names a light amber.
+SENT_LINK_COLOR = 'FFFFFFFF'
+SENT_NAME_COLOR = 'FFFFD54F'
+
+
+def sent_message(name, url):
+    """In Hebrew: 'The log was sent ({name}). Send this address, or a photo of the code, with what went wrong:',
+    then the link on a line of its own."""
+    return ("\u05d4\u05dc\u05d5\u05d2 \u05e0\u05e9\u05dc\u05d7 ([COLOR {0}]{1}[/COLOR]). "
+            "\u05e9\u05dc\u05d7\u05d5 \u05d0\u05ea \u05d4\u05e7\u05d9\u05e9\u05d5\u05e8 "
+            "\u05d0\u05d5 \u05e6\u05dc\u05de\u05d5 \u05d0\u05ea \u05d4\u05e7\u05d5\u05d3, "
+            "\u05e2\u05dd \u05ea\u05d9\u05d0\u05d5\u05e8 \u05d4\u05d1\u05e2\u05d9\u05d4:"
+            "[CR][COLOR {2}][B]{3}[/B][/COLOR]").format(SENT_NAME_COLOR, name, SENT_LINK_COLOR, url)
 
 
 def show_result(message, url=None):

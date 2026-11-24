@@ -5072,7 +5072,7 @@
 			<control type="group" description="rows search">
 				<left>0</left><top>618</top>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),search)</visible>
-				<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]">Conditional</animation>
+				<animation effect="slide" end="0,-352" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]] + [Integer.IsGreater(Container(5071).NumItems,0) | Container(5071).IsUpdating]">Conditional</animation>
 				<control type="group" description="חיפושי סרטים אחרונים">
 					<left>0</left><top>0</top>
 					<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5072) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5072)]]">Conditional</animation>
@@ -5117,6 +5117,7 @@
 				</control>
 				<control type="group" description="חיפושי סדרות אחרונים">
 					<left>0</left><top>352</top>
+					<animation effect="slide" end="0,-352" time="0" condition="![Integer.IsGreater(Container(5071).NumItems,0) | Container(5071).IsUpdating]">Conditional</animation>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>
@@ -5905,8 +5906,9 @@
 			<control type="group" description="rows continue">
 				<left>0</left><top>618</top>
 				<visible>String.IsEqual(Window(home).Property(povil.tab),continue)</visible>
-				<animation effect="slide" end="0,-362" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5102) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5102)]]">Conditional</animation>
-				<animation effect="slide" end="0,-724" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5103) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5103)]]">Conditional</animation>
+				<animation effect="slide" end="0,-362" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5102) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5102)]] + [Integer.IsGreater(Container(5101).NumItems,0) | Container(5101).IsUpdating]">Conditional</animation>
+				<animation effect="slide" end="0,-362" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5103) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5103)]] + [Integer.IsGreater(Container(5101).NumItems,0) | Container(5101).IsUpdating]">Conditional</animation>
+				<animation effect="slide" end="0,-362" time="320" tween="cubic" easing="out" condition="[Control.HasFocus(5103) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5103)]] + [Integer.IsGreater(Container(5102).NumItems,0) | Container(5102).IsUpdating]">Conditional</animation>
 				<control type="group" description="הפרק הבא">
 					<left>0</left><top>0</top>
 					<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5102) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5102)]] | [Control.HasFocus(5103) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5103)]]">Conditional</animation>
@@ -5953,6 +5955,7 @@
 				</control>
 				<control type="group" description="סרטים שהתחלתם">
 					<left>0</left><top>362</top>
+					<animation effect="slide" end="0,-362" time="0" condition="![Integer.IsGreater(Container(5101).NumItems,0) | Container(5101).IsUpdating]">Conditional</animation>
 					<animation effect="fade" start="100" end="0" time="220" condition="[Control.HasFocus(5103) | [String.IsEmpty(System.CurrentControlId) + String.IsEqual(Window(home).Property(povil.focus),5103)]]">Conditional</animation>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
@@ -5997,6 +6000,8 @@
 				</control>
 				<control type="group" description="פרקים שהתחלתם">
 					<left>0</left><top>724</top>
+					<animation effect="slide" end="0,-362" time="0" condition="![Integer.IsGreater(Container(5101).NumItems,0) | Container(5101).IsUpdating]">Conditional</animation>
+					<animation effect="slide" end="0,-362" time="0" condition="![Integer.IsGreater(Container(5102).NumItems,0) | Container(5102).IsUpdating]">Conditional</animation>
 					<control type="label">
 						<left>90</left><top>0</top><width>1740</width><height>44</height>
 						<font>povil_row</font><align>right</align><aligny>center</aligny>

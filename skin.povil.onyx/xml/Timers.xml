@@ -847,7 +847,7 @@
 	</timer>
 	<timer>
 		<name>povil_deep_search</name>
-		<start reset="true">Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.tab),search) + !ControlGroup(9000).HasFocus() + !Skin.HasSetting(POVILChild) + String.IsEmpty(Window(home).Property(povil.deep.search))</start>
+		<start reset="true">Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.tab),search) + [!ControlGroup(9000).HasFocus() | [!String.IsEmpty(Window(home).Property(povil.tab.search)) + !Container(5071).IsUpdating + !Integer.IsGreater(Container(5071).NumItems,0)]] + !Skin.HasSetting(POVILChild) + String.IsEmpty(Window(home).Property(povil.deep.search))</start>
 		<onstart>SetProperty(povil.deep.search,1,home)</onstart>
 		<stop>true</stop>
 	</timer>
@@ -859,7 +859,7 @@
 	</timer>
 	<timer>
 		<name>povil_deep_continue</name>
-		<start reset="true">Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.tab),continue) + !ControlGroup(9000).HasFocus() + !Skin.HasSetting(POVILChild) + String.IsEmpty(Window(home).Property(povil.deep.continue))</start>
+		<start reset="true">Window.IsActive(home) + String.IsEqual(Window(home).Property(povil.tab),continue) + [!ControlGroup(9000).HasFocus() | [!String.IsEmpty(Window(home).Property(povil.tab.continue)) + !Container(5101).IsUpdating + !Integer.IsGreater(Container(5101).NumItems,0)]] + !Skin.HasSetting(POVILChild) + String.IsEmpty(Window(home).Property(povil.deep.continue))</start>
 		<onstart>SetProperty(povil.deep.continue,1,home)</onstart>
 		<stop>true</stop>
 	</timer>

@@ -661,6 +661,11 @@ def row_focus(ti, ri):
             'String.IsEqual(Window(home).Property(povil.focus),%d)]]' % (rid, rid))
 
 
+def row_kept(rid):
+    """An optional row keeps its room: it has items, or it is still asking for them (its skeleton shows there)."""
+    return '[Integer.IsGreater(Container(%d).NumItems,0) | Container(%d).IsUpdating]' % (rid, rid)
+
+
 # The viewer's own rows (the Wizard's custom_rows.py, the settings tile "שורות משלי"; a viewer, Nov 2026: "let me add
 # the films on my hard drive"): CUSTOM_SLOTS rows at the end of these tabs, each the folder in a skin string, shown
 # only while it has one and it has items
@@ -1233,8 +1238,15 @@ def gen_timers():
             continue
         x(1, '<timer>')
         x(2, '<name>povil_deep_%s</name>' % tab['id'])
-        x(2, '<start reset="true">Window.IsActive(home) + %s + !ControlGroup(9000).HasFocus() + !Skin.HasSetting(POVILChild) + '
-             'String.IsEmpty(Window(home).Property(povil.deep.%s))</start>' % (tab_cond(tab), tab['id']))
+        left_bar = '!ControlGroup(9000).HasFocus()'
+        if tab['rows'][0][3] and not slot_tab(tab):
+            # The first row can come back empty (continue watching with no "next episode"): the rows under it
+            # load then too, or the screen stays empty until the viewer steps down to rows he cannot see.
+            first = row_id(TABS.index(tab), 0)
+            left_bar = ('[%s | [!String.IsEmpty(Window(home).Property(povil.tab.%s)) + !Container(%d).IsUpdating + '
+                        '!Integer.IsGreater(Container(%d).NumItems,0)]]' % (left_bar, tab['id'], first, first))
+        x(2, '<start reset="true">Window.IsActive(home) + %s + %s + !Skin.HasSetting(POVILChild) + '
+             'String.IsEmpty(Window(home).Property(povil.deep.%s))</start>' % (tab_cond(tab), left_bar, tab['id']))
         x(2, '<onstart>SetProperty(povil.deep.%s,1,home)</onstart>' % tab['id'])
         x(2, '<stop>true</stop>')
         x(1, '</timer>')
@@ -1451,6 +1463,9 @@ def gen_includes():
     for cond, cid in plain_sources:
         x(2, '<value condition="%s + String.IsEqual(Container(%d).ListItem.DBType,episode)">$INFO[Container(%d).ListItem.Season,עונה , · ]$INFO[Container(%d).ListItem.Episode,פרק ]$INFO[Container(%d).ListItem.Title,  ·  ]</value>'
           % (cond, cid, cid, cid, cid))
+        # the row on screen decides, also when its item is no episode: Kodi would go on to the tab's first row
+        # (a film in "המשך צפייה" showed the next episode's season, episode and name above it)
+        x(2, '<value condition="%s"></value>' % cond)
     x(1, '</variable>')
     x(1, '<variable name="POVIL_HeroMeta">')
     for cond, cid in plain_sources:
@@ -2484,10 +2499,20 @@ def rows(x, d):
         x(d, '<control type="group" description="rows %s">' % tab['id'])
         x(d + 1, '<left>0</left><top>%d</top>' % ROWS_Y)
         x(d + 1, '<visible>%s</visible>' % tab_cond(tab))
+        # An empty optional row takes no room on a screen of plain rows: the rows under it come up into its place,
+        # and the focus slide counts only the rows above that have something. The continue-watching screen has
+        # nothing but optional rows, and a viewer with no "next episode" saw an empty screen -- the episodes he
+        # had started were there, one row under the bottom of the screen (Nov 2026). Slot screens keep theirs.
+        collapse = [] if slot_tab(tab) else [j for j, r in enumerate(tab['rows']) if r[3]]
         # Slide the rows up so the focused row sits where the first one was
         for ri in range(1, len(ids)):
-            x(d + 1, '<animation effect="slide" end="0,-%d" time="320" tween="cubic" easing="out" condition="%s">Conditional</animation>'
-              % (offsets[ri], row_focus(ti, ri)))
+            fixed = offsets[ri] - sum(offsets[j + 1] - offsets[j] for j in collapse if j < ri)
+            if fixed:
+                x(d + 1, '<animation effect="slide" end="0,-%d" time="320" tween="cubic" easing="out" condition="%s">Conditional</animation>'
+                  % (fixed, row_focus(ti, ri)))
+            for j in (j for j in collapse if j < ri):
+                x(d + 1, '<animation effect="slide" end="0,-%d" time="320" tween="cubic" easing="out" condition="%s + %s">'
+                         'Conditional</animation>' % (offsets[j + 1] - offsets[j], row_focus(ti, ri), row_kept(ids[j])))
         for ri, (title, path, kind, optional) in enumerate(tab['rows']):
             if slot_tab(tab):
                 slot_row(x, d + 1, ti, ri, ids, offsets[ri])
@@ -2496,6 +2521,9 @@ def rows(x, d):
             rid = ids[ri]
             x(d + 1, '<control type="group" description="%s">' % e(title))
             x(d + 2, '<left>0</left><top>%d</top>' % offsets[ri])
+            for j in (j for j in collapse if j < ri):
+                x(d + 2, '<animation effect="slide" end="0,-%d" time="0" condition="!%s">Conditional</animation>'
+                  % (offsets[j + 1] - offsets[j], row_kept(ids[j])))
             # Rows above the focused one fade out (they would cover the hero)
             hide = ' | '.join(row_focus(ti, j) for j in range(ri + 1, len(ids)))
             if hide:

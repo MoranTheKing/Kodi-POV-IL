@@ -1,3 +1,7 @@
+[B]Kodi POV IL - Onyx 1.0.39[/B]
+- "המשך צפייה" shows the episodes you started (a viewer, Nov 2026: "even after 12 minutes it does not show"). Without Trakt, "הפרק הבא" stays empty until an episode is finished, and the screen's rows stood at fixed places: with it and "סרטים שהתחלתם" empty, "פרקים שהתחלתם" was a row under the bottom of the screen, and loaded only after a step down -- the screen looked empty with episodes in it. An empty row now gives its room to the rows under it, and those load as soon as the first row comes back empty. The search screen's two rows the same.
+- A film in "סרטים שהתחלתם" no longer shows the next episode's season, episode and name above it.
+
 [B]Kodi POV IL - Onyx 1.0.38[/B]
 - The rows of wide pictures reach the screen's left edge, as the rows of posters do (a viewer, Nov 2026, with a video of the home's "next episode": "I installed the latest ... the episodes still pass *under* some bar"; a findings report on 1.0.33 said the same). Four pictures started a sixth of the way in, and left of them the picture past the row's end stood dimmed and still while the row slid under it. Now five, 6 % smaller, from the edge: a season's episodes, the next episode, the films and episodes in progress and every other wide row.
 - The films' and the series' shortcuts stop at their ends (the same report): Right on Netflix jumped to Umbrella at the far end, and Left on the series' last shortcut back to their first. Umbrella's shortcut had the id of the next screen's first; it has its own now, and a hidden Umbrella stays hidden.
