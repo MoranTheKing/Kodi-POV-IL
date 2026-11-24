@@ -1,3 +1,7 @@
+0.5.50
+- The window of a sent log photographs well (the owner, Nov 2026): the link white and bold, the log's names a light amber -- they were the Wizard's dark blue on that dark window.
+- "המשך צפייה" says in the log what it left out: each list (the next episode, the episodes and the shows in progress) writes how many rows came, how many it kept, and the TMDb ids of the shows the hidden list ("הסר מהמשך צפייה") left out, or that the hidden list could not be read. A viewer's POV asked him to resume an episode, yet "פרקים שהתחלתם" came back empty; his log could not say why.
+
 0.5.49
 - A movie picked right after closing another one's source list plays (a viewer, Nov 2026, a video: he closed one movie's sources, picked another, and got "another episode is already starting" -- on a movie -- and nothing played, twice). The guard against taps that pile up while Kodi is busy kept its "a title is starting" mark until POV's Python interpreter exited, and that one can stay alive for a while after the request is over, waiting on POV's scraper threads. The mark now ends the moment POV's route returns (sources closed, cancelled, nothing found, or the video over); taps queued behind a search that is still running are dropped as before, and the toast says "the previous pick is still looking for sources", right for a movie or an episode.
 

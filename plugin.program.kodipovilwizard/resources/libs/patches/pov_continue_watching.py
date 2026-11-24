@@ -381,19 +381,36 @@ def dropped_info(native, indicator):
     return hidden
 
 
+def _note_left_out(what, total, rows, left, hidden):
+    """One line in the log for each list the filter saw: how many rows came, and which shows the hidden list
+    left out. A viewer (Nov 2026) had a saved place in an episode that never showed in "פרקים שהתחלתם",
+    and his log could not say whether the show was hidden or the row failed later. TMDb ids only."""
+    try:
+        import xbmc
+        why = 'the hidden list could not be read' if isinstance(hidden, _UnknownHidden) else 'hidden'
+        xbmc.log('[POV IL continue] %s: %d row(s), %d kept%s' % (
+            what, total, rows, (', left out (%s): %s' % (why, ','.join(sorted(left))[:300])) if left else ''),
+            xbmc.LOGINFO)
+    except Exception:
+        pass
+
+
 def filter_episode_sources(menu):
     # Also cover optional watchlist additions and partially watched bookmarks;
     # the native last-watched query alone cannot filter these extra sources.
     if not (menu.list_type.startswith('next_episode') or menu.list_type == 'in_progress'):
         return
     hidden = dropped_info({}, menu.watched_indicators)
-    rows = []
+    rows, left = [], set()
     for row in menu.list:
         try:
             if _id(row['media_ids']['tmdb']) not in hidden:
                 rows.append(row)
+            else:
+                left.add(str(_id(row['media_ids']['tmdb'])))
         except (TypeError, ValueError, KeyError):
             continue
+    _note_left_out(menu.list_type, len(menu.list), len(rows), left, hidden)
     menu.list = rows
 
 
@@ -444,14 +461,17 @@ def filter_show_sources(menu):
     if menu.action != 'in_progress_tvshows':
         return
     hidden = dropped_info({}, menu.watched_indicators)
-    rows = []
+    rows, left = [], set()
     for row in menu.list:
         try:
             if _id(row) not in hidden:
                 rows.append(row)
+            else:
+                left.add(str(_id(row)))
         except (TypeError, ValueError):
             # A malformed source entry must not blank all the valid shows.
             continue
+    _note_left_out(menu.action, len(menu.list), len(rows), left, hidden)
     menu.list = rows
 
 
