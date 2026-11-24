@@ -206,8 +206,13 @@ class ModularUpdater:
         # Finish a package prepared on the previous boot before any network
         # request. The old service has already acknowledged and exited; a
         # manifest outage must not strand a complete local handoff.
-        if not getattr(self, 'fresh', False):
-            self._complete_pending_service_handoff()
+        # A first install being resumed (fresh) finishes it too: that run
+        # prepares the swap for "the next start" and, until 0.5.51, never
+        # completed it, so every start found the old MoranSubs, called the
+        # install incomplete, and the service yielded on every boot (new
+        # streamers, Nov 2026: only a reinstall of the app helped). With no
+        # prepared package -- a clean device -- this returns at once.
+        self._complete_pending_service_handoff()
         # A handoff cut off between disabling the subtitle service and
         # enabling it again leaves it disabled for good. After the handoff:
         # one cut off before its swap completes above and enables itself.
@@ -1270,6 +1275,28 @@ class ModularUpdater:
             if not leaving:
                 xbmc.executebuiltin('ReloadSkin()')
 
+    def _service_staged_for_restart(self, addon_id, mod, actual):
+        """MoranSubs runs, and this manifest's MoranSubs is staged to replace it at
+        the next Kodi start (the handoff never swaps a live service): the build
+        is complete; the normal update pass finishes the swap. Until 0.5.51 a
+        resumed first install demanded the new version now, which only that
+        restart can bring -- and failed on every start (new streamers, Nov 2026).
+        """
+        if addon_id != 'service.subtitles.kodipovilai' or not actual:
+            return False
+        try:
+            from resources.libs import staged_addon_install
+            staged = (self._service_update_allowed() and
+                      staged_addon_install.prepared_matches(
+                          CONFIG.ADDONS, addon_id, str(mod.get('version') or ''),
+                          str(mod.get('sha256') or '').lower()))
+        except Exception:
+            return False
+        if staged:
+            logging.log('[Provisioning] MoranSubs {0} runs; {1} is staged for the next '
+                        'start'.format(actual, mod.get('version')), level=xbmc.LOGINFO)
+        return bool(staged)
+
     def _fresh_install_complete(self, manifest):
         """Certify the installed files, not the installer dialog's completion.
 
@@ -1286,6 +1313,8 @@ class ModularUpdater:
                 missing.append('{0} (extraction not verified)'.format(addon_id))
             if (not expected or not actual or
                     self._version_tuple(actual) < self._version_tuple(expected)):
+                if self._service_staged_for_restart(addon_id, mod, actual):
+                    continue
                 missing.append('{0} ({1}, expected {2})'.format(
                     addon_id, actual or 'missing', expected or 'unspecified'))
         for addon_id in youtube_platform.eligible(self.CORE_PROVISION_IDS) + ['skin.povil.onyx', 'script.fentastic.helper']:

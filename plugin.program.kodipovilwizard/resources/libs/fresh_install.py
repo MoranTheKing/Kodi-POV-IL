@@ -156,7 +156,17 @@ def apply_live_defaults(defaults_path=None):
     Only the exact first-install skin-retention question is accepted. A
     reverted skin is not reported as a successfully activated build.
     """
-    root = ET.parse(defaults_path or os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')).getroot()
+    path = defaults_path or os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')
+    if os.path.isfile(path):
+        root = ET.parse(path).getroot()
+    else:
+        # The snapshot is written only when the settings pack is applied fresh. A
+        # pack applied before (a manual reinstall over a used profile) left none,
+        # and finishing then failed on every start for want of the file: the
+        # settings are on disk already, so only the skin is left to set.
+        logging.log('[FreshInstall] no fresh settings snapshot; setting the skin only',
+                    level=xbmc.LOGWARNING)
+        root = ET.Element('settings')
     target_skin = root.findtext("setting[@id='lookandfeel.skin']", 'skin.povil.onyx')
     monitor = xbmc.Monitor()
     if apply_live_settings(root, strict=True) is None:
@@ -174,6 +184,53 @@ def apply_live_defaults(defaults_path=None):
         if monitor.waitForAbort(0.2):
             return False
     return False
+
+
+def _profile_reloads():
+    try:
+        with open(os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_profile_reload'), encoding='utf-8') as fh:
+            return int(fh.read().strip())
+    except (OSError, ValueError):
+        return 0
+
+
+def complete_pending():
+    """Finish, from the Wizard's menu, a first install that startup left pending.
+
+    New streamers (Nov 2026): Onyx on the screen, "the installation did not
+    complete", and the skin switcher answered "no build installed" -- only a
+    reinstall of the app helped. Startup retries at its next real start, which
+    a TV box seldom has. This resumes the same steps here: nothing is cleared
+    first, present add-ons are skipped. True once the build is recorded.
+    """
+    from resources.libs.modular_updater import ModularUpdater
+    dialog = xbmcgui.Dialog()
+    logging.log('[FreshInstall] completing a pending install from the menu '
+                '(provisioned={0})'.format(ModularUpdater.is_provisioned()), level=xbmc.LOGINFO)
+    if not ModularUpdater.is_provisioned():
+        begin()
+        ready, issues = provision()
+        if not ready:
+            dialog.ok(CONFIG.ADDONTITLE, failure_message(issues))
+            return False
+    reloads = _profile_reloads()
+    try:
+        done = finalize()
+    except Exception as exc:
+        logging.log('[FreshInstall] completion from the menu failed: {0}'.format(exc),
+                    level=xbmc.LOGERROR)
+        done = False
+    if not done and _profile_reloads() > reloads:
+        # Kodi reloads the profile to show the build's favourites; startup's resume
+        # finishes right after it -- not a failure to report.
+        dialog.notification(CONFIG.ADDONTITLE, 'Kodi טוען מחדש את הפרופיל כדי לסיים את ההתקנה', time=6000)
+        return False
+    if not done:
+        dialog.ok(CONFIG.ADDONTITLE, 'ההתקנה עדיין לא הושלמה. היא תמשיך בפתיחה הבאה של Kodi, '
+                                     'או נסו שוב מכאן. אם זה חוזר, שלחו לוג דרך הוויזרד.')
+        return False
+    dialog.notification(CONFIG.ADDONTITLE, 'הבילד הותקן ומוכן לשימוש')
+    return True
 
 
 def live_favourites_ready():

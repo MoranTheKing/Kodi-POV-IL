@@ -1219,9 +1219,20 @@ def build_switch_skin():
         xbmcgui.Dialog().ok('סקין פרופיל הילדים', 'יש להשלים את בקרת ההורים במשתמש הראשי.')
         return
     if not CONFIG.get_setting('buildname'):
-        logging.log_notify(CONFIG.ADDONTITLE,
-                           '[COLOR {0}]לא מותקן בילד![/COLOR]'.format(CONFIG.COLOR2))
-        return
+        # A first install that stopped half-way (new streamers, Nov 2026: Onyx on
+        # the screen, yet "no build installed" here): offer to finish it.
+        if not os.path.isfile(os.path.join(CONFIG.USERDATA, 'kodipovil.modular_install_started')):
+            logging.log_notify(CONFIG.ADDONTITLE,
+                               '[COLOR {0}]לא מותקן בילד![/COLOR]'.format(CONFIG.COLOR2))
+            return
+        if not xbmcgui.Dialog().yesno(
+                CONFIG.ADDONTITLE,
+                'התקנת הבילד לא הושלמה עד הסוף.\nלהשלים אותה עכשיו? שום דבר לא יימחק.',
+                nolabel='לא עכשיו', yeslabel='השלמת ההתקנה'):
+            return
+        from resources.libs import fresh_install
+        if not fresh_install.complete_pending():
+            return
 
 
     from resources.libs import build_skin
