@@ -1,3 +1,8 @@
+0.5.51
+- A first install that stopped half-way finishes (new streamers, Nov 2026: Onyx on the screen, "the installation did not complete", and the skin switcher said "no build installed" -- only reinstalling the app helped). When MoranSubs was on the device and a newer one was out, a resumed install staged the new one for the next start, never ran that swap, and called the build incomplete for want of it -- on every start; meanwhile the Wizard stopped there (no updates) and MoranSubs yielded to the swap on every boot. The staged MoranSubs now counts, a resumed install completes a swap the old service has acknowledged, and the normal update finishes it at the next start.
+- The skin switcher offers to finish a pending installation ("השלמת ההתקנה", nothing is deleted) instead of "no build installed", and opens once it is done.
+- Finishing no longer fails on every start when the fresh settings snapshot is missing (the settings are on disk; only the skin is set).
+
 0.5.50
 - The window of a sent log photographs well (the owner, Nov 2026): the link white and bold, the log's names a light amber -- they were the Wizard's dark blue on that dark window.
 - "המשך צפייה" says in the log what it left out: each list (the next episode, the episodes and the shows in progress) writes how many rows came, how many it kept, and the TMDb ids of the shows the hidden list ("הסר מהמשך צפייה") left out, or that the hidden list could not be read. A viewer's POV asked him to resume an episode, yet "פרקים שהתחלתם" came back empty; his log could not say why.

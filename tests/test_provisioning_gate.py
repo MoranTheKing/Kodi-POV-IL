@@ -129,6 +129,7 @@ class ProvisioningGateTests(unittest.TestCase):
             ON_DEMAND_SKINS=frozenset(('skin.povil.onyx',)),
             OPTIONAL_SKINS=frozenset(),
             _pending_addon_receipt=lambda _aid: False,
+            _service_staged_for_restart=lambda *_a: False,
             CORE_PROVISION_IDS=('plugin.video.pov', 'plugin.video.idanplus'))
         manifest = {'addons': {aid: {'version': ver} for aid, ver in versions.items()},
                     'config': {'config_version': '2.0.7'}}
@@ -175,6 +176,7 @@ class ProvisioningGateTests(unittest.TestCase):
             OPTIONAL_SKINS=frozenset(),
             _pending_addon_receipt=lambda _aid: False,
             _standalone_service_on_disk=lambda: False,
+            _complete_pending_service_handoff=lambda: False,
             install_missing=True, fresh=True,
             _record_build_identity=lambda _manifest: True,
             _config_pending=lambda _manifest: True,
