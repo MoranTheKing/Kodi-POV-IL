@@ -33,6 +33,17 @@ class ServiceVisibilityTests(unittest.TestCase):
             self.assertTrue(self.load(settings)._read_states()['trakt'])
         self.assertFalse(self.load({})._read_states()['trakt'])
 
+    def test_a_source_that_is_not_installed_is_not_asked_for(self):
+        # Wizard 0.5.52: Account Manager is optional. Asking Kodi for a missing add-on writes an
+        # EXCEPTION line into the viewer's log at every rebuild (QA clean install, 25 Nov 2026).
+        asked=[]
+        module=self.load({'plugin.video.pov':{'trakt.token':'QA_OPAQUE'}})
+        real=module.xbmcaddon.Addon
+        module.xbmcaddon=types.SimpleNamespace(Addon=lambda ident:asked.append(ident) or real(ident))
+        module.xbmc.getCondVisibility=lambda cond:cond!='System.HasAddon(script.module.acctmgr)'
+        self.assertTrue(module._read_states()['trakt'])
+        self.assertEqual(asked,['plugin.video.pov'])
+
     def test_refresh_does_not_reenter_a_current_favourites_writer(self):
         module=self.load({})
         module._home=lambda:types.SimpleNamespace(getProperty=lambda key:'writer')

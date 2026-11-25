@@ -26,7 +26,7 @@ class HeadlessRepoTests(unittest.TestCase):
         scope = {
             '_log': lambda *_a, **_kw: None,
             '_parse_addons_xml': lambda body: {
-                'script.module.acctmgr': {'version': '1.0', 'requires': ['dep.one']},
+                'plugin.video.idanplus': {'version': '1.0', 'requires': ['dep.one']},
                 'dep.one': {'version': '1.0', 'requires': []},
             } if body == 'canonical' else {},
             '_version_tuple': lambda version: tuple(int(x) for x in version.split('.')),
@@ -41,11 +41,11 @@ class HeadlessRepoTests(unittest.TestCase):
             _targets_indexed=lambda wanted: targets_indexed(resolver, wanted),
             _iter_installed_repos=lambda: iter((
                 ('repository.unrelated', [('unused', 'https://unused/')]),
-                ('repository.709', [('canonical', 'https://canonical/')]),
+                ('repository.Fishenzon', [('canonical', 'https://canonical/')]),
             )),
             _fetch_text=lambda url: fetched.append(url) or url,
         )
-        load_index(resolver, ['script.module.acctmgr'])
+        load_index(resolver, ['plugin.video.idanplus'])
         self.assertEqual(fetched, ['canonical'])
         self.assertIn('dep.one', resolver.index)
 
@@ -53,7 +53,7 @@ class HeadlessRepoTests(unittest.TestCase):
         scope = {
             '_log': lambda *_a, **_kw: None,
             '_parse_addons_xml': lambda body: (
-                {'script.module.acctmgr': {'version': '1.0', 'requires': ['dep.one']}}
+                {'plugin.video.idanplus': {'version': '1.0', 'requires': ['dep.one']}}
                 if body == 'canonical' else
                 {'dep.one': {'version': '1.0', 'requires': []}}),
             '_version_tuple': lambda version: tuple(int(x) for x in version.split('.')),
@@ -68,11 +68,11 @@ class HeadlessRepoTests(unittest.TestCase):
             _targets_indexed=lambda wanted: targets_indexed(resolver, wanted),
             _iter_installed_repos=lambda: iter((
                 ('repository.unrelated', [('dependency', 'https://dependency/')]),
-                ('repository.709', [('canonical', 'https://canonical/')]),
+                ('repository.Fishenzon', [('canonical', 'https://canonical/')]),
             )),
             _fetch_text=lambda url: fetched.append(url) or url,
         )
-        load_index(resolver, ['script.module.acctmgr'])
+        load_index(resolver, ['plugin.video.idanplus'])
         self.assertEqual(fetched, ['canonical', 'dependency'])
 
 

@@ -453,9 +453,14 @@ UMBRELLA_PACKS = [
 # EasyDebrid / Easynews / Trakt / MDBList, which it then pushes into every
 # supported add-on it finds installed -- POV and Umbrella both among them, and
 # re-pushed at every Kodi startup, so an add-on installed LATER picks the
-# accounts up on the next boot. Ships with script.module.acctvwr (a hard
-# dependency of acctmgr, in no repo the build already carries) and with the
-# developer's own repository, so from here on he is its update channel, not us.
+# accounts up on the next boot. Needs script.module.acctvwr. Its developer
+# retired both on 24 Nov 2026 and removed them from his repositories: the
+# build no longer needs it (Wizard 0.5.52), and installs it only from its
+# own manifest, when the manifest offers it.
+
+ACCTMGR_ID = 'script.module.acctmgr'
+# install order: the viewer Account Manager requires, then Account Manager
+ACCTMGR_PARTS = ('script.module.acctvwr', ACCTMGR_ID)
 
 def _acctmgr_was_removed():
     """True when Account Manager's settings are on disk but the add-on is not.
@@ -479,21 +484,61 @@ def _acctmgr_was_removed():
 
 
 def ensure_acctmgr_installed():
-    """Install Account Manager ON DEMAND via Kodi's native InstallAddon.
+    """Install Account Manager and its viewer from the build's manifest.
 
-    Replaces the legacy static monolithic zip extraction. Once the target repository
-    is available, this will safely download and resolve dependencies for
-    script.module.acctmgr through Kodi's internal provisioning system.
+    Until 0.5.52 this asked Kodi to install it from repository.709, which no
+    longer has it (retired by its developer, 24 Nov 2026): a minute's wait for
+    nothing. The same verified download and swap as the build's skins.
+    True: installed. None: the manifest does not offer it. False: it could
+    not be installed (no manifest, a failed download, Kodi did not enable it).
     """
-    if xbmc.getCondVisibility('System.HasAddon(script.module.acctmgr)'):
+    if xbmc.getCondVisibility('System.HasAddon({0})'.format(ACCTMGR_ID)):
         return True
-    try:
-        from resources.libs.modular_updater import ModularUpdater
-        ModularUpdater(background=False).post_install_provisioning(
-            per_addon_timeout=60, ids=['script.module.acctmgr'])
-    except Exception as err:
-        logging.log('[Account Manager] native install failed: {0}'.format(err), level=xbmc.LOGERROR)
-    return xbmc.getCondVisibility('System.HasAddon(script.module.acctmgr)')
+    from resources.libs.modular_updater import ModularUpdater
+    updater = ModularUpdater(background=True)
+    manifest = updater._load_manifest()
+    if not manifest:
+        return False
+    addons = manifest.get('addons') or {}
+    for ident in ACCTMGR_PARTS:
+        entry = addons.get(ident)
+        if not entry or not entry.get('zip') or not entry.get('sha256'):
+            # checked for both first: never leave the viewer alone on the device
+            logging.log('[Account Manager] {0} is not in the manifest'.format(ident),
+                        level=xbmc.LOGWARNING)
+            return None
+    placed = []
+    for ident in ACCTMGR_PARTS:
+        entry = addons[ident]
+        local = updater.get_local_version(ident)
+        if not (local and updater._version_tuple(local) >= updater._version_tuple(entry.get('version'))):
+            entry = dict(entry, id=ident)
+            tools.ensure_folders(CONFIG.PACKAGES)
+            package = os.path.join(CONFIG.PACKAGES, '{0}-modular.zip'.format(ident))
+            try:
+                updater._download_background_zip(entry['zip'], package, entry)
+                updater._install_verified_module(package, entry, entry['sha256'])
+            except Exception as err:
+                logging.log('[Account Manager] installing {0} failed: {1}'.format(
+                    ident, type(err).__name__), level=xbmc.LOGERROR)
+                return False
+            finally:
+                tools.remove_file(package)
+        placed.append(ident)
+    db.addon_database(placed, 1, True)
+    xbmc.executebuiltin('UpdateLocalAddons')
+    monitor = xbmc.Monitor()
+    for _ in range(20):
+        # the refresh is asynchronous: enable what it has not enabled yet
+        for ident in placed:
+            if not xbmc.getCondVisibility('System.HasAddon({0})'.format(ident)):
+                ModularUpdater._enable_addon(ident)
+        if xbmc.getCondVisibility('System.HasAddon({0})'.format(ACCTMGR_ID)):
+            logging.log('[Account Manager] installed from the manifest', level=xbmc.LOGINFO)
+            return True
+        if monitor.waitForAbort(0.5):
+            break
+    return xbmc.getCondVisibility('System.HasAddon({0})'.format(ACCTMGR_ID))
 
 
 ACCTMGR_AUTO_SETTING = 'acctmgr_auto'
@@ -581,23 +626,27 @@ def install_acctmgr_pilot():
         yeslabel='[B][COLOR springgreen]התקן[/COLOR][/B]')
     if not yes_pressed:
         return
-    if ensure_acctmgr_installed():
-        xbmc.sleep(500)
-        try:
-            xbmc.executebuiltin('UpdateLocalAddons')
-        except Exception:
-            pass
-
-        # Record it here too so manual and auto paths leave the same mark
-        try:
-            CONFIG.set_setting(ACCTMGR_AUTO_SETTING, ACCTMGR_AUTO_DONE)
-        except Exception:
-            pass
-
-        logging.log_notify(
-            CONFIG.ADDONTITLE,
-            '[COLOR {0}]הותקן! זמין תחת תוספים -> תוכניות -> '
-            'Account Manager[/COLOR]'.format(CONFIG.COLOR1))
+    xbmcgui.Dialog().notification(CONFIG.ADDONTITLE, 'מתקין את Account Manager...',
+                                  xbmcgui.NOTIFICATION_INFO, 4000)
+    done = ensure_acctmgr_installed()
+    if done is None:
+        # a Hebrew word first: a line that opens with Latin letters is laid out left to right
+        xbmcgui.Dialog().ok(CONFIG.ADDONTITLE, 'התוסף Account Manager אינו זמין כרגע: המפתח שלו הפסיק להפיץ אותו. '
+                                               'חיבור השירותים עובד גם בלעדיו, ישירות ב-POV.')
+        return
+    if not done:
+        xbmcgui.Dialog().ok(CONFIG.ADDONTITLE, 'ההתקנה של Account Manager לא הצליחה. '
+                                               'בדקו את החיבור לאינטרנט ונסו שוב.')
+        return
+    # Record it here too so manual and auto paths leave the same mark
+    try:
+        CONFIG.set_setting(ACCTMGR_AUTO_SETTING, ACCTMGR_AUTO_DONE)
+    except Exception:
+        pass
+    logging.log_notify(
+        CONFIG.ADDONTITLE,
+        '[COLOR {0}]הותקן! זמין תחת תוספים -> תוכניות -> '
+        'Account Manager[/COLOR]'.format(CONFIG.COLOR1))
 
 
 def ensure_umbrella_installed():
