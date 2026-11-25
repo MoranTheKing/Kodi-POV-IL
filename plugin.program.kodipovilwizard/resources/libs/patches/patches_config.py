@@ -1207,6 +1207,8 @@ PATCH_CONFIG = [
         "target_file": "resources/lib/indexers/trakt_api.py",
         "marker": "# WIZARD_POV_TRAKT_REAUTH_v2",
         "anchor": "def trakt_sync_activities(force_update=False, init_callback=None, monitor=None):",
+        # POV 6.11.04 dropped the monitor argument (issue 442); the hook does not use it
+        "alternatives": [{"anchor": "def trakt_sync_activities(force_update=False, init_callback=None):"}],
         "action": "prepend_before",
         "hook": (
             "import sys, xbmcvfs\n"

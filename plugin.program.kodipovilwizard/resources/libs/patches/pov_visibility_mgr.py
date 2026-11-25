@@ -205,6 +205,14 @@ def _read_states():
 		return states
 	sources = _SOURCES[:1] if STRICT_ACCTMGR else _SOURCES
 	for addon_id, id_map in sources:
+		# A source that is not installed is skipped quietly: asking Kodi for it
+		# writes an EXCEPTION line into the log on every rebuild (Account Manager
+		# is optional since Wizard 0.5.52; its developer retired it).
+		try:
+			if xbmc is not None and not xbmc.getCondVisibility('System.HasAddon(%s)' % addon_id):
+				continue
+		except Exception:
+			pass
 		try:
 			addon = xbmcaddon.Addon(addon_id)
 		except Exception as e:

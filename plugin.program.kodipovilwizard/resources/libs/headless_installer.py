@@ -283,7 +283,6 @@ class HeadlessInstaller:
             return
         wanted = tuple(wanted_ids or ())
         hints = {
-            'script.module.acctmgr': 'repository.709',
             'plugin.video.pov': 'repository.kodifitzwell',
             'plugin.video.idanplus': 'repository.Fishenzon',
             'plugin.video.youtube': 'repository.xbmc.org',

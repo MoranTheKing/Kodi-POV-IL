@@ -935,8 +935,14 @@ class ModularUpdater:
     # for up to ~60s on a fresh install; placing it last means a transient Otaku
     # timeout can never block the core addons (POV, IdanPlus, YouTube, language
     # pack) -- heal_missing_addons() simply (re)installs Otaku on the next launch.
+    # Account Manager (script.module.acctmgr + script.module.acctvwr) is not
+    # here since 0.5.52: its developer retired it on 24 Nov 2026 and removed it
+    # from repository.709, after which every new install stopped at 25% on it
+    # and ended "incomplete". The build works without it (the services screen
+    # connects POV directly). A third-party add-on is never a core requirement
+    # on the strength of a repository we do not run; if the build's manifest
+    # ever ships it, it arrives with the build's own add-ons.
     PROVISION_IDS = [
-        'script.module.acctmgr',            # <- repository.709 (Account Manager)
         'plugin.video.pov',                 # <- repository.kodifitzwell (+ patched at runtime)
         'plugin.video.idanplus',            # <- repository.Fishenzon
         'plugin.video.youtube',             # <- Kodi official repo
@@ -949,7 +955,6 @@ class ModularUpdater:
     # A completed config pack must not certify a fresh build without them.
     # Otaku and unpause-jumpback are recoverable optional additions.
     CORE_PROVISION_IDS = (
-        'script.module.acctmgr',
         'plugin.video.pov',
         'plugin.video.idanplus',
         'plugin.video.youtube',
