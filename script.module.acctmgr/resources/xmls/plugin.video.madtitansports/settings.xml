@@ -1,0 +1,47 @@
+<settings version="4">
+    <setting id="use_cache" default="true">false</setting>
+    <setting id="time_cache">60</setting>
+    <setting id="clear_cache" default="true" />
+    <setting id="full_meta">true</setting>
+    <setting id="item_meta" default="true">false</setting>
+    <setting id="open.Osettings" default="true" />
+    <setting id="store_refresh_notifications" default="true">false</setting>
+    <setting id="tmdb.api_key" default="true">0a66c52089e5b0756f86589d928a2c06</setting>
+    <setting id="tmdb.access_token" default="true">eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIwYTY2YzUyMDg5ZTViMDc1NmY4NjU4OWQ5MjhhMmMwNiIsInN1YiI6IjYxZmQ0NWQ3Y2U5OTdhMDA0NDYxMGRmZCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.Zezp0YNMzgRnxeZV9Jada2j9mNoRqLNjOeE3rNI_mzQ</setting>
+    <setting id="trakt.client_id" default="true">af6a59b4eadd2b50c1cd99a0281ac9ebceb1726af06cef9861d1e213cadf66fa</setting>
+    <setting id="trakt.client_secret" default="true">8a7cb62e468aa137fab9aabe95b6e8455c4c41b58445de19885eb17174c64b95</setting>
+    <setting id="trakt.access_token" default="true" />
+    <setting id="trakt.refresh_token" default="true" />
+    <setting id="trakt.user_id" default="true" />
+    <setting id="trakt.authorize" default="true" />
+    <setting id="trakt.clear" default="true" />
+    <setting id="root_xml" default="true">file://main.xml</setting>
+    <setting id="message_xml_url" default="true">file://news.xml</setting>
+    <setting id="use_gui">true</setting>
+    <setting id="server_front_url" default="true" />
+    <setting id="recently_played_count">5</setting>
+    <setting id="auto_play_prefs" default="true">false</setting>
+    <setting id="disable_preview" default="true">false</setting>
+    <setting id="gui_layout" default="true">0</setting>
+    <setting id="playback_session" default="true" />
+    <setting id="ls_cache_ttl">5</setting>
+    <setting id="ls_nfl" default="true">false</setting>
+    <setting id="ls_ncaaf" default="true">false</setting>
+    <setting id="ls_mlb" default="true">false</setting>
+    <setting id="ls_nba" default="true">false</setting>
+    <setting id="ls_nhl" default="true">false</setting>
+    <setting id="ls_ncaab" default="true">false</setting>
+    <setting id="ls_wnba" default="true">false</setting>
+    <setting id="ls_mls" default="true">false</setting>
+    <setting id="ls_cfl" default="true">false</setting>
+    <setting id="ls_ncaabase" default="true">false</setting>
+    <setting id="ls_la_liga" default="true">false</setting>
+    <setting id="ls_bundesliga" default="true">false</setting>
+    <setting id="ls_serie_a" default="true">false</setting>
+    <setting id="ls_ligue_1" default="true">false</setting>
+    <setting id="ls_champions_league" default="true">false</setting>
+    <setting id="ls_world" default="true">false</setting>
+    <setting id="debug_logging" default="true">false</setting>
+    <setting id="debug" default="true">false</setting>
+    <setting id="playback_url" default="true" />
+</settings>

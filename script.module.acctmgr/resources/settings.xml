@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+	<category label="Accounts">
+		<setting type="lsep" label="Trakt" />
+		<setting id="trakt.token" type="text" visible="false" label="" default="" />
+		<setting id="trakt.refresh" type="text" visible="false" label="" default="" />
+		<setting id="trakt.expires" type="text" visible="false" label="" default="" />
+		<setting type="action" label="Edit Sync List" option="close" action="RunScript(script.module.acctmgr, action=traktEditSyncList)" visible="!eq(-3,)" />
+		<setting type="action" label="Authorize" option="close" action="RunScript(script.module.acctmgr, action=traktAuth)" visible="eq(-4,)" />
+		<setting id="trakt.username" type="text" default="" label="32318" enable="false" visible="!eq(-5,)" />
+		<setting type="action" label="32316" option="close" action="RunScript(script.module.acctmgr, action=traktAcct)" visible="!eq(-6,)" />
+
+		<setting type="lsep" label="MDBList" />
+		<setting id="mdblist.token" type="text" visible="false" default="" />
+		<setting id="mdblist.refresh" type="text" visible="false" default="" />
+		<setting id="mdblist.expires" type="text" visible="false" default="" />
+		<setting id="mdblist.client_id" type="text" visible="false" default="" />
+		<setting id="mdblist.auth_status" type="text" visible="false" default="" />
+		<setting type="action" label="Authorize" option="close" action="RunScript(script.module.acctmgr, action=mdblistAuth)" visible="eq(-5,) + eq(1,)" />
+		<setting id="mdblist.apikey" type="text" visible="false" label="" default="" />
+		<setting id="mdblist.username" type="text" default="" label="32318" visible="!eq(-1,)" enable="false" />
+		<setting id="mdblist.apikey" type="text" default="" label="32305" visible="!eq(-2,)" enable="false" />
+
+		<setting type="lsep" label="Real-Debrid" />
+		<setting id="realdebrid.token" label="40079" type="text" default="" visible="false" />
+		<setting id="realdebrid.username" label="32318" type="text" default="" visible="!eq(-1,)" enable="false" />
+		<setting type="action" label="32316" option="close" action="RunScript(script.module.acctmgr, action=realdebridAcct)" visible="!eq(-1,)" />
+		<setting type="action" label="32319" option="close" action="RunScript(script.module.acctmgr, action=realdebridAuth)" visible="eq(-3,)" />
+		<setting id="realdebrid.client_id" label="realdebrid client_id" type="text" default="" visible="false" />
+		<setting id="realdebrid.refresh" label="realdebrid refresh" type = "text" default="" visible="false" />
+		<setting id="realdebrid.secret" label="realdebrid secret" type = "text" default="" visible="false" />
+
+		<setting type="lsep" label="Premiumize" />
+		<setting id="premiumize.token" label="40078" type="text" default="" visible="false" />
+		<setting id="premiumize.username" label="32318" type="text" default="" visible="!eq(-1,)" enable="false" />
+		<setting type="action" label="32316" option="close" action="RunScript(script.module.acctmgr, action=premiumizeAcct)" visible="!eq(-1,)" />
+		<setting type="action" label="32319" option="close" action="RunScript(script.module.acctmgr, action=premiumizeAuth)" visible="eq(-3,)" />
+		<setting id="premiumize.client_id" type="text" default="" label="premiumize client_id" visible="false" />
+
+		<setting type="lsep" label="All-Debrid" />
+		<setting id="alldebrid.token" label="40077" type="text" default="" visible="false" />
+		<setting id="alldebrid.username" label="32318" type="text" default="" visible="!eq(-1,)" enable="false" />
+		<setting type="action" label="32316" option="close" action="RunScript(script.module.acctmgr, action=alldebridAcct)" visible="!eq(-1,)" />
+		<setting type="action" label="32319" option="close" action="RunScript(script.module.acctmgr, action=alldebridAuth)" visible="eq(-3,)" />
+
+		<setting type="lsep" label="TorBox" />
+		<setting id="torbox.token" type="text" visible="false" label="" default="" />
+		<setting id="torbox.token" type="text" label="32305" enable="false" default="" visible="!eq(-1,)" />
+		<setting type="action" label="32316" option="close" action="RunScript(script.module.acctmgr, action=torboxAcct)" visible="!eq(-1,)" />
+		<setting id="torbox.acct_id" type="text" label="Account ID" enable="false" default="" visible="false" />
+		<setting id="torbox.auth_status" type="text" label="Account Tier" enable="false" default="" visible="false" />
+		<setting type="action" label="32319" option="close" action="RunScript(script.module.acctmgr, action=torboxAuth)" visible="eq(-4,)" />
+
+		<setting type="lsep" label="OffCloud" />
+		<setting id="offcloud.token" label="40115" type="text" default="" visible="false" />
+		<setting id="offcloud.userid" type="text" label="Offcloud User ID" enable="false" default="" visible="!eq(-1,)" />
+		<setting id="offcloud.token" type="text" label="Offcloud APi Key" enable="false" default="" visible="!eq(-2,)" />
+		<setting type="action" label="32319" option="close" action="RunScript(script.module.acctmgr, action=offcloudAuth)" visible="eq(-3,)" />
+
+		<setting type="lsep" label="Easynews" />
+		<setting id="easynews.username" type="text" visible="false" label="" default="" />
+		<setting id="easynews.password" type="text" visible="false" label="" default="" />
+		<setting id="easynews.username" type="text" label="32318" enable="false" default="" visible="!eq(-2,)" />
+		<setting id="easynews.password" type="text" label="32344" enable="false" default="" visible="!eq(-2,)" />
+		<setting type="action" label="32319" option="close" action="RunScript(script.module.acctmgr, action=easynewsAuth)" visible="eq(-4,) | eq(-3,)" />
+	</category>
+	<category label="Manage">
+		<setting type="lsep" label="40087" />
+		<setting type="text" label="40088" enable="false" />
+		<setting type="action" label="Run Revoke All Now" option="close" action="RunScript(script.module.acctmgr, action=allRevoke)" visible="true" />
+		<setting type="lsep" label="Trakt" />
+		<setting id="trakt.token" label="" type="text" default="" visible="false" enable="false" />
+		<setting type="action" label="View Authorizations" option="close" action="RunScript(script.module.acctmgr, action=traktViewer)" visible="!eq(-1,)" />
+		<setting type="action" label="Sync Add-ons" option="close" action="RunScript(script.module.acctmgr, action=traktReSync)" visible="!eq(-2,)" />
+		<setting type="action" label="Revoke" option="close" action="RunScript(script.module.acctmgr, action=traktRevoke)" visible="!eq(-3,)" />
+
+		<setting type="lsep" label="MDBList" />
+		<setting id="mdblist.username" label="" type="text" default="" visible="false" enable="false" />
+		<setting id="mdblist.apikey" label="" type="text" default="" visible="false" enable="false" />
+		<setting type="action" label="View Authorizations" option="close" action="RunScript(script.module.acctmgr, action=mdblistViewer)" visible="!eq(-2,)" />
+		<setting type="action" label="Sync Add-ons" option="close" action="RunScript(script.module.acctmgr, action=mdblistReSync)" visible="!eq(-3,)" />
+		<setting type="action" label="Revoke" option="close" action="RunScript(script.module.acctmgr, action=mdblistRevoke)" visible="!eq(-4,)" />
+
+		<setting type="lsep" label="Real-Debrid" />
+		<setting id="realdebrid.token" label="" type="text" default="" visible="false" enable="false" />
+		<setting type="action" label="View Authorizations" option="close" action="RunScript(script.module.acctmgr, action=realdebridViewer)" visible="!eq(-1,)" />
+		<setting type="action" label="Sync Add-ons" option="close" action="RunScript(script.module.acctmgr, action=realdebridReSync)"  visible="!eq(-2,)" />
+		<setting type="action" label="Revoke" option="close" action="RunScript(script.module.acctmgr, action=realdebridRevoke)"  visible="!eq(-3,)" />
+
+		<setting type="lsep" label="Premiumize" />
+		<setting id="premiumize.token" label="" type="text" default="" visible="false" enable="false" />
+		<setting type="action" label="View Authorizations" option="close" action="RunScript(script.module.acctmgr, action=premiumizeViewer)" visible="!eq(-1,)" />
+		<setting type="action" label="Sync Add-ons" option="close" action="RunScript(script.module.acctmgr, action=premiumizeReSync)"  visible="!eq(-2,)" />
+		<setting type="action" label="Revoke" option="close" action="RunScript(script.module.acctmgr, action=premiumizeRevoke)"  visible="!eq(-3,)" />
+	
+		<setting type="lsep" label="All-Debrid" />
+		<setting id="alldebrid.token" label="" type="text" default="" visible="false" enable="false" />
+		<setting type="action" label="View Authorizations" option="close" action="RunScript(script.module.acctmgr, action=alldebridViewer)" visible="!eq(-1,)" />
+		<setting type="action" label="Sync Add-ons" option="close" action="RunScript(script.module.acctmgr, action=alldebridReSync)"  visible="!eq(-2,)" />
+		<setting type="action" label="Revoke" option="close" action="RunScript(script.module.acctmgr, action=alldebridRevoke)"  visible="!eq(-3,)" />
+
+		<setting type="lsep" label="TorBox" />
+		<setting id="torbox.token" label="" type="text" default="" visible="false" enable="false" />
+		<setting type="action" label="View Authorizations" option="close" action="RunScript(script.module.acctmgr, action=torboxViewer)" visible="!eq(-1,)" />
+		<setting type="action" label="Sync Add-ons" option="close" action="RunScript(script.module.acctmgr, action=torboxReSync)"  visible="!eq(-2,)" />
+		<setting type="action" label="Revoke" option="close" action="RunScript(script.module.acctmgr, action=torboxRevoke)"  visible="!eq(-3,)" />
+
+		<setting type="lsep" label="OffCloud" />
+		<setting id="offcloud.token" label="" type="text" default="" visible="false" enable="false" />
+		<setting type="action" label="View Authorizations" option="close" action="RunScript(script.module.acctmgr, action=offcloudViewer)" visible="!eq(-1,)" />
+		<setting type="action" label="Sync Add-ons" option="close" action="RunScript(script.module.acctmgr, action=offcloudReSync)"  visible="!eq(-2,)" />
+		<setting type="action" label="Revoke" option="close" action="RunScript(script.module.acctmgr, action=offcloudRevoke)"  visible="!eq(-3,)" />
+
+		<setting type="lsep" label="Easynews" />
+		<setting id="easynews.password" label="" type="text" default="" visible="false" enable="false" />
+		<setting type="action" label="View Authorizations" option="close" action="RunScript(script.module.acctmgr, action=easynewsViewer)" visible="!eq(-1,)" />
+		<setting type="action" label="Sync Add-ons" option="close" action="RunScript(script.module.acctmgr, action=easynewsReSync)"  visible="!eq(-2,)" />
+		<setting type="action" label="Revoke" option="close" action="RunScript(script.module.acctmgr, action=easynewsRevoke)"  visible="!eq(-3,)" />
+	</category>
+	<category label="Tools">
+		<!-- Set Max Resolution -->
+		<setting type="lsep" label="Set Max Resolution" />
+		<setting type="action" label="Set 4K Max" option="close" action="RunScript(script.module.acctmgr, action=setUHD)"  visible="true" />
+		<setting type="action" label="Set 1080P Max" option="close" action="RunScript(script.module.acctmgr, action=setHD)"  visible="true" />
+		<setting type="action" label="Set SD-720P Max" option="close" action="RunScript(script.module.acctmgr, action=setSD)"  visible="true" />
+		
+		<!-- Set Autoplay -->
+		<setting type="lsep" label="Set Source Select/Autoplay" />
+		<setting type="action" label="Set Source Select" option="close" action="RunScript(script.module.acctmgr, action=setDIR)"  visible="true" />
+		<setting type="action" label="Set Autoplay" option="close" action="RunScript(script.module.acctmgr, action=setAUTO)"  visible="true" />
+		
+		<!-- Install TMDbH Players -->
+		<setting type="lsep" label="Manage TMDb Helper Players" />
+		<setting type="action" label="Add Players" option="close" action="RunScript(script.module.acctmgr, action=setPLAYER)"  visible="true" />
+		<setting type="action" label="Remove Players" option="close" action="RunScript(script.module.acctmgr, action=delPLAYER)"  visible="true" />
+	</category>
+	<category label="Startup">
+		<setting type="lsep" label="Update Notifications" />
+		<setting id="check_for_update" type="bool" label="Enable Update Notification" default="true" />
+		<setting id="am_last_prepare" type="text" default="" visible="false" />
+		<setting id="am_trakt_ready" type="bool" default="false" visible="false" />
+		<setting id="api.service" type="bool" label="Trakt API Service" visible="false" default="false" />
+		<!-- Services -->
+		<setting type="lsep" label="Sync Authorization(s) with Supported Add-ons" />
+		<setting id="sync.mdb.service"  type="bool" label="MDBList" visible="true" default="false"/>
+      		<setting id="sync.rd.service"  type="bool" label="Real-Debrid" visible="true" default="false"/>
+      		<setting id="sync.pm.service"  type="bool" label="Premiumize" visible="true" default="false"/>
+      		<setting id="sync.ad.service"  type="bool" label="All-Debrid" visible="true" default="false"/>
+      		<setting id="sync.tb.service"  type="bool" label="TorBox" visible="true" default="false"/>
+		<setting id="sync.oc.service"  type="bool" label="OffCloud" visible="true" default="false"/>
+      		<setting id="sync.en.service"  type="bool" label="Easynews" visible="true" default="false"/>
+	</category>
+	<category label="Logs">
+		<setting type="lsep" label="Error Logging" />
+		<setting id="debug.enabled" type="bool" label="Enable Logging" default="true" />
+		<setting id="debug.reversed" type="bool" label="Enable Reverse Logging - (New entries written to top of log)" default="false" visible="eq(-1,true) + eq(1,1)"/>
+		<setting id="debug.location" type="enum" label="Log Output Location" values="Kodi log|AM Lite log" default="0" visible="eq(-2,true)" />
+		<setting type="action" label="View Log" action="RunScript(script.module.acctmgr, action=viewLogFile)" visible="eq(-3,true)" />
+		<setting type="action" label="Clear Log" option="close" action="RunScript(script.module.acctmgr, action=clearLogFile)" visible="eq(-4,true) + eq(-3,1)" />
+		<setting type="action" label="Upload Log" option="close" action="RunScript(script.module.acctmgr, action=uploadLogFile)" visible="eq(-5,true)" />
+	</category>
+	<category label="Info">
+		<setting type="lsep" label="View Supported Add-ons & Scrapers" />
+		<setting label="40098" type="action" action="RunScript(script.module.acctmgr, action=ShowSupported_Trakt)" />
+		<setting label="40104" type="action" action="RunScript(script.module.acctmgr, action=ShowSupported_MDBList)" />
+		<setting label="40099" type="action" action="RunScript(script.module.acctmgr, action=ShowSupported_Debrid)" />
+		<setting label="40196" type="action" action="RunScript(script.module.acctmgr, action=ShowSupported_Torbox)" />
+		<setting label="40100" type="action" action="RunScript(script.module.acctmgr, action=ShowSupported_Offcloud)" />
+		<setting label="40101" type="action" action="RunScript(script.module.acctmgr, action=ShowSupported_Easynews)" />
+		<setting label="40102" type="action" action="RunScript(script.module.acctmgr, action=ShowSupported_MaxQL)" />
+		<setting label="40103" type="action" action="RunScript(script.module.acctmgr, action=ShowSupported_Autoplay)" />
+		<setting type="lsep" label="View Changelog" />
+		<setting label="40106" type="action" action="RunScript(script.module.acctmgr, action=ShowChangelog)" />
+	</category>
+</settings>

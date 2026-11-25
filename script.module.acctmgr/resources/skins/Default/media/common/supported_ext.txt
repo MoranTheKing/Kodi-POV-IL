@@ -1,0 +1,13 @@
+
+Supported Scraper Packages:
+1. Coco Scrapers
+2. Gears Scrapers
+3. Magneto Scrapers
+4. Viper Scrapers
+
+Supported Add-ons:
+1. Fen Light
+2. The Gears
+3. Red Light
+4. Umbrella
+

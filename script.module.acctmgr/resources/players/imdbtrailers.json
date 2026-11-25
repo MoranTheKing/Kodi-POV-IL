@@ -1,0 +1,14 @@
+{
+    "name"              : "[COLOR gold]IMDb Trailers[/COLOR]",
+    "plugin"            : "plugin.video.imdb.trailers",
+    "priority"          : 19,
+    "is_resolvable"     : "true",
+    "search_movie"      : [
+                            "plugin://plugin.video.imdb.trailers/?action=search_word&keyword={title_escaped}",
+                            {"dialog": "true"}
+                          ],
+    "search_episode"    : [
+                            "plugin://plugin.video.imdb.trailers/?action=search_word&keyword={showname_escaped}",
+                            {"dialog": "true"}
+                          ]
+}

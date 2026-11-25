@@ -1,0 +1,4 @@
+
+
+
+This action will revoke all authorizations applied using AM Lite. Once the above actions are complete, all settings applied by AM Lite will be completely removed from your system. You can now safely uninstall AM Lite.

@@ -1,0 +1,98 @@
+<settings version="4">
+    <setting id="language" default="true">18</setting>
+    <setting id="mpaa_prefix" default="true" />
+    <setting id="ignore_regionreleasefilter" default="true">false</setting>
+    <setting id="force_english_plot_fallback" default="true">false</setting>
+    <setting id="startup_notifications" default="true">true</setting>
+    <setting id="sync_notifications" default="true">true</setting>
+    <setting id="connection_notifications" default="true">true</setting>
+    <setting id="contextmenu_related_lists" default="true">true</setting>
+    <setting id="contextmenu_sync_options" default="true">true</setting>
+    <setting id="contextmenu_refresh_details" default="true">true</setting>
+    <setting id="contextmenu_modify_artwork" default="true">true</setting>
+    <setting id="contextmenu_add_to_library" default="true">true</setting>
+    <setting id="contextmenu_make_node" default="true">true</setting>
+    <setting id="widgets_nextpage" default="true">false</setting>
+    <setting id="widgets_stale_hours" default="true">24</setting>
+    <setting id="flatten_seasons" default="true">false</setting>
+    <setting id="seasons_specials" default="true">true</setting>
+    <setting id="seasons_anticipated" default="true">true</setting>
+    <setting id="seasons_groups" default="true">true</setting>
+    <setting id="seasons_upnext" default="true">true</setting>
+    <setting id="calendar_flatten" default="true">true</setting>
+    <setting id="nextaired_linklibrary" default="true">true</setting>
+    <setting id="calendar_art" default="true">0</setting>
+    <setting id="trakt_nextepisodesort" default="true">airdate</setting>
+    <setting id="nextepisodes_usecalendar" default="true">false</setting>
+    <setting id="nextmovies_updates" default="true">true</setting>
+    <setting id="nextmovies_daily_budget" default="true">25</setting>
+    <setting id="trakt_becausewatchedseed" default="true">5</setting>
+    <setting id="pagemulti_tmdb" default="true">1</setting>
+    <setting id="pagemulti_trakt" default="true">1</setting>
+    <setting id="pagemulti_sync" default="true">1</setting>
+    <setting id="artwork_quality" default="true">0</setting>
+    <setting id="artwork_quality_poster" default="true">-1</setting>
+    <setting id="artwork_quality_fanart" default="true">-1</setting>
+    <setting id="regional_prefer" default="true">false</setting>
+    <setting id="fanarttv_lookup" default="true">false</setting>
+    <setting id="fanarttv_prefer" default="true">false</setting>
+    <setting id="language_lookup" default="true">false</setting>
+    <setting id="genre_icon_location" default="true" />
+    <setting id="trakt_genre_icon_location" default="true" />
+    <setting id="provider_icon_location" default="true" />
+    <setting id="genre_fanart" default="true">false</setting>
+    <setting id="provider_fanart" default="true">false</setting>
+    <setting id="default_player_movies" default="true" />
+    <setting id="default_player_episodes" default="true" />
+    <setting id="default_player_provider" default="true">true</setting>
+    <setting id="default_player_kodi" default="true">1</setting>
+    <setting id="player_episode_groups" default="true">default</setting>
+    <setting id="combined_players" default="true">true</setting>
+    <setting id="bundled_players" default="true">true</setting>
+    <setting id="players_url" default="true" />
+    <setting id="tmdb_user_rate_after_watching" default="true">true</setting>
+    <setting id="movies_library" default="true">special://profile/addon_data/plugin.video.themoviedb.helper/movies/</setting>
+    <setting id="tvshows_library" default="true">special://profile/addon_data/plugin.video.themoviedb.helper/tvshows/</setting>
+    <setting id="auto_update" default="true">true</setting>
+    <setting id="library_autoupdate" default="true">false</setting>
+    <setting id="library_autoupdate_hour" default="true">0</setting>
+    <setting id="monitor_userlist" default="true" />
+    <setting id="monitor_userslug" default="true" />
+    <setting id="last_autoupdate" default="true" />
+    <setting id="use_kodi_local_db" default="true">0</setting>
+    <setting id="ignore_folderchecking" default="true">false</setting>
+    <setting id="alternative_nfo" default="true">false</setting>
+    <setting id="trakt_cacheownlists" default="true">true</setting>
+    <setting id="trakt_token" default="true" />
+    <setting id="omdb_apikey" default="true" />
+    <setting id="omdb_apikey_access" default="true">false</setting>
+    <setting id="ratingposterdb_apikey" default="true" />
+    <setting id="fanarttv_clientkey" default="true" />
+    <setting id="fanarttv_clientkey_access" default="true">false</setting>
+    <setting id="ratings_provider_configuration" default="true" />
+    <setting id="tmdb_user_token" default="true" />
+    <setting id="tmdb_user_token_access" default="true">false</setting>
+    <setting id="sync_provider_watched" default="true" />
+    <setting id="sync_provider_watchlist" default="true" />
+    <setting id="sync_provider_collection" default="true" />
+    <setting id="sync_provider_scrobbling" default="true" />
+    <setting id="sync_provider_stats" default="true" />
+    <setting id="trakt_watchedindicators" default="true">false</setting>
+    <setting id="invalidate_sync" default="true" />
+    <setting id="provider_allowlist" default="true" />
+    <setting id="use_online_artwork" default="true">true</setting>
+    <setting id="use_online_ratings" default="true">true</setting>
+    <setting id="service_container_content_fallback" default="true">false</setting>
+    <setting id="service_prefers_online_clearlogo" default="true">false</setting>
+    <setting id="dummy_duration" default="true">1.0</setting>
+    <setting id="dummy_delay" default="true">1.0</setting>
+    <setting id="only_resolve_strm" default="true">false</setting>
+    <setting id="force_recache_kodidb" default="true">false</setting>
+    <setting id="use_alternate_api_url" default="true">false</setting>
+    <setting id="max_threads" default="true">0</setting>
+    <setting id="cache_location" default="true" />
+    <setting id="image_location" default="true" />
+    <setting id="image_cache_size" default="true">128</setting>
+    <setting id="debug_logging" default="true">false</setting>
+    <setting id="timer_reports" default="true">0</setting>
+</settings>

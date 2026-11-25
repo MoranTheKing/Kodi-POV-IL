@@ -6,13 +6,16 @@
 # Wizard's hooks and MoranSubs' patchers fit the new official zip. The other
 # lines are the last version a person checked by hand; since 17 Nov 2026 the
 # same workflow runs the patches on the newest published version of Arctic
-# Fuse 3, Idan Plus, Account Manager and YouTube every six hours
+# Fuse 3, Idan Plus and YouTube every six hours
 # (.github/scripts/upstream_audit.py) and keeps an issue open only while
 # something does not fit, so these need no update.
+# Account Manager (script.module.acctmgr) is no longer listed: its developer
+# retired it on 24 Nov 2026 and removed it from his repositories, and the
+# build ships its last version (1.2.1a, with script.module.acctvwr 1.1.6a)
+# from this repo.
 plugin.video.pov: 6.11.04
 plugin.video.idanplus: 4.0.6
 skin.arctic.fuse.3: 3.4.22
 plugin.video.umbrella: 6.8.02
 plugin.video.otaku: 5.3.4
-script.module.acctmgr: 1.2.1a
 plugin.video.youtube: 7.4.4

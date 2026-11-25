@@ -1,0 +1,27 @@
+<settings version="4">
+    <setting id="general.max_quality">3</setting>
+    <setting id="general.max_movie_size">200</setting>
+    <setting id="general.dolby_vision_allowed" default="true">false</setting>
+    <setting id="general.autoplay" default="true">false</setting>
+    <setting id="general.mark_as_watched_rating">7</setting>
+    <setting id="general.page_size">29</setting>
+    <setting id="general.lists_page_size">29</setting>
+    <setting id="general.season_title_template" default="true">0</setting>
+    <setting id="general.episode_title_template">1</setting>
+    <setting id="views.menu">4</setting>
+    <setting id="views.titles">5</setting>
+    <setting id="views.seasons">4</setting>
+    <setting id="views.episodes">4</setting>
+    <setting id="views.movie" default="true">0</setting>
+    <setting id="views.episode" default="true">0</setting>
+    <setting id="provider.install" default="true" />
+    <setting id="provider.manage" default="true" />
+    <setting id="provider.check" default="true" />
+    <setting id="premiumize.apikey" default="true" />
+    <setting id="alldebrid.apikey" default="true" />
+    <setting id="imdb.at-main" default="true" />
+    <setting id="trakt.clientid" default="true" />
+    <setting id="trakt.username" default="true" />
+    <setting id="trakt.migrate_status" default="true" />
+    <setting id="trakt.migrate_collections" default="true" />
+</settings>

@@ -1,0 +1,13 @@
+{
+  "name": "[COLOR red]Magneto[/COLOR] (AIOStreams)",
+  "plugin": "script.module.magneto",
+  "api_language": "en-US",
+  "priority": 18,
+  "is_resolvable": "true",
+  "assert": {
+    "search_movie": ["imdb"],
+    "search_episode": ["imdb", "season", "episode"]
+  },
+  "play_movie": "executebuiltin://RunPlugin(plugin://script.module.magneto/?action=MediaPlay&mediatype=movie&imdb_id={imdb})",
+  "play_episode": "executebuiltin://RunPlugin(plugin://script.module.magneto/?action=MediaPlay&mediatype=episode&imdb_id={imdb}&season={season}&episode={episode})"
+}

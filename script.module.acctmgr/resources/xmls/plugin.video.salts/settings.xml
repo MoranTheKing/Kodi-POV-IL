@@ -1,0 +1,67 @@
+<settings version="2">
+    <setting id="auto_play" default="true">false</setting>
+    <setting id="source_timeout">30</setting>
+    <setting id="max_results">50</setting>
+    <setting id="freestream_enabled">true</setting>
+    <setting id="source_cache_enabled">true</setting>
+    <setting id="source_cache_hours">2</setting>
+    <setting id="preemptive_scrape">true</setting>
+    <setting id="trakt_enabled" default="true">false</setting>
+    <setting id="trakt_access_token" default="true" />
+    <setting id="trakt_refresh_token" default="true" />
+    <setting id="trakt_expires" default="true">0</setting>
+    <setting id="realdebrid_enabled" default="true">false</setting>
+    <setting id="realdebrid_token" default="true" />
+    <setting id="realdebrid_refresh" default="true" />
+    <setting id="realdebrid_expires" default="true">0</setting>
+    <setting id="premiumize_enabled" default="true">false</setting>
+    <setting id="premiumize_token" default="true" />
+    <setting id="alldebrid_enabled" default="true">false</setting>
+    <setting id="alldebrid_token" default="true" />
+    <setting id="1337x_enabled">true</setting>
+    <setting id="yts_enabled">true</setting>
+    <setting id="eztv_enabled">true</setting>
+    <setting id="torrentgalaxy_enabled">true</setting>
+    <setting id="thepiratebay_enabled">true</setting>
+    <setting id="solidtorrents_enabled">true</setting>
+    <setting id="limetorrents_enabled">true</setting>
+    <setting id="torrentz2_enabled">true</setting>
+    <setting id="rarbg_enabled">true</setting>
+    <setting id="kickass_enabled">true</setting>
+    <setting id="magnetdl_enabled">true</setting>
+    <setting id="glodls_enabled">true</setting>
+    <setting id="idope_enabled">true</setting>
+    <setting id="torrentdownload_enabled">true</setting>
+    <setting id="btdigg_enabled">true</setting>
+    <setting id="zooqle_enabled">true</setting>
+    <setting id="torrentproject_enabled">true</setting>
+    <setting id="nyaa_enabled">true</setting>
+    <setting id="subsplease_enabled">true</setting>
+    <setting id="tokyotosho_enabled">true</setting>
+    <setting id="animetosho_enabled">true</setting>
+    <setting id="anidex_enabled">true</setting>
+    <setting id="rutracker_enabled">true</setting>
+    <setting id="rutor_enabled">true</setting>
+    <setting id="nnm-club_enabled">true</setting>
+    <setting id="dytt_enabled">true</setting>
+    <setting id="btbtt_enabled">true</setting>
+    <setting id="primewire_enabled">true</setting>
+    <setting id="watchseries_enabled">true</setting>
+    <setting id="movie4k_enabled">true</setting>
+    <setting id="solarmovie_enabled">true</setting>
+    <setting id="jackett_enabled" default="true">false</setting>
+    <setting id="jackett_url" default="true">http://localhost:9117</setting>
+    <setting id="jackett_api_key" default="true" />
+    <setting id="prowlarr_enabled" default="true">false</setting>
+    <setting id="prowlarr_url" default="true">http://localhost:9696</setting>
+    <setting id="prowlarr_api_key" default="true" />
+    <setting id="torrentapi_enabled" default="true">false</setting>
+    <setting id="filter_cam">true</setting>
+    <setting id="min_quality" default="true">Any</setting>
+    <setting id="sort_by" default="true">Seeds</setting>
+    <setting id="next_episode_enabled">true</setting>
+    <setting id="skip_intro_enabled">true</setting>
+    <setting id="skip_intro_duration">90</setting>
+    <setting id="cache_duration">8</setting>
+    <setting id="debug_enabled" default="true">false</setting>
+</settings>

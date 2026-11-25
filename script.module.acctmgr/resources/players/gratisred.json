@@ -1,0 +1,31 @@
+{
+    "name"              : "[COLOR red]Gratis Red[/COLOR]",
+    "plugin"            : "plugin.video.gratisred",
+    "is_resolvable"     : "true",
+    "priority"          : 17,
+    "assert"            : {
+                            "play_movie":       ["title", "year"],
+                            "play_episode":     ["showname", "season", "episode"],
+                            "search_movie":     ["title"],
+                            "search_episode":   ["showname"]
+                          },
+    "play_movie"        : [
+                            "plugin://plugin.video.gratisred/?action=movies_searchterm&select=movies&name={title_url}",
+                            {"title": "(?i)^(\\[.*\\])?.*{title}.*(\\[.*\\])?$", "year": "{year}"}
+                          ],
+    "play_episode"      : [
+                            "plugin://plugin.video.gratisred/?action=tvshows_searchterm&select=tvshow&name={showname_url}",
+                            {"title": "(?i)^(\\[.*\\])?{showname}(\\[.*\\])?$"},
+                            {"return": "true", "season": "^{season}$", "episode": "^{episode}$"},
+                            {"season": "^{season}$"},
+                            {"season": "^{season}$", "episode": "^{episode}$"}
+                          ],
+    "search_movie"      : [
+                            "plugin://plugin.video.gratisred/?action=movies_searchterm&select=movies&name={title_url}",
+                            {"keyboard": "{title}"}
+                          ],
+    "search_episode"    : [
+                            "plugin://plugin.video.gratisred/?action=tvshows_searchterm&select=tvshow&name={showname_url}",
+                            {"keyboard": "{showname}"}
+                          ]
+}

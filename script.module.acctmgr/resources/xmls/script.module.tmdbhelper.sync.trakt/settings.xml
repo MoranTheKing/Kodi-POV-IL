@@ -1,0 +1,8 @@
+<settings version="4">
+    <setting id="token" default="true" />
+    <setting id="credentials_migrated">true</setting>
+    <setting id="cache_own_lists" default="true">true</setting>
+    <setting id="genre_icon_location" default="true" />
+    <setting id="use_calendar" default="true">false</setting>
+    <setting id="preferences_migrated">true</setting>
+</settings>
