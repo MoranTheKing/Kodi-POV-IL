@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "MoranTheKing/Kodi-POV-IL",
   "release_tag": "addons-latest",
-  "generated": "2026-11-25T18:44:22Z",
+  "generated": "2026-11-25T18:57:52Z",
   "manifest_url": "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json",
   "pov_host_migration": {
     "id": "plugin.video.pov",
@@ -130,6 +130,28 @@
       "size": 19192,
       "sha256": "6b22dc143e7bcdf71a2022aa16817ce2df2941ad6a457dfc687f50c2cbbd3106",
       "updated": "2026-11-17T21:11:48Z"
+    },
+    "script.module.acctmgr": {
+      "id": "script.module.acctmgr",
+      "name": "[COLOR dodgerblue][B]Account Manager[/B][/COLOR] [COLOR white][B]Lite[/B][/COLOR]",
+      "version": "1.2.1a",
+      "type": "script",
+      "filename": "script.module.acctmgr-1.2.1a.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/script.module.acctmgr-1.2.1a.zip",
+      "size": 6567335,
+      "sha256": "ba87962d345451076eae3ba6ebd122f4d887e12472033be6d2de6d50a6516c5e",
+      "updated": "2026-11-25T18:57:52Z"
+    },
+    "script.module.acctvwr": {
+      "id": "script.module.acctvwr",
+      "name": "[COLOR dodgerblue][B]Account[/B][/COLOR] [COLOR white][B]Viewer[/B][/COLOR]",
+      "version": "1.1.6a",
+      "type": "plugin",
+      "filename": "script.module.acctvwr-1.1.6a.zip",
+      "zip": "https://github.com/MoranTheKing/Kodi-POV-IL/releases/download/addons-latest/script.module.acctvwr-1.1.6a.zip",
+      "size": 3848920,
+      "sha256": "0785e23ef611aa8adade43bd4dfdc88d5dcc4753e7c351a158c74f237164e1a3",
+      "updated": "2026-11-25T18:57:52Z"
     },
     "script.module.autocompletion": {
       "id": "script.module.autocompletion",
