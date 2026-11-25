@@ -1,0 +1,12 @@
+<settings version="2">
+    <setting id="general.username" default="true" />
+    <setting id="general.password" default="true" />
+    <setting id="general.results_per_page" default="true">50</setting>
+    <setting id="general.date_sort_order" default="true">0</setting>
+    <setting id="general.search_resolution" default="true">all</setting>
+    <setting id="browse.saved_newsgroups_max" default="true">10</setting>
+    <setting id="general.newsgroup_exclusions.erotica" default="true">false</setting>
+    <setting id="general.download_folder" default="true" />
+    <setting id="tools.kodi_curlclienttimeout" default="true">300</setting>
+    <setting id="tools.kodi_curllowspeedtime" default="true">120</setting>
+</settings>

@@ -39,8 +39,8 @@ WATCH = (
     ('plugin.video.otaku', (
         'https://raw.githubusercontent.com/Goldenfreddy0703/repository.otaku'
         '/master/repo/zips/addons.xml',)),
-    ('script.module.acctmgr', (
-        'https://raw.githubusercontent.com/Zaxxon709/zaxxon/main/zips/addons.xml',)),
+    # (Account Manager: retired by its developer on 24 Nov 2026 and removed from his
+    # repositories; the build ships its last version, 1.2.1a, from this repo since then)
     # (Kodi's own repository: the build patches it since Wizard 0.5.13, patches_config youtube_whole_streams)
     ('plugin.video.youtube', (
         'https://mirrors.kodi.tv/addons/omega/addons.xml.gz',)),

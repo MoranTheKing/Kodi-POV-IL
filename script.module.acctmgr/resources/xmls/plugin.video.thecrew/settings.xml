@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<settings version="2">
+    <setting id="appearance.alt" default="true">-</setting>
+    <setting id="appearance.1" default="true">modern</setting>
+    <setting id="indicators.alt">1</setting>
+    <setting id="indicators" default="true">0</setting>
+    <setting id="api.language" default="true">AUTO</setting>
+    <setting id="providers.lang" default="true">English</setting>
+    <setting id="fanart">true</setting>
+    <setting id="fanart.quality">2</setting>
+    <setting id="fanart.quality.action" default="true" />
+    <setting id="page.item.limit">25</setting>
+    <setting id="max.threads">25</setting>
+    <setting id="max.threads.warning" default="true" />
+    <setting id="max.threads.warning.2" default="true" />
+    <setting id="max.threads.warning.3" default="true" />
+    <setting id="flatten.tvshows" default="true">false</setting>
+    <setting id="showunaired">true</setting>
+    <setting id="unaired.identify">1</setting>
+    <setting id="tv.specials">true</setting>
+    <setting id="tv.widget.alt">2</setting>
+    <setting id="tv.widget">1</setting>
+    <setting id="movie.widget">1</setting>
+    <setting id="silent.boot" default="true">false</setting>
+    <setting id="silent.boot.warning" default="true" />
+    <setting id="navi.personal.list" default="true">false</setting>
+    <setting id="personal.list" default="true">https://</setting>
+    <setting id="adult_pw" default="true">Enter Here!</setting>
+    <setting id="adult_section_name" default="true">Adult Content</setting>
+    <setting id="adult_pin_enabled" default="true">false</setting>
+    <setting id="adult_pin_enable_action" default="true" />
+    <setting id="adult_pin_disable_action" default="true" />
+    <setting id="adult_pin_setup" default="true" />
+    <setting id="adult_pin_remove" default="true" />
+    <setting id="adult_pin_reset" default="true" />
+    <setting id="adult_pin" default="true" />
+    <setting id="navi.halloween">true</setting>
+    <setting id="navi.holidays">true</setting>
+    <setting id="navi.movies">true</setting>
+    <setting id="navi.tvshows">true</setting>
+    <setting id="navi.sports">true</setting>
+    <setting id="navi.kids">true</setting>
+    <setting id="navi.1clicks">true</setting>
+    <setting id="navi.whitehat">true</setting>
+    <setting id="navi.purplehat">true</setting>
+    <setting id="navi.247movies">true</setting>
+    <setting id="navi.collections">true</setting>
+    <setting id="navi.traktlist">true</setting>
+    <setting id="navi.moviegenre">true</setting>
+    <setting id="navi.movieyears">true</setting>
+    <setting id="navi.moviepersons">true</setting>
+    <setting id="navi.movielanguages">true</setting>
+    <setting id="navi.moviecerts">true</setting>
+    <setting id="navi.movietrending">true</setting>
+    <setting id="navi.moviepopular">true</setting>
+    <setting id="navi.disneym">true</setting>
+    <setting id="navi.movieviews">true</setting>
+    <setting id="navi.movieboxoffice">true</setting>
+    <setting id="navi.movieoscars">true</setting>
+    <setting id="navi.movietheaters">true</setting>
+    <setting id="navi.moviewidget">true</setting>
+    <setting id="navi.traktrecommendations">true</setting>
+    <setting id="navi.traktpopular">true</setting>
+    <setting id="navi.traktanticipated">true</setting>
+    <setting id="navi.traktplayed">true</setting>
+    <setting id="navi.traktwatched">true</setting>
+    <setting id="navi.traktcollected">true</setting>
+    <setting id="navi.traktrecommendations_tv">true</setting>
+    <setting id="navi.traktpopular_tv">true</setting>
+    <setting id="navi.traktanticipated_tv">true</setting>
+    <setting id="navi.traktplayed_tv">true</setting>
+    <setting id="navi.traktwatched_tv">true</setting>
+    <setting id="navi.traktcollected_tv">true</setting>
+    <setting id="navi.tvGenres">true</setting>
+    <setting id="navi.tvNetworks">true</setting>
+    <setting id="navi.tvLanguages">true</setting>
+    <setting id="navi.tvCertificates">true</setting>
+    <setting id="navi.tvTrending">true</setting>
+    <setting id="navi.tvPopular">true</setting>
+    <setting id="navi.disney">true</setting>
+    <setting id="navi.netflix">true</setting>
+    <setting id="navi.applet">true</setting>
+    <setting id="navi.tvRating">true</setting>
+    <setting id="navi.tvViews">true</setting>
+    <setting id="navi.tvAiring">true</setting>
+    <setting id="navi.tvActive">true</setting>
+    <setting id="navi.tvPremier">true</setting>
+    <setting id="navi.tvTmdb">true</setting>
+    <setting id="navi.tvAdded">true</setting>
+    <setting id="navi.tvCalendar">true</setting>
+    <setting id="progress.dialog" default="true">0</setting>
+    <setting id="hosts.mode">1</setting>
+    <setting id="hosts.quality" default="true">0</setting>
+    <setting id="hosts.screener">true</setting>
+    <setting id="scrapers.timeout.1">30</setting>
+    <setting id="sources.cache.enabled">true</setting>
+    <setting id="sources.cache.duration">15</setting>
+    <setting id="returned.sources">100</setting>
+    <setting id="max.limit.sources">25</setting>
+    <setting id="sourcelist.multiline" default="true">false</setting>
+    <setting id="sources.compact" default="true">false</setting>
+    <setting id="sources.pack.name" default="true">false</setting>
+    <setting id="sources.extrainfo">true</setting>
+    <setting id="hosts.captcha">true</setting>
+    <setting id="debrid.only" default="true">false</setting>
+    <setting id="prem.identify">3</setting>
+    <setting id="preemptive.termination" default="true">false</setting>
+    <setting id="preemptive.limit">10</setting>
+    <setting id="remove.dups">true</setting>
+    <setting id="HEVC">true</setting>
+    <setting id="filter.year" default="true">false</setting>
+    <setting id="filter.title" default="true">false</setting>
+    <setting id="filter.undesirables">true</setting>
+    <setting id="filter.undesirables.select" default="true" />
+    <setting id="filter.undesirables.input" default="true" />
+    <setting id="filter.undesirables.user_remove" default="true" />
+    <setting id="filter.undesirables.user_remove_all" default="true" />
+    <setting id="filter.extras">true</setting>
+    <setting id="results.per_quality_limit" default="true">0</setting>
+    <setting id="sources.hint.per_quality" default="true" />
+    <setting id="validation.info" default="true" />
+    <setting id="hosts.sort.provider" default="true">false</setting>
+    <setting id="autoplay.sd" default="true">false</setting>
+    <setting id="torrent.enabled">true</setting>
+    <setting id="torrent.identify">7</setting>
+    <setting id="torrent.min.seeders">10</setting>
+    <setting id="torrent.sort.the.crew">true</setting>
+    <setting id="torrent.resolveurl" default="true" />
+    <setting id="check.torr.cache" default="true">false</setting>
+    <setting id="remove.uncached" default="true">false</setting>
+    <setting id="bookmarks">true</setting>
+    <setting id="bookmarks.auto" default="true">false</setting>
+    <setting id="upnext.enabled">true</setting>
+    <setting id="upnext.trigger_percent">97</setting>
+    <setting id="upnext.end_seconds" default="true">0</setting>
+    <setting id="upnext.countdown_seconds">15</setting>
+    <setting id="upnext.autoplay">true</setting>
+    <setting id="tvevening.show_playlist">true</setting>
+    <setting id="tvevening.gap_countdown">60</setting>
+    <setting id="tvevening.randomize" default="true">false</setting>
+    <setting id="tvevening.source_count">15</setting>
+    <setting id="tvevening.min_episode_age">48</setting>
+    <setting id="cocoscrapers.enabled">true</setting>
+    <setting id="cocoscrapers.info" default="true" />
+    <setting id="cocoscrapers.info2" default="true" />
+    <setting id="cocoscrapers.info3" default="true" />
+    <setting id="gearsscrapers.enabled">true</setting>
+    <setting id="gearsscrapers.info" default="true" />
+    <setting id="gearsscrapers.info2" default="true" />
+    <setting id="gearsscrapers.info3" default="true" />
+    <setting id="viperscrapers.enabled">true</setting>
+    <setting id="viperscrapers.info" default="true" />
+    <setting id="viperscrapers.info2" default="true" />
+    <setting id="viperscrapers.info3" default="true" />
+    <setting id="bookmarks.trakt" default="true">false</setting>
+    <setting id="lists.widget">1</setting>
+    <setting id="prgr.sortorder">1</setting>
+    <setting id="autoTraktOnStart" default="true">false</setting>
+    <setting id="schedTraktTime" default="true">0</setting>
+    <setting id="trakt.scrobble">true</setting>
+    <setting id="trakt.scrobble.warning" default="true" />
+    <setting id="trakt.scrobble.warning.2" default="true" />
+    <setting id="trakt.auth" default="true" />
+    <setting id="trakt.authorize" default="true" />
+    <setting id="trakt.user" default="true" />
+    <setting id="trakt.token" default="true" />
+    <setting id="trakt.refresh" default="true" />
+    <setting id="trakt.expires_at" default="true" />
+    <setting id="trakt.shows.last_modified" default="true" />
+    <setting id="trakt.shows.etag" default="true" />
+    <setting id="trakt.movies.last_modified" default="true" />
+    <setting id="trakt.movies.etag" default="true" />
+    <setting id="orion.installed" default="true" />
+    <setting id="orion.boolinstalled" default="true">false</setting>
+    <setting id="orion.username" default="true" />
+    <setting id="orion.package" default="true" />
+    <setting id="orion.expiration" default="true" />
+    <setting id="orion.inline">true</setting>
+    <setting id="apikeys.text.notice" default="true" />
+    <setting id="trakt.client_id" default="true" />
+    <setting id="trakt.client_secret" default="true" />
+    <setting id="fanart.tv.user" default="true" />
+    <setting id="tm.user" default="true" />
+    <setting id="imdb.user" default="true" />
+    <setting id="tvdb.user" default="true" />
+    <setting id="easynews.user" default="true" />
+    <setting id="easynews.password" default="true" />
+    <setting id="library.playback_integration" default="true">false</setting>
+    <setting id="library.text.hint1" default="true" />
+    <setting id="library.text.hint2" default="true" />
+    <setting id="library.movie" default="true">special://userdata/addon_data/plugin.video.thecrew/Movies</setting>
+    <setting id="library.tv" default="true">special://userdata/addon_data/plugin.video.thecrew/TVShows</setting>
+    <setting id="library.update.action" default="true" />
+    <setting id="library.service.update">true</setting>
+    <setting id="library.service.notification">true</setting>
+    <setting id="library.service.warning" default="true" />
+    <setting id="library.update">true</setting>
+    <setting id="library.check">true</setting>
+    <setting id="library.importdelay" default="true">false</setting>
+    <setting id="library.check_movie" default="true">false</setting>
+    <setting id="library.check_episode" default="true">false</setting>
+    <setting id="library.include_unknown">true</setting>
+    <setting id="downloads" default="true">false</setting>
+    <setting id="movie.download.path" default="true" />
+    <setting id="tv.download.path" default="true" />
+    <setting id="download.warning.1" default="true" />
+    <setting id="download.warning.2" default="true" />
+    <setting id="subtitles" default="true">false</setting>
+    <setting id="subtitles.utf" default="true">false</setting>
+    <setting id="subtitles.lang.1" default="true">English</setting>
+    <setting id="subtitles.lang.2" default="true">English</setting>
+    <setting id="OSuser" default="true" />
+    <setting id="OSpass" default="true" />
+    <setting id="OSapikey" default="true" />
+    <setting id="settings.schema_version" default="true">3.0.7</setting>
+    <setting id="addon_debug" default="true">false</setting>
+    <setting id="debug.location">1</setting>
+    <setting id="dev_pw" default="true" />
+    <setting id="disable.orion" default="true">false</setting>
+    <setting id="debug.warning" default="true" />
+    <setting id="module_base" default="true" />
+    <setting id="plugin_base" default="true" />
+    <setting id="last_version_announcement" default="true" />
+    <setting id="fanart.quality.old" default="true" />
+    <setting id="uploads.text.notice" default="true" />
+    <setting id="uploads.kodi_log" default="true" />
+    <setting id="uploads.crew_log" default="true" />
+    <setting id="uploads.text.hint" default="true" />
+</settings>

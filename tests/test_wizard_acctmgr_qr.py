@@ -7,8 +7,9 @@ without PIL the window showed only a code and a link cut short to fit (field
 report, 28 Oct 2026). Two Wizard patches hand generate_qr's two give-ups to
 patches/acctmgr_qr.py, which draws the PNG with the Wizard's segno.
 
-Set ACCTMGR_TREE to a real script.module.acctmgr folder to also patch and
-compile the real base_auth.py.
+The real-tree tests patch and compile the script.module.acctmgr the build
+ships (1.2.1a, kept in this repo since its developer retired it on 24 Nov
+2026); ACCTMGR_TREE points them at another copy.
 """
 import importlib.util
 import os
@@ -25,6 +26,7 @@ ENGINE = WIZ / 'resources/libs/patch_engine.py'
 CONFIG = WIZ / 'resources/libs/patches/patches_config.py'
 PATCHES = WIZ / 'resources/libs/patches'
 REL = 'lib/acctmgr/modules/auth/base_auth.py'
+TREE = os.environ.get('ACCTMGR_TREE') or str(WIZ.parent / 'script.module.acctmgr')
 PNG = bytes([0x89]) + b'PNG'
 
 # Account Manager 1.2.1 base_auth.py: the constants and generate_qr verbatim.
@@ -340,10 +342,10 @@ class AccountManagerQrTests(unittest.TestCase):
         self.assertEqual(('https://real-debrid.com/device', 'ABCD', 'https://real-debrid.com/device'),
                          RealDebrid().details())
 
-    @unittest.skipUnless(os.environ.get('ACCTMGR_TREE'), 'set ACCTMGR_TREE to a real script.module.acctmgr')
+    @unittest.skipUnless(os.path.isfile(os.path.join(TREE, 'addon.xml')), 'no script.module.acctmgr tree')
     def test_the_real_torbox_and_base_auth_patch_and_compile(self):
         shutil.rmtree(self.addon)
-        shutil.copytree(os.environ['ACCTMGR_TREE'], self.addon)
+        shutil.copytree(TREE, self.addon)
         with patch.dict(sys.modules, self.modules):
             config = _load('real_config', CONFIG, self.modules).PATCH_CONFIG
             entries = [e for e in config if e['id'].startswith('acctmgr_')]
@@ -354,10 +356,10 @@ class AccountManagerQrTests(unittest.TestCase):
         for rel in (REL, TORBOX_REL):
             compile((self.addon / rel).read_text(encoding='utf-8'), rel, 'exec')
 
-    @unittest.skipUnless(os.environ.get('ACCTMGR_TREE'), 'set ACCTMGR_TREE to a real script.module.acctmgr')
+    @unittest.skipUnless(os.path.isfile(os.path.join(TREE, 'addon.xml')), 'no script.module.acctmgr tree')
     def test_the_real_base_auth_patches_and_compiles(self):
         shutil.rmtree(self.addon)
-        shutil.copytree(os.environ['ACCTMGR_TREE'], self.addon)
+        shutil.copytree(TREE, self.addon)
         with patch.dict(sys.modules, self.modules):
             first = self.engine.PatchEngine(self.entries).run()
             second = self.engine.PatchEngine(self.entries).run()

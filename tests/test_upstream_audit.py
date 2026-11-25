@@ -119,8 +119,8 @@ class IssueTests(unittest.TestCase):
                        for r in audit.audit(newest=newest, getter=getter, runner=runner))
         self.assertEqual(results['skin.arctic.fuse.3'], 'error')
         self.assertEqual(results['plugin.video.idanplus'], 'error')
-        # Account Manager has no MoranSubs patcher: the Wizard's entries run and miss their anchors
-        self.assertEqual(results['script.module.acctmgr'], 'broken')
+        # YouTube has no MoranSubs patcher: the Wizard's entries run and miss their anchors
+        self.assertEqual(results['plugin.video.youtube'], 'broken')
 
     def test_an_issue_of_another_title_is_left_alone(self):
         gh = Gh([open_issue(title=TITLE + ' (old)', number=9)])
@@ -162,7 +162,10 @@ class ContractTests(unittest.TestCase):
             ROOT / 'plugin.program.kodipovilwizard/resources/libs/patches/patches_config.py'))['PATCH_CONFIG']
         hosts = {entry.get('addon_id') for entry in config}
         pinned = {'plugin.video.pov', 'plugin.video.umbrella'}        # their pins move on the same proof
-        self.assertEqual(hosts - pinned - set(audit.AUDITED), set(),
+        # shipped from this repo, its patches run on that tree (test_wizard_acctmgr_qr)
+        shipped = {'script.module.acctmgr'}
+        self.assertTrue((ROOT / 'script.module.acctmgr' / 'addon.xml').is_file())
+        self.assertEqual(hosts - pinned - shipped - set(audit.AUDITED), set(),
                          'a host the Wizard patches is neither pinned nor audited')
 
     def test_the_workflow_runs_the_audit_and_opens_no_informational_issue(self):

@@ -1,0 +1,14 @@
+
+How To Authorize Torbox:
+
+1. Select 'Authorize'
+2. Enter your API key
+3. Ensure the data you entered is correct
+4. Select 'Ok' to sync your data with supported add-ons
+
+How To Authorize Off Cloud:
+
+1. Select 'Authorize'
+2. Enter your login credentials
+3. Ensure the data you entered is correct
+4. Select 'Ok' to sync your data with supported add-ons

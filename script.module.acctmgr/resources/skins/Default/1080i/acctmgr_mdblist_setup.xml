@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window>
+	<defaultcontrol always="true">101</defaultcontrol>
+	<coordinates>
+		<left>0</left>
+		<top>0</top>
+	</coordinates>
+	<controls>
+		<!-- Overlay dim background -->
+		<control type="image">
+			<left>0</left>
+			<top>0</top>
+			<width>1920</width>
+			<height>1080</height>
+			<texture colordiffuse="E60A0C10">common/white.png</texture>
+		</control>
+
+		<!-- Main Dialog Background -->
+		<control type="image">
+			<left>360</left>
+			<top>120</top>
+			<width>1200</width>
+			<height>840</height>
+			<texture colordiffuse="FF161B22">common/white.png</texture>
+		</control>
+
+		<!-- Header Background -->
+		<control type="image">
+			<left>360</left>
+			<top>120</top>
+			<width>1200</width>
+			<height>60</height>
+			<texture colordiffuse="FF185F9D">common/white.png</texture>
+		</control>
+
+		<!-- Header Title -->
+		<control type="label">
+			<left>390</left>
+			<top>120</top>
+			<width>1140</width>
+			<height>60</height>
+			<font>font14</font>
+			<textcolor>FFFFFFFF</textcolor>
+			<align>right</align>
+			<aligny>center</aligny>
+			<label>AM Lite - MDBList Authorization</label>
+		</control>
+
+		<!-- QR Code Section -->
+		<control type="label">
+			<left>420</left>
+			<top>215</top>
+			<width>1080</width>
+			<height>45</height>
+			<font>font14</font>
+			<textcolor>FF38BDF8</textcolor>
+			<aligny>center</aligny>
+			<label>QR Code Authorization</label>
+		</control>
+
+		<control type="label" id="200">
+			<left>420</left>
+			<top>265</top>
+			<width>1080</width>
+			<height>40</height>
+			<font>font13</font>
+			<textcolor>FFFFFFFF</textcolor>
+			<aligny>center</aligny>
+			<label></label>
+		</control>
+
+		<control type="label" id="201">
+			<left>450</left>
+			<top>315</top>
+			<width>1050</width>
+			<height>180</height>
+			<font>font13</font>
+			<textcolor>FFFFFFFF</textcolor>
+			<aligny>top</aligny>
+			<label></label>
+		</control>
+
+		<!-- API Key Section -->
+		<control type="label">
+			<left>420</left>
+			<top>525</top>
+			<width>1080</width>
+			<height>45</height>
+			<font>font14</font>
+			<textcolor>FF38BDF8</textcolor>
+			<aligny>center</aligny>
+			<label>API Key Authorization</label>
+		</control>
+
+		<control type="label" id="202">
+			<left>420</left>
+			<top>575</top>
+			<width>1080</width>
+			<height>40</height>
+			<font>font13</font>
+			<textcolor>FFFFFFFF</textcolor>
+			<aligny>center</aligny>
+			<label></label>
+		</control>
+
+		<control type="label" id="203">
+			<left>450</left>
+			<top>625</top>
+			<width>1050</width>
+			<height>120</height>
+			<font>font13</font>
+			<textcolor>FFFFFFFF</textcolor>
+			<aligny>top</aligny>
+			<label></label>
+		</control>
+
+		<control type="button" id="101">
+			<left>1030</left>
+			<top>855</top>
+			<width>220</width>
+			<height>60</height>
+			<label>Continue</label>
+			<font>font13</font>
+			<textcolor>FFFFFFFF</textcolor>
+			<focusedcolor>FF0F172A</focusedcolor>
+			<align>center</align>
+			<aligny>center</aligny>
+			<texturefocus colordiffuse="FF38BDF8">common/white.png</texturefocus>
+			<texturenofocus colordiffuse="FF21262D">common/white.png</texturenofocus>
+			<onleft>102</onleft>
+			<onright>102</onright>
+			<onup>101</onup>
+			<ondown>101</ondown>
+		</control>
+
+		<control type="button" id="102">
+			<left>1270</left>
+			<top>855</top>
+			<width>220</width>
+			<height>60</height>
+			<label>Cancel</label>
+			<font>font13</font>
+			<textcolor>FFFFFFFF</textcolor>
+			<focusedcolor>FF0F172A</focusedcolor>
+			<align>center</align>
+			<aligny>center</aligny>
+			<texturefocus colordiffuse="FF38BDF8">common/white.png</texturefocus>
+			<texturenofocus colordiffuse="FF21262D">common/white.png</texturenofocus>
+			<onleft>101</onleft>
+			<onright>101</onright>
+			<onup>102</onup>
+			<ondown>102</ondown>
+		</control>
+	</controls>
+</window>

@@ -50,8 +50,8 @@ AUDITED = {
         'https://raw.githubusercontent.com/jurialmunkey/repository.jurialmunkey/master/repo/zips/'),
     'plugin.video.idanplus': (
         'https://raw.githubusercontent.com/fishenzon/repo/master/zips/',),
-    'script.module.acctmgr': (
-        'https://raw.githubusercontent.com/Zaxxon709/zaxxon/main/zips/',),
+    # (Account Manager: retired upstream on 24 Nov 2026; the build ships 1.2.1a from
+    # this repo, and tests/test_wizard_acctmgr_qr.py runs the patches on that tree)
     # Kodi's own repository (the mirror director sends each request to a mirror)
     'plugin.video.youtube': (
         'https://mirrors.kodi.tv/addons/omega/',),

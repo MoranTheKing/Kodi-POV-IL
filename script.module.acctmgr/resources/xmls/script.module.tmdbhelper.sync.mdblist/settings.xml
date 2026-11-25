@@ -1,0 +1,3 @@
+<settings version="4">
+    <setting id="apikey" default="true" />
+</settings>
