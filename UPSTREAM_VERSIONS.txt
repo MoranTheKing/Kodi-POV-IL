@@ -9,7 +9,7 @@
 # Fuse 3, Idan Plus, Account Manager and YouTube every six hours
 # (.github/scripts/upstream_audit.py) and keeps an issue open only while
 # something does not fit, so these need no update.
-plugin.video.pov: 6.11.03
+plugin.video.pov: 6.11.04
 plugin.video.idanplus: 4.0.6
 skin.arctic.fuse.3: 3.4.22
 plugin.video.umbrella: 6.8.02
